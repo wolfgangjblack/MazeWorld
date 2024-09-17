@@ -119,8 +119,8 @@ while running:
             running = False
 
         if event.type == pygame.KEYDOWN:
-            # Close the item message dialogue box when pressing Enter
-            if event.key == pygame.K_RETURN and item_message_active:
+            # Close the item message dialogue box when pressing Enter or Esc
+            if (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE) and item_message_active:
                 item_message = None  # Clear item message
                 item_message_active = False  # Close the item message box
 
