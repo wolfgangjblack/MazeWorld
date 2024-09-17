@@ -14,8 +14,6 @@ MAZE_SEED = 42 # Set to -1 for random seed
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
-BLUE = (0, 0, 255)  # Player color
-RED = (255, 0, 0)   # NPC color
 
 #NPC settings
 # ------------------------------------

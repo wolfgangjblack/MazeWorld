@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 import random
-from config import GRID_SIZE, MAZE_WIDTH, MAZE_HEIGHT
+from config import GRID_SIZE
 import pygame
 
 class NPC(BaseModel):
