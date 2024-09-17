@@ -1,0 +1,2 @@
+pydantic==2.9.1
+pygame==2.6.0
