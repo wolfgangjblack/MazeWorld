@@ -25,10 +25,10 @@ class NPC(BaseModel):
             return True
         return False
 
-    def npc_chat(self, player_input: str) -> str:
+    def npc_chat(self) -> str:
         """Placeholder for NPC chat using a locally hosted LLM."""
         # You can replace this with the actual LLM call
-        return f"NPC responds to: {player_input}"
+        return "hello"
 
 class StaticNPC(NPC):
     color: tuple = (0, 255, 0)
@@ -74,7 +74,7 @@ class AggressiveNPC(NPC):
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
         # Check if the player is within 5 squares in line of sight
-        if self.in_line_of_sight(player_pos):
+        if self.in_line_of_sight(maze, player_pos):
             # Move toward the player
             if player_pos[0] > self.x and not maze.is_wall(self.x + 1, self.y):
                 self.x += 1
