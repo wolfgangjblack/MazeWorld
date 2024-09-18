@@ -11,8 +11,8 @@ class PlayerCharacter:
         
         #Inventory
         self.inventory = {  # Initial inventory with categories
-            "bread": Food("bread", quantity=1),
-            "water": Drink("water", quantity=2),
+            "bread": Food("bread", quantity=1, nutrition_value=15),
+            "water": Drink("water", quantity=2, hydration_value=20),
             "hammer": Tool("hammer", quantity=1)
         }        
         self.selected_item_index = 0  # Tracks the selected item in the inventory
@@ -81,25 +81,10 @@ class PlayerCharacter:
     def use_item(self):
         """Use the currently selected item."""
         inventory_items = list(self.inventory.values())
-        
-        if len(inventory_items) > 0:
+        if inventory_items:
             item = inventory_items[self.selected_item_index]
-            message = item.use()  # Call the 'use' method of the item
+            message = item.use(self)  # Pass the player instance to the item's use method
             self.remove_from_inventory(item.name)  # Reduce the quantity
-            
-            #Apply item affects
-            if isinstance(item, Food):
-                self.hunger += item.nutrition_value
-                self.hunger = min(self.hunger, self.max_hunger)
-                self.health += item.health_value
-                self.health = min(self.health, self.max_health)
-                
-            elif isinstance(item, Drink):
-                self.thirst += item.hydration_value
-                self.thirst = min(self.thirst, self.max_thirst)    
-                self.health += item.health_value
-                self.health = min(self.health, self.max_health)
-            
             return message
         return "No item to use."
 
@@ -135,20 +120,24 @@ class PlayerCharacter:
         # Thirst effects
         if self.thirst == 0:
             self.health -= 1 # Lose health faster when dehydrated
-        
+
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         cell_value = maze.grid[self.y][self.x]
         if cell_value == "food":
-            new_food = Food("Bread", nutrition_value=20)
+            new_food = Food("bread", nutrition_value=20)
             self.add_to_inventory(new_food)
             maze.grid[self.y][self.x] = 0  # Remove the item from the maze
-            return "Picked up food."
+            return "Picked up bread."
         elif cell_value == "drink":
-            new_drink = Drink("Water", hydration_value=20)
+            new_drink = Drink("water", hydration_value=15)
             self.add_to_inventory(new_drink)
             maze.grid[self.y][self.x] = 0  # Remove the item from the maze
-            return "Picked up drink."
+            return "Picked up water."
+        elif cell_value == "tool":
+            new_tool = Tool("hammer")
+            self.add_to_inventory(new_tool)
+            maze.grid[self.y][self.x] = 0
         return ""
 
     def check_health(self):
