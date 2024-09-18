@@ -8,6 +8,7 @@ from utils.dialogue_utils import draw_dialogue_box, player_near_npc, handle_npc_
 
 # Initialize pygame
 pygame.init()
+pygame.font.init()    
 
 # Create the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -41,6 +42,8 @@ random_npc.home_x, random_npc.home_y = random_npc.x, random_npc.y
 
 aggressive_npc = AggressiveNPC(x=0, y=0, image_path='path_to_image')
 aggressive_npc.x, aggressive_npc.y = get_random_open_space()
+
+
 
 
 def draw_inventory(screen, font, player):
@@ -97,7 +100,8 @@ while running:
 
         # Draw the player
         player.draw(screen)
-
+        player.draw_hud(screen)
+        
     if not inventory_active:  # Disable NPC interaction when inventory is open
         if player_near_npc((player.x, player.y), static_npc):
             current_npc = static_npc
