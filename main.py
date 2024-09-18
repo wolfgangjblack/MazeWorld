@@ -1,6 +1,6 @@
 import pygame
 import random
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, NUM_FOOD, NUM_DRINKS, NUM_TOOLS 
 from utils.maze_utils import Maze
 from utils.pc_utils import PlayerCharacter
 from utils.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
@@ -16,6 +16,7 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 # Initialize and generate the maze
 maze = Maze()
 maze.generate()
+maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
 
 # Find open spaces for player and NPC placement
 open_spaces = maze.find_open_spaces()

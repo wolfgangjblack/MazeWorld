@@ -1,6 +1,6 @@
 import pygame
 from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH
-from utils.item_utils import Food, Drink, Tool
+from utils.item_utils import Food, Drink, Tool, ENTITY_IDS, item_registry
 from utils.display_utils import game_to_screen
 
 class PlayerCharacter:
@@ -62,19 +62,12 @@ class PlayerCharacter:
             
             self.apply_hunger_thirst_effects()
 
-    def add_to_inventory(self, item, quantity=1):
+    def add_to_inventory(self, item):
         """Add an item to the player's inventory."""
         if item.name in self.inventory:
-            self.inventory[item.name].quantity += quantity
+            self.inventory[item.name].quantity += item.quantity
         else:
             self.inventory[item.name] = item
-
-    def remove_from_inventory(self, item_name):
-        """Remove an item from the player's inventory."""
-        if item_name in self.inventory:
-            self.inventory[item_name].quantity -= 1
-            if self.inventory[item_name].quantity <= 0:
-                del self.inventory[item_name]
 
     def get_inventory(self):
         """Return the player's inventory as a list of tuples (item name, quantity)."""
@@ -115,32 +108,26 @@ class PlayerCharacter:
         if self.hunger == 0:
             self.health -= 1  # Lose health when starving
         elif self.hunger < 20:
-            self.speed = self.base_speed * 0.8  # Reduce speed
+            self.speed = self.speed * 0.8  # Reduce speed
         elif self.hunger < 80:
             self.speed = self.max_speed  # Normal speed
 
         # Thirst effects
         if self.thirst == 0:
             self.health -= 1 # Lose health faster when dehydrated
-
+            
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         cell_value = maze.grid[self.y][self.x]
-        if cell_value == "food":
-            new_food = Food("bread", nutrition_value=20)
-            self.add_to_inventory(new_food)
+        if cell_value in item_registry:
+            item_template = item_registry[cell_value]
+            # Clone the item to avoid shared references
+            item = item_template.clone()
+            self.add_to_inventory(item)
             maze.grid[self.y][self.x] = 0  # Remove the item from the maze
-            return "Picked up bread."
-        elif cell_value == "drink":
-            new_drink = Drink("water", hydration_value=15)
-            self.add_to_inventory(new_drink)
-            maze.grid[self.y][self.x] = 0  # Remove the item from the maze
-            return "Picked up water."
-        elif cell_value == "tool":
-            new_tool = Tool("hammer")
-            self.add_to_inventory(new_tool)
-            maze.grid[self.y][self.x] = 0
+            return f"Picked up {item.name}."
         return ""
+
 
     def check_health(self):
         """Check if the player is alive."""

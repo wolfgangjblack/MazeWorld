@@ -21,3 +21,8 @@ WHITE = (255, 255, 255)
 #NPC settings
 # ------------------------------------
 
+## Item settings
+# ------------------------------------
+NUM_FOOD = 2
+NUM_DRINKS = 2
+NUM_TOOLS = 1

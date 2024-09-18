@@ -1,7 +1,8 @@
 import pygame
 import random
-from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, HUD_HEIGHT
+from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE
 from utils.display_utils import game_to_screen
+from utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
 
 # Set seed for deterministic mazes
 if MAZE_SEED != -1:
@@ -71,20 +72,6 @@ class Maze:
         self.grid = self.initialize_maze()  # Reset the grid
         self.carve_passages_from(1, 1)
 
-    def place_consumables(self, maze, num_items=10):
-        """Place consumables in the maze."""
-        open_spaces = maze.find_open_spaces()
-        random.shuffle(open_spaces)
-
-        for _ in range(num_items):
-            if open_spaces:
-                x, y = open_spaces.pop()
-                # Randomly choose between food and drink
-                if random.random() < 0.5:
-                    maze.grid[y][x] = "food"
-                else:
-                    maze.grid[y][x] = "drink"
-
     def draw(self, screen):
         """Draw the maze on the screen."""
         WALL_SCALE = 0.5  # Adjust this value between 0 and 1 to change wall size
@@ -94,32 +81,31 @@ class Maze:
         for y, row in enumerate(self.grid):
             for x, cell in enumerate(row):
                 screen_x, screen_y = game_to_screen(x, y)
-                rect = pygame.Rect(screen_x,
-                                   screen_y,
-                                   GRID_SIZE,
-                                   GRID_SIZE)
+                rect = pygame.Rect(screen_x, screen_y, GRID_SIZE, GRID_SIZE)
                 if cell == 1:
+                    # Draw walls
                     pygame.draw.rect(screen, WHITE, rect)
                 elif cell == 0:
+                    # Draw floor
                     pygame.draw.rect(screen, BLACK, rect)
-                elif cell == "food":
+                elif cell in item_registry:
                     # Draw food item
-                    food_rect = pygame.Rect(
+                    item = item_registry[cell]
+                    if isinstance(item, Food):
+                        color = (255, 215, 0)  # Gold color for food
+                    elif isinstance(item, Drink):
+                        color = (30, 144, 255) # Blue color for drinks
+                    elif isinstance(item, Tool):
+                        color = (255, 0, 255) # magenta color for tools
+                        
+                        
+                    item_rect = pygame.Rect(
                         screen_x + GRID_SIZE // 4,
                         screen_y + GRID_SIZE // 4,
                         GRID_SIZE // 2,
                         GRID_SIZE // 2
                     )
-                    pygame.draw.rect(screen, (255, 215, 0), food_rect)
-                elif cell == "drink":
-                    # Draw drink item
-                    drink_rect = pygame.Rect(
-                        screen_x + GRID_SIZE // 4,
-                        screen_y + GRID_SIZE // 4,
-                        GRID_SIZE // 2,
-                        GRID_SIZE // 2
-                    )
-                    pygame.draw.rect(screen, (30, 144, 255), drink_rect)
+                    pygame.draw.rect(screen, color, item_rect)  # Gold color for food
                     
     def is_wall(self, x, y):
         """Check if the given position (x, y) is a wall or out of bounds."""
@@ -138,3 +124,27 @@ class Maze:
                 if cell == 0:  # 0 means open space
                     open_spaces.append((x, y))
         return open_spaces
+        
+    def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1):
+        open_spaces = self.find_open_spaces()  # Find open spaces in the maze
+        random.shuffle(open_spaces)  # Shuffle the spaces to randomize placement
+
+        item_ids = list(ENTITY_IDS.keys())  # Get the list of item IDs
+        
+        def generate_items_by_class(cls, num_gens):
+            """Place items in the maze based on their class."""
+            i = 0
+            while i < num_gens:
+                if open_spaces:
+                    x, y = open_spaces.pop()  # Get a random open space
+                    item_id = random.choice(item_ids)  # Choose a random item ID
+                    
+                    # Check if the item class matches (Food, Drink, or Tool)
+                    if isinstance(item_registry[item_id], cls):
+                        self.grid[y][x] = item_id  # Place the item in the grid (using the ID)
+                        i += 1  # Increment the counter when an item is successfully placed
+        
+        # Generate items based on the class
+        generate_items_by_class(Food, num_food)
+        generate_items_by_class(Drink, num_drink)
+        generate_items_by_class(Tool, num_tools)
