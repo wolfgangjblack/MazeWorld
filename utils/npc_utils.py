@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+import pygame
 import random
 from config import GRID_SIZE
-import pygame
+from pydantic import BaseModel
+from utils.display_utils import game_to_screen
 
 class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
@@ -14,7 +15,8 @@ class NPC(BaseModel):
 
     def draw(self, screen):
         """Draw the NPC at the specified position."""
-        rect = pygame.Rect(self.x * GRID_SIZE, self.y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
+        screen_x, screen_y = game_to_screen(self.x, self.y)
+        rect = pygame.Rect(screen_x,screen_y, GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(screen, self.color, rect)
 
     def can_move(self):

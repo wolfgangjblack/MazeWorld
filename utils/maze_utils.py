@@ -1,6 +1,7 @@
 import pygame
 import random
-from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE
+from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, HUD_HEIGHT
+from utils.display_utils import game_to_screen
 
 # Set seed for deterministic mazes
 if MAZE_SEED != -1:
@@ -89,32 +90,37 @@ class Maze:
         WALL_SCALE = 0.5  # Adjust this value between 0 and 1 to change wall size
         WALL_SIZE = GRID_SIZE * WALL_SCALE
         WALL_OFFSET = (GRID_SIZE - WALL_SIZE) / 2
-
+        
         for y, row in enumerate(self.grid):
             for x, cell in enumerate(row):
+                screen_x, screen_y = game_to_screen(x, y)
+                rect = pygame.Rect(screen_x,
+                                   screen_y,
+                                   GRID_SIZE,
+                                   GRID_SIZE)
                 if cell == 1:
-                    # Draw smaller wall rectangles centered in the grid cell
-                    rect = pygame.Rect(
-                        x * GRID_SIZE + WALL_OFFSET,
-                        y * GRID_SIZE + WALL_OFFSET,
-                        WALL_SIZE,
-                        WALL_SIZE
-                    )
                     pygame.draw.rect(screen, WHITE, rect)
-                else:
-                    # Draw the floor as usual
-                    rect = pygame.Rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
+                elif cell == 0:
                     pygame.draw.rect(screen, BLACK, rect)
-                
-                if cell == "food":
+                elif cell == "food":
                     # Draw food item
-                    rect = pygame.Rect(x * GRID_SIZE + GRID_SIZE // 4, y * GRID_SIZE + GRID_SIZE // 4, GRID_SIZE // 2, GRID_SIZE // 2)
-                    pygame.draw.rect(screen, (255, 215, 0), rect)  # Gold color
+                    food_rect = pygame.Rect(
+                        screen_x + GRID_SIZE // 4,
+                        screen_y + GRID_SIZE // 4,
+                        GRID_SIZE // 2,
+                        GRID_SIZE // 2
+                    )
+                    pygame.draw.rect(screen, (255, 215, 0), food_rect)
                 elif cell == "drink":
                     # Draw drink item
-                    rect = pygame.Rect(x * GRID_SIZE + GRID_SIZE // 4, y * GRID_SIZE + GRID_SIZE // 4, GRID_SIZE // 2, GRID_SIZE // 2)
-                    pygame.draw.rect(screen, (30, 144, 255), rect)  # Dodger blue color
-  
+                    drink_rect = pygame.Rect(
+                        screen_x + GRID_SIZE // 4,
+                        screen_y + GRID_SIZE // 4,
+                        GRID_SIZE // 2,
+                        GRID_SIZE // 2
+                    )
+                    pygame.draw.rect(screen, (30, 144, 255), drink_rect)
+                    
     def is_wall(self, x, y):
         """Check if the given position (x, y) is a wall or out of bounds."""
         # Check if the coordinates are out of bounds (boundary check)

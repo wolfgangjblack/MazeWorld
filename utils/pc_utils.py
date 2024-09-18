@@ -1,6 +1,7 @@
 import pygame
-from config import GRID_SIZE
+from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH
 from utils.item_utils import Food, Drink, Tool
+from utils.display_utils import game_to_screen
 
 class PlayerCharacter:
     def __init__(self, start_x, start_y, color=(0, 0, 255)):
@@ -31,7 +32,8 @@ class PlayerCharacter:
 
     def draw(self, screen):
         """Draw the player at its current position."""
-        player_rect = pygame.Rect(self.x * GRID_SIZE, self.y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
+        screen_x, screen_y = game_to_screen(self.x, self.y)
+        player_rect = pygame.Rect(screen_x, screen_y, GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(screen, self.color, player_rect)
 
     def move(self, event, maze):
@@ -147,27 +149,68 @@ class PlayerCharacter:
             # Handle player death (e.g., end game or respawn)
             
     def draw_hud(self, screen):
-        """Draw the hunger and thirst HUD."""
+        """Draw the hunger, thirst, and health HUD at the top of the screen."""
+        # HUD settings
+        bar_width = (SCREEN_WIDTH - 80) // 3  # Adjust spacing as needed
+        bar_height = 20
+        spacing = 20  # Space between bars
+        hud_y = (HUD_HEIGHT - bar_height) // 2  # Center the bars vertically within the HUD area
+
+        # Positions for each bar
+        hunger_x = 20
+        thirst_x = hunger_x + bar_width + spacing
+        health_x = thirst_x + bar_width + spacing
+
         # Hunger bar
-        hunger_bar_width = 200
-        hunger_bar_height = 20
         hunger_ratio = self.hunger / self.max_hunger
-        hunger_rect = pygame.Rect(10, 10, hunger_bar_width * hunger_ratio, hunger_bar_height)
+        hunger_rect = pygame.Rect(hunger_x, hud_y, bar_width * hunger_ratio, bar_height)
         pygame.draw.rect(screen, (255, 165, 0), hunger_rect)  # Orange color
+        # Hunger bar border
+        pygame.draw.rect(screen, (255, 255, 255), (hunger_x, hud_y, bar_width, bar_height), 2)
 
         # Thirst bar
-        thirst_bar_width = 200
-        thirst_bar_height = 20
         thirst_ratio = self.thirst / self.max_thirst
-        thirst_rect = pygame.Rect(10, 40, thirst_bar_width * thirst_ratio, thirst_bar_height)
+        thirst_rect = pygame.Rect(thirst_x, hud_y, bar_width * thirst_ratio, bar_height)
         pygame.draw.rect(screen, (65, 105, 225), thirst_rect)  # Royal blue color
+        # Thirst bar border
+        pygame.draw.rect(screen, (255, 255, 255), (thirst_x, hud_y, bar_width, bar_height), 2)
 
-        # Health bar (optional)
-        health_bar_width = 200
-        health_bar_height = 20
+        # Health bar
         health_ratio = self.health / self.max_health
-        health_rect = pygame.Rect(10, 70, health_bar_width * health_ratio, health_bar_height)
+        health_rect = pygame.Rect(health_x, hud_y, bar_width * health_ratio, bar_height)
         pygame.draw.rect(screen, (255, 0, 0), health_rect)  # Red color
+        # Health bar border
+        pygame.draw.rect(screen, (255, 255, 255), (health_x, hud_y, bar_width, bar_height), 2)
+
+        # Fonts and labels
+        font = pygame.font.SysFont(None, 24)
+
+        # Hunger text
+        hunger_label = font.render("Hunger", True, (255, 255, 255))
+        hunger_label_rect = hunger_label.get_rect(center=(hunger_x + bar_width // 2, hud_y - 15))
+        screen.blit(hunger_label, hunger_label_rect)
+
+        hunger_value = font.render(f"{int(self.hunger)} / {self.max_hunger}", True, (255, 255, 255))
+        hunger_value_rect = hunger_value.get_rect(center=(hunger_x + bar_width // 2, hud_y + bar_height + 15))
+        screen.blit(hunger_value, hunger_value_rect)
+
+        # Thirst text
+        thirst_label = font.render("Thirst", True, (255, 255, 255))
+        thirst_label_rect = thirst_label.get_rect(center=(thirst_x + bar_width // 2, hud_y - 15))
+        screen.blit(thirst_label, thirst_label_rect)
+
+        thirst_value = font.render(f"{int(self.thirst)} / {self.max_thirst}", True, (255, 255, 255))
+        thirst_value_rect = thirst_value.get_rect(center=(thirst_x + bar_width // 2, hud_y + bar_height + 15))
+        screen.blit(thirst_value, thirst_value_rect)
+
+        # Health text
+        health_label = font.render("Health", True, (255, 255, 255))
+        health_label_rect = health_label.get_rect(center=(health_x + bar_width // 2, hud_y - 15))
+        screen.blit(health_label, health_label_rect)
+
+        health_value = font.render(f"{int(self.health)} / {self.max_health}", True, (255, 255, 255))
+        health_value_rect = health_value.get_rect(center=(health_x + bar_width // 2, hud_y + bar_height + 15))
+        screen.blit(health_value, health_value_rect)
 
     def apply_buffs(self):
         """Apply buffs when hunger and thirst are high."""

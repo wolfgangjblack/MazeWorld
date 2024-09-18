@@ -1,6 +1,6 @@
 import pygame
 import random
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, GRID_SIZE
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
 from utils.maze_utils import Maze
 from utils.pc_utils import PlayerCharacter
 from utils.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
