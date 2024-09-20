@@ -115,7 +115,12 @@ class PlayerCharacter:
         # Thirst effects
         if self.thirst == 0:
             self.health -= 1 # Lose health faster when dehydrated
-            
+
+    def is_item_at_player_position(self, maze):
+        """Check if there is an item at the player's current position."""
+        cell_value = maze.grid[self.y][self.x]
+        return cell_value in item_registry  # item_registry contains item IDs
+
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         cell_value = maze.grid[self.y][self.x]
@@ -127,8 +132,6 @@ class PlayerCharacter:
             maze.grid[self.y][self.x] = 0  # Remove the item from the maze
             return f"Picked up {item.name}."
         return ""
-
-
     def check_health(self):
         """Check if the player is alive."""
         if self.health <= 0:
@@ -205,3 +208,10 @@ class PlayerCharacter:
             self.speed = self.max_speed  
         else:
             self.speed = self.base_speed  # Normal speed
+            
+    def get_nearby_npc(self, npcs):
+        """Return an NPC if one is adjacent to the player."""
+        for npc in npcs:
+            if abs(npc.x - self.x) + abs(npc.y - self.y) == 1:
+                return npc
+        return None
