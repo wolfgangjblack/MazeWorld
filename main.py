@@ -54,14 +54,16 @@ player = PlayerCharacter(start_x=player_pos[0], start_y=player_pos[1])
 # Initialize NPCs at random open spaces
 static_npc = StaticNPC(x=0, y=0, image_path='path_to_image')
 static_npc.x, static_npc.y = get_random_open_space()
+static_npc.generate_personality_document()
 
 random_npc = RandomNPC(x=0, y=0, home_x=0, home_y=0, image_path='path_to_image')
 random_npc.x, random_npc.y = get_random_open_space()
 random_npc.home_x, random_npc.home_y = random_npc.x, random_npc.y
+random_npc.generate_personality_document()
 
 aggressive_npc = AggressiveNPC(x=0, y=0, image_path='path_to_image')
 aggressive_npc.x, aggressive_npc.y = get_random_open_space()
-
+aggressive_npc.generate_personality_document()
 npcs = [static_npc, random_npc, aggressive_npc]
     
 # Font for text rendering
@@ -195,9 +197,9 @@ while running:
 
     # Draw the dialogue box with item message if it exists
     if item_message_active:
-        draw_dialogue_box(screen, font, "", "", item_message)  # Show only item message
+        draw_dialogue_box(screen, font, "","", "", item_message)  # Show only item message
     elif dialogue_active:
-        draw_dialogue_box(screen, font, npc_message, user_input)
+        draw_dialogue_box(screen, font, current_npc, npc_message, user_input)
     elif player_at_item:
         #show promopt to pick up item
         item_id = maze.grid[player.y][player.x]

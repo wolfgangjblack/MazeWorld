@@ -1,7 +1,7 @@
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
 
-def draw_dialogue_box(screen, font, npc_message, user_message, item_message=None):
+def draw_dialogue_box(screen, font, current_npc, npc_message, user_message, item_message=None):
     """Draw the dialogue box at the bottom of the screen."""
     dialogue_box_rect = pygame.Rect(0, SCREEN_HEIGHT - 100, SCREEN_WIDTH, 100)
     pygame.draw.rect(screen, WHITE, dialogue_box_rect)
@@ -12,7 +12,7 @@ def draw_dialogue_box(screen, font, npc_message, user_message, item_message=None
         screen.blit(item_text_surface, (10, SCREEN_HEIGHT - 90))
     else:
         # NPC message
-        npc_text_surface = font.render(f"NPC: {npc_message}", True, BLACK)
+        npc_text_surface = font.render(f"{current_npc.name}: {npc_message}", True, BLACK)
         screen.blit(npc_text_surface, (10, SCREEN_HEIGHT - 90))
 
         # User message

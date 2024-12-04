@@ -68,11 +68,15 @@ class NPC(BaseModel):
         if not self.environment:
             self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
 
-        # Generate name, personality, job, and hobby
-        self.name = random.choice(names)
-        self.personality = random.choice(personalities)
-        self.job = random.choice(jobs[self.environment])
-        self.hobby = random.choice(hobbies[self.environment])
+        # Generate environment if not provided
+        if not self.environment:
+            self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
+
+        # Populate missing fields
+        self.name = self.name or random.choice(names)
+        self.personality = self.personality or random.choice(personalities)
+        self.job = self.job or random.choice(jobs[self.environment])
+        self.hobby = self.hobby or random.choice(hobbies[self.environment])
         
     def can_move(self):
         """check if the NPC can move based on the move interval"""
@@ -82,12 +86,13 @@ class NPC(BaseModel):
             return True
         return False
 
-    def build_prompt(self, player_input: str) -> str:
+    def build_prompt(self) -> str:
         prompt = (
             f"""You are {self.name},{self.job} in a {self.environment}. This environment is in a fantasy
             setting, so limit discussions to the environment, the npc's job, and the npc's hobbies. 
             The npc's personality is {self.personality}. The npc's hobbies are {self.hobby}."""
         )
+        return prompt
     
     def generate_response(self, prompt: str) -> str:
         """Generate a response using the LLM."""
