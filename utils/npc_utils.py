@@ -1,6 +1,7 @@
 import torch
 import pygame
 import random
+from typing import Optional
 from config import GRID_SIZE
 from pydantic import BaseModel
 from utils.display_utils import game_to_screen
@@ -21,12 +22,12 @@ class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
     x: int
     y: int
-    image_path: str
-    name :str
-    job: str
-    hobby: str
-    personality: str
-    environment: str
+    image_path: Optional[str] = None
+    name : Optional[str] = None
+    job: Optional[str] = None
+    hobby: Optional[str] = None
+    personality: Optional[str] = None
+    environment: Optional[str] = None
     interaction_history: list = []
     color: tuple = (0, 255, 0)  # Green by default
     move_interval: int = 10000  # Move every 10 seconds
