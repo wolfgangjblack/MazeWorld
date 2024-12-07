@@ -4,7 +4,7 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, NUM_FOOD, NUM_DRIN
 from utils.maze_utils import Maze
 from utils.pc_utils import PlayerCharacter
 from utils.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
-from utils.dialogue_utils import draw_dialogue_box, player_near_npc, handle_npc_response
+from utils.dialogue_utils import DialogueBox
 from utils.item_utils import item_registry, ENTITY_IDS
 
 # Initialize pygame
@@ -13,10 +13,15 @@ pygame.font.init()
 
 # Create the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+font = pygame.font.Font(None, 32)
+
+#Create Dialogue Box Instance
+dialogue_box = DialogueBox(screen, font)
 
 # Initialize and generate the maze
 maze = Maze()
 maze.generate()
+maze.place_event_tiles()
 maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
 
 # Find open spaces for player and NPC placemen
@@ -29,7 +34,10 @@ def get_random_open_space():
 def draw_inventory(screen, font, player):
     """Draw the inventory over the game screen."""
     # Inventory background
-    pygame.draw.rect(screen, (200, 200, 200), pygame.Rect(100, 100, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 200))
+    pygame.draw.rect(screen,
+                     (200, 200, 200),
+                     pygame.Rect(100, 100, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 200)
+                     )
     
     # Inventory items
     inventory = player.get_inventory()
@@ -53,33 +61,25 @@ player = PlayerCharacter(start_x=player_pos[0], start_y=player_pos[1])
 
 # Initialize NPCs at random open spaces
 static_npc = StaticNPC(x=0, y=0, image_path='path_to_image')
+static_npc.prepare()
 static_npc.x, static_npc.y = get_random_open_space()
 
 random_npc = RandomNPC(x=0, y=0, home_x=0, home_y=0, image_path='path_to_image')
 random_npc.x, random_npc.y = get_random_open_space()
 random_npc.home_x, random_npc.home_y = random_npc.x, random_npc.y
+random_npc.prepare()
 
 aggressive_npc = AggressiveNPC(x=0, y=0, image_path='path_to_image')
 aggressive_npc.x, aggressive_npc.y = get_random_open_space()
-
+aggressive_npc.prepare()
 npcs = [static_npc, random_npc, aggressive_npc]
-    
-# Font for text rendering
-font = pygame.font.Font(None, 32)
+
+#init inventory
+inventory_active = False
+item_message_active = False  # Track if an item message is active
 
 # Game loop
 running = True
-
-#dialogue state
-dialogue_active = False
-inventory_active = False
-input_active = False
-current_npc = None
-user_input = ""
-npc_message = ""
-item_message = None  # Track item usage message to display in dialogue box
-item_message = None  # Track item usage message to display in dialogue box
-item_message_active = False  # Track if an item message is active
 
 while running:
     screen.fill(BLACK)
@@ -102,18 +102,11 @@ while running:
         player.draw(screen)
         player.draw_hud(screen)
         
-    if not inventory_active:  # Disable NPC interaction when inventory is open
-        if player_near_npc((player.x, player.y), static_npc):
-            current_npc = static_npc
-        elif player_near_npc((player.x, player.y), random_npc):
-            current_npc = random_npc
-        elif player_near_npc((player.x, player.y), aggressive_npc):
-            current_npc = aggressive_npc
-        else:
-            current_npc = None
+    if not inventory_active and not dialogue_box.dialogue_active:
+        current_npc = player.get_nearby_npc(npcs)
 
-        # If the player is near an NPC, show "Press enter to talk"
-        if current_npc and not dialogue_active and not item_message_active:
+        # If the player is near an NPC, show "Press Enter to talk"
+        if current_npc and not item_message_active:
             text_surface = font.render("Press Enter to talk", True, WHITE)
             screen.blit(text_surface, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
         
@@ -127,84 +120,85 @@ while running:
         if event.type == pygame.KEYDOWN:
             # Close the item message dialogue box when pressing Enter or Esc
             if (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE) and item_message_active:
-                item_message = None  # Clear item message
-                item_message_active = False  # Close the item message box
+                item_message = None
+                item_message_active = False
+                dialogue_box.clear_item_message()
 
             # Only allow item use after the item message box has been closed
             elif inventory_active and not item_message_active:
-                if event.key == pygame.K_UP:
-                    player.selected_item_index = (player.selected_item_index - 1) % len(player.get_inventory())
-                elif event.key == pygame.K_DOWN:
-                    player.selected_item_index = (player.selected_item_index + 1) % len(player.get_inventory())
-                elif event.key == pygame.K_RETURN:
-                    # Use the selected item
-                    item_message = player.use_item()
-                    item_message_active = True  # Set the flag to show the item message
+                # Inventory navigation and item usage code...
+                pass
 
-                elif event.key == pygame.K_g:
-                    # Give the selected item
-                    item_message = player.give_item()
-                    item_message_active = True  # Set the flag to show the item message
-
-            # Handle movement only when no item message is active and inventory is closed
-            elif not dialogue_active and not inventory_active and not item_message_active:
+            # Handle movement only when no item message is active, inventory is closed, and not in dialogue
+            elif not dialogue_box.dialogue_active and not inventory_active and not item_message_active:
                 player.move(event, maze)
                 # After moving, update item and NPC status
-                player_at_item = player.is_item_at_player_position(maze)
-                current_npc = player.get_nearby_npc(npcs)
+                if player.is_on_event_tile(maze):    
+                    dialogue_box.start_event(maze)
+                    maze.grid[player.y][player.x] = 0
+                
+                else:
+                    
+                    player_at_item = player.is_item_at_player_position(maze)
+                    current_npc = player.get_nearby_npc(npcs)
+
+                if not dialogue_box.dialogue_active:
+                    current_npc = player.get_nearby_npc(npcs)
 
             # Start conversation with NPC (only if inventory is closed)
             if not inventory_active and not item_message_active and event.key == pygame.K_RETURN:
                 if player_at_item:
-                    #Player is standing on item
+                    # Player is standing on item
                     item_message = player.pick_up_item(maze)
                     item_message_active = True
                     player_at_item = False
-                if current_npc and not dialogue_active:
+                    dialogue_box.set_item_message(item_message)
+                elif current_npc and not dialogue_box.dialogue_active:
                     # Activate chat
-                    dialogue_active = True
-                    npc_message = "hello"  # NPC says "hello"
-                    user_input = ""  # Clear user input
-                    input_active = True
-                    conversation_counter = 0  # Reset conversation counter
-                elif dialogue_active and input_active:
+                    dialogue_box.start_dialogue(current_npc)
+                elif dialogue_box.dialogue_active and dialogue_box.input_active:
                     # NPC responds with player's message or silence
-                    npc_message = handle_npc_response(npc_message, user_input, conversation_counter)
-                    user_input = ""  # Clear player input
-                    conversation_counter += 1  # Increment conversation counter
+                    dialogue_box.update_dialogue(dialogue_box.user_message)
 
             # Handle typing input for NPC dialogue
-            if input_active and event.key != pygame.K_RETURN:
+            if dialogue_box.input_active and event.key != pygame.K_RETURN:
                 if event.key == pygame.K_BACKSPACE:
-                    user_input = user_input[:-1]  # Remove last character
+                    dialogue_box.user_message = dialogue_box.user_message[:-1]
                 else:
-                    user_input += event.unicode  # Add typed character
+                    dialogue_box.user_message += event.unicode
+
+            #Handle Scrolling
+            if dialogue_box.dialogue_active:
+                if event.key == pygame.K_UP:
+                    dialogue_box.scroll_up()
+                elif event.key == pygame.K_DOWN:
+                    dialogue_box.scroll_down()
 
             # Escape key to exit conversation
-            if event.key == pygame.K_ESCAPE and dialogue_active:
-                dialogue_active = False  # Exit dialogue mode
-                input_active = False  # Stop collecting input
-                npc_message = ""  # Clear NPC message
-                user_input = ""  # Clear user input
-
+            if event.key == pygame.K_ESCAPE:
+                if dialogue_box.dialogue_active:
+                    dialogue_box.end_dialogue()
+                    current_npc = None
+                elif inventory_active:
+                    inventory_active = False
+                
             # Open/close inventory
-            if event.key == pygame.K_i and not dialogue_active:
-                inventory_active = not inventory_active  # Toggle inventory
-            elif event.key == pygame.K_ESCAPE and inventory_active:
-                inventory_active = False  # Close inventory
+            if event.key == pygame.K_i and not dialogue_box.dialogue_active:
+                inventory_active = not inventory_active
 
     # Draw the dialogue box with item message if it exists
-    if item_message_active:
-        draw_dialogue_box(screen, font, "", "", item_message)  # Show only item message
-    elif dialogue_active:
-        draw_dialogue_box(screen, font, npc_message, user_input)
+    if item_message_active or dialogue_box.dialogue_active:
+        dialogue_box.draw()
     elif player_at_item:
-        #show promopt to pick up item
+        # Show prompt to pick up item
         item_id = maze.grid[player.y][player.x]
         item = ENTITY_IDS[item_id]
         prompt = f"Press 'Enter' to pick up {item}"
-        draw_dialogue_box(screen, font, "", "", prompt)
-    
+        dialogue_box.set_item_message(prompt)
+        dialogue_box.draw()
+    else:
+        dialogue_box.clear_item_message()
+        
     # Update the screen
     pygame.display.flip()
 

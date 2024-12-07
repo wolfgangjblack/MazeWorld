@@ -1,15 +1,20 @@
+import os
 import torch
 import pygame
 import random
 from typing import Optional
-from config import GRID_SIZE
+from config import GRID_SIZE, LLM_MODEL_PATH, HF_ENV
 from pydantic import BaseModel
 from utils.display_utils import game_to_screen
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-tokenizer = AutoTokenizer.from_pretrained('mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated', use_fast=False)
-model = AutoModelForCausalLM.from_pretrained('mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated')
-model.eval()
+
+hf_token = os.getenv(HF_ENV)
+
+tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
+model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_PATH,
+                                             token = hf_token)
+model.to('cuda')
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -68,11 +73,15 @@ class NPC(BaseModel):
         if not self.environment:
             self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
 
-        # Generate name, personality, job, and hobby
-        self.name = random.choice(names)
-        self.personality = random.choice(personalities)
-        self.job = random.choice(jobs[self.environment])
-        self.hobby = random.choice(hobbies[self.environment])
+        # Generate environment if not provided
+        if not self.environment:
+            self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
+
+        # Populate missing fields
+        self.name = self.name or random.choice(names)
+        self.personality = self.personality or random.choice(personalities)
+        self.job = self.job or random.choice(jobs[self.environment])
+        self.hobby = self.hobby or random.choice(hobbies[self.environment])
         
     def can_move(self):
         """check if the NPC can move based on the move interval"""
@@ -82,34 +91,75 @@ class NPC(BaseModel):
             return True
         return False
 
-    def build_prompt(self, player_input: str) -> str:
-        prompt = (
-            f"""You are {self.name},{self.job} in a {self.environment}. This environment is in a fantasy
+    def system_instruct(self) -> str:
+        instructions = f"""'sys': You are playing a video game character. You are {self.name},a {self.job} in a {self.environment}. This environment is in a fantasy
             setting, so limit discussions to the environment, the npc's job, and the npc's hobbies. 
-            The npc's personality is {self.personality}. The npc's hobbies are {self.hobby}."""
-        )
+            The npc's personality is {self.personality}. The npc's hobbies are {self.hobby}.
+            
+            Always follow these rules:
+            1. do not speak for the player
+            2. do not Roleplay heavily
+            3. do not break the fourth wall
+            4. do not hallucinate
+            5. converse with the NPC but maintain conversational context            
+            """
+        
+        self.interaction_history.append(instructions)
+        
+        return instructions
     
-    def generate_response(self, prompt: str) -> str:
+    def construct_chat_history(self, player_input: str = "") -> str:
+        if len(self.interaction_history) == 1:
+    
+            self.interaction_history.append(f"player input: walks up and greets {self.name}")
+            self.interaction_history.append(f"sys: This is the first time you are meeting the player character in this {self.environment}. Greet them according to your personal details. Do not continue the conversation by yourself.")
+            self.interaction_history.append(f"{self.name} response:")
+            history = self.interaction_history
+            
+        elif len(self.interaction_history) > 5:
+            history = [self.interaction_history[0]]
+            self.interaction_history.append(f'player: {player_input}')
+            self.interaction_history.append(f"{self.name} response:")
+            history.extend(self.interaction_history[-6:])
+            
+        else:
+            self.interaction_history.append(f'player: {player_input}')
+            self.interaction_history.append(f"{self.name} response:")
+            history = self.interaction_history
+            
+        return history
+    
+    def generate_response(self, player_input) -> str:
         """Generate a response using the LLM."""
+        
         # Tokenize the prompt
-        inputs = tokenizer(prompt, return_tensors='pt', truncation=True, max_length=1024)
+        history = self.construct_chat_history(player_input)
+        inputs = tokenizer("\n#################\n".join(history),
+                   return_tensors='pt',
+                   truncation=True,
+                   max_length=1024)
+        
         if torch.cuda.is_available():
             inputs = {k: v.to('cuda') for k, v in inputs.items()}
-
-        # Generate the response
+            
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=150,
                 pad_token_id=tokenizer.eos_token_id,
-                do_sample=True,
-                temperature=0.7
+                temperature=1.0
             )
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        # Extract the generated response (excluding the prompt)
-        generated_response = response[len(tokenizer.decode(inputs['input_ids'][0], skip_special_tokens=True)):].strip()
-        return generated_response
-    
+
+        response = tokenizer.decode(outputs[0], 
+                    skip_special_tokens=True)
+        
+        self.interaction_history[-1] = response.split("\n#################\n")[-1]
+        
+        if self.is_appropriate(response):
+            return f"{self.name}:{response.split(':')[-1]}"
+        else:
+            return self.get_fallback_response()
+            
     def is_appropriate(self, response: str) -> bool:
         """Check if the response is appropriate."""
         # Simple keyword-based filtering
@@ -127,28 +177,15 @@ class NPC(BaseModel):
             "I don't have anything to say about that."
         ]
         return random.choice(fallback_responses)
-
-    def npc_chat(self, player_input: str) -> str:
-        """Generate NPC chat using the LLM."""
-        prompt = self.build_prompt(player_input)
-        response = self.generate_response(prompt)
-
-        # Optionally filter the response
-        if not self.is_appropriate(response):
-            response = self.get_fallback_response()
-
-        # Update interaction history
-        self.interaction_history.append(f"Player: {player_input}")
-        self.interaction_history.append(f"{self.name}: {response}")
-
-        return response
+    
     
 class StaticNPC(NPC):
     color: tuple = (0, 255, 0)
     """NPC that doesn't move."""
-    
-    def update(self):
-        pass
+
+    def prepare(self):
+        self.generate_personality_document()
+        self.system_instruct()
 
 class RandomNPC(NPC):
     """NPC that moves randomly around a fixed point."""
@@ -156,6 +193,10 @@ class RandomNPC(NPC):
     home_x: int
     home_y: int
     movement_range: int = 2
+    
+    def prepare(self):
+        self.generate_personality_document()
+        self.system_instruct()
     
     def update(self, maze):
         
@@ -178,6 +219,10 @@ class RandomNPC(NPC):
 class AggressiveNPC(NPC):
     """NPC that moves randomly until the player is within 5 squares and in line of sight."""
     color:tuple = (255, 0, 0)
+    
+    def prepare(self):
+        self.generate_personality_document()
+        self.system_instruct()
     
     def update(self, maze, player_pos):
         """Move randomly or move toward player if within range and in line of sight."""

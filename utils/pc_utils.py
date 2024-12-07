@@ -121,6 +121,9 @@ class PlayerCharacter:
         cell_value = maze.grid[self.y][self.x]
         return cell_value in item_registry  # item_registry contains item IDs
 
+    def is_on_event_tile(self, maze):
+        return maze.grid[self.y][self.x] == maze.event_tile_id
+
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         cell_value = maze.grid[self.y][self.x]
