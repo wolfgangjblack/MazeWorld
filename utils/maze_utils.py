@@ -1,6 +1,7 @@
+import math 
 import pygame
 import random
-from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE
+from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
 from utils.display_utils import game_to_screen
 from utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
 
@@ -14,11 +15,15 @@ DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # (dx, dy)
 class Maze:
     def __init__(self):
         """Initialize the maze object with a grid."""
+        self.event_percent = EVENT_PERCENT
+        self.event_tile_id = -1
+        self.wall_tile_id = 1
+        self.environment = random.choice(["forest", "cave", "dungeon", "castle", "house", "city"])
         self.grid = self.initialize_maze()
 
     def initialize_maze(self):
         """Initialize a grid where all cells are walls (1)."""
-        return [[1 for _ in range(MAZE_WIDTH)] for _ in range(MAZE_HEIGHT)]
+        return [[self.wall_tile_id for _ in range(MAZE_WIDTH)] for _ in range(MAZE_HEIGHT)]
 
     def carve_passages_from(self, x, y):
         """Recursive backtracking algorithm to carve maze paths with hallway size control."""
@@ -38,7 +43,7 @@ class Maze:
 
             dx, dy = direction
             nx, ny = x + dx * 2, y + dy * 2  # Jump 2 cells to leave walls
-            if 0 <= nx < MAZE_WIDTH and 0 <= ny < MAZE_HEIGHT and self.grid[ny][nx] == 1:
+            if 0 <= nx < MAZE_WIDTH and 0 <= ny < MAZE_HEIGHT and self.grid[ny][nx] == self.wall_tile_id:
                 # Carve passage based on the hallway size
                 self.carve_hallway(x, y, direction, hallway_width)
 
@@ -124,7 +129,24 @@ class Maze:
                 if cell == 0:  # 0 means open space
                     open_spaces.append((x, y))
         return open_spaces
+    
+    def place_event_tiles(self, random_var: float = 0.05):
+        """Place event tiles in the maze."""
+        open_spaces = self.find_open_spaces()
         
+        #Randomly vary event percent - later
+        if MAZE_SEED == -1:
+            event_percent = random.uniform(self.event_percent -random_var, self.event_percent + random_var)
+
+        else:
+            event_percent = self.event_percent
+        
+        num_events = math.ceil(len(open_spaces) * event_percent)
+        for _ in range(num_events):
+            x, y = random.choice(open_spaces)
+            self.grid[y][x] = self.event_tile_id
+            open_spaces.remove((x, y))
+    
     def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1):
         open_spaces = self.find_open_spaces()  # Find open spaces in the maze
         random.shuffle(open_spaces)  # Shuffle the spaces to randomize placement

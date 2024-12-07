@@ -4,11 +4,12 @@ MazeWorld is a simple 2d overhead RPG adventure where you play a square trying t
 
 ## Upcoming development
 0. Start/End screens
-1. Implement LLM driven NPC dialogue
-    - next step: make fit in box
-2. Implement random events driven by NPCs 
-3. Implement Diffusion Model generated profiles for NPCs
-4. Implement Portals to next level
-5. Implement level backgrounds and themes
-6. rework items to be thematic 
-7. rework npcs and events to be thematic
+1. Implement random events 
+    - random events on floor
+        - make sure there are 10% of the spaces covered in events
+    - NPCs aware of random events nearby and will mention them
+        (if random event within N steps, they say something like I think I saw something nearby...)
+    - NPCS have a random event?
+2. Implement Diffusion Model generated profiles for NPCs
+3. Implement Portals to next level
+4. Implement level backgrounds and themes

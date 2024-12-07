@@ -21,6 +21,7 @@ dialogue_box = DialogueBox(screen, font)
 # Initialize and generate the maze
 maze = Maze()
 maze.generate()
+maze.place_event_tiles()
 maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
 
 # Find open spaces for player and NPC placemen
@@ -33,7 +34,10 @@ def get_random_open_space():
 def draw_inventory(screen, font, player):
     """Draw the inventory over the game screen."""
     # Inventory background
-    pygame.draw.rect(screen, (200, 200, 200), pygame.Rect(100, 100, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 200))
+    pygame.draw.rect(screen,
+                     (200, 200, 200),
+                     pygame.Rect(100, 100, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 200)
+                     )
     
     # Inventory items
     inventory = player.get_inventory()
@@ -129,7 +133,15 @@ while running:
             elif not dialogue_box.dialogue_active and not inventory_active and not item_message_active:
                 player.move(event, maze)
                 # After moving, update item and NPC status
-                player_at_item = player.is_item_at_player_position(maze)
+                if player.is_on_event_tile(maze):    
+                    dialogue_box.start_event(maze)
+                    maze.grid[player.y][player.x] = 0
+                
+                else:
+                    
+                    player_at_item = player.is_item_at_player_position(maze)
+                    current_npc = player.get_nearby_npc(npcs)
+
                 if not dialogue_box.dialogue_active:
                     current_npc = player.get_nearby_npc(npcs)
 
