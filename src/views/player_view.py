@@ -3,12 +3,12 @@ from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH
 from src.utils.display_utils import game_to_screen
 
 class PlayerView:
-    def draw_player(screen, player):
+    def draw_player(self,screen, player):
         screen_x, screen_y = game_to_screen(player.x, player.y)
         player_rect = pygame.Rect(screen_x, screen_y, GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(screen, player.color, player_rect)
         
-    def draw_hud(screen, player):
+    def draw_hud(self, screen, player):
         bar_width = (SCREEN_WIDTH - 80) // 3
         bar_height = 20
         spacing = 20

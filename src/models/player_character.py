@@ -14,6 +14,7 @@ class PlayerCharacter(BaseModel):
     max_health: int = 100
     max_thirst: int = 100
     max_speed: float = 2.0
+    selected_item_index: int = 0
     inventory: Dict[str, object] = Field(default_factory=dict)
     
     class Config: 
@@ -43,6 +44,13 @@ class PlayerCharacter(BaseModel):
             self.inventory[item.name].quantity += item.quantity
         else:
             self.inventory[item.name] = item
+            
+    def remove_from_inventory(self, item_name):
+        """Remove an item from the player's inventory."""
+        if item_name in self.inventory:
+            self.inventory[item_name].quantity -= 1
+            if self.inventory[item_name].quantity == 0:
+                del self.inventory[item_name]
 
     def get_inventory(self):
         """Return the player's inventory as a list of tuples (item name, quantity)."""
