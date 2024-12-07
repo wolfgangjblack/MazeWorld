@@ -1,11 +1,20 @@
 import pygame
 import random
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, NUM_FOOD, NUM_DRINKS, NUM_TOOLS 
-from utils.maze_utils import Maze
-from utils.pc_utils import PlayerCharacter
-from utils.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
-from utils.dialogue_utils import DialogueBox
-from utils.item_utils import item_registry, ENTITY_IDS
+
+#Classes
+from src.models.pc_utils import PlayerCharacter
+from src.models.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
+
+#Utilities
+from src.utils.maze_utils import Maze
+from src.utils.dialogue_utils import DialogueBox
+from src.utils.item_utils import item_registry, ENTITY_IDS
+
+#Views
+from src.views.player_view import PlayerView
+
+#Controls
 
 # Initialize pygame
 pygame.init()
@@ -57,7 +66,7 @@ open_spaces = maze.find_open_spaces()
 player_pos = list(get_random_open_space())  # Use list to modify position later
 
 # Create the player character
-player = PlayerCharacter(start_x=player_pos[0], start_y=player_pos[1])
+player = PlayerCharacter(x=player_pos[0], y=player_pos[1])
 
 # Initialize NPCs at random open spaces
 static_npc = StaticNPC(x=0, y=0, image_path='path_to_image')
@@ -99,8 +108,8 @@ while running:
         aggressive_npc.draw(screen)
 
         # Draw the player
-        player.draw(screen)
-        player.draw_hud(screen)
+        PlayerView.draw_player(screen, player)
+        PlayerView.draw_hud(screen, player)
         
     if not inventory_active and not dialogue_box.dialogue_active:
         current_npc = player.get_nearby_npc(npcs)
@@ -118,6 +127,14 @@ while running:
             running = False
 
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT:
+                player.move(dx=-1, dy=0, maze=maze)
+            elif event.key == pygame.K_RIGHT:
+                player.move(dx=1, dy=0, maze=maze)
+            elif event.key == pygame.K_UP:
+                player.move(dx=0, dy=-1, maze=maze)
+            elif event.key == pygame.K_DOWN:
+                player.move(dx=0, dy=1, maze=maze)
             # Close the item message dialogue box when pressing Enter or Esc
             if (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE) and item_message_active:
                 item_message = None
@@ -131,7 +148,6 @@ while running:
 
             # Handle movement only when no item message is active, inventory is closed, and not in dialogue
             elif not dialogue_box.dialogue_active and not inventory_active and not item_message_active:
-                player.move(event, maze)
                 # After moving, update item and NPC status
                 if player.is_on_event_tile(maze):    
                     dialogue_box.start_event(maze)

@@ -135,16 +135,17 @@ class DialogueBox:
         self.scroll_offset = max(self.scroll_offset, 0)
         
     def start_event(self, environment):
-        self.event_active = True
-        self.dialogue_active = True
-        self.input_actice = True
-        self.awaiting_roll = False
-        self.conversation_history = []
+        pass
+        # self.event_active = True
+        # self.dialogue_active = True
+        # self.input_actice = True
+        # self.awaiting_roll = False
+        # self.conversation_history = []
         
-        #Generate the event using the LLM
-        self.current_event = self.generate_event(environment)
-        self.conversation_history.append(self.current_event['description'])
-        self.user_message = ""
+        # #Generate the event using the LLM
+        # self.current_event = self.generate_event(environment)
+        # self.conversation_history.append(self.current_event['description'])
+        # self.user_message = ""
     
     def generate_event(self, environment):
         #Generate event using the LLM

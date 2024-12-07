@@ -5,7 +5,7 @@ import random
 from typing import Optional
 from config import GRID_SIZE, LLM_MODEL_PATH, HF_ENV
 from pydantic import BaseModel
-from utils.display_utils import game_to_screen
+from src.utils.display_utils import game_to_screen
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 

@@ -2,8 +2,8 @@ import math
 import pygame
 import random
 from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
-from utils.display_utils import game_to_screen
-from utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
+from src.utils.display_utils import game_to_screen
+from src.utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
 
 # Set seed for deterministic mazes
 if MAZE_SEED != -1:
