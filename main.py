@@ -3,8 +3,8 @@ import random
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE, NUM_FOOD, NUM_DRINKS, NUM_TOOLS 
 
 #Classes
-from src.models.pc_utils import PlayerCharacter
-from src.models.npc_utils import StaticNPC, RandomNPC, AggressiveNPC
+from src.models.player_character import PlayerCharacter
+from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
 
 #Utilities
 from src.utils.maze_utils import Maze
@@ -13,6 +13,7 @@ from src.utils.item_utils import item_registry, ENTITY_IDS
 
 #Views
 from src.views.player_view import PlayerView
+from src.views.npc_view import NPCView
 
 #Controls
 
@@ -92,7 +93,9 @@ running = True
 
 while running:
     screen.fill(BLACK)
+    current_time = pygame.time.get_ticks()
 
+            
     if inventory_active:
         # Draw inventory if it's active
         draw_inventory(screen, font, player)
@@ -100,12 +103,15 @@ while running:
         # Draw the maze
         maze.draw(screen)
 
-        # Update and draw NPCs
-        static_npc.draw(screen)
-        random_npc.update(maze)
-        random_npc.draw(screen)
-        aggressive_npc.update(maze, (player.x, player.y))
-        aggressive_npc.draw(screen)
+        npc_view = NPCView()
+        for npc in npcs:
+            npc_view.draw_npc(screen, npc)
+                
+        for npc in npcs:
+            if isinstance(npc, RandomNPC):
+                npc.update_position(maze, current_time)
+            elif isinstance(npc, AggressiveNPC):
+                npc.update_position(maze, (player.x, player.y), current_time)
 
         # Draw the player
         PlayerView.draw_player(screen, player)

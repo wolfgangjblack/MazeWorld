@@ -1,5 +1,6 @@
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from src.utils.llm_service import generate_npc_response
 
 class DialogueBox:
     def __init__(self, screen, font):
@@ -70,7 +71,7 @@ class DialogueBox:
         
     def handle_npc_response(self, user_input):
         if self.current_npc:
-            npc_message = self.current_npc.generate_response(user_input)
+            npc_message = generate_npc_response(self.current_npc, user_input)
             return npc_message
         else:
             return "There is no one here to talk too..."
@@ -102,7 +103,7 @@ class DialogueBox:
     def start_dialogue(self, npc):
         self.dialogue_active = True
         self.current_npc = npc
-        self.npc_message = self.current_npc.generate_response('')
+        self.npc_message = generate_npc_response(npc, '')
         self.user_message = ""
         self.input_active = True
         self.conversation_history = []
