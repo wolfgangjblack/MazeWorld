@@ -1,7 +1,7 @@
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from config import LLM_MODEL_PATH, HF_ENV
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 hf_token = os.getenv(HF_ENV)
 tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)

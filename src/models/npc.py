@@ -1,6 +1,6 @@
 import random
-from typing import Optional, List, Tuple
 from pydantic import BaseModel
+from typing import Optional, List, Tuple
 
 class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""

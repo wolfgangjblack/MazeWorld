@@ -1,13 +1,19 @@
 import pygame
 from config import GRID_SIZE, WHITE, BLACK
+from src.models.items import Food, Drink, Tool
 from src.utils.display_utils import game_to_screen
-from src.utils.item_utils import Food, Drink, Tool, item_registry
+from src.utils.dataloader_utils import load_json_data, create_item_from_data
+
+items_data = load_json_data('data/items/items.json')
+
+item_registry = {}
+for item_id_str, item_info in items_data.items():
+    item_id = int(item_id_str)
+    item_obj = create_item_from_data(item_id, item_info)
+    item_registry[item_id] = item_obj
 
 class MazeView:
     def draw_maze(self, screen, maze):
-        WALL_SCALE = 0.5
-        WALL_SIZE = GRID_SIZE * WALL_SCALE
-        WALL_OFFSET = (GRID_SIZE - WALL_SIZE) / 2
 
         for y, row in enumerate(maze.grid):
             for x, cell in enumerate(row):

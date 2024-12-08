@@ -1,6 +1,5 @@
-import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
-from src.utils.llm_service import generate_npc_response
+from config import SCREEN_WIDTH
+from src.utils.conversation_utils import generate_npc_response
 
 class DialogueBox:
     def __init__(self, screen, font):

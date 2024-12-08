@@ -1,7 +1,8 @@
 import math 
 import random
+from src.models.items import Food, Drink, Tool
+from src.utils.dataloader_utils import load_json_data, create_item_from_data
 from config import MAZE_HEIGHT, MAZE_WIDTH, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
-from src.utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
 
 # Set seed for deterministic mazes
 if MAZE_SEED != -1:
@@ -9,6 +10,19 @@ if MAZE_SEED != -1:
 
 # Directions for maze carving (up, down, left, right)
 DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # (dx, dy)
+
+items_data = load_json_data('data/items/items.json')
+
+item_registry = {}
+for item_id_str, item_info in items_data.items():
+    item_id = int(item_id_str)
+    item_obj = create_item_from_data(item_id, item_info)
+    item_registry[item_id] = item_obj
+
+ENTITY_IDS = load_json_data('data/items/entities.json')
+
+ENTITY_IDS = {int(k): v for k, v in ENTITY_IDS.items()}
+item_registry = {int(k): v for k, v in item_registry.items()}
 
 class Maze:
     def __init__(self):
@@ -120,27 +134,31 @@ class Maze:
             x, y = random.choice(open_spaces)
             self.grid[y][x] = self.event_tile_id
             open_spaces.remove((x, y))
-    
+        
     def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1):
-        open_spaces = self.find_open_spaces()  # Find open spaces in the maze
-        random.shuffle(open_spaces)  # Shuffle the spaces to randomize placement
+        open_spaces = self.find_open_spaces()
+        random.shuffle(open_spaces)
+        
+        item_ids = list(item_registry.keys())
 
-        item_ids = list(ENTITY_IDS.keys())  # Get the list of item IDs
-        
         def generate_items_by_class(cls, num_gens):
-            """Place items in the maze based on their class."""
             i = 0
-            while i < num_gens:
-                if open_spaces:
-                    x, y = open_spaces.pop()  # Get a random open space
-                    item_id = random.choice(item_ids)  # Choose a random item ID
-                    
-                    # Check if the item class matches (Food, Drink, or Tool)
-                    if isinstance(item_registry[item_id], cls):
-                        self.grid[y][x] = item_id  # Place the item in the grid (using the ID)
-                        i += 1  # Increment the counter when an item is successfully placed
-        
-        # Generate items based on the class
+            attempts = 0
+            max_attempts = 1000
+            while i < num_gens and attempts < max_attempts:
+                attempts += 1
+                if not open_spaces:
+                    break
+                x, y = open_spaces.pop()
+                item_id = random.choice(item_ids)
+                item = item_registry[item_id]
+
+                if isinstance(item, cls):
+                    self.grid[y][x] = item_id
+                    i += 1
+                # If not the right class, we just continue trying
+            # If after max_attempts or out of open spaces we haven't placed enough, we stop.
+
         generate_items_by_class(Food, num_food)
         generate_items_by_class(Drink, num_drink)
         generate_items_by_class(Tool, num_tools)
