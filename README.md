@@ -27,20 +27,19 @@ MazeWorld/
 Here we see the general build of the MazeWorld builder. 
 
 ## Development Roadmap to v0.1
-0. Refactor directory
 1. Refactor code for pre-generation llm primatives 
-2. add logs
-3. add saves
-4. add events
+2. add diffusion generated graphics
+3. add logs
+4. add saves
+5. add events
     - make sure there are 10% of the spaces covered in events
     - NPCs aware of random events nearby and will mention them
         (if random event within N steps, they say something like I think I saw something nearby...)
     - NPCS have a random event?5. add combat
-6. add diffusion generated graphics
-7. Start/Save/End screens 
-8. Implement Portals to next level
-9. Implement level backgrounds and themes
-10. Implement mac support for llm/dm generation
+6. Start/Save/Load/End screens 
+7. Implement Portals to next level
+8. Implement level backgrounds and themes
+9. Implement mac support for llm/dm generation
 
 
 ## Known Bugs
