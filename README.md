@@ -2,6 +2,8 @@
 
 MazeWorld is a simple 2d overhead RPG adventure where you play a square trying to find your way out of a fully connected maze.
 
+Written in python3.11.9
+
 ## Layout
 ```
 MazeWorld/

@@ -21,6 +21,7 @@ class GameController:
 
         # Initialize the main GameView
         self.game_view = GameView(screen, font, dialogue_box)
+        
 
     def run(self):
         """Main game loop."""

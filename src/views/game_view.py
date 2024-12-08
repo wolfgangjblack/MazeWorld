@@ -3,6 +3,7 @@ from config import BLACK, WHITE, SCREEN_WIDTH, SCREEN_HEIGHT
 from src.views.npc_view import NPCView
 from src.views.player_view import PlayerView
 from src.views.dialogue_view import DialogueBoxView
+from src.views.maze_view import MazeView
 from src.utils.item_utils import ENTITY_IDS
 
 class GameView:
@@ -10,6 +11,7 @@ class GameView:
         self.screen = screen
         self.font = font
         self.dialogue_box = dialogue_box
+        self.maze_view = MazeView()
         self.npc_view = NPCView()
         self.player_view = PlayerView()
         self.dialogue_view = DialogueBoxView(screen, font)
@@ -19,7 +21,7 @@ class GameView:
         if inventory_active:
             self.draw_inventory(player)
         else:
-            maze.draw(self.screen)
+            self.maze_view.draw_maze(self.screen, maze)
 
             for npc in npcs:
                 self.npc_view.draw_npc(self.screen, npc)
