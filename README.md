@@ -41,3 +41,8 @@ Here we see the general build of the MazeWorld builder.
 8. Implement Portals to next level
 9. Implement level backgrounds and themes
 10. Implement mac support for llm/dm generation
+
+
+## Known Bugs
+- npcs have a randomly generated env, rather than reading from the env of the maze
+- dialogue does not always start at the top of the text when npcs respond, it can start in the middle of the reply

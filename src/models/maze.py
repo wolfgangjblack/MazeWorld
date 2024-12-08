@@ -1,6 +1,6 @@
 import math 
 import random
-from config import GRID_SIZE, MAZE_HEIGHT, MAZE_WIDTH, WHITE, BLACK, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
+from config import MAZE_HEIGHT, MAZE_WIDTH, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
 from src.utils.item_utils import ENTITY_IDS, Food, Drink, Tool, item_registry
 
 # Set seed for deterministic mazes
@@ -92,6 +92,17 @@ class Maze:
                 if cell == 0:  # 0 means open space
                     open_spaces.append((x, y))
         return open_spaces
+    
+    def get_random_open_space(self):
+        """Get a random open space from the maze - use to place entities."""
+        open_spaces = self.find_open_spaces()
+        return random.choice(open_spaces)
+    
+    def place_character(self):
+        """Place a character in the maze."""
+        open_spaces = self.find_open_spaces()
+        space = random.choice(open_spaces)
+        return space[0], space[1]
     
     def place_event_tiles(self, random_var: float = 0.05):
         """Place event tiles in the maze."""
