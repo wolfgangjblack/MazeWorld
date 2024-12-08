@@ -8,7 +8,7 @@ from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
 
 #Utilities
 from src.utils.maze_utils import Maze
-from src.utils.dialogue_utils import DialogueBox
+from src.models.dialogue_box import DialogueBox
 from src.utils.item_utils import ENTITY_IDS
 
 #Views

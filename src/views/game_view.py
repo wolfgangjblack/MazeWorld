@@ -2,6 +2,7 @@ import pygame
 from config import BLACK, WHITE, SCREEN_WIDTH, SCREEN_HEIGHT
 from src.views.npc_view import NPCView
 from src.views.player_view import PlayerView
+from src.views.dialogue_view import DialogueBoxView
 from src.utils.item_utils import ENTITY_IDS
 
 class GameView:
@@ -11,6 +12,7 @@ class GameView:
         self.dialogue_box = dialogue_box
         self.npc_view = NPCView()
         self.player_view = PlayerView()
+        self.dialogue_view = DialogueBoxView(screen, font)
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active, current_npc, player_at_item):
         self.screen.fill(BLACK)
@@ -31,7 +33,7 @@ class GameView:
             text_surface = self.font.render("Press Enter to talk", True, WHITE)
             self.screen.blit(text_surface, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
 
-        self.draw_dialogue_and_messages(player, maze, inventory_active, item_message_active, player_at_item)
+        self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
 
     def draw_inventory(self, player):
         pygame.draw.rect(self.screen,
@@ -47,9 +49,9 @@ class GameView:
         exit_text = self.font.render("Press 'Esc' to exit", True, (0, 0, 0))
         self.screen.blit(exit_text, (150, SCREEN_HEIGHT - 150))
 
-    def draw_dialogue_and_messages(self, player, maze, inventory_active, item_message_active, player_at_item):
+    def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
         if item_message_active or self.dialogue_box.dialogue_active:
-            self.dialogue_box.draw()
+            self.dialogue_view.draw(self.dialogue_box)
         elif player_at_item:
             # Show prompt to pick up item
             item_id = maze.grid[player.y][player.x]

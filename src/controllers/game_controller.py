@@ -46,63 +46,99 @@ class GameController:
             if event.type == pygame.KEYDOWN:
                 self.handle_keydown(event)
 
+    def after_move_check(self):
+        # After the player moves, check for events, items, NPCs
+        if self.player.is_on_event_tile(self.maze):
+            self.dialogue_box.start_event(self.maze)
+            self.maze.grid[self.player.y][self.player.x] = 0
+        else:
+            self.player_at_item = self.player.is_item_at_player_position(self.maze)
+            self.current_npc = self.player.get_nearby_npc(self.npcs)
+
     def handle_keydown(self, event):
-        """Handle key presses."""
-        
-        # Movement keys (Handled only if no dialogue, no inventory, no item message)
-        if event.key in [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]:
-            if not self.dialogue_box.dialogue_active and not self.inventory_active and not self.item_message_active:
-                dx, dy = 0, 0
-                if event.key == pygame.K_LEFT:
-                    dx, dy = -1, 0
-                elif event.key == pygame.K_RIGHT:
-                    dx, dy = 1, 0
-                elif event.key == pygame.K_UP:
-                    dx, dy = 0, -1
-                elif event.key == pygame.K_DOWN:
-                    dx, dy = 0, 1
-                self.player.move(dx=dx, dy=dy, maze=self.maze)
+        # 1. If an item message is active, handle that first and exclusively.
+        if self.item_message_active:
+            if event.key == pygame.K_RETURN:
+                # Clear the item message
+                self.item_message_active = False
+                self.dialogue_box.clear_item_message()
+                return
+            if event.key == pygame.K_ESCAPE:
+                return
+            return
 
-                # After moving, check for items/events/NPCs
-                if self.player.is_on_event_tile(self.maze):
-                    self.dialogue_box.start_event(self.maze)
-                    self.maze.grid[self.player.y][self.player.x] = 0
-                else:
-                    self.player_at_item = self.player.is_item_at_player_position(self.maze)
-                    self.current_npc = self.player.get_nearby_npc(self.npcs)
-
-        # Close item message box
-        if (event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE) and self.item_message_active:
-            self.item_message = None
-            self.item_message_active = False
-            self.dialogue_box.clear_item_message()
-
-        # Inventory usage (not implemented details here, just placeholder)
-        if self.inventory_active and not self.item_message_active:
-            # Handle inventory navigation and usage
-            if self.inventory_active and not self.item_message_active:
+        # 2. If inventory is active (and we know item_message_active is false here).
+        if self.inventory_active:
+            if event.key == pygame.K_ESCAPE:
+                self.inventory_active = False
+                return
+            else:
+                # Handle inventory navigation and item usage (Up/own/Enter)
                 self.handle_inventory_input(event)
                 return
 
-        # Interact (Enter key actions)
-        if event.key == pygame.K_RETURN:
-            self.handle_enter_key()
-
-        # Dialogue input
-        if self.dialogue_box.input_active and event.key != pygame.K_RETURN:
-            self.handle_dialogue_input(event)
-
-        # Dialogue scrolling
+        # 3. If dialogue is active (NPC conversation)
         if self.dialogue_box.dialogue_active:
-            self.handle_dialogue_scrolling(event)
+            if event.key == pygame.K_UP:
+                self.dialogue_box.scroll_up()
+                return
+            elif event.key == pygame.K_DOWN:
+                self.dialogue_box.scroll_down()
+                return
+            elif event.key == pygame.K_ESCAPE:
+                self.dialogue_box.end_dialogue()
+                self.current_npc = None
+                return
+            elif event.key == pygame.K_RETURN and self.dialogue_box.input_active:
+                self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
+                return
+            elif self.dialogue_box.input_active:
+                if event.key == pygame.K_BACKSPACE:
+                    self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
+                else:
+                    self.dialogue_box.user_message += event.unicode
+                return
 
-        # Escape key actions
-        if event.key == pygame.K_ESCAPE:
-            self.handle_escape_key()
+            return
+
+        # 4. No dialogue, no inventory, no item message active: handle normal gameplay
+        if event.key in [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]:
+            dx, dy = 0, 0
+            if event.key == pygame.K_LEFT:
+                dx, dy = -1, 0
+            elif event.key == pygame.K_RIGHT:
+                dx, dy = 1, 0
+            elif event.key == pygame.K_UP:
+                dx, dy = 0, -1
+            elif event.key == pygame.K_DOWN:
+                dx, dy = 0, 1
+            self.player.move(dx=dx, dy=dy, maze=self.maze)
+            self.after_move_check()
+            return
+
+        # Interact key when no inventory/dialogue/item message
+        if event.key == pygame.K_RETURN:
+            # If player at item
+            if self.player_at_item:
+                item_message = self.player.pick_up_item(self.maze)
+                self.item_message_active = True
+                self.player_at_item = False
+                self.dialogue_box.set_item_message(item_message)
+                return
+            # If player near NPC
+            if self.current_npc:
+                self.dialogue_box.start_dialogue(self.current_npc)
+                return
 
         # Toggle inventory
-        if event.key == pygame.K_i and not self.dialogue_box.dialogue_active:
+        if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
+            return
+
+        # Escape key in normal state does nothing or can be assigned a function
+        if event.key == pygame.K_ESCAPE:
+            # If you want Escape to do something here, do it. Otherwise, no action.
+            return
 
     def handle_enter_key(self):
         """Handle actions triggered by pressing Enter."""
@@ -143,33 +179,25 @@ class GameController:
             self.inventory_active = False
             
     def handle_inventory_input(self, event):
-        """Handle navigation and usage of the player's inventory."""
         inventory = self.player.get_inventory()
-        inventory_length = len(inventory)
-        
-        if inventory_length == 0:
+        if not inventory:
             return
-            
+
+        inv_length = len(inventory)
         if event.key == pygame.K_UP:
-            # Move selection up
-            self.player.selected_item_index = (self.player.selected_item_index - 1) % inventory_length
+            self.player.selected_item_index = (self.player.selected_item_index - 1) % inv_length
         elif event.key == pygame.K_DOWN:
-            # Move selection down
-            self.player.selected_item_index = (self.player.selected_item_index + 1) % inventory_length
+            self.player.selected_item_index = (self.player.selected_item_index + 1) % inv_length
         elif event.key == pygame.K_RETURN:
             # Use the currently selected item
             message = self.player.use_item()
-            # If you want to show a message when item is used:
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
         elif event.key == pygame.K_u:
-            # Another key (like 'U') to use the currently selected item if you don't want to tie it to Enter
             message = self.player.use_item()
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
-        elif event.key == pygame.K_ESCAPE:
-            # Close inventory
-            self.inventory_active = False
+
             
     def update(self, current_time):
         """Update game logic (NPC movement, etc.)"""
