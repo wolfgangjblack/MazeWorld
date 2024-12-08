@@ -1,51 +1,24 @@
-import os
-import torch
-import pygame
 import random
-from typing import Optional
-from config import GRID_SIZE, LLM_MODEL_PATH, HF_ENV
 from pydantic import BaseModel
-from utils.display_utils import game_to_screen
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-
-hf_token = os.getenv(HF_ENV)
-
-tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
-model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_PATH,
-                                             token = hf_token)
-model.to('cuda')
-
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-elif torch.backends.mps.is_available():
-    device = torch.device('mps')
-    
-model.to(device)
+from typing import Optional, List, Tuple
 
 class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
     x: int
     y: int
-    image_path: Optional[str] = None
+    profile_image: Optional[str] = None
     name : Optional[str] = None
     job: Optional[str] = None
     hobby: Optional[str] = None
     personality: Optional[str] = None
     environment: Optional[str] = None
-    interaction_history: list = []
-    color: tuple = (0, 255, 0)  # Green by default
-    move_interval: int = 10000  # Move every 10 seconds
-    last_move_time: int = 0 #to track the last time an npc moved
+    interaction_history: List[str] = []
+    color: Tuple[int, int, int] = (0, 255, 0)  # Green by default
+    move_interval: int = 5000  # Move every 5 seconds
+    last_move_time: int = 0 #track the last time an npc moved (ms)
 
     class Config:
         arbitrary_types_allowed = True
-
-    def draw(self, screen):
-        """Draw the NPC at the specified position."""
-        screen_x, screen_y = game_to_screen(self.x, self.y)
-        rect = pygame.Rect(screen_x,screen_y, GRID_SIZE, GRID_SIZE)
-        pygame.draw.rect(screen, self.color, rect)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -73,19 +46,14 @@ class NPC(BaseModel):
         if not self.environment:
             self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
 
-        # Generate environment if not provided
-        if not self.environment:
-            self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
-
         # Populate missing fields
         self.name = self.name or random.choice(names)
         self.personality = self.personality or random.choice(personalities)
         self.job = self.job or random.choice(jobs[self.environment])
         self.hobby = self.hobby or random.choice(hobbies[self.environment])
         
-    def can_move(self):
+    def can_move(self, current_time: int) -> bool:
         """check if the NPC can move based on the move interval"""
-        current_time = pygame.time.get_ticks()
         if current_time - self.last_move_time >= self.move_interval:
             self.last_move_time = current_time
             return True
@@ -128,37 +96,6 @@ class NPC(BaseModel):
             history = self.interaction_history
             
         return history
-    
-    def generate_response(self, player_input) -> str:
-        """Generate a response using the LLM."""
-        
-        # Tokenize the prompt
-        history = self.construct_chat_history(player_input)
-        inputs = tokenizer("\n#################\n".join(history),
-                   return_tensors='pt',
-                   truncation=True,
-                   max_length=1024)
-        
-        if torch.cuda.is_available():
-            inputs = {k: v.to('cuda') for k, v in inputs.items()}
-            
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=150,
-                pad_token_id=tokenizer.eos_token_id,
-                temperature=1.0
-            )
-
-        response = tokenizer.decode(outputs[0], 
-                    skip_special_tokens=True)
-        
-        self.interaction_history[-1] = response.split("\n#################\n")[-1]
-        
-        if self.is_appropriate(response):
-            return f"{self.name}:{response.split(':')[-1]}"
-        else:
-            return self.get_fallback_response()
             
     def is_appropriate(self, response: str) -> bool:
         """Check if the response is appropriate."""
@@ -189,7 +126,7 @@ class StaticNPC(NPC):
 
 class RandomNPC(NPC):
     """NPC that moves randomly around a fixed point."""
-    color: tuple = (0, 255, 255)
+    color: Tuple[int, int, int] = (0, 255, 255)
     home_x: int
     home_y: int
     movement_range: int = 2
@@ -198,9 +135,9 @@ class RandomNPC(NPC):
         self.generate_personality_document()
         self.system_instruct()
     
-    def update(self, maze):
-        
-        if not self.can_move():
+    def update_position(self, maze, current_time: int):
+        """Update the NPC's position randomly"""
+        if not self.can_move(current_time):
             return
         
         """Move randomly within a fixed range."""
@@ -218,15 +155,16 @@ class RandomNPC(NPC):
 
 class AggressiveNPC(NPC):
     """NPC that moves randomly until the player is within 5 squares and in line of sight."""
-    color:tuple = (255, 0, 0)
+    color: Tuple[int, int, int] = (255, 0, 0)
+    dist: int = 5
     
     def prepare(self):
         self.generate_personality_document()
         self.system_instruct()
     
-    def update(self, maze, player_pos):
+    def update_position(self, maze, player_pos, current_time):
         """Move randomly or move toward player if within range and in line of sight."""
-        if not self.can_move():
+        if not self.can_move(current_time):
             return
 
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -251,20 +189,20 @@ class AggressiveNPC(NPC):
             if not maze.is_wall(new_x, new_y):
                 self.x, self.y = new_x, new_y
                 
-    def in_line_of_sight(self, maze, player_pos, dist:int=5):
+    def in_line_of_sight(self, maze, player_pos):
         """Check if the player is within {dist} squares and there are no walls in between."""
         dx = abs(player_pos[0] - self.x)
         dy = abs(player_pos[1] - self.y)
 
         # Check if the player is in the same row or column within 5 squares
-        if dx <= dist and dy == 0:
+        if dx <= self.dist and dy == 0:
             # Player is in the same row, check for walls between NPC and player
             x_step = 1 if player_pos[0] > self.x else -1
             for i in range(1, dx + 1):
                 if maze.is_wall(self.x + i * x_step, self.y):
                     return False
             return True
-        elif dy <= dist and dx == 0:
+        elif dy <= self.dist and dx == 0:
             # Player is in the same column, check for walls between NPC and player
             y_step = 1 if player_pos[1] > self.y else -1
             for i in range(1, dy + 1):

@@ -1,4 +1,3 @@
-
 ### maze settings
 # ------------------------------------
 # Screen settings
@@ -12,7 +11,7 @@ MIN_HALLWAY_SIZE = 1
 MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
-MAZE_SEED = -1 # Set to -1 for random seed
+MAZE_SEED = 1234 # Set to -1 for random seed
 EVENT_PERCENT = 0.1
 
 # Colors

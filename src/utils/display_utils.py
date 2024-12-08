@@ -1,4 +1,3 @@
-import random
 from config import GRID_SIZE, HUD_HEIGHT
 
 def game_to_screen(x, y):
