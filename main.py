@@ -38,9 +38,9 @@ player = PlayerCharacter(x = 0 ,y = 0)
 player.initialize_inventory()
 
 # Initialize NPCs and place characters at random open spaces
-static_npc = StaticNPC(x = 0, y = 0)
-random_npc = RandomNPC(x = 0, y = 0, home_x=0, home_y=0)
-aggressive_npc = AggressiveNPC(x = 0 , y = 0)
+static_npc = StaticNPC(x = 0, y = 0, id = 100)
+random_npc = RandomNPC(x = 0, y = 0, id = 101, home_x=0, home_y=0)
+aggressive_npc = AggressiveNPC(x = 0 , y = 0, id = 102)
 
 for char in [player, static_npc, random_npc, aggressive_npc]:
     char.x, char.y = maze.place_character()
