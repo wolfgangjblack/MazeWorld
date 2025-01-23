@@ -154,3 +154,50 @@ def generate_npc_convo(npc_personality_json: dict, delimiter ="\n===============
                                     skip_special_tokens=True)
 
     return response.split(delimiter)[0]
+
+def generate_image_description(personality_document: dict) -> str:
+
+    sys_gen = """###sys: you are a stable diffusion prompt generator. You will be given a brief description of a person
+and you will output a prompt for stable diffusion. The prompt should be short, in the fashion of a high fantasy/snes video game 
+style and stay on topic based on the persons details
+
+Here are some examples of npc images you've generated:
+    
+##Input: {'name': 'Duran', 'job': 'fighter', 'personality': 'brooding', 'hobby': 'swordsplay', 'environment': 'city', 'environment_name': 'Capital City'}
+========================================
+##Output: A precocious warrior, clad in steel armor with a great sword over his shoulder. He has long red hair, untamed and wild. He stands in a bustling city square, scanning the crowd.
+
+
+##Input: {'name': 'Angela', 'job': 'mage', 'personality': 'princess', 'hobby': 'naughty', 'environment': 'city', 'environment_name': 'Magic Ice Kingdom of Altena'}
+========================================
+##Output: A sexy mage with long flowing blonde hair, naughty and dressed in a revealing short purple dress. She looks playful standing alone in a snowy town square
+
+##Input: {'name': 'Kevin', 'job': 'monk', 'personality': 'mischievous', 'hobby': 'goofing off', 'environment': 'forest', 'environment_name': 'Dark Forest'}
+========================================
+##Output: A mischievous half beast-half man monk with a playful grin, dressed in animal skins. Half wolf man, he has shaggy brown fur and is standing in a dark forest, surrounded by tall trees and mist.
+"""
+    
+    prompt = [sys_gen+f"\n##Input: {personality_document}"]
+    prompt.append("##Output:")
+    inputs = tokenizer("\n========================================\n".join(prompt),
+                return_tensors='pt',
+                truncation=True,
+                max_length=512)
+
+    if torch.cuda.is_available():
+        inputs = {k: v.to('cuda') for k, v in inputs.items()}
+        
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=40,
+            pad_token_id=tokenizer.eos_token_id,
+            temperature=1
+        )
+
+    response = tokenizer.decode(outputs[0], 
+                skip_special_tokens=True)
+    description =  response.split(f'##Input: {x}')[-1].split("##Output: ")[-1].split('\n')[0]
+    
+    diffusion_prompt = f"masterpiece, best quality, very aesthetic, detailed, beautiful, appealing, attractive, fantasy illustration, stardew valley inspired, pixel art, vivid colors, {description}"
+    return diffusion_prompt  

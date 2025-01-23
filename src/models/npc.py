@@ -6,11 +6,13 @@ class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
     x: int
     y: int
+    id: int ##ids are always unique and in the 100s
     profile_image: Optional[str] = None
     name : Optional[str] = None
     job: Optional[str] = None
     hobby: Optional[str] = None
     personality: Optional[str] = None
+    description: Optional[str] = None
     environment: Optional[str] = None
     interaction_history: List[str] = []
     color: Tuple[int, int, int] = (0, 255, 0)  # Green by default
