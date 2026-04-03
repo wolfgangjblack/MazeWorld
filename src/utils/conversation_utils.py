@@ -1,42 +1,49 @@
-import os
-import torch
-from config import LLM_MODEL_PATH, HF_ENV
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from src.prompts import get_prompt_set
+from src.generate.llm_client import generate
 
-hf_token = os.getenv(HF_ENV)
-tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
-model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_PATH, token=hf_token)
-
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-elif torch.backends.mps.is_available():
-    device = torch.device('mps')
-else:
-    device = torch.device('cpu')
-
-model.to(device)
 
 def generate_npc_response(npc, player_input: str) -> str:
-    history = npc.construct_chat_history(player_input)
-    inputs = tokenizer("\n#################\n".join(history),
-                       return_tensors='pt',
-                       truncation=True,
-                       max_length=1024)
+    prompts = get_prompt_set()
+    is_greeting = not player_input
 
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=150,
-            pad_token_id=tokenizer.eos_token_id,
-            temperature=1.0
+    if not npc.has_met_player:
+        request = prompts.npc_greeting(name=npc.name, identity=npc.identity)
+        raw = generate(request)
+        response = _extract_response(raw)
+        npc.add_turn("npc", response)
+        npc.has_met_player = True
+    elif is_greeting:
+        npc.add_turn("user", f"The player returns to speak with {npc.name}.")
+        request = prompts.npc_response(
+            identity=npc.identity,
+            history=npc.get_recent_history(),
+            npc_name=npc.name,
+            player_input="The player returns to speak with you.",
         )
-
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    npc.interaction_history[-1] = response.split("\n#################\n")[-1]
+        raw = generate(request)
+        response = _extract_response(raw)
+        npc.add_turn("npc", response)
+    else:
+        npc.add_turn("user", player_input)
+        request = prompts.npc_response(
+            identity=npc.identity,
+            history=npc.get_recent_history(),
+            npc_name=npc.name,
+            player_input=player_input,
+        )
+        raw = generate(request)
+        response = _extract_response(raw)
+        npc.add_turn("npc", response)
 
     if npc.is_appropriate(response):
-        return f"{npc.name}:{response.split(':')[-1]}"
+        return f"{npc.name}: {response}"
+    return npc.get_fallback_response()
+
+
+def _extract_response(raw: str) -> str:
+    """Extract the usable NPC response from raw LLM output."""
+    if "##Output:" in raw:
+        response = raw.split("##Output:")[-1].strip()
     else:
-        return npc.get_fallback_response()
+        response = raw.strip()
+    return response.split("\n")[0].strip()

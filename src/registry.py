@@ -1,5 +1,4 @@
 from src.utils.dataloader_utils import load_json_data, create_item_from_data
-from src.models.items import Food, Drink, Tool
 
 
 class GameRegistry:

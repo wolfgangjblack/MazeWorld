@@ -27,10 +27,23 @@ NUM_FOOD = 2
 NUM_DRINKS = 2
 NUM_TOOLS = 1
 
-##GenAI Settings
+##GenAI Backend
 # ------------------------------------
-LLM_MODEL_PATH ="meta-llama/Llama-3.2-3B-Instruct" 
-#"mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated"
-DIFFUSION_MODEL_PATH = "flux_place_holder" 
-
+LLM_BACKEND = "local"  # "local" for HF transformers, "api" for Anthropic
+LLM_MODEL_PATH = "meta-llama/Llama-3.2-3B-Instruct"
 HF_ENV = "hf_write_read"
+
+## Anthropic (used when LLM_BACKEND == "api")
+ANTHROPIC_MODEL = "claude-3-5-haiku-latest"
+ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
+
+##Image Generation Backend
+# ------------------------------------
+IMAGE_BACKEND = "local"  # "local" for diffusers pipeline, "api" for fal.ai API
+FAL_MODEL = "fal-ai/nano-banana-pro"
+FAL_KEY_ENV = "FAL_KEY"
+FAL_SUPPORTED_MODELS = {
+    "flux-schnell": "fal-ai/flux/schnell",
+    "nano-banana-pro": "fal-ai/nano-banana-pro",
+    "flux-pro": "fal-ai/flux-pro/v1.1",
+}

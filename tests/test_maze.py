@@ -1,6 +1,6 @@
 from src.models.maze import Maze
 from src.models.items import Food, Drink, Tool
-from src.registry import registry
+
 from config import MAZE_WIDTH, MAZE_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS
 
 
