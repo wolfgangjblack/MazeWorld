@@ -80,20 +80,22 @@ class GameController:
 
         # 3. If dialogue is active (NPC conversation)
         if self.dialogue_box.dialogue_active:
-            if event.key == pygame.K_UP:
-                self.dialogue_box.scroll_up()
-                return
-            elif event.key == pygame.K_DOWN:
-                self.dialogue_box.scroll_down()
-                return
-            elif event.key == pygame.K_ESCAPE:
+            if event.key == pygame.K_ESCAPE:
                 self.dialogue_box.end_dialogue()
                 self.current_npc = None
                 return
-            elif event.key == pygame.K_RETURN and self.dialogue_box.input_active:
+            if event.key == pygame.K_UP:
+                self.dialogue_box.scroll_up()
+                return
+            if event.key == pygame.K_DOWN:
+                self.dialogue_box.scroll_down()
+                return
+            if self.dialogue_box.generating:
+                return
+            if event.key == pygame.K_RETURN and self.dialogue_box.input_active:
                 self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
                 return
-            elif self.dialogue_box.input_active:
+            if self.dialogue_box.input_active:
                 if event.key == pygame.K_BACKSPACE:
                     self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
                 else:
@@ -141,44 +143,6 @@ class GameController:
             # If you want Escape to do something here, do it. Otherwise, no action.
             return
 
-    def handle_enter_key(self):
-        """Handle actions triggered by pressing Enter."""
-        if not self.inventory_active and not self.item_message_active:
-            if self.player_at_item:
-                # Player picks up item
-                item_message = self.player.pick_up_item(self.maze)
-                self.item_message_active = True
-                self.player_at_item = False
-                self.dialogue_box.set_item_message(item_message)
-            elif self.current_npc and not self.dialogue_box.dialogue_active:
-                # Start NPC conversation
-                self.dialogue_box.start_dialogue(self.current_npc)
-            elif self.dialogue_box.dialogue_active and self.dialogue_box.input_active:
-                # Player responds in dialogue
-                self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
-
-    def handle_dialogue_input(self, event):
-        """Handle typing input for NPC dialogue."""
-        if event.key == pygame.K_BACKSPACE:
-            self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
-        else:
-            self.dialogue_box.user_message += event.unicode
-
-    def handle_dialogue_scrolling(self, event):
-        """Handle scrolling through dialogue history."""
-        if event.key == pygame.K_UP:
-            self.dialogue_box.scroll_up()
-        elif event.key == pygame.K_DOWN:
-            self.dialogue_box.scroll_down()
-
-    def handle_escape_key(self):
-        """Handle actions triggered by pressing Escape."""
-        if self.dialogue_box.dialogue_active:
-            self.dialogue_box.end_dialogue()
-            self.current_npc = None
-        elif self.inventory_active:
-            self.inventory_active = False
-            
     def handle_inventory_input(self, event):
         inventory = self.player.get_inventory()
         if not inventory:
@@ -202,7 +166,9 @@ class GameController:
             
     def update(self, current_time):
         """Update game logic (NPC movement, etc.)"""
-        # Update NPC positions
+        if self.dialogue_box.generating:
+            self.dialogue_box.check_generation()
+
         for npc in self.npcs:
             if hasattr(npc, 'update_position'):
                 if isinstance(npc, RandomNPC):

@@ -165,5 +165,8 @@ scratch/
 
 .cursor/
 
+# Ruff linter cache
+.ruff_cache/
+
 # Generated NPC portraits
 data/portraits/

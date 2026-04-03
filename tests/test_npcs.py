@@ -1,4 +1,5 @@
 import random
+import pytest
 from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
 from src.models.maze import Maze
 
@@ -139,3 +140,74 @@ def test_get_fallback_response():
     response = npc.get_fallback_response()
     assert isinstance(response, str)
     assert len(response) > 0
+
+
+def test_interaction_history_isolation():
+    npc_a = StaticNPC(x=0, y=0, id=100)
+    npc_b = StaticNPC(x=1, y=1, id=101)
+
+    npc_a.add_turn("user", "Hello A")
+    assert len(npc_a.interaction_history) == 1
+    assert len(npc_b.interaction_history) == 0
+
+
+def test_aggressive_npc_chases_player():
+    random.seed(42)
+    maze = Maze()
+    maze.generate()
+    open_spaces = maze.find_open_spaces()
+    open_set = set(open_spaces)
+
+    for sx, sy in open_spaces:
+        for dx in range(2, 6):
+            tx = sx + dx
+            if (tx, sy) in open_set:
+                if all(not maze.is_wall(sx + i, sy) for i in range(1, dx)):
+                    npc = AggressiveNPC(x=sx, y=sy, id=102)
+                    npc.last_move_time = 0
+
+                    npc.update_position(maze, (tx, sy), current_time=6000)
+                    new_dist = abs(npc.x - tx) + abs(npc.y - sy)
+                    assert new_dist < dx, "NPC should have moved closer to player"
+                    return
+
+    pytest.fail("Could not find line-of-sight pair in generated maze")
+
+
+def test_aggressive_npc_random_when_no_los():
+    random.seed(42)
+    maze = Maze()
+    maze.generate()
+    open_spaces = maze.find_open_spaces()
+    nx, ny = open_spaces[len(open_spaces) // 2]
+
+    npc = AggressiveNPC(x=nx, y=ny, id=102)
+    npc.last_move_time = 0
+
+    far_pos = (nx + 100, ny + 100)
+
+    moved = False
+    for t in range(6000, 60000, 6000):
+        old_x, old_y = npc.x, npc.y
+        npc.update_position(maze, far_pos, current_time=t)
+        if (npc.x, npc.y) != (old_x, old_y):
+            moved = True
+            break
+
+    assert moved, "NPC should eventually move randomly when player is not in line of sight"
+
+
+def test_random_npc_stays_in_range():
+    random.seed(42)
+    maze = Maze()
+    maze.generate()
+    open_spaces = maze.find_open_spaces()
+    sx, sy = open_spaces[len(open_spaces) // 2]
+
+    npc = RandomNPC(x=sx, y=sy, id=101, home_x=sx, home_y=sy, movement_range=2)
+    npc.last_move_time = 0
+
+    for t in range(5000, 100000, 5000):
+        npc.update_position(maze, current_time=t)
+        assert abs(npc.x - sx) <= npc.movement_range
+        assert abs(npc.y - sy) <= npc.movement_range

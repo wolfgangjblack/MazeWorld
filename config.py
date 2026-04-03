@@ -14,6 +14,10 @@ MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space fo
 MAZE_SEED = 1234 # Set to -1 for random seed
 EVENT_PERCENT = 0.1
 
+# Dialogue box
+DIALOGUE_BOX_HEIGHT = 100
+DIALOGUE_BOX_HEIGHT_ACTIVE = 250
+
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)

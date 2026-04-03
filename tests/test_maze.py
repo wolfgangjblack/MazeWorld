@@ -1,3 +1,4 @@
+import math
 from src.models.maze import Maze
 from src.models.items import Food, Drink, Tool
 
@@ -63,4 +64,24 @@ def test_place_character():
     x, y = m.place_character()
     assert 0 <= x < MAZE_WIDTH
     assert 0 <= y < MAZE_HEIGHT
+    assert not m.is_wall(x, y)
+
+
+def test_place_event_tiles_count():
+    m = Maze()
+    m.generate()
+    open_count = len(m.find_open_spaces())
+    m.place_event_tiles()
+
+    event_count = sum(
+        1 for row in m.grid for cell in row if cell == m.event_tile_id
+    )
+    expected = math.ceil(open_count * m.event_percent)
+    assert event_count == expected
+
+
+def test_get_random_open_space():
+    m = Maze()
+    m.generate()
+    x, y = m.get_random_open_space()
     assert not m.is_wall(x, y)
