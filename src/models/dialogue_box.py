@@ -72,7 +72,10 @@ class DialogueBox:
     def _start_generation(self, npc, user_input):
         """Launch LLM response generation on a background thread."""
         def _run():
-            self._generation_result = generate_npc_response(npc, user_input)
+            try:
+                self._generation_result = generate_npc_response(npc, user_input)
+            except Exception:
+                self._generation_result = f"{npc.name}: [Unable to generate response]"
         self._generation_thread = threading.Thread(target=_run, daemon=True)
         self._generation_thread.start()
 

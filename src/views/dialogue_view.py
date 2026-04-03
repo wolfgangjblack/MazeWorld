@@ -68,6 +68,8 @@ class DialogueBoxView:
 
     def wrap_text(self, text, font, max_width):
         """Wrap text into multiple lines to fit within max_width."""
+        if not text:
+            return []
         words = text.split(' ')
         lines = []
         current_line = ''
