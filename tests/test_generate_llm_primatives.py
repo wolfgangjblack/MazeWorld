@@ -5,6 +5,7 @@ from src.generate.generate_llm_primatives import (
     generate_npc_convo,
     generate_image_description,
 )
+from src.prompts.base import LLMRequest
 
 
 SAMPLE_PERSONALITY = {
@@ -52,11 +53,18 @@ def test_personality_primative_returns_error_on_failure(mock_generate):
 
 
 @patch("src.generate.generate_llm_primatives.generate")
-def test_generate_npc_convo_returns_string(mock_generate):
-    mock_generate.return_value = "Hello, welcome to the forest!"
+def test_generate_npc_convo_extracts_response(mock_generate):
+    mock_generate.return_value = (
+        "preamble\n##Output: Welcome to the forest, traveler!\nmore stuff"
+    )
     result = generate_npc_convo(SAMPLE_PERSONALITY.copy())
-    assert isinstance(result, str)
-    assert len(result) > 0
+
+    assert result == "Welcome to the forest, traveler!"
+
+    request = mock_generate.call_args[0][0]
+    assert isinstance(request, LLMRequest)
+    assert "Arin" in request.system
+    assert "hunter" in request.system
 
 
 @patch("src.generate.generate_llm_primatives.generate")

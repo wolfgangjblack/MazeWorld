@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 ### maze settings
 # ------------------------------------
 # Screen settings
@@ -14,6 +19,10 @@ MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space fo
 MAZE_SEED = 1234 # Set to -1 for random seed
 EVENT_PERCENT = 0.1
 
+# Dialogue box
+DIALOGUE_BOX_HEIGHT = 100
+DIALOGUE_BOX_HEIGHT_ACTIVE = 250
+
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -29,7 +38,7 @@ NUM_TOOLS = 1
 
 ##GenAI Backend
 # ------------------------------------
-LLM_BACKEND = "local"  # "local" for HF transformers, "api" for Anthropic
+LLM_BACKEND = os.getenv("LLM_BACKEND", "local")  # "local" for HF transformers, "api" for Anthropic
 LLM_MODEL_PATH = "meta-llama/Llama-3.2-3B-Instruct"
 HF_ENV = "hf_write_read"
 
@@ -39,7 +48,7 @@ ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
 
 ##Image Generation Backend
 # ------------------------------------
-IMAGE_BACKEND = "local"  # "local" for diffusers pipeline, "api" for fal.ai API
+IMAGE_BACKEND = os.getenv("IMAGE_BACKEND", "local")  # "local" for diffusers pipeline, "api" for fal.ai API
 FAL_MODEL = "fal-ai/nano-banana-pro"
 FAL_KEY_ENV = "FAL_KEY"
 FAL_SUPPORTED_MODELS = {

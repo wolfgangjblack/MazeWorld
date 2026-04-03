@@ -30,12 +30,16 @@ def test_generate_image_api_returns_url(mock_subscribe):
 @patch.object(img_mod, "_generate_image_api", return_value="https://example.com/img.png")
 @patch("urllib.request.urlretrieve")
 def test_generate_npc_portraits_api_saves(mock_retrieve, mock_api, tmp_path):
-    npc_db = {"100": {"description": "a warrior"}}
+    npc_db = {
+        "100": {"description": "a warrior"},
+        "101": {"description": "an elf"},
+    }
     img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
-    mock_api.assert_called_once_with("a warrior")
-    mock_retrieve.assert_called_once()
+    assert mock_api.call_count == 2
+    assert mock_retrieve.call_count == 2
     assert npc_db["100"]["profile_image"].endswith("npc_100.png")
+    assert npc_db["101"]["profile_image"].endswith("npc_101.png")
 
 
 @patch.object(img_mod, "IMAGE_BACKEND", "local")
@@ -50,18 +54,3 @@ def test_generate_npc_portraits_local_saves(mock_local, tmp_path):
     mock_local.assert_called_once_with("an elf")
     mock_image.save.assert_called_once()
     assert npc_db["101"]["profile_image"].endswith("npc_101.png")
-
-
-@patch.object(img_mod, "IMAGE_BACKEND", "api")
-@patch.object(img_mod, "_generate_image_api", return_value="https://example.com/img.png")
-@patch("urllib.request.urlretrieve")
-def test_generate_npc_portraits_sets_profile_image(mock_retrieve, mock_api, tmp_path):
-    npc_db = {
-        "100": {"description": "a warrior"},
-        "101": {"description": "an elf"},
-    }
-    img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
-
-    assert npc_db["100"]["profile_image"].endswith("npc_100.png")
-    assert npc_db["101"]["profile_image"].endswith("npc_101.png")
-    assert mock_api.call_count == 2

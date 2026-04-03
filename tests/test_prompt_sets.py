@@ -1,5 +1,5 @@
 from src.prompts.base import LLMRequest
-from src.prompts.llama_prompts import LlamaPromptSet
+from src.prompts.llama_prompts import LlamaPromptSet, _history_to_examples
 from src.prompts.claude_prompts import ClaudePromptSet
 
 
@@ -99,3 +99,27 @@ class TestClaudePromptSet:
         assert isinstance(req, LLMRequest)
         assert len(req.examples) == 1
         assert req.max_tokens == 80
+
+
+class TestHistoryToExamples:
+    def test_paired(self):
+        history = [
+            {"role": "user", "content": "hi"},
+            {"role": "npc", "content": "hello"},
+        ]
+        assert _history_to_examples(history) == [("hi", "hello")]
+
+    def test_unpaired_user(self):
+        history = [{"role": "user", "content": "hi"}]
+        assert _history_to_examples(history) == [("hi", "")]
+
+    def test_orphan_npc_first(self):
+        history = [
+            {"role": "npc", "content": "greetings"},
+            {"role": "user", "content": "hi"},
+            {"role": "npc", "content": "hello"},
+        ]
+        assert _history_to_examples(history) == [("", "greetings"), ("hi", "hello")]
+
+    def test_empty(self):
+        assert _history_to_examples([]) == []

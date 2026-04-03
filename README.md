@@ -37,6 +37,15 @@ MazeWorld/
 └── build/                   # Packaged game executables
 ```
 
+## Setup
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # then edit .env with your values
+```
+
+To use API-backed generation, set `LLM_BACKEND=api` and/or `IMAGE_BACKEND=api` in your `.env` and supply the corresponding keys (`ANTHROPIC_API_KEY`, `FAL_KEY`). See `.env.example` for all available variables.
+
 ## Requirements
 
 - Python 3.11+
