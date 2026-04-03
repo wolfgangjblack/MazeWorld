@@ -1,0 +1,14 @@
+[
+    {
+        "type": "StaticNPC",
+        "id": 100
+    },
+    {
+        "type": "RandomNPC",
+        "id": 101
+    },
+    {
+        "type": "AggressiveNPC",
+        "id": 102
+    }
+]

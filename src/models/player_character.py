@@ -1,14 +1,6 @@
 from typing import Dict, Tuple
 from pydantic import BaseModel, Field
-from src.utils.dataloader_utils import load_json_data, create_item_from_data
-
-items_data = load_json_data('data/items/items.json')
-
-item_registry = {}
-for item_id_str, item_info in items_data.items():
-    item_id = int(item_id_str)
-    item_obj = create_item_from_data(item_id, item_info)
-    item_registry[item_id] = item_obj
+from src.registry import registry
     
 class PlayerCharacter(BaseModel):
     x: int
@@ -29,27 +21,10 @@ class PlayerCharacter(BaseModel):
         arbitrary_types_allowed = True
         
     def initialize_inventory(self):
-        starter_items_data = { 
-            "bread": {"category" : "Food",
-            "name" : "bread",
-            "desc": "A loaf of bread.",
-            "item_stats": {"nutrition_value" : 20, "hydration_value" :0, "health_value" :0, "uses": 1}},
-            "water": {"category": "drink", 
-            "name" : "water", 
-            "desc": "Crisp water, easy to drink.",
-            "item_stats": {"nutrition_value" : 0, "hydration_value" :10, "health_value" :0, "uses": 1}},
-            "hammer": {"category": "tool",
-            "name" : "hammer",
-            "desc": "A craftmans hammer",
-            "item_stats": {"attribute" : "bludgeon", "nutrition_value" : -5, "hydration_value" :-5 , "health_value" :0, "uses": 3}}
+        self.inventory = {
+            name: item.clone()
+            for name, item in registry.starter_inventory.items()
         }
-        
-        new_inventory = {}
-        for item_name, data in starter_items_data.items():
-            item_obj = create_item_from_data(0, data)  # item_id=0 or any placeholder
-            new_inventory[item_name] = item_obj
-
-        self.inventory = new_inventory
         
     def move(self, dx: int, dy: int, maze):
         new_x = self.x + dx
@@ -122,7 +97,7 @@ class PlayerCharacter(BaseModel):
     def is_item_at_player_position(self, maze):
         """Check if there is an item at the player's current position."""
         cell_value = maze.grid[self.y][self.x]
-        return cell_value in item_registry  # item_registry contains item IDs
+        return registry.is_item(cell_value)
 
     def is_on_event_tile(self, maze):
         return maze.grid[self.y][self.x] == maze.event_tile_id
@@ -130,9 +105,8 @@ class PlayerCharacter(BaseModel):
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         cell_value = maze.grid[self.y][self.x]
-        if cell_value in item_registry:
-            item_template = item_registry[cell_value]
-            # Clone the item to avoid shared references
+        if registry.is_item(cell_value):
+            item_template = registry.get_item(cell_value)
             item = item_template.clone()
             self.add_to_inventory(item)
             maze.grid[self.y][self.x] = 0  # Remove the item from the maze
