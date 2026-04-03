@@ -1,6 +1,5 @@
 from src.models.player_character import PlayerCharacter
 from src.models.items import Food, Drink, Tool
-from src.registry import registry
 
 
 def test_initialize_inventory(player):

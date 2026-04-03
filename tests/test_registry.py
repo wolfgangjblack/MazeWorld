@@ -1,4 +1,4 @@
-from src.registry import GameRegistry, registry
+from src.registry import GameRegistry
 from src.models.items import Food, Drink, Tool
 
 EXPECTED_IDS = [200, 201, 202, 203, 300, 301, 302, 303, 400, 401, 402, 403]
