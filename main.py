@@ -1,58 +1,55 @@
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS 
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS
 
-#Classes
+from src.registry import registry
 from src.models.maze import Maze
 from src.models.dialogue_box import DialogueBox
 from src.models.player_character import PlayerCharacter
 from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
-
-#Utilities
-from src.utils.dataloader_utils import load_json_data
-
-#Controls
 from src.controllers.game_controller import GameController
 
-ENTITY_IDS = load_json_data('data/items/entities.json')
-ENTITY_IDS = {int(k): v for k, v in ENTITY_IDS.items()}
+NPC_CLASS_MAP = {
+    "StaticNPC": StaticNPC,
+    "RandomNPC": RandomNPC,
+    "AggressiveNPC": AggressiveNPC,
+}
 
-# Initialize pygame
+registry.load()
+
 pygame.init()
-pygame.font.init()    
+pygame.font.init()
 
-# Create the screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 font = pygame.font.Font(None, 32)
 
-#Create Dialogue Box Instance
 dialogue_box = DialogueBox(screen, font)
 
-# Initialize and generate the maze
 maze = Maze()
 maze.generate()
 maze.place_event_tiles()
 maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
 
-# Create the player character
-player = PlayerCharacter(x = 0 ,y = 0)
+player = PlayerCharacter(x=0, y=0)
 player.initialize_inventory()
 
-# Initialize NPCs and place characters at random open spaces
-static_npc = StaticNPC(x = 0, y = 0, id = 100)
-random_npc = RandomNPC(x = 0, y = 0, id = 101, home_x=0, home_y=0)
-aggressive_npc = AggressiveNPC(x = 0 , y = 0, id = 102)
+npcs = []
+for template in registry.npc_templates:
+    cls = NPC_CLASS_MAP[template["type"]]
+    npc_id = template["id"]
+    kwargs = {"x": 0, "y": 0, "id": npc_id}
+    if cls is RandomNPC:
+        kwargs["home_x"] = 0
+        kwargs["home_y"] = 0
+    npc = cls(**kwargs)
+    npcs.append(npc)
 
-for char in [player, static_npc, random_npc, aggressive_npc]:
+for char in [player] + npcs:
     char.x, char.y = maze.place_character()
 
-static_npc.prepare()
-random_npc.home_x, random_npc.home_y = random_npc.x, random_npc.y
-random_npc.prepare()
-aggressive_npc.prepare()
-
-npcs = [static_npc, random_npc, aggressive_npc]
+for npc in npcs:
+    if isinstance(npc, RandomNPC):
+        npc.home_x, npc.home_y = npc.x, npc.y
+    npc.prepare()
 
 game_controller = GameController(screen, font, maze, player, npcs, dialogue_box)
-
-#run game
 game_controller.run()

@@ -1,0 +1,20 @@
+{
+    "bread": {
+        "category": "Food",
+        "name": "bread",
+        "desc": "A loaf of bread.",
+        "item_stats": {"nutrition_value": 20, "hydration_value": 0, "health_value": 0, "uses": 1}
+    },
+    "water": {
+        "category": "drink",
+        "name": "water",
+        "desc": "Crisp water, easy to drink.",
+        "item_stats": {"nutrition_value": 0, "hydration_value": 10, "health_value": 0, "uses": 1}
+    },
+    "hammer": {
+        "category": "tool",
+        "name": "hammer",
+        "desc": "A craftmans hammer",
+        "item_stats": {"attribute": "bludgeon", "nutrition_value": -5, "hydration_value": -5, "health_value": 0, "uses": 3}
+    }
+}

@@ -4,10 +4,7 @@ from src.views.npc_view import NPCView
 from src.views.maze_view import MazeView
 from src.views.player_view import PlayerView
 from src.views.dialogue_view import DialogueBoxView
-from src.utils.dataloader_utils import load_json_data
-
-ENTITY_IDS = load_json_data('data/items/entities.json')
-ENTITY_IDS = {int(k): v for k, v in ENTITY_IDS.items()}
+from src.registry import registry
 
 class GameView:
     def __init__(self, screen, font, dialogue_box):
@@ -60,8 +57,8 @@ class GameView:
         elif player_at_item:
             # Show prompt to pick up item
             item_id = maze.grid[player.y][player.x]
-            item = ENTITY_IDS[item_id]
-            prompt = f"Press 'Enter' to pick up {item}"
+            item_name = registry.get_item_name(item_id)
+            prompt = f"Press 'Enter' to pick up {item_name}"
             self.dialogue_box.set_item_message(prompt)
             self.dialogue_view.draw(self.dialogue_box)
         else:

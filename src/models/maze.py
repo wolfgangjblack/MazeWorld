@@ -1,7 +1,7 @@
 import math 
 import random
 from src.models.items import Food, Drink, Tool
-from src.utils.dataloader_utils import load_json_data, create_item_from_data
+from src.registry import registry
 from config import MAZE_HEIGHT, MAZE_WIDTH, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
 
 # Set seed for deterministic mazes
@@ -10,19 +10,6 @@ if MAZE_SEED != -1:
 
 # Directions for maze carving (up, down, left, right)
 DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # (dx, dy)
-
-items_data = load_json_data('data/items/items.json')
-
-item_registry = {}
-for item_id_str, item_info in items_data.items():
-    item_id = int(item_id_str)
-    item_obj = create_item_from_data(item_id, item_info)
-    item_registry[item_id] = item_obj
-
-ENTITY_IDS = load_json_data('data/items/entities.json')
-
-ENTITY_IDS = {int(k): v for k, v in ENTITY_IDS.items()}
-item_registry = {int(k): v for k, v in item_registry.items()}
 
 class Maze:
     def __init__(self):
@@ -139,7 +126,7 @@ class Maze:
         open_spaces = self.find_open_spaces()
         random.shuffle(open_spaces)
         
-        item_ids = list(item_registry.keys())
+        item_ids = registry.item_ids()
 
         def generate_items_by_class(cls, num_gens):
             i = 0
@@ -151,13 +138,11 @@ class Maze:
                     break
                 x, y = open_spaces.pop()
                 item_id = random.choice(item_ids)
-                item = item_registry[item_id]
+                item = registry.get_item(item_id)
 
                 if isinstance(item, cls):
                     self.grid[y][x] = item_id
                     i += 1
-                # If not the right class, we just continue trying
-            # If after max_attempts or out of open spaces we haven't placed enough, we stop.
 
         generate_items_by_class(Food, num_food)
         generate_items_by_class(Drink, num_drink)

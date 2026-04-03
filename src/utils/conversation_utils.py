@@ -23,8 +23,7 @@ def generate_npc_response(npc, player_input: str) -> str:
                        truncation=True,
                        max_length=1024)
 
-    if torch.cuda.is_available():
-        inputs = {k: v.to(device) for k, v in inputs.items()}
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     with torch.no_grad():
         outputs = model.generate(

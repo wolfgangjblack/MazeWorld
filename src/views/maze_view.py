@@ -2,15 +2,7 @@ import pygame
 from config import GRID_SIZE, WHITE, BLACK
 from src.models.items import Food, Drink, Tool
 from src.utils.display_utils import game_to_screen
-from src.utils.dataloader_utils import load_json_data, create_item_from_data
-
-items_data = load_json_data('data/items/items.json')
-
-item_registry = {}
-for item_id_str, item_info in items_data.items():
-    item_id = int(item_id_str)
-    item_obj = create_item_from_data(item_id, item_info)
-    item_registry[item_id] = item_obj
+from src.registry import registry
 
 class MazeView:
     def draw_maze(self, screen, maze):
@@ -25,8 +17,8 @@ class MazeView:
                 elif cell == 0:
                     # Draw floor
                     pygame.draw.rect(screen, BLACK, rect)
-                elif cell in item_registry:
-                    item = item_registry[cell]
+                elif registry.is_item(cell):
+                    item = registry.get_item(cell)
                     if isinstance(item, Food):
                         color = (255, 215, 0)  # Gold for food
                     elif isinstance(item, Drink):
