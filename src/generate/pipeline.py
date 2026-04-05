@@ -17,6 +17,7 @@ from config import (
     NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
 )
 from src.models.maze import Maze
+from src.models.monster import generate_encounter_monsters
 from src.registry import registry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -396,13 +397,38 @@ def generate_world():
         player_start = (1, 1)
     phase_bar.update(1)
 
-    # --- 7. Generate events ---
+    # --- 7. Generate events (combat with monsters, puzzle, event encounters) ---
     phase_bar.set_postfix_str("Events")
     event_list = []
-    event_bar = tqdm(event_positions, desc="  Events (data+image prompt)",
+
+    # Compute room levels based on distance from player start
+    def _room_level_for_pos(x, y):
+        dist = abs(x - player_start[0]) + abs(y - player_start[1])
+        max_dist = MAZE_WIDTH + MAZE_HEIGHT
+        fraction = dist / max(1, max_dist)
+        return min(4, max(1, int(fraction * 4) + 1))
+
+    # Collect available tool attributes for puzzle solvability checks
+    available_tool_attrs = set()
+    for p in item_placements:
+        item_obj = registry.get_item(p["item_id"])
+        if item_obj:
+            stats = getattr(item_obj, 'item_stats', None)
+            if stats and getattr(stats, 'attribute', None):
+                available_tool_attrs.add(stats.attribute)
+
+    event_bar = tqdm(event_positions, desc="  Events (data+image+monsters)",
                      unit="evt", leave=True)
     for idx, (ex, ey) in enumerate(event_bar):
-        event_type = random.choice(["combat", "puzzle"])
+        # Weight encounter types: 50% combat, 25% puzzle, 25% event
+        roll = random.random()
+        if roll < 0.50:
+            event_type = "combat"
+        elif roll < 0.75:
+            event_type = "puzzle"
+        else:
+            event_type = "event"
+
         event_data = _llm_generate_event(maze.environment, env_name, event_type)
         event_data["id"] = f"evt_{idx:03d}"
         event_data["type"] = event_type
@@ -410,6 +436,54 @@ def generate_world():
             event_data["name"] = f"Event {idx}"
         if "description" not in event_data:
             event_data["description"] = "Something happens!"
+
+        room_level = _room_level_for_pos(ex, ey)
+
+        if event_type == "combat":
+            # Generate monster group for this encounter
+            monsters = generate_encounter_monsters(maze.environment, room_level)
+            event_data["monsters"] = [m.to_dict() for m in monsters]
+            event_data["room_level"] = room_level
+            # Set name from lead monster if generic
+            if event_data["name"].startswith("Event ") and monsters:
+                event_data["name"] = f"{monsters[0].name} Encounter"
+            if not event_data.get("description") or event_data["description"] == "Something happens!":
+                names = ", ".join(m.name for m in monsters)
+                event_data["description"] = f"You are ambushed by {names}!"
+
+        elif event_type == "event":
+            # Ensure walk-away option exists
+            choices = event_data.get("choices", [])
+            has_walk = any(c.get("auto_success") for c in choices)
+            if not has_walk:
+                choices.append({"text": "Walk away", "auto_success": True})
+            event_data["choices"] = choices
+            event_data["failure_damage_type"] = random.choice(["health", "hunger", "thirst"])
+            event_data["failure_damage_range"] = [3 + room_level, 8 + room_level * 2]
+
+        elif event_type == "puzzle":
+            # Solvability: ensure at least one choice uses a tool attribute available in world
+            choices = event_data.get("choices", [])
+            solvable = False
+            for c in choices:
+                if c.get("auto_success"):
+                    continue
+                if c.get("tool_attribute") in available_tool_attrs:
+                    solvable = True
+                    break
+            if not solvable and available_tool_attrs and choices:
+                # Add a solvable option
+                attr = random.choice(list(available_tool_attrs))
+                choices.insert(0, {
+                    "text": f"Use a {attr} tool",
+                    "tool_attribute": attr,
+                    "dc": 8 + room_level,
+                    "auto_success": False,
+                })
+            # Always have walk-away
+            if not any(c.get("auto_success") for c in choices):
+                choices.append({"text": "Leave it alone", "auto_success": True})
+            event_data["choices"] = choices
 
         event_data["portrait_prompt"] = _llm_generate_event_image(event_data)
         event_data["profile_image"] = None

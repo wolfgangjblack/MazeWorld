@@ -30,6 +30,9 @@ class GameController:
         self.current_npc = None
         self.running = True
 
+        # Combat target selection
+        self.combat_target_index = 0
+
         self.game_view = GameView(screen, font, dialogue_box)
 
     def _build_event_position_map(self):
@@ -179,12 +182,21 @@ class GameController:
         if not current_event:
             return
 
+        # Multi-turn combat
+        if self.dialogue_box.combat_active:
+            self._handle_combat_input(event)
+            return
+
+        # Legacy/simple event handling
         if self.dialogue_box.awaiting_roll:
             if event.key == pygame.K_r:
                 dice_roll = random.randint(1, 20)
                 if current_event.type == "combat":
                     result = current_event.resolve(dice_roll, self.player)
                 elif current_event.type == "puzzle":
+                    choice_idx = self.dialogue_box.event_context.get("selected_choice", 0)
+                    result = current_event.resolve(choice_idx, dice_roll, self.player)
+                elif current_event.type == "event":
                     choice_idx = self.dialogue_box.event_context.get("selected_choice", 0)
                     result = current_event.resolve(choice_idx, dice_roll, self.player)
                 else:
@@ -199,7 +211,10 @@ class GameController:
                     if reward_item:
                         self.player.add_to_inventory(reward_item.clone())
 
-                if current_event.resolved:
+                # Walk-away for event encounters: don't resolve
+                if result.get("walked_away"):
+                    pass  # Event stays active
+                elif current_event.resolved:
                     self.maze.grid[self.player.y][self.player.x] = 0
 
                     for qid, quest in self.quests.items():
@@ -214,7 +229,7 @@ class GameController:
                 self.dialogue_box.end_event()
                 return
 
-        elif current_event.type == "puzzle" and not self.dialogue_box.event_context.get("result"):
+        elif current_event.type in ("puzzle", "event") and not self.dialogue_box.event_context.get("result"):
             choices = getattr(current_event, 'choices', [])
             if choices:
                 for i in range(len(choices)):
@@ -234,6 +249,188 @@ class GameController:
             if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
                 self.dialogue_box.end_event()
                 return
+
+    def _handle_combat_input(self, event):
+        """Handle input during multi-turn combat."""
+        combat_event = self.dialogue_box.current_event
+        phase = self.dialogue_box.combat_phase
+
+        if phase == "initiative":
+            # Press Enter or Space to roll initiative
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                init_result = combat_event.start_combat(self.player)
+                self.dialogue_box.start_combat_turns(init_result)
+                self.dialogue_box.combat_log = list(combat_event.combat_log)
+                self.combat_target_index = 0
+                self._advance_combat_to_next_turn(combat_event)
+            elif event.key == pygame.K_ESCAPE:
+                self.dialogue_box.end_event()
+            return
+
+        if phase == "player_turn":
+            if self.dialogue_box.player_stunned_turns > 0:
+                # Stunned: any key skips turn
+                if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    self.dialogue_box.player_stunned_turns -= 1
+                    self.dialogue_box.add_combat_log("You shake off the stun.")
+                    combat_event.advance_turn()
+                    self._advance_combat_to_next_turn(combat_event)
+                return
+
+            # A = Attack, F = Flee, I = use Item, Up/Down = select target
+            if event.key == pygame.K_UP:
+                alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
+                if alive_indices:
+                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
+                    curr = (curr - 1) % len(alive_indices)
+                    self.combat_target_index = alive_indices[curr]
+                return
+
+            if event.key == pygame.K_DOWN:
+                alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
+                if alive_indices:
+                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
+                    curr = (curr + 1) % len(alive_indices)
+                    self.combat_target_index = alive_indices[curr]
+                return
+
+            if event.key == pygame.K_a:
+                # Apply poison damage before player acts
+                self._apply_player_poison()
+
+                result = combat_event.player_attack(self.player, self.combat_target_index)
+                self.dialogue_box.combat_log = list(combat_event.combat_log)
+
+                outcome = combat_event.is_combat_over()
+                if outcome == "victory":
+                    self._handle_combat_victory(combat_event)
+                    return
+                combat_event.advance_turn()
+                self._advance_combat_to_next_turn(combat_event)
+                return
+
+            if event.key == pygame.K_f:
+                result = combat_event.try_flee(self.player)
+                self.dialogue_box.combat_log = list(combat_event.combat_log)
+
+                if result["success"]:
+                    self.dialogue_box.set_combat_phase("fled")
+                    return
+
+                # Flee failed — monsters still get their turns
+                combat_event.advance_turn()
+                self._advance_combat_to_next_turn(combat_event)
+                return
+
+            if event.key == pygame.K_i:
+                # Use selected item in combat
+                message = self.player.use_item()
+                self.dialogue_box.add_combat_log(f"Item: {message}")
+                combat_event.combat_log.append(f"Item: {message}")
+                combat_event.advance_turn()
+                self._advance_combat_to_next_turn(combat_event)
+                return
+
+            return
+
+        if phase == "monster_turn":
+            # Auto-advance monster turns on any keypress (or auto in update)
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self._execute_monster_turn(combat_event)
+            return
+
+        if phase in ("victory", "defeat", "fled"):
+            if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                self._finalize_combat(combat_event)
+            return
+
+    def _advance_combat_to_next_turn(self, combat_event):
+        """Set the phase based on whose turn it is."""
+        outcome = combat_event.is_combat_over()
+        if outcome == "victory":
+            self._handle_combat_victory(combat_event)
+            return
+        if self.player.health <= 0:
+            self.dialogue_box.set_combat_phase("defeat")
+            self.dialogue_box.add_combat_log("You have been defeated...")
+            return
+
+        turn = combat_event.get_current_turn()
+        if not turn:
+            return
+
+        if turn["type"] == "player":
+            self.dialogue_box.set_combat_phase("player_turn")
+            # Auto-select first alive target
+            alive = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
+            if alive and self.combat_target_index not in alive:
+                self.combat_target_index = alive[0]
+        else:
+            self.dialogue_box.set_combat_phase("monster_turn")
+            # Auto-execute monster turn after brief display
+            self._execute_monster_turn(combat_event)
+
+    def _execute_monster_turn(self, combat_event):
+        """Execute the current monster's turn."""
+        turn = combat_event.get_current_turn()
+        if not turn or turn["type"] != "monster":
+            combat_event.advance_turn()
+            self._advance_combat_to_next_turn(combat_event)
+            return
+
+        monster_idx = turn["index"]
+        result = combat_event.monster_turn(monster_idx, self.player)
+        self.dialogue_box.combat_log = list(combat_event.combat_log)
+
+        # Track stun/poison on player
+        if result.get("effect") == "stun":
+            self.dialogue_box.player_stunned_turns = 1
+        if result.get("effect") == "poison":
+            self.dialogue_box.player_poison_turns = result.get("duration", 2)
+
+        if self.player.health <= 0:
+            self.dialogue_box.set_combat_phase("defeat")
+            self.dialogue_box.add_combat_log("You have been defeated...")
+            return
+
+        combat_event.advance_turn()
+        self._advance_combat_to_next_turn(combat_event)
+
+    def _apply_player_poison(self):
+        """Apply poison damage to player if poisoned."""
+        if self.dialogue_box.player_poison_turns > 0:
+            poison_dmg = random.randint(1, 4)
+            self.player.health = max(0, self.player.health - poison_dmg)
+            self.dialogue_box.add_combat_log(f"Poison deals {poison_dmg} damage to you!")
+            self.dialogue_box.player_poison_turns -= 1
+
+    def _handle_combat_victory(self, combat_event):
+        """Handle victory: collect loot, mark resolved."""
+        self.dialogue_box.set_combat_phase("victory")
+        combat_event.resolved = True
+        self.dialogue_box.add_combat_log("Victory!")
+
+        # Collect loot
+        loot_ids = combat_event.collect_loot()
+        for item_id in loot_ids:
+            item = registry.get_item(item_id)
+            if item:
+                self.player.add_to_inventory(item.clone())
+                self.dialogue_box.add_combat_log(f"Loot: {item.name}")
+
+    def _finalize_combat(self, combat_event):
+        """Clean up after combat ends."""
+        if combat_event.resolved:
+            self.maze.grid[self.player.y][self.player.x] = 0
+            # Check quest completion
+            for qid, quest in self.quests.items():
+                if (quest.type == "combat"
+                        and getattr(quest, 'target_event_id', '') == combat_event.id
+                        and quest.status == "active"):
+                    quest.status = "completed"
+                    self.player.complete_quest(qid)
+
+        self.dialogue_box.end_event()
 
     def _handle_npc_interaction(self, npc):
         """Start dialogue with an NPC, handling quest offers and completions."""
