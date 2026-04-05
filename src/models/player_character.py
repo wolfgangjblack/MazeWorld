@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
     
@@ -16,6 +16,9 @@ class PlayerCharacter(BaseModel):
     max_speed: float = 2.0
     selected_item_index: int = 0
     inventory: Dict[str, object] = Field(default_factory=dict)
+    profile_image: Optional[str] = None
+    active_quests: List[str] = Field(default_factory=list)
+    completed_quests: List[str] = Field(default_factory=list)
     
     class Config: 
         arbitrary_types_allowed = True
@@ -60,8 +63,11 @@ class PlayerCharacter(BaseModel):
         inventory_items = list(self.inventory.values())
         if inventory_items:
             item = inventory_items[self.selected_item_index]
-            message = item.use(self)  # Pass the player instance to the item's use method
-            self.remove_from_inventory(item.name)  # Reduce the quantity
+            from src.models.items import EscortItem
+            if isinstance(item, EscortItem):
+                return item.use(self)
+            message = item.use(self)
+            self.remove_from_inventory(item.name)
             return message
         return "No item to use."
 
@@ -70,8 +76,11 @@ class PlayerCharacter(BaseModel):
         inventory_items = list(self.inventory.values())
         if len(inventory_items) > 0:
             item = inventory_items[self.selected_item_index]
-            message = item.give()  # Call the 'give' method of the item
-            self.remove_from_inventory(item.name)  # Reduce the quantity
+            from src.models.items import EscortItem
+            if isinstance(item, EscortItem):
+                return item.give()
+            message = item.give()
+            self.remove_from_inventory(item.name)
             return message
         return "No item to give."
     
@@ -132,3 +141,15 @@ class PlayerCharacter(BaseModel):
             if abs(npc.x - self.x) + abs(npc.y - self.y) == 1:
                 return npc
         return None
+
+    def accept_quest(self, quest_id: str):
+        if quest_id not in self.active_quests:
+            self.active_quests.append(quest_id)
+
+    def complete_quest(self, quest_id: str):
+        if quest_id in self.active_quests:
+            self.active_quests.remove(quest_id)
+            self.completed_quests.append(quest_id)
+
+    def has_completed(self, quest_id: str) -> bool:
+        return quest_id in self.completed_quests

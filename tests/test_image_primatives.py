@@ -7,8 +7,10 @@ from src.generate import generate_image_primatives as img_mod
 @pytest.fixture(autouse=True)
 def reset_pipe():
     img_mod._pipe = None
+    img_mod._pipe_type = None
     yield
     img_mod._pipe = None
+    img_mod._pipe_type = None
 
 
 def test_generate_image_api_raises_without_key():

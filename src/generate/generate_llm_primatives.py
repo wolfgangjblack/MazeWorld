@@ -35,10 +35,6 @@ def _parse_personality(raw: str, env: str, env_name: str) -> dict:
 def generate_npc_convo(npc_personality_json: dict) -> str:
     """
     Generate an initial greeting for an NPC given their personality dict.
-    Expects input like:
-    {'name': 'lyra', 'job': 'shaman', 'personality': 'whispering',
-     'hobby': 'communicating with spirits', 'environment': 'forest',
-     'environment_name': 'shadowleaf'}
     """
     prompts = get_prompt_set()
 
@@ -71,6 +67,85 @@ def generate_image_description(personality_document: dict) -> str:
     return diffusion_prompt
 
 
+def generate_environment_name(env_type: str) -> str:
+    """Generate a thematic name for an environment type."""
+    prompts = get_prompt_set()
+    request = prompts.environment_name_generation(env_type)
+    raw = generate(request)
+    return _extract_response(raw)
+
+
+def generate_event_primative(environment: dict, event_type: str) -> dict:
+    """Generate a combat or puzzle event for the given environment."""
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+
+    request = prompts.event_generation(env, env_name, event_type)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_quest_primative(environment: dict, npcs: list[dict],
+                             items: list[dict], events: list[dict],
+                             quest_type: str) -> dict:
+    """Generate a quest given available NPCs, items, events."""
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+
+    request = prompts.quest_generation(env, env_name, npcs, items, events, quest_type)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = None) -> dict:
+    """Generate a multiple-choice dialogue tree for offline-static mode."""
+    prompts = get_prompt_set()
+    request = prompts.dialogue_tree_generation(npc_personality, quest_context)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_item_image_description(item_data: dict) -> str:
+    """Generate a diffusion prompt for an item portrait."""
+    prompts = get_prompt_set()
+    request = prompts.item_image_description(item_data)
+    raw = generate(request)
+    description = _extract_response(raw)
+    return (
+        "masterpiece, best quality, very aesthetic, detailed, beautiful, "
+        "fantasy illustration, stardew valley inspired, pixel art, vivid colors, "
+        f"game item icon, {description}"
+    )
+
+
+def generate_event_image_description(event_data: dict) -> str:
+    """Generate a diffusion prompt for an event illustration."""
+    prompts = get_prompt_set()
+    request = prompts.event_image_description(event_data)
+    raw = generate(request)
+    description = _extract_response(raw)
+    return (
+        "masterpiece, best quality, very aesthetic, detailed, beautiful, "
+        "fantasy illustration, stardew valley inspired, pixel art, vivid colors, "
+        f"scene illustration, {description}"
+    )
+
+
+def generate_player_image_description() -> str:
+    """Generate a diffusion prompt for the player character portrait."""
+    prompts = get_prompt_set()
+    request = prompts.player_image_description()
+    raw = generate(request)
+    description = _extract_response(raw)
+    return (
+        "masterpiece, best quality, very aesthetic, detailed, beautiful, "
+        "fantasy illustration, stardew valley inspired, pixel art, vivid colors, "
+        f"character portrait, {description}"
+    )
+
+
 def _extract_response(raw: str) -> str:
     """Extract the usable response from raw LLM output."""
     if "##Output:" in raw:
@@ -78,3 +153,25 @@ def _extract_response(raw: str) -> str:
     else:
         response = raw.strip()
     return response.split("\n")[0].strip()
+
+
+def _parse_json_response(raw: str) -> dict:
+    """Parse a JSON response from LLM output, with fallback to ast.literal_eval."""
+    cleaned = _extract_response(raw)
+    # Try to find JSON in the response
+    for candidate in [cleaned, raw]:
+        start = candidate.find("{")
+        end = candidate.rfind("}") + 1
+        if start != -1 and end > start:
+            snippet = candidate[start:end]
+            try:
+                return json.loads(snippet)
+            except (json.JSONDecodeError, ValueError):
+                try:
+                    result = ast.literal_eval(snippet)
+                    if isinstance(result, dict):
+                        return result
+                except Exception:
+                    pass
+                continue
+    return {"error": f"Could not parse JSON from: {raw[:200]}"}

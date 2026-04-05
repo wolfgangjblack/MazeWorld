@@ -16,18 +16,18 @@ class LlamaPromptSet(PromptSet):
                 "3. generate in a jsonic format"
             ),
             examples=[
-                ("enviroment: 'forest', env_name: 'Iron Oak'",
+                ("environment: 'forest', env_name: 'Iron Oak'",
                  "{'name': 'helena', 'job': 'herbalist', 'personality': 'mysterious', 'hobby': 'collecting herbs'}"),
-                ("enviroment: 'desert', env_name: 'Sandstone'",
+                ("environment: 'desert', env_name: 'Sandstone'",
                  "{'name': 'khalid', 'job': 'merchant', 'personality': 'charming', 'hobby': 'haggling'}"),
-                ("enviroment: 'mountain', env_name: 'Frostpeak'",
+                ("environment: 'mountain', env_name: 'Frostpeak'",
                  "{'name': 'greta', 'job': 'blacksmith', 'personality': 'gruff', 'hobby': 'forging'}"),
-                ("enviroment: 'city', env_name: 'Silverport'",
+                ("environment: 'city', env_name: 'Silverport'",
                  "{'name': 'julius', 'job': 'guard', 'personality': 'stoic', 'hobby': 'training'}"),
-                ("enviroment: 'swamp', env_name: 'Mosswood'",
+                ("environment: 'swamp', env_name: 'Mosswood'",
                  "{'name': 'elara', 'job': 'alchemist', 'personality': 'eccentric', 'hobby': 'experimenting'}"),
             ],
-            user_message=f"enviroment: '{env}', env_name: '{env_name}'",
+            user_message=f"environment: '{env}', env_name: '{env_name}'",
             max_tokens=40,
         )
 
@@ -103,6 +103,141 @@ class LlamaPromptSet(PromptSet):
                 ),
             ],
             user_message=str(personality_doc),
+            max_tokens=40,
+        )
+
+
+    def environment_name_generation(self, env_type: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are a fantasy location name generator. Given an environment type, "
+                "output ONLY a single creative name. No explanation."
+            ),
+            examples=[
+                ("forest", "Shadowleaf"),
+                ("cave", "Gloomhollow"),
+                ("dungeon", "Dreadkeep"),
+                ("castle", "Whitespire"),
+                ("city", "Silverport"),
+            ],
+            user_message=env_type,
+            max_tokens=10,
+        )
+
+    def event_generation(self, env: str, env_name: str, event_type: str) -> LLMRequest:
+        if event_type == "combat":
+            return LLMRequest(
+                system=(
+                    "You generate combat encounters for a fantasy game. "
+                    "Output a JSON object with: name, description, difficulty (1-5), "
+                    "damage_type (health|hunger|thirst), damage_range ([min,max])."
+                ),
+                examples=[
+                    ("environment: 'forest', env_name: 'Shadowleaf'",
+                     '{"name": "Giant Spider", "description": "A massive spider drops from the canopy!", '
+                     '"difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}'),
+                    ("environment: 'cave', env_name: 'Gloomhollow'",
+                     '{"name": "Cave Troll", "description": "A hulking troll emerges from the shadows!", '
+                     '"difficulty": 4, "damage_type": "health", "damage_range": [8, 20]}'),
+                ],
+                user_message=f"environment: '{env}', env_name: '{env_name}'",
+                max_tokens=80,
+            )
+        else:
+            return LLMRequest(
+                system=(
+                    "You generate puzzle encounters for a fantasy game. "
+                    "Output a JSON object with: name, description, difficulty (1-5), "
+                    "choices (array with: text, stat_check, tool_attribute, dc, auto_success). "
+                    "Include 2-3 choices. One should be a safe walk-away option."
+                ),
+                examples=[
+                    ("environment: 'cave', env_name: 'Gloomhollow'",
+                     '{"name": "Locked Chest", "description": "A heavy chest with a strange mechanism...", '
+                     '"difficulty": 2, "choices": ['
+                     '{"text": "Force it open", "stat_check": "health", "tool_attribute": null, "dc": 12, "auto_success": false}, '
+                     '{"text": "Walk away", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}'),
+                ],
+                user_message=f"environment: '{env}', env_name: '{env_name}'",
+                max_tokens=200,
+            )
+
+    def quest_generation(self, env: str, env_name: str,
+                         available_npcs: list[dict], available_items: list[dict],
+                         available_events: list[dict], quest_type: str) -> LLMRequest:
+        context = str({
+            "environment": env, "environment_name": env_name,
+            "quest_type": quest_type,
+            "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
+            "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
+            "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
+        })
+        return LLMRequest(
+            system=(
+                "You generate quests for a fantasy game. Given context about NPCs, items, events, "
+                "output a JSON object with: title, description, giver_npc_id. "
+                "For fetch: add target_items [{item_id, count}]. "
+                "For escort: add escort_npc_id. "
+                "For delivery: add delivery_item_id, target_npc_id. "
+                "For combat: add target_event_id. "
+                "For dialogue_gated: add dialogue_tree with prompt and choices. "
+                "Use ONLY ids from context."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=200,
+        )
+
+    def dialogue_tree_generation(self, npc_personality: dict,
+                                 quest_context: dict | None = None) -> LLMRequest:
+        context = str({"npc": npc_personality, "quest": quest_context})
+        return LLMRequest(
+            system=(
+                "You generate dialogue trees for fantasy game NPCs. "
+                "Output a JSON: {nodes: {start: {prompt, choices: [{text, next_node_id}]}, ...}}. "
+                "3-5 nodes. Stay in character."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=400,
+        )
+
+    def item_image_description(self, item_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are a stable diffusion prompt generator for game items. "
+                "Output a short visual description of the item, high fantasy style."
+            ),
+            examples=[
+                (str({"name": "hammer", "desc": "A craftsman's hammer"}),
+                 "A sturdy iron hammer with a worn leather grip, resting on a workbench."),
+            ],
+            user_message=str(item_data),
+            max_tokens=40,
+        )
+
+    def event_image_description(self, event_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are a stable diffusion prompt generator for game encounters. "
+                "Output a short scene illustration description, high fantasy style."
+            ),
+            examples=[
+                (str({"name": "Giant Spider", "type": "combat"}),
+                 "A giant spider descending from dark forest canopy, silk threads glistening."),
+            ],
+            user_message=str(event_data),
+            max_tokens=40,
+        )
+
+    def player_image_description(self) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are a stable diffusion prompt generator. Generate a visual description "
+                "for a default adventurer player character portrait. High fantasy pixel art style."
+            ),
+            examples=[],
+            user_message="Generate a default player character portrait.",
             max_tokens=40,
         )
 

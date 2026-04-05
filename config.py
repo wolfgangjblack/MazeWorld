@@ -16,7 +16,7 @@ MIN_HALLWAY_SIZE = 1
 MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
-MAZE_SEED = 1234 # Set to -1 for random seed
+WORLD_SEED = 1234 # Set to -1 for random seed
 EVENT_PERCENT = 0.1
 
 # Dialogue box
@@ -26,6 +26,9 @@ DIALOGUE_BOX_HEIGHT_ACTIVE = 250
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
+
+# Game mode
+GAME_MODE = os.getenv("GAME_MODE", "online")  # "online" | "offline_local" | "offline_static"
 
 #NPC settings
 # ------------------------------------
@@ -43,12 +46,14 @@ LLM_MODEL_PATH = "meta-llama/Llama-3.2-3B-Instruct"
 HF_ENV = "hf_write_read"
 
 ## Anthropic (used when LLM_BACKEND == "api")
-ANTHROPIC_MODEL = "claude-3-5-haiku-latest"
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
 
 ##Image Generation Backend
 # ------------------------------------
 IMAGE_BACKEND = os.getenv("IMAGE_BACKEND", "local")  # "local" for diffusers pipeline, "api" for fal.ai API
+LOCAL_IMAGE_MODEL_MPS = "stabilityai/sdxl-turbo"
+LOCAL_IMAGE_MODEL_CUDA = "black-forest-labs/FLUX.1-schnell"
 FAL_MODEL = "fal-ai/nano-banana-pro"
 FAL_KEY_ENV = "FAL_KEY"
 FAL_SUPPORTED_MODELS = {

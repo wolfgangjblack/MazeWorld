@@ -1,12 +1,14 @@
-import math 
+import json
+import math
 import random
 from src.models.items import Food, Drink, Tool
 from src.registry import registry
-from config import MAZE_HEIGHT, MAZE_WIDTH, MAZE_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
+from src.data.world_data import ENVIRONMENT_TYPES
+from config import MAZE_HEIGHT, MAZE_WIDTH, WORLD_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
 
 # Set seed for deterministic mazes
-if MAZE_SEED != -1:
-    random.seed(MAZE_SEED)
+if WORLD_SEED != -1:
+    random.seed(WORLD_SEED)
 
 # Directions for maze carving (up, down, left, right)
 DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # (dx, dy)
@@ -17,7 +19,8 @@ class Maze:
         self.event_percent = EVENT_PERCENT
         self.event_tile_id = -1
         self.wall_tile_id = 1
-        self.environment = random.choice(["forest", "cave", "dungeon", "castle", "house", "city"])
+        self.environment = random.choice(ENVIRONMENT_TYPES)
+        self.environment_name: str = ""
         self.grid = self.initialize_maze()
 
     def initialize_maze(self):
@@ -110,7 +113,7 @@ class Maze:
         open_spaces = self.find_open_spaces()
         
         #Randomly vary event percent - later
-        if MAZE_SEED == -1:
+        if WORLD_SEED == -1:
             event_percent = random.uniform(self.event_percent -random_var, self.event_percent + random_var)
 
         else:
@@ -147,3 +150,31 @@ class Maze:
         generate_items_by_class(Food, num_food)
         generate_items_by_class(Drink, num_drink)
         generate_items_by_class(Tool, num_tools)
+
+    def save_to_json(self, path: str, extra: dict | None = None):
+        """Persist the maze grid and metadata to a JSON file."""
+        import os
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {
+            "grid": self.grid,
+            "environment": self.environment,
+            "environment_name": self.environment_name,
+        }
+        if extra:
+            data.update(extra)
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    @classmethod
+    def load_from_json(cls, path: str) -> "Maze":
+        """Reconstruct a Maze from a previously saved JSON file."""
+        with open(path, "r") as f:
+            data = json.load(f)
+        maze = cls.__new__(cls)
+        maze.event_percent = EVENT_PERCENT
+        maze.event_tile_id = -1
+        maze.wall_tile_id = 1
+        maze.environment = data["environment"]
+        maze.environment_name = data.get("environment_name", "")
+        maze.grid = data["grid"]
+        return maze, data
