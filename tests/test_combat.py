@@ -8,7 +8,7 @@ combat end conditions (victory / defeat / flee).
 import random
 import pytest
 
-from src.models.player_character import PlayerCharacter, stat_modifier
+from src.models.player import PlayerCharacter, PlayerClass, Stats, stat_modifier
 from src.models.monster import (
     Monster,
     LootDrop,
@@ -30,31 +30,35 @@ from src.controllers.combat_controller import (
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _make_player(archetype: str, stats_dict: dict, armor: int = 0) -> PlayerCharacter:
+    """Create a PlayerCharacter with a PlayerClass for combat tests."""
+    pc = PlayerClass(
+        name=archetype.title(),
+        archetype=archetype,
+        stats=Stats(**stats_dict),
+    )
+    p = PlayerCharacter(x=0, y=0, armor=armor)
+    p.player_class = pc
+    p.weapon = STARTER_WEAPONS[archetype]
+    return p
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def warrior():
-    p = PlayerCharacter(
-        x=0, y=0,
-        player_class="warrior",
-        level=1,
-        STR=16, DEX=14, CON=14, INT=8, WIS=8, CHA=10, LUCK=10,
-        armor=2,
-    )
-    p.weapon = STARTER_WEAPONS["warrior"]
+    p = _make_player("warrior", dict(STR=16, DEX=14, CON=14, INT=8, WIS=8, CHA=10, LUCK=10), armor=2)
     return p
 
 
 @pytest.fixture
 def mage():
-    p = PlayerCharacter(
-        x=0, y=0,
-        player_class="mage",
-        level=1,
-        STR=8, DEX=12, CON=10, INT=16, WIS=12, CHA=10, LUCK=10,
-    )
-    p.weapon = STARTER_WEAPONS["mage"]
+    p = _make_player("mage", dict(STR=8, DEX=12, CON=10, INT=16, WIS=12, CHA=10, LUCK=10))
     p.spells = [
         Spell(
             name="Fireball",
@@ -82,13 +86,7 @@ def mage():
 
 @pytest.fixture
 def healer():
-    p = PlayerCharacter(
-        x=0, y=0,
-        player_class="healer",
-        level=1,
-        STR=8, DEX=10, CON=12, INT=10, WIS=16, CHA=14, LUCK=10,
-    )
-    p.weapon = STARTER_WEAPONS["healer"]
+    p = _make_player("healer", dict(STR=8, DEX=10, CON=12, INT=10, WIS=16, CHA=14, LUCK=10))
     p.spells = [
         Spell(
             name="Heal",
@@ -118,13 +116,7 @@ def healer():
 
 @pytest.fixture
 def jester():
-    p = PlayerCharacter(
-        x=0, y=0,
-        player_class="jester",
-        level=1,
-        STR=10, DEX=12, CON=10, INT=10, WIS=10, CHA=10, LUCK=16,
-    )
-    p.weapon = STARTER_WEAPONS["jester"]
+    p = _make_player("jester", dict(STR=10, DEX=12, CON=10, INT=10, WIS=10, CHA=10, LUCK=16))
     return p
 
 
@@ -243,7 +235,7 @@ class TestMeleeAttack:
 
     def test_guaranteed_hit(self, warrior, weak_monster):
         """With extreme stats, should always hit weak monster."""
-        warrior.STR = 30  # +10 modifier
+        warrior.player_class.stats.STR = 30  # +10 modifier
         warrior.level = 5  # +4 level mod
         cc = CombatController(warrior, [weak_monster])
         cc.combatants = [cc.player_combatant]
@@ -356,7 +348,7 @@ class TestSpellCosts:
 class TestMultiTarget:
     def test_multi_attack_hits_multiple(self, warrior):
         pack = make_pack(3)
-        warrior.STR = 30  # guaranteed hits
+        warrior.player_class.stats.STR = 30  # guaranteed hits
         warrior.level = 5
         cc = CombatController(warrior, pack)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
@@ -386,7 +378,7 @@ class TestMultiTarget:
     def test_multi_spell_hits_all_targets(self, mage):
         pack = make_pack(3)
         # Give mage high INT for guaranteed hits and set low magic resistance
-        mage.INT = 30
+        mage.player_class.stats.INT = 30
         mage.level = 5
         for m in pack:
             m.magic_resistance = 0
@@ -404,7 +396,7 @@ class TestMultiTarget:
 class TestFlee:
     def test_flee_success_ends_combat(self, warrior, weak_monster):
         """High DEX + low monster level → flee succeeds."""
-        warrior.DEX = 30  # +10 mod → minimum roll 11 + 10 = 21 vs DC 13
+        warrior.player_class.stats.DEX = 30  # +10 mod → minimum roll 11 + 10 = 21 vs DC 13
         cc = CombatController(warrior, [weak_monster])
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
@@ -414,7 +406,7 @@ class TestFlee:
 
     def test_flee_failure_takes_damage(self, warrior, weak_monster):
         """Low DEX → flee fails, monster gets free attack."""
-        warrior.DEX = 2  # -4 mod → max roll 20 - 4 = 16 vs DC 13 could succeed
+        warrior.player_class.stats.DEX = 2  # -4 mod → max roll 20 - 4 = 16 vs DC 13 could succeed
         # Use a strong monster to make DC higher
         strong = Monster(
             id="boss", name="Boss", level=10,
@@ -432,7 +424,7 @@ class TestFlee:
         assert cc.state == CombatState.ONGOING
 
     def test_flee_state_is_fled(self, warrior, weak_monster):
-        warrior.DEX = 30
+        warrior.player_class.stats.DEX = 30
         cc = CombatController(warrior, [weak_monster])
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
@@ -462,7 +454,7 @@ class TestJesterGamble:
 
     def test_high_luck_favors_good_outcomes(self, jester, weak_monster):
         """With very high LUCK, bad outcomes (damage_self, nothing) should be rare."""
-        jester.LUCK = 30  # +10 mod
+        jester.player_class.stats.LUCK = 30  # +10 mod
         outcomes = {"damage_self": 0, "nothing": 0, "good": 0}
         for seed in range(200):
             m = Monster(id="m", name="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
@@ -488,7 +480,7 @@ class TestJesterGamble:
 class TestCombatEndConditions:
     def test_victory_when_all_monsters_dead(self, warrior, weak_monster):
         weak_monster.hp = 1
-        warrior.STR = 30
+        warrior.player_class.stats.STR = 30
         warrior.level = 5
         cc = CombatController(warrior, [weak_monster])
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
@@ -499,7 +491,7 @@ class TestCombatEndConditions:
     def test_defeat_when_player_dies(self, warrior, weak_monster):
         warrior.health = 1
         warrior.armor = 0
-        warrior.DEX = 2
+        warrior.player_class.stats.DEX = 2
         # Strong monster that always hits
         boss = Monster(
             id="boss", name="Boss", level=5,
@@ -516,7 +508,7 @@ class TestCombatEndConditions:
         assert cc.state == CombatState.DEFEAT
 
     def test_fled_state(self, warrior, weak_monster):
-        warrior.DEX = 30
+        warrior.player_class.stats.DEX = 30
         cc = CombatController(warrior, [weak_monster])
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0

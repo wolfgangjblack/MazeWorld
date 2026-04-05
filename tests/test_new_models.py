@@ -67,9 +67,9 @@ def test_player_class_with_abilities():
 
 def test_monster_creation():
     m = Monster(
-        id="wolf_01", name="Dire Wolf", environment="forest",
-        level=2, hp=15, ac=12, STR=14, DEX=12,
-        attack_name="bite", damage_dice="1d8", damage_type="physical",
+        id="wolf_01", name="Dire Wolf",
+        level=2, hp=15, max_hp=15, ac=12, str_mod=2, dex_mod=1,
+        damage_dice=8, damage_type="physical",
     )
     assert m.name == "Dire Wolf"
     assert m.level == 2
@@ -78,7 +78,7 @@ def test_monster_creation():
 
 def test_monster_with_loot():
     m = Monster(
-        id="goblin_01", name="Goblin", environment="cave",
+        id="goblin_01", name="Goblin",
         loot_table=[LootDrop(item_id=201, probability=0.6)],
     )
     assert len(m.loot_table) == 1

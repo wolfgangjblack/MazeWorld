@@ -293,6 +293,14 @@ class TestScreenTransitions:
         sc.replace(ScreenState.ROOM_INTRO)
         assert sc.state == ScreenState.ROOM_INTRO
 
+    def test_level_up_state_exists(self):
+        from src.controllers.screen_controller import ScreenController, ScreenState
+        sc = ScreenController(ScreenState.GAMEPLAY)
+        sc.push(ScreenState.LEVEL_UP)
+        assert sc.state == ScreenState.LEVEL_UP
+        sc.pop()
+        assert sc.state == ScreenState.GAMEPLAY
+
     def test_full_flow_transitions(self):
         from src.controllers.screen_controller import ScreenController, ScreenState
         sc = ScreenController(ScreenState.START)

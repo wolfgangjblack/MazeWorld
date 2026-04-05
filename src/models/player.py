@@ -121,8 +121,8 @@ class PlayerCharacter(BaseModel):
     profile_image: Optional[str] = None
     active_quests: List[str] = Field(default_factory=list)
     completed_quests: List[str] = Field(default_factory=list)
-    abilities: List[Ability] = Field(default_factory=list)
-    spells: List[Spell] = Field(default_factory=list)
+    abilities: List[Any] = Field(default_factory=list)
+    spells: List[Any] = Field(default_factory=list)
     equipped_weapon: str = ""
     armor: int = 0  # flat armor value added to AC
     weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)

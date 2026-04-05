@@ -219,8 +219,10 @@ def main():
                                 "The air hums with untold stories, and the path ahead "
                                 "promises both peril and wonder."
                             )
+                            env_portrait = registry.manifest.get("environment_portrait") if registry.manifest else None
                             room_intro_view = RoomIntroView(
                                 screen, font, env_name, env_type, story_text,
+                                portrait_path=env_portrait,
                             )
                             screen_ctrl.replace(ScreenState.ROOM_INTRO)
                         elif result["action"] == "back":

@@ -14,6 +14,7 @@ class ScreenState(Enum):
     DIALOGUE = "dialogue"
     SHOP = "shop"
     PAUSE = "pause"
+    LEVEL_UP = "level_up"
     GAME_OVER = "game_over"
     VICTORY = "victory"
 

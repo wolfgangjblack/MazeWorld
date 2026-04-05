@@ -542,6 +542,7 @@ def generate_world():
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,
             generate_item_portraits, generate_player_portrait,
+            _generate_and_save,
         )
         from src.generate.generators.llm_primitives import (
             generate_player_image_description, generate_item_image_description,
@@ -601,6 +602,13 @@ def generate_world():
             cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
         portrait_bar.update(1)
 
+        portrait_bar.set_postfix_str("Environment portrait")
+        env_portrait_prompt = f"a {maze.environment} landscape, fantasy pixel art, wide angle, atmospheric"
+        env_portrait_path = os.path.join("data/portraits", "environment.png")
+        if not _generate_and_save(env_portrait_prompt, env_portrait_path):
+            env_portrait_path = None
+        portrait_bar.update(1)
+
         portrait_bar.close()
         portraits_generated = True
         logger.info("Portraits generated successfully.")
@@ -608,6 +616,7 @@ def generate_world():
         logger.warning("Portrait generation skipped: %s", e)
         portraits_generated = False
         player_portrait_path = None
+        env_portrait_path = None
     phase_bar.update(1)
 
     # --- 12. NPC positions for home coords ---
@@ -658,6 +667,7 @@ def generate_world():
         "class_count": len(class_data_list),
         "portraits_generated": portraits_generated,
         "player_portrait": player_portrait_path,
+        "environment_portrait": env_portrait_path,
         "game_mode": GAME_MODE,
     }
     with open(MANIFEST_PATH, "w") as f:
