@@ -81,6 +81,163 @@ class ClaudePromptSet(PromptSet):
         )
 
 
+    def environment_name_generation(self, env_type: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You name fantasy locations for a video game. Given an environment type, "
+                "respond with ONLY a single creative name for that place. "
+                "No punctuation, no explanation, just the name."
+            ),
+            examples=[
+                ("forest", "Shadowleaf"),
+                ("cave", "Gloomhollow"),
+                ("city", "Silverport"),
+            ],
+            user_message=env_type,
+            max_tokens=10,
+        )
+
+    def event_generation(self, env: str, env_name: str, event_type: str) -> LLMRequest:
+        if event_type == "combat":
+            return LLMRequest(
+                system=(
+                    "You generate combat encounter descriptions for a fantasy game. "
+                    "Given an environment, respond with ONLY a JSON object with keys: "
+                    "name, description, difficulty (1-5), damage_type (health|hunger|thirst), "
+                    "damage_range ([min, max]). Keep it thematic."
+                ),
+                examples=[
+                    (
+                        "environment: 'forest', name: 'Shadowleaf'",
+                        json.dumps({"name": "Giant Spider", "description": "A massive spider drops from the canopy!",
+                                    "difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}),
+                    ),
+                ],
+                user_message=f"environment: '{env}', name: '{env_name}'",
+                max_tokens=100,
+            )
+        else:
+            return LLMRequest(
+                system=(
+                    "You generate puzzle encounter descriptions for a fantasy game. "
+                    "Given an environment, respond with ONLY a JSON object with keys: "
+                    "name, description, difficulty (1-5), choices (array of objects with: "
+                    "text, stat_check (health|hunger|thirst|null), tool_attribute "
+                    "(bludgeon|cutting|digging|climbing|null), dc (number), auto_success (bool)). "
+                    "Include 2-3 choices, one should be a safe 'walk away' option."
+                ),
+                examples=[
+                    (
+                        "environment: 'cave', name: 'Gloomhollow'",
+                        json.dumps({
+                            "name": "Locked Chest", "description": "A heavy chest with a strange mechanism...",
+                            "difficulty": 2,
+                            "choices": [
+                                {"text": "Force it open", "stat_check": "health", "tool_attribute": None, "dc": 12, "auto_success": False},
+                                {"text": "Pick the lock", "stat_check": None, "tool_attribute": "cutting", "dc": 8, "auto_success": False},
+                                {"text": "Walk away", "stat_check": None, "tool_attribute": None, "dc": 0, "auto_success": True},
+                            ]
+                        }),
+                    ),
+                ],
+                user_message=f"environment: '{env}', name: '{env_name}'",
+                max_tokens=250,
+            )
+
+    def quest_generation(self, env: str, env_name: str,
+                         available_npcs: list[dict], available_items: list[dict],
+                         available_events: list[dict], quest_type: str) -> LLMRequest:
+        context = json.dumps({
+            "environment": env, "environment_name": env_name,
+            "quest_type": quest_type,
+            "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
+            "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
+            "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
+        })
+        return LLMRequest(
+            system=(
+                "You generate quests for a fantasy game. Given context about available NPCs, "
+                "items, and events, respond with ONLY a JSON object with keys: "
+                "title, description, giver_npc_id (int from available NPCs). "
+                "For fetch quests also include target_items: [{item_id, count}]. "
+                "For escort quests include escort_npc_id. "
+                "For delivery quests include delivery_item_id and target_npc_id. "
+                "For combat quests include target_event_id. "
+                "For dialogue_gated quests include a simple dialogue_tree with prompt and choices. "
+                "Use ONLY ids from the provided context."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=200,
+        )
+
+    def dialogue_tree_generation(self, npc_personality: dict,
+                                 quest_context: dict | None = None) -> LLMRequest:
+        context = json.dumps({"npc": npc_personality, "quest": quest_context})
+        return LLMRequest(
+            system=(
+                "You generate dialogue trees for a fantasy game NPC. "
+                "Respond with ONLY a JSON object representing a dialogue tree. Format: "
+                '{"nodes": {"start": {"prompt": "NPC says...", '
+                '"choices": [{"text": "Player option", "next_node_id": "node2"}, ...]}, '
+                '"node2": {"prompt": "...", "choices": [...]}, '
+                '"end": {"prompt": "Farewell!", "choices": []}}}. '
+                "Keep it 3-5 nodes deep. Stay in character."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=400,
+        )
+
+    def item_image_description(self, item_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are an image prompt generator for a pixel-art fantasy game. "
+                "Given item details as JSON, output a short visual description suitable "
+                "for an image generator. Focus on the item's appearance and style. "
+                "Output ONLY the description."
+            ),
+            examples=[
+                (
+                    json.dumps({"name": "hammer", "desc": "A craftsman's hammer", "category": "tool"}),
+                    "A sturdy iron hammer with a worn leather grip, resting on a wooden workbench."
+                ),
+            ],
+            user_message=json.dumps(item_data),
+            max_tokens=60,
+        )
+
+    def event_image_description(self, event_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are an image prompt generator for a pixel-art fantasy game. "
+                "Given event details as JSON, output a short scene illustration description "
+                "suitable for an image generator. Focus on the scene, atmosphere, and danger. "
+                "Output ONLY the description."
+            ),
+            examples=[
+                (
+                    json.dumps({"name": "Giant Spider", "type": "combat", "description": "A massive spider drops from the canopy!"}),
+                    "A giant spider descending from dark forest canopy, silk threads glistening, menacing fangs visible."
+                ),
+            ],
+            user_message=json.dumps(event_data),
+            max_tokens=60,
+        )
+
+    def player_image_description(self) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are an image prompt generator for a pixel-art fantasy game. "
+                "Generate a visual description for a default player character portrait. "
+                "The character is a young adventurer. Output ONLY the description."
+            ),
+            examples=[],
+            user_message="Generate a default player character portrait description.",
+            max_tokens=60,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs."""
     examples: list[tuple[str, str]] = []

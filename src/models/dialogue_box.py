@@ -122,8 +122,22 @@ class DialogueBox:
         self.auto_scroll = False
         self.generating = False
 
-    def start_event(self, environment):
-        pass
+    def start_event(self, event):
+        """Activate an event in the dialogue box."""
+        self.event_active = True
+        self.current_event = event
+        self.event_context = {}
+        self.dialogue_active = False
+        self.input_active = False
 
-    def generate_event(self, environment):
-        pass
+        if event.type == "combat":
+            self.awaiting_roll = True
+        else:
+            self.awaiting_roll = False
+
+    def end_event(self):
+        """Close the event panel."""
+        self.event_active = False
+        self.current_event = None
+        self.awaiting_roll = False
+        self.event_context = {}

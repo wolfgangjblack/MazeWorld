@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 from pydantic import BaseModel
 
 class ItemStats(BaseModel):
@@ -15,7 +15,9 @@ class Item(BaseModel):
     name: str
     desc: str
     quantity: int = 1
-    item_stats : ItemStats
+    item_stats: ItemStats
+    profile_image: Optional[str] = None
+    portrait_prompt: Optional[str] = None
 
     def use(self):
         """Use the item."""
@@ -67,3 +69,15 @@ class Tool(Item):
             return f"The {self.name} broke."
         
         return f"You used the {self.name}. It still seems useful"
+
+
+class EscortItem(Item):
+    """Represents an NPC being escorted. Cannot be consumed or dropped."""
+    npc_id: int = 0
+    target_zone: Tuple[int, int] = (0, 0)
+
+    def use(self, player):
+        return "\"Are we there yet?\""
+
+    def give(self):
+        return "You can't abandon your escort!"

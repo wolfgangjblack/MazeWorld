@@ -168,5 +168,9 @@ scratch/
 # Ruff linter cache
 .ruff_cache/
 
-# Generated NPC portraits
+# Generated world data (from world_gen.py)
 data/portraits/
+data/maze/
+data/events/
+data/quests/
+data/manifest.json

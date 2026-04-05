@@ -1,8 +1,10 @@
+import os
 from src.utils.dataloader_utils import load_json_data, create_item_from_data
 
 
 class GameRegistry:
-    """Singleton registry for all game data -- items, NPCs, starter inventory.
+    """Singleton registry for all game data -- items, NPCs, starter inventory,
+    plus pre-generated events, quests, and manifest from world_gen.
 
     Loads once from JSON files and provides lookup methods so no other module
     needs to touch the raw data files directly.
@@ -21,7 +23,31 @@ class GameRegistry:
         self._load_items()
         self._load_npcs()
         self._load_starter_inventory()
+        self._load_manifest()
+        self._load_events()
+        self._load_quests()
         self._loaded = True
+
+    def reload(self):
+        """Force-reload all data (e.g. after world_gen runs)."""
+        self._loaded = False
+        self.load()
+
+    # -- manifest ------------------------------------------------------------
+
+    def _load_manifest(self):
+        self.manifest = None
+        path = "data/manifest.json"
+        if os.path.exists(path):
+            self.manifest = load_json_data(path)
+
+    def has_manifest(self) -> bool:
+        return self.manifest is not None
+
+    def manifest_matches_seed(self, seed: int) -> bool:
+        if not self.manifest:
+            return False
+        return self.manifest.get("world_seed") == seed
 
     # -- items ---------------------------------------------------------------
 
@@ -52,6 +78,40 @@ class GameRegistry:
 
     def _load_npcs(self):
         self.npc_templates: list = load_json_data('data/npcs/npcs.json')
+
+    def get_active_npcs(self) -> list[dict]:
+        """Return only the NPC dicts that are selected (active) for this world."""
+        return [n for n in self.npc_templates if n.get("selected", True)]
+
+    # -- events --------------------------------------------------------------
+
+    def _load_events(self):
+        self.event_registry: dict = {}
+        path = "data/events/events.json"
+        if os.path.exists(path):
+            from src.models.event import create_event_from_data
+            events_data = load_json_data(path)
+            for evt in events_data:
+                event_obj = create_event_from_data(evt)
+                self.event_registry[event_obj.id] = event_obj
+
+    def get_event(self, event_id: str):
+        return self.event_registry.get(event_id)
+
+    # -- quests --------------------------------------------------------------
+
+    def _load_quests(self):
+        self.quest_registry: dict = {}
+        path = "data/quests/quests.json"
+        if os.path.exists(path):
+            from src.models.quest import create_quest_from_data
+            quests_data = load_json_data(path)
+            for qd in quests_data:
+                quest_obj = create_quest_from_data(qd)
+                self.quest_registry[quest_obj.id] = quest_obj
+
+    def get_quest(self, quest_id: str):
+        return self.quest_registry.get(quest_id)
 
     # -- starter inventory ---------------------------------------------------
 

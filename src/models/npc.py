@@ -1,8 +1,9 @@
 import random
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Tuple
 
 from src.prompts import get_prompt_set
+from src.data.world_data import NAMES, PERSONALITIES, JOBS, HOBBIES, ENVIRONMENT_TYPES
 
 
 class NPC(BaseModel):
@@ -11,14 +12,21 @@ class NPC(BaseModel):
     y: int
     id: int
     profile_image: Optional[str] = None
+    portrait_prompt: Optional[str] = None
     name: Optional[str] = None
     job: Optional[str] = None
     hobby: Optional[str] = None
     personality: Optional[str] = None
     description: Optional[str] = None
     environment: Optional[str] = None
+    environment_name: Optional[str] = None
     identity: Optional[str] = None
-    interaction_history: List[dict] = []
+    opening_greeting: Optional[str] = None
+    dialogue_tree: Optional[dict] = None
+    quest_id: Optional[str] = None
+    zone: Optional[List[int]] = None
+    selected: bool = True
+    interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
     color: Tuple[int, int, int] = (0, 255, 0)
     move_interval: int = 5000
@@ -29,35 +37,23 @@ class NPC(BaseModel):
 
     def __init__(self, **data):
         super().__init__(**data)
-        self.generate_personality_document()
+        if not self.name:
+            self.generate_personality_document()
 
     def generate_personality_document(self):
         """Generate personality attributes for the NPC."""
-        names = ['Arin', 'Belinda', 'Corwin', 'Daphne', 'Eldon', 'Fiona', 'Gareth', 'Helena']
-        personalities = ['cheerful', 'grumpy', 'mysterious', 'friendly', 'suspicious', 'stoic']
-        hobbies = {
-            'forest': ['collecting herbs', 'bird watching', 'tracking animals'],
-            'cave': ['mining rare ores', 'exploring caverns', 'studying geology'],
-            'plain': ['farming', 'stargazing', 'herding livestock'],
-            'city': ['trading goods', 'playing music', 'studying art']
-        }
-        jobs = {
-            'forest': ['hunter', 'herbalist', 'ranger'],
-            'cave': ['miner', 'spelunker', 'geologist'],
-            'plain': ['farmer', 'shepherd', 'blacksmith'],
-            'city': ['merchant', 'artist', 'guard']
-        }
-
         if not self.environment:
-            self.environment = random.choice(['forest', 'cave', 'plain', 'city'])
+            self.environment = random.choice(ENVIRONMENT_TYPES)
 
-        self.name = self.name or random.choice(names)
-        self.personality = self.personality or random.choice(personalities)
-        self.job = self.job or random.choice(jobs[self.environment])
-        self.hobby = self.hobby or random.choice(hobbies[self.environment])
+        self.name = self.name or random.choice(NAMES)
+        self.personality = self.personality or random.choice(PERSONALITIES)
+        self.job = self.job or random.choice(JOBS[self.environment])
+        self.hobby = self.hobby or random.choice(HOBBIES[self.environment])
 
     def build_identity(self):
         """Build the conversation identity using the prompt library."""
+        if self.identity:
+            return
         prompts = get_prompt_set()
         self.identity = prompts.conversation_identity(
             name=self.name,
@@ -65,7 +61,7 @@ class NPC(BaseModel):
             personality=self.personality,
             hobby=self.hobby,
             env=self.environment,
-            env_name=self.environment or "Unknown",
+            env_name=self.environment_name or self.environment or "Unknown",
         )
 
     def add_turn(self, role: str, content: str):
@@ -110,8 +106,8 @@ class StaticNPC(NPC):
 class RandomNPC(NPC):
     """NPC that moves randomly around a fixed point."""
     color: Tuple[int, int, int] = (0, 255, 255)
-    home_x: int
-    home_y: int
+    home_x: int = 0
+    home_y: int = 0
     movement_range: int = 2
 
     def prepare(self):

@@ -27,3 +27,27 @@ class PromptSet(ABC):
 
     @abstractmethod
     def image_description(self, personality_doc: dict) -> LLMRequest: ...
+
+    @abstractmethod
+    def environment_name_generation(self, env_type: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def event_generation(self, env: str, env_name: str, event_type: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def quest_generation(self, env: str, env_name: str,
+                         available_npcs: list[dict], available_items: list[dict],
+                         available_events: list[dict], quest_type: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def dialogue_tree_generation(self, npc_personality: dict,
+                                 quest_context: dict | None = None) -> LLMRequest: ...
+
+    @abstractmethod
+    def item_image_description(self, item_data: dict) -> LLMRequest: ...
+
+    @abstractmethod
+    def event_image_description(self, event_data: dict) -> LLMRequest: ...
+
+    @abstractmethod
+    def player_image_description(self) -> LLMRequest: ...
