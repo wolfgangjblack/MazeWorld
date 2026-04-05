@@ -129,6 +129,10 @@ class PlayerCharacter(BaseModel):
     weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)
     active_buffs: List[ActiveBuff] = Field(default_factory=list)
 
+    # --- Phase 4: Items, Inventory & Shops ---
+    money: int = 0
+    equipped_weapon: Optional[str] = None
+
     class Config:
         arbitrary_types_allowed = True
         
@@ -174,10 +178,12 @@ class PlayerCharacter(BaseModel):
             self.spells.append(choice)
 
     def initialize_inventory(self):
+        from config import STARTING_MONEY
         self.inventory = {
             name: item.clone()
             for name, item in registry.starter_inventory.items()
         }
+        self.money = STARTING_MONEY
         
     def move(self, dx: int, dy: int, maze):
         new_x = self.x + dx
@@ -378,3 +384,40 @@ class PlayerCharacter(BaseModel):
 
     def is_alive(self) -> bool:
         return self.health > 0
+
+    # --- Phase 4: Items, Inventory & Shops ---
+
+    def equip_weapon(self, weapon_name: str) -> str:
+        """Equip a weapon from inventory."""
+        from src.models.items import Weapon
+        if weapon_name not in self.inventory:
+            return "You don't have that weapon."
+        item = self.inventory[weapon_name]
+        if not isinstance(item, Weapon):
+            return f"{weapon_name} is not a weapon."
+        if self.equipped_weapon == weapon_name:
+            self.equipped_weapon = None
+            return f"You unequipped the {weapon_name}."
+        self.equipped_weapon = weapon_name
+        return f"You equipped the {weapon_name}."
+
+    def get_equipped_weapon(self):
+        """Return the equipped Weapon object, or None."""
+        from src.models.items import Weapon
+        if self.equipped_weapon and self.equipped_weapon in self.inventory:
+            item = self.inventory[self.equipped_weapon]
+            if isinstance(item, Weapon):
+                return item
+        self.equipped_weapon = None
+        return None
+
+    def add_money(self, amount: int):
+        """Add money to the player's wallet."""
+        self.money += amount
+
+    def spend_money(self, amount: int) -> bool:
+        """Spend money if the player has enough. Returns True on success."""
+        if self.money >= amount:
+            self.money -= amount
+            return True
+        return False

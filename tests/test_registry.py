@@ -1,5 +1,5 @@
 from src.registry import GameRegistry
-from src.models.items import Food, Drink, Tool
+from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, Item
 
 
 def test_singleton():
@@ -11,12 +11,12 @@ def test_singleton():
 def test_items_loaded(reg):
     assert len(reg.item_registry) > 0
     for item in reg.item_registry.values():
-        assert isinstance(item, (Food, Drink, Tool))
+        assert isinstance(item, (Food, Drink, Tool, Weapon, SpellScroll))
 
 
 def test_get_item_returns_correct_class(reg):
     for item_id, item in reg.item_registry.items():
-        assert isinstance(item, (Food, Drink, Tool))
+        assert isinstance(item, (Food, Drink, Tool, Weapon, SpellScroll))
         assert reg.get_item(item_id) is item
 
 

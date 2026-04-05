@@ -1,40 +1,48 @@
 import json
-from src.models.items import Food, Drink, Tool, Item, ItemStats
+from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, Item, ItemStats
+
+ITEM_CLASS_MAP = {
+    "food": Food,
+    "drink": Drink,
+    "tool": Tool,
+    "weapon": Weapon,
+    "spell_scroll": Weapon,  # placeholder, overridden below
+}
 
 def create_item_from_data(item_id: int, data: dict):
-    # data format example:
-    # {
-    #    "category": "Food",
-    #    "name": "bread",
-    #    "desc": "A loaf of bread.",
-    #    "item_stats": {"nutrition_value": 20, "hydration_value":0, "health_value":0, "uses":1}
-    # }
-
-    # Normalize the type (just in case)
     item_type = data["category"].strip().lower()
 
-    # Determine the class based on 'type'
     if item_type == "food":
         cls = Food
     elif item_type == "drink":
         cls = Drink
     elif item_type == "tool":
         cls = Tool
+    elif item_type == "weapon":
+        cls = Weapon
+    elif item_type == "spell_scroll":
+        cls = SpellScroll
     else:
-        cls = Item  # default fallback if type is not recognized
+        cls = Item
 
-    # Create the ItemStats from the data
     stats_data = data.get("item_stats", {})
     stats = ItemStats(**stats_data)
 
-    # Instantiate the item
-    return cls(
-        category=data["category"],  # keep the original string in case we need it
-        name=data["name"],
-        desc=data["desc"],
-        quantity=1,
-        item_stats=stats
-    )
+    kwargs = {
+        "category": data["category"],
+        "name": data["name"],
+        "desc": data.get("desc", ""),
+        "quantity": 1,
+        "item_stats": stats,
+        "room_level": data.get("room_level", 1),
+    }
+
+    if cls == Weapon:
+        kwargs["weapon_type"] = data.get("weapon_type", "simple")
+    elif cls == SpellScroll:
+        kwargs["spell_effect"] = data.get("spell_effect", "generic")
+
+    return cls(**kwargs)
 
 def load_json_data(file_path: str):
     with open(file_path, "r") as file:

@@ -3,14 +3,17 @@ from pydantic import BaseModel
 
 class ItemStats(BaseModel):
     nutrition_value: int = 0
-    hydration_value: int = 0 
+    hydration_value: int = 0
     health_value: int = 0
     uses: int = 1
     attribute: Optional[str] = None
+    price: int = 0
+    attack_dice: Optional[str] = None  # e.g. "1d6", "2d4"
+    stat_modifier: Optional[str] = None  # "STR", "DEX", "INT"
 
 
 class Item(BaseModel):
-    """Base class for all items."""    
+    """Base class for all items."""
     category: str
     name: str
     desc: str
@@ -18,6 +21,7 @@ class Item(BaseModel):
     item_stats: ItemStats
     profile_image: Optional[str] = None
     portrait_prompt: Optional[str] = None
+    room_level: int = 1
 
     def use(self):
         """Use the item."""
@@ -69,6 +73,44 @@ class Tool(Item):
             return f"The {self.name} broke."
         
         return f"You used the {self.name}. It still seems useful"
+
+
+class Weapon(Item):
+    """Represents weapon items. Determines attack dice + stat modifier.
+    Types: heavy (STR), light (DEX), simple (STR/INT).
+    """
+    weapon_type: str = "simple"  # "heavy", "light", "simple"
+
+    def use(self, player):
+        """Equip or unequip the weapon."""
+        if player.equipped_weapon == self.name:
+            player.equipped_weapon = None
+            return f"You unequipped the {self.name}."
+        player.equipped_weapon = self.name
+        return f"You equipped the {self.name}."
+
+    def roll_damage(self) -> int:
+        """Roll attack dice and return damage value."""
+        import random
+        dice_str = self.item_stats.attack_dice or "1d4"
+        try:
+            num, sides = dice_str.split("d")
+            total = sum(random.randint(1, int(sides)) for _ in range(int(num)))
+        except (ValueError, TypeError):
+            total = random.randint(1, 4)
+        return total
+
+
+class SpellScroll(Item):
+    """Consumable single-use spell scroll.
+    Solves events/quests/puzzles. Jester class can learn permanently.
+    """
+    spell_effect: str = "generic"  # describes what the spell does
+
+    def use(self, player):
+        """Use the spell scroll. Consumed on use."""
+        player.health = min(player.health + self.item_stats.health_value, player.max_health)
+        return f"You cast {self.name}! The scroll crumbles to dust."
 
 
 class EscortItem(Item):
