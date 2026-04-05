@@ -1,12 +1,26 @@
-from typing import Dict, List, Optional, Tuple
+import random
+from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
-    
+
+
+def stat_modifier(value: int) -> int:
+    """D&D-style modifier: (stat - 10) // 2."""
+    return (value - 10) // 2
+
+
+class ActiveBuff(BaseModel):
+    """A temporary stat buff active during combat."""
+    stat: str
+    value: int
+    turns_remaining: int
+
+
 class PlayerCharacter(BaseModel):
     x: int
     y: int
     color: Tuple[int, int, int] = (0, 0, 255)
-    health: int = 100 
+    health: int = 100
     hunger: int = 100
     thirst: int = 100
     speed: float = 1.0
@@ -19,8 +33,25 @@ class PlayerCharacter(BaseModel):
     profile_image: Optional[str] = None
     active_quests: List[str] = Field(default_factory=list)
     completed_quests: List[str] = Field(default_factory=list)
-    
-    class Config: 
+
+    # --- RPG stats (Phase 2) ---
+    player_class: str = "warrior"  # "warrior" | "mage" | "healer" | "jester"
+    level: int = 1
+    STR: int = 10
+    DEX: int = 10
+    CON: int = 10
+    INT: int = 10
+    WIS: int = 10
+    CHA: int = 10
+    LUCK: int = 10
+    armor: int = 0  # flat armor value added to AC
+
+    # Combat equipment — stored as dicts to avoid circular import; resolved at runtime
+    weapon: Optional[Any] = None  # Weapon instance
+    spells: List[Any] = Field(default_factory=list)  # list of Spell instances
+    active_buffs: List[ActiveBuff] = Field(default_factory=list)
+
+    class Config:
         arbitrary_types_allowed = True
         
     def initialize_inventory(self):
@@ -153,3 +184,62 @@ class PlayerCharacter(BaseModel):
 
     def has_completed(self, quest_id: str) -> bool:
         return quest_id in self.completed_quests
+
+    # --- Combat helpers ---
+
+    def get_stat_mod(self, stat_name: str) -> int:
+        """Return the D&D-style modifier for a stat, including active buffs."""
+        base = getattr(self, stat_name, 10)
+        buff_bonus = sum(b.value for b in self.active_buffs if b.stat == stat_name)
+        return stat_modifier(base + buff_bonus)
+
+    def get_ac(self) -> int:
+        """Armor class: 10 + armor + DEX mod."""
+        return 10 + self.armor + self.get_stat_mod("DEX")
+
+    def roll_initiative(self) -> int:
+        return random.randint(1, 20) + self.get_stat_mod("DEX")
+
+    def roll_attack(self) -> int:
+        """1d20 + weapon stat mod + level mod."""
+        if self.weapon is None:
+            return random.randint(1, 20) + self.get_stat_mod("STR") + (self.level - 1)
+        return random.randint(1, 20) + self.get_stat_mod(self.weapon.stat) + (self.level - 1)
+
+    def roll_weapon_damage(self) -> int:
+        """Roll weapon damage dice + weapon stat modifier."""
+        if self.weapon is None:
+            return max(1, random.randint(1, 4) + self.get_stat_mod("STR"))
+        base = self.weapon.roll_damage()
+        return max(1, base + self.get_stat_mod(self.weapon.stat))
+
+    def roll_magic_attack(self) -> int:
+        """1d20 + INT (mage) or WIS (healer) + level mod."""
+        if self.player_class == "healer":
+            return random.randint(1, 20) + self.get_stat_mod("WIS") + (self.level - 1)
+        return random.randint(1, 20) + self.get_stat_mod("INT") + (self.level - 1)
+
+    def get_jester_mod(self, normal_stat: str) -> int:
+        """Jester modifier rule: avg(LUCK mod, normal stat mod)."""
+        luck_mod = self.get_stat_mod("LUCK")
+        normal_mod = self.get_stat_mod(normal_stat)
+        return (luck_mod + normal_mod) // 2
+
+    def can_afford_spell(self, spell) -> bool:
+        return self.hunger >= spell.hunger_cost and self.thirst >= spell.thirst_cost
+
+    def pay_spell_cost(self, spell):
+        self.hunger = max(0, self.hunger - spell.hunger_cost)
+        self.thirst = max(0, self.thirst - spell.thirst_cost)
+
+    def apply_buff(self, stat: str, value: int, duration: int):
+        self.active_buffs.append(ActiveBuff(stat=stat, value=value, turns_remaining=duration))
+
+    def tick_buffs(self):
+        """Decrement buff durations at end of player's turn. Remove expired."""
+        for buff in self.active_buffs:
+            buff.turns_remaining -= 1
+        self.active_buffs = [b for b in self.active_buffs if b.turns_remaining > 0]
+
+    def is_alive(self) -> bool:
+        return self.health > 0

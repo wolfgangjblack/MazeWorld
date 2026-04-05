@@ -174,3 +174,11 @@ data/maze/
 data/events/
 data/quests/
 data/manifest.json
+
+# Gas Town (added by gt)
+.runtime/
+.claude/
+.logs/
+state.json
+CLAUDE.md
+CLAUDE.local.md
