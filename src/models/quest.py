@@ -32,11 +32,6 @@ class FetchQuest(Quest):
         for req in self.target_items:
             item_id = req["item_id"]
             count = req.get("count", 1)
-            held = sum(
-                1 for item in player.inventory.values()
-                if getattr(item, 'item_stats', None)
-                and item.name  # just need the right items
-            )
             found = 0
             for item in player.inventory.values():
                 from src.registry import registry

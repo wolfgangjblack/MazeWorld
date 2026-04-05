@@ -8,7 +8,6 @@ Can also be imported and called via generate_world().
 
 import json
 import logging
-import math
 import os
 import random
 from datetime import datetime, timezone
@@ -17,9 +16,8 @@ from tqdm import tqdm
 
 from config import (
     WORLD_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
-    NUM_FOOD, NUM_DRINKS, NUM_TOOLS, EVENT_PERCENT,
+    NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
 )
-from src.data.world_data import ENVIRONMENT_TYPES
 from src.models.maze import Maze
 from src.registry import registry
 
@@ -500,7 +498,7 @@ def generate_world():
                 giver = next((n for n in active_npcs
                               if n["id"] == quest_data["giver_npc_id"]), None)
                 quest_data["dialogue_tree"] = {
-                    "prompt": f"What business do you have with me?",
+                    "prompt": "What business do you have with me?",
                     "choices": [
                         {"text": "I need your help.", "next_node_id": "success"},
                         {"text": "Never mind.", "next_node_id": "fail"},
