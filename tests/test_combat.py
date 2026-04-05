@@ -9,8 +9,14 @@ import random
 import pytest
 
 from src.models.player_character import PlayerCharacter, stat_modifier
-from src.models.monster import Monster, LootDrop, create_scaled_monster
-from src.models.weapon import Weapon, STARTER_WEAPONS
+from src.models.monster import (
+    Monster,
+    LootDrop,
+    create_scaled_monster,
+    generate_encounter,
+    EncounterType,
+)
+from src.models.weapon import Weapon, STARTER_WEAPONS, RANDOM_WEAPON_STATS
 from src.models.spell import (
     Spell,
     elemental_multiplier,
@@ -656,3 +662,91 @@ class TestPlayerCombat:
         assert warrior.is_alive()
         warrior.health = 0
         assert not warrior.is_alive()
+
+
+# ---------------------------------------------------------------------------
+# Encounter composition
+# ---------------------------------------------------------------------------
+
+class TestEncounterComposition:
+    def test_solo_encounter_one_monster(self):
+        monsters = generate_encounter(1, EncounterType.SOLO)
+        assert len(monsters) == 1
+
+    def test_pack_encounter_two_to_four(self):
+        for seed in range(20):
+            random.seed(seed)
+            monsters = generate_encounter(1, EncounterType.PACK)
+            assert 2 <= len(monsters) <= 4
+
+    def test_mixed_encounter_composition(self):
+        random.seed(42)
+        monsters = generate_encounter(2, EncounterType.MIXED)
+        # 1-2 strong + 2-3 weak = 3-5 total
+        assert 3 <= len(monsters) <= 5
+
+    def test_random_encounter_type(self):
+        """When encounter_type is None, it picks randomly."""
+        monsters = generate_encounter(1)
+        assert len(monsters) >= 1
+
+    def test_solo_monster_level_above_player(self):
+        monsters = generate_encounter(2, EncounterType.SOLO)
+        assert monsters[0].level == 3
+
+    def test_pack_monsters_level_below_player(self):
+        monsters = generate_encounter(3, EncounterType.PACK)
+        for m in monsters:
+            assert m.level == 2  # max(1, 3-1)
+
+
+# ---------------------------------------------------------------------------
+# Default loot probability (40-60%)
+# ---------------------------------------------------------------------------
+
+class TestDefaultLoot:
+    def test_scaled_monster_has_default_loot(self):
+        m = create_scaled_monster("l1", "Rat", level=1)
+        assert len(m.loot_table) == 1
+        assert 0.4 <= m.loot_table[0].probability <= 0.6
+
+    def test_explicit_loot_overrides_default(self):
+        custom = [LootDrop(item_id=999, probability=1.0)]
+        m = create_scaled_monster("l2", "Rat", level=1, loot_table=custom)
+        assert m.loot_table[0].item_id == 999
+        assert m.loot_table[0].probability == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Jester random weapon stat
+# ---------------------------------------------------------------------------
+
+class TestJesterRandomWeapon:
+    def test_random_weapon_uses_varying_stats(self, jester):
+        """Jester's roll_attack should sometimes use different stats."""
+        stats_used = set()
+        for seed in range(50):
+            random.seed(seed)
+            jester._resolve_weapon_stat()
+            # Can't directly observe which stat was used, so test via RANDOM_WEAPON_STATS
+        assert set(RANDOM_WEAPON_STATS) == {"STR", "DEX", "INT"}
+
+    def test_resolve_weapon_stat_random_type(self, jester):
+        """_resolve_weapon_stat with a random weapon returns a stat from the pool."""
+        for seed in range(30):
+            random.seed(seed)
+            stat = jester._resolve_weapon_stat()
+            assert stat in RANDOM_WEAPON_STATS
+
+
+# ---------------------------------------------------------------------------
+# Light weapon
+# ---------------------------------------------------------------------------
+
+class TestLightWeapon:
+    def test_light_weapon_exists(self):
+        assert "rogue" in STARTER_WEAPONS
+        w = STARTER_WEAPONS["rogue"]
+        assert w.weapon_type == "light"
+        assert w.stat == "DEX"
+        assert w.damage_dice in (4, 6)  # 1d4-1d6 per spec

@@ -57,4 +57,15 @@ STARTER_WEAPONS = {
         damage_dice=6,
         description="A blade that seems to change shape when you're not looking.",
     ),
+    "rogue": Weapon(
+        name="Short Dagger",
+        weapon_type="light",
+        stat="DEX",
+        damage_dice=4,
+        description="A quick, light dagger favored by agile fighters.",
+    ),
 }
+
+
+# Stats that a jester's random weapon can roll on each attack
+RANDOM_WEAPON_STATS = ["STR", "DEX", "INT"]

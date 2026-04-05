@@ -200,18 +200,27 @@ class PlayerCharacter(BaseModel):
     def roll_initiative(self) -> int:
         return random.randint(1, 20) + self.get_stat_mod("DEX")
 
+    def _resolve_weapon_stat(self) -> str:
+        """Return the stat governing the current weapon. Random weapons pick a random stat."""
+        if self.weapon is None:
+            return "STR"
+        if self.weapon.weapon_type == "random":
+            from src.models.weapon import RANDOM_WEAPON_STATS
+            return random.choice(RANDOM_WEAPON_STATS)
+        return self.weapon.stat
+
     def roll_attack(self) -> int:
         """1d20 + weapon stat mod + level mod."""
-        if self.weapon is None:
-            return random.randint(1, 20) + self.get_stat_mod("STR") + (self.level - 1)
-        return random.randint(1, 20) + self.get_stat_mod(self.weapon.stat) + (self.level - 1)
+        stat = self._resolve_weapon_stat()
+        return random.randint(1, 20) + self.get_stat_mod(stat) + (self.level - 1)
 
     def roll_weapon_damage(self) -> int:
         """Roll weapon damage dice + weapon stat modifier."""
+        stat = self._resolve_weapon_stat()
         if self.weapon is None:
-            return max(1, random.randint(1, 4) + self.get_stat_mod("STR"))
+            return max(1, random.randint(1, 4) + self.get_stat_mod(stat))
         base = self.weapon.roll_damage()
-        return max(1, base + self.get_stat_mod(self.weapon.stat))
+        return max(1, base + self.get_stat_mod(stat))
 
     def roll_magic_attack(self) -> int:
         """1d20 + INT (mage) or WIS (healer) + level mod."""

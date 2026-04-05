@@ -1,4 +1,5 @@
 import random
+from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -84,6 +85,11 @@ def create_scaled_monster(
     str_mod = max(0, level - 1)
     dex_mod = max(0, (level - 1) // 2)
 
+    # Default loot: one generic drop with 40-60% probability
+    if loot_table is None:
+        drop_chance = random.uniform(0.4, 0.6)
+        loot_table = [LootDrop(item_id=level * 100, probability=drop_chance)]
+
     return Monster(
         id=id,
         name=name,
@@ -97,5 +103,87 @@ def create_scaled_monster(
         damage_type=damage_type,
         elemental_affinity=elemental_affinity,
         magic_resistance=level,
-        loot_table=loot_table or [],
+        loot_table=loot_table,
     )
+
+
+# ---------------------------------------------------------------------------
+# Encounter composition
+# ---------------------------------------------------------------------------
+
+class EncounterType(str, Enum):
+    SOLO = "solo"    # 1 monster
+    PACK = "pack"    # 2-4 weak monsters
+    MIXED = "mixed"  # 1-2 strong + 2-3 weak
+
+
+# Pool of monster templates for encounter generation
+MONSTER_POOL = {
+    "weak": [
+        {"name": "Rat", "damage_type": "physical"},
+        {"name": "Goblin", "damage_type": "physical"},
+        {"name": "Bat", "damage_type": "physical"},
+        {"name": "Imp", "damage_type": "fire", "elemental_affinity": "fire"},
+        {"name": "Sprite", "damage_type": "forest", "elemental_affinity": "forest"},
+    ],
+    "strong": [
+        {"name": "Orc", "damage_type": "physical"},
+        {"name": "Fire Elemental", "damage_type": "fire", "elemental_affinity": "fire"},
+        {"name": "Treant", "damage_type": "physical", "elemental_affinity": "forest"},
+        {"name": "Water Serpent", "damage_type": "water", "elemental_affinity": "water"},
+        {"name": "Shadow Knight", "damage_type": "physical", "elemental_affinity": "dark"},
+    ],
+}
+
+
+def generate_encounter(
+    player_level: int,
+    encounter_type: Optional[EncounterType] = None,
+) -> List[Monster]:
+    """Generate a combat encounter scaled to the player's level.
+
+    Args:
+        player_level: The player's current level (determines monster scaling).
+        encounter_type: Force a specific composition, or None for random selection.
+
+    Returns:
+        A list of Monster instances ready for CombatController.
+    """
+    if encounter_type is None:
+        encounter_type = random.choice(list(EncounterType))
+
+    monsters: List[Monster] = []
+    counter = 0
+
+    def _make(template: dict, level: int) -> Monster:
+        nonlocal counter
+        counter += 1
+        return create_scaled_monster(
+            id=f"enc-{counter}",
+            name=template["name"],
+            level=level,
+            damage_type=template.get("damage_type", "physical"),
+            elemental_affinity=template.get("elemental_affinity"),
+        )
+
+    if encounter_type == EncounterType.SOLO:
+        template = random.choice(MONSTER_POOL["strong"])
+        monsters.append(_make(template, player_level + 1))
+
+    elif encounter_type == EncounterType.PACK:
+        count = random.randint(2, 4)
+        for _ in range(count):
+            template = random.choice(MONSTER_POOL["weak"])
+            monsters.append(_make(template, max(1, player_level - 1)))
+
+    elif encounter_type == EncounterType.MIXED:
+        strong_count = random.randint(1, 2)
+        weak_count = random.randint(2, 3)
+        for _ in range(strong_count):
+            template = random.choice(MONSTER_POOL["strong"])
+            monsters.append(_make(template, player_level))
+        for _ in range(weak_count):
+            template = random.choice(MONSTER_POOL["weak"])
+            monsters.append(_make(template, max(1, player_level - 1)))
+
+    return monsters

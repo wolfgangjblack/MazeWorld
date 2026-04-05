@@ -32,7 +32,8 @@ class CombatView:
         self.log_font = pygame.font.SysFont(None, 18)
 
     def draw(self, combat: CombatController, selected_action: int = 0,
-             selected_target: int = 0, selecting_target: bool = False):
+             selected_target: int = 0, selecting_target: bool = False,
+             game_over_selection: int = 0):
         """Draw the full combat screen."""
         self.screen.fill(DARK_GRAY)
         self._draw_monsters(combat)
@@ -40,7 +41,7 @@ class CombatView:
         self._draw_player_stats(combat.player)
         self._draw_action_menu(combat, selected_action, selected_target, selecting_target)
         self._draw_combat_log(combat)
-        self._draw_state_banner(combat)
+        self._draw_state_banner(combat, game_over_selection)
 
     # ------------------------------------------------------------------
     # Monster area
@@ -193,7 +194,7 @@ class CombatView:
     # State banner (victory / defeat / fled)
     # ------------------------------------------------------------------
 
-    def _draw_state_banner(self, combat: CombatController):
+    def _draw_state_banner(self, combat: CombatController, game_over_selection: int = 0):
         if combat.state == CombatState.ONGOING:
             return
 
@@ -213,5 +214,28 @@ class CombatView:
         self.screen.blit(backdrop, (rect.x - 20, rect.y - 10))
         self.screen.blit(surf, rect)
 
-        hint = self.font.render("Press Enter to continue", True, LIGHT_GRAY)
-        self.screen.blit(hint, (SCREEN_WIDTH // 2 - 100, rect.bottom + 20))
+        if combat.state == CombatState.DEFEAT:
+            self._draw_game_over_menu(rect.bottom + 15, game_over_selection)
+        else:
+            hint = self.font.render("Press Enter to continue", True, LIGHT_GRAY)
+            self.screen.blit(hint, (SCREEN_WIDTH // 2 - 100, rect.bottom + 20))
+
+    # ------------------------------------------------------------------
+    # Game Over screen (defeat only)
+    # ------------------------------------------------------------------
+
+    GAME_OVER_OPTIONS = ["Load Save", "Quit to Menu"]
+
+    def _draw_game_over_menu(self, y: int, selected: int = 0):
+        """Show load/quit options after defeat."""
+        label = self.font.render("Game Over", True, RED)
+        self.screen.blit(label, (SCREEN_WIDTH // 2 - label.get_width() // 2, y))
+
+        for i, option in enumerate(self.GAME_OVER_OPTIONS):
+            color = YELLOW if i == selected else LIGHT_GRAY
+            prefix = "> " if i == selected else "  "
+            text = self.font.render(f"{prefix}{option}", True, color)
+            self.screen.blit(
+                text,
+                (SCREEN_WIDTH // 2 - text.get_width() // 2, y + 28 + i * 26),
+            )
