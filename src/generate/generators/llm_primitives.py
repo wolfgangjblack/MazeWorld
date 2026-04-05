@@ -146,6 +146,55 @@ def generate_player_image_description() -> str:
     )
 
 
+def generate_player_classes(environment: dict) -> list[dict]:
+    """Generate 4 player class options themed to the environment.
+
+    Returns a list of 4 dicts, one per archetype.
+    """
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+
+    request = prompts.class_generation(env, env_name)
+    raw = generate(request)
+    return _parse_class_array(raw)
+
+
+def generate_class_portrait_description(class_data: dict) -> str:
+    """Generate a diffusion prompt for a class portrait."""
+    prompts = get_prompt_set()
+    request = prompts.class_portrait_description(class_data)
+    raw = generate(request)
+    description = _extract_response(raw)
+    return (
+        "masterpiece, best quality, very aesthetic, detailed, beautiful, "
+        "fantasy illustration, stardew valley inspired, pixel art, vivid colors, "
+        f"character portrait, {description}"
+    )
+
+
+def _parse_class_array(raw: str) -> list[dict]:
+    """Parse a JSON array of class definitions from LLM output."""
+    # Try to find a JSON array in the response
+    for candidate in [raw]:
+        start = candidate.find("[")
+        end = candidate.rfind("]") + 1
+        if start != -1 and end > start:
+            snippet = candidate[start:end]
+            try:
+                result = json.loads(snippet)
+                if isinstance(result, list):
+                    return result
+            except (json.JSONDecodeError, ValueError):
+                try:
+                    result = ast.literal_eval(snippet)
+                    if isinstance(result, list):
+                        return result
+                except Exception:
+                    pass
+    return []
+
+
 def _extract_response(raw: str) -> str:
     """Extract the usable response from raw LLM output."""
     if "##Output:" in raw:

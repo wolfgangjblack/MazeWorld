@@ -274,7 +274,7 @@ class CombatController:
         for target in targets:
             magic_roll = self.player.roll_magic_attack()
             # Jester uses averaged modifier
-            if self.player.player_class == "jester":
+            if self.player.player_class and self.player.player_class.archetype == "jester":
                 normal_stat = spell.stat  # "INT" or "WIS"
                 jester_mod = self.player.get_jester_mod(normal_stat)
                 # Recalculate: base roll was with INT/WIS, adjust with jester rule
@@ -361,7 +361,7 @@ class CombatController:
 
     def player_gamble(self) -> dict:
         """Jester's Gamble: roll on random effect table, LUCK influences distribution."""
-        if self.player.player_class != "jester":
+        if not self.player.player_class or self.player.player_class.archetype != "jester":
             return {"success": False, "message": "Only jesters can gamble!"}
 
         luck_mod = self.player.get_stat_mod("LUCK")

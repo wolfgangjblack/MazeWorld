@@ -238,6 +238,57 @@ class ClaudePromptSet(PromptSet):
         )
 
 
+    def class_generation(self, env: str, env_name: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You generate 4 player class options for a fantasy RPG themed to an environment. "
+                "Respond with ONLY a JSON array of 4 objects. Each object has:\n"
+                "- name: thematic class name (e.g., 'Ranger' not 'Warrior')\n"
+                "- archetype: one of warrior, mage, healer, jester\n"
+                "- flavor_text: 1-2 sentence description\n"
+                "- starting_weapon: a weapon name\n"
+                "- stats: {STR, DEX, CON, INT, WIS, CHA, LUCK} — integers, total MUST equal 72\n"
+                "  Warrior: STR,CON 14-18; DEX,CHA 11-14; INT,WIS 6-10; LUCK 6-10\n"
+                "  Mage: INT 14-18; WIS,DEX 11-14; STR,CON,CHA 6-10; LUCK 6-10\n"
+                "  Healer: WIS 14-18; CHA,CON 11-14; STR,DEX,INT 6-10; LUCK 6-10\n"
+                "  Jester: LUCK 14-18; all others 11-14 except 1 random dump stat 6-10\n"
+                "- abilities: array of {name, description, stat, cost_hunger, cost_thirst}\n"
+                "  Warrior gets 4 utility abilities (break door, intimidate, bash, rally type)\n"
+                "  Jester gets 0-3 random abilities from other classes\n"
+                "- spells: array of {name, description, element, damage_dice, spell_type, cost_hunger, cost_thirst}\n"
+                "  Mage: 1 element + 4 spells (2 damage, 2 utility), elements: fire|water|forest|light|dark\n"
+                "  Healer: 1 element + 4 spells (1 heal, 1 buff, 1 damage, 1 utility)\n"
+                "  Warrior: no spells. Jester: random 0-3 from other classes\n"
+                "- portrait_prompt: visual description for image generation\n"
+                "- ability_pool: 4 additional abilities/spells beyond starting set (for level-ups)\n"
+                "- spell_pool: 4 additional spells beyond starting set (for level-ups)\n"
+                "Output order: warrior, mage, healer, jester."
+            ),
+            examples=[],
+            user_message=f"environment: '{env}', name: '{env_name}'",
+            max_tokens=2000,
+        )
+
+    def class_portrait_description(self, class_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You are an image prompt generator for a pixel-art fantasy game. "
+                "Given a player class, output a short visual description for a character portrait. "
+                "Focus on appearance, gear, pose, and class identity. Output ONLY the description."
+            ),
+            examples=[
+                (
+                    json.dumps({"name": "Ranger", "archetype": "warrior",
+                                "starting_weapon": "longbow", "environment": "forest"}),
+                    "A rugged ranger in forest-green leather armor, longbow slung across their back, "
+                    "standing in a sun-dappled forest clearing with keen eyes scanning the treeline."
+                ),
+            ],
+            user_message=json.dumps(class_data),
+            max_tokens=80,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs."""
     examples: list[tuple[str, str]] = []

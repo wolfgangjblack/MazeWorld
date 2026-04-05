@@ -3,6 +3,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
 
+STAT_NAMES = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
+STAT_BUDGET = 72
+
+# Archetype stat role assignments: primary stats get 14-18, secondary 11-14, dump 6-10
+ARCHETYPE_STAT_ROLES = {
+    "warrior": {"primary": ["STR", "CON"], "secondary": ["DEX", "CHA"], "dump": ["INT", "WIS"]},
+    "mage":    {"primary": ["INT"],        "secondary": ["WIS", "DEX"], "dump": ["STR", "CON", "CHA"]},
+    "healer":  {"primary": ["WIS"],        "secondary": ["CHA", "CON"], "dump": ["STR", "DEX", "INT"]},
+    "jester":  {"primary": ["LUCK"],       "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
+}
+
 
 def stat_modifier(value: int) -> int:
     """D&D-style modifier: (stat - 10) // 2."""
@@ -28,6 +39,32 @@ class Stats(BaseModel):
 
     def modifier(self, stat: str) -> int:
         return (getattr(self, stat) - 10) // 2
+
+    def total(self) -> int:
+        return self.STR + self.DEX + self.CON + self.INT + self.WIS + self.CHA + self.LUCK
+
+    def as_dict(self) -> dict[str, int]:
+        return {s: getattr(self, s) for s in STAT_NAMES}
+
+    def validate_guardrails(self, archetype: str) -> list[str]:
+        """Check stat values against archetype guardrails. Returns list of violations."""
+        roles = ARCHETYPE_STAT_ROLES.get(archetype, {})
+        errors = []
+        for stat in roles.get("primary", []):
+            val = getattr(self, stat)
+            if not (14 <= val <= 18):
+                errors.append(f"{stat}={val} not in primary range 14-18")
+        for stat in roles.get("secondary", []):
+            val = getattr(self, stat)
+            if not (11 <= val <= 14):
+                errors.append(f"{stat}={val} not in secondary range 11-14")
+        for stat in roles.get("dump", []):
+            val = getattr(self, stat)
+            if not (6 <= val <= 10):
+                errors.append(f"{stat}={val} not in dump range 6-10")
+        if self.total() != STAT_BUDGET:
+            errors.append(f"total={self.total()} != budget {STAT_BUDGET}")
+        return errors
 
 
 class Ability(BaseModel):
@@ -58,11 +95,18 @@ class PlayerClass(BaseModel):
     abilities: list[Ability] = Field(default_factory=list)
     spells: list[Spell] = Field(default_factory=list)
     portrait_path: Optional[str] = None
+    portrait_prompt: Optional[str] = None
+    # Pool of extra abilities available at level-up
+    ability_pool: list[Ability] = Field(default_factory=list)
+    spell_pool: list[Spell] = Field(default_factory=list)
 
 
 class PlayerCharacter(BaseModel):
     x: int
     y: int
+    name: str = "Adventurer"
+    player_class: Optional[PlayerClass] = None
+    level: int = 1
     color: Tuple[int, int, int] = (0, 0, 255)
     health: int = 100
     hunger: int = 100
@@ -77,27 +121,57 @@ class PlayerCharacter(BaseModel):
     profile_image: Optional[str] = None
     active_quests: List[str] = Field(default_factory=list)
     completed_quests: List[str] = Field(default_factory=list)
-
-    # --- RPG stats (Phase 2) ---
-    player_class: str = "warrior"  # "warrior" | "mage" | "healer" | "jester"
-    level: int = 1
-    STR: int = 10
-    DEX: int = 10
-    CON: int = 10
-    INT: int = 10
-    WIS: int = 10
-    CHA: int = 10
-    LUCK: int = 10
+    abilities: List[Ability] = Field(default_factory=list)
+    spells: List[Spell] = Field(default_factory=list)
+    equipped_weapon: str = ""
     armor: int = 0  # flat armor value added to AC
-
-    # Combat equipment — stored as dicts to avoid circular import; resolved at runtime
-    weapon: Optional[Any] = None  # Weapon instance
-    spells: List[Any] = Field(default_factory=list)  # list of Spell instances
+    weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)
     active_buffs: List[ActiveBuff] = Field(default_factory=list)
 
     class Config:
         arbitrary_types_allowed = True
         
+    def apply_class(self, player_class: PlayerClass):
+        """Apply a selected class to this character."""
+        self.player_class = player_class
+        self.abilities = list(player_class.abilities)
+        self.spells = list(player_class.spells)
+        self.equipped_weapon = player_class.starting_weapon
+        if player_class.portrait_path:
+            self.profile_image = player_class.portrait_path
+        # Apply CON modifier to max HP: base 100 + 10 * CON modifier
+        con_mod = player_class.stats.modifier("CON")
+        self.max_health = max(50, 100 + 10 * con_mod)
+        self.health = self.max_health
+
+    def get_stat_modifier(self, stat: str) -> int:
+        """Get modifier for a stat from the player's class."""
+        if self.player_class:
+            return self.player_class.stats.modifier(stat)
+        return 0
+
+    def level_up_choices(self) -> list:
+        """Return available abilities/spells to pick from on level-up."""
+        if not self.player_class:
+            return []
+        known_names = {a.name for a in self.abilities} | {s.name for s in self.spells}
+        choices = []
+        for a in self.player_class.ability_pool:
+            if a.name not in known_names:
+                choices.append(("ability", a))
+        for s in self.player_class.spell_pool:
+            if s.name not in known_names:
+                choices.append(("spell", s))
+        return choices
+
+    def apply_level_up(self, choice_type: str, choice):
+        """Apply a level-up choice (ability or spell)."""
+        self.level += 1
+        if choice_type == "ability":
+            self.abilities.append(choice)
+        elif choice_type == "spell":
+            self.spells.append(choice)
+
     def initialize_inventory(self):
         self.inventory = {
             name: item.clone()
@@ -233,7 +307,10 @@ class PlayerCharacter(BaseModel):
 
     def get_stat_mod(self, stat_name: str) -> int:
         """Return the D&D-style modifier for a stat, including active buffs."""
-        base = getattr(self, stat_name, 10)
+        if self.player_class:
+            base = getattr(self.player_class.stats, stat_name, 10)
+        else:
+            base = 10
         buff_bonus = sum(b.value for b in self.active_buffs if b.stat == stat_name)
         return stat_modifier(base + buff_bonus)
 
@@ -268,7 +345,8 @@ class PlayerCharacter(BaseModel):
 
     def roll_magic_attack(self) -> int:
         """1d20 + INT (mage) or WIS (healer) + level mod."""
-        if self.player_class == "healer":
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        if archetype == "healer":
             return random.randint(1, 20) + self.get_stat_mod("WIS") + (self.level - 1)
         return random.randint(1, 20) + self.get_stat_mod("INT") + (self.level - 1)
 
@@ -279,11 +357,14 @@ class PlayerCharacter(BaseModel):
         return (luck_mod + normal_mod) // 2
 
     def can_afford_spell(self, spell) -> bool:
-        return self.hunger >= spell.hunger_cost and self.thirst >= spell.thirst_cost
+        return self.hunger >= getattr(spell, 'hunger_cost', getattr(spell, 'cost_hunger', 0)) and \
+               self.thirst >= getattr(spell, 'thirst_cost', getattr(spell, 'cost_thirst', 0))
 
     def pay_spell_cost(self, spell):
-        self.hunger = max(0, self.hunger - spell.hunger_cost)
-        self.thirst = max(0, self.thirst - spell.thirst_cost)
+        h_cost = getattr(spell, 'hunger_cost', getattr(spell, 'cost_hunger', 0))
+        t_cost = getattr(spell, 'thirst_cost', getattr(spell, 'cost_thirst', 0))
+        self.hunger = max(0, self.hunger - h_cost)
+        self.thirst = max(0, self.thirst - t_cost)
 
     def apply_buff(self, stat: str, value: int, duration: int):
         self.active_buffs.append(ActiveBuff(stat=stat, value=value, turns_remaining=duration))

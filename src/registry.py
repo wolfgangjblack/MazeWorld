@@ -26,6 +26,7 @@ class GameRegistry:
         self._load_manifest()
         self._load_events()
         self._load_quests()
+        self._load_classes()
         self._loaded = True
 
     def reload(self):
@@ -112,6 +113,24 @@ class GameRegistry:
 
     def get_quest(self, quest_id: str):
         return self.quest_registry.get(quest_id)
+
+    # -- classes -------------------------------------------------------------
+
+    def _load_classes(self):
+        self.class_options: list = []
+        path = "data/classes/classes.json"
+        if os.path.exists(path):
+            from src.models.player import PlayerClass
+            classes_data = load_json_data(path)
+            if isinstance(classes_data, list):
+                for cd in classes_data:
+                    try:
+                        self.class_options.append(PlayerClass(**cd))
+                    except Exception:
+                        pass
+
+    def get_class_options(self):
+        return self.class_options
 
     # -- starter inventory ---------------------------------------------------
 

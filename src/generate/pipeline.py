@@ -34,6 +34,7 @@ PHASES = [
     "Events",
     "Quests",
     "Dialogue trees",
+    "Player classes",
     "Portraits",
     "NPC positions",
     "Write files",
@@ -47,6 +48,7 @@ MAZE_PATH = os.path.join(DATA_DIR, "maze", "maze.json")
 NPC_PATH = os.path.join(DATA_DIR, "npcs", "npcs.json")
 EVENT_PATH = os.path.join(DATA_DIR, "events", "events.json")
 QUEST_PATH = os.path.join(DATA_DIR, "quests", "quests.json")
+CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
 
 
@@ -520,10 +522,22 @@ def generate_world():
         dialogue_bar.close()
     phase_bar.update(1)
 
-    # --- 10. Portrait generation (try, skip on failure) ---
+    # --- 10. Player classes ---
+    phase_bar.set_postfix_str("Player classes")
+    from src.generate.class_gen import generate_classes
+    player_classes = generate_classes(maze.environment, env_name)
+    class_data_list = []
+    for pc in player_classes:
+        cd = pc.model_dump()
+        class_data_list.append(cd)
+    logger.info("Generated %d player classes.", len(player_classes))
+    phase_bar.update(1)
+
+    # --- 11. Portrait generation (try, skip on failure) ---
     phase_bar.set_postfix_str("Portraits")
     portrait_steps = ["NPC portraits", "Event illustrations",
-                      "Item descriptions", "Item portraits", "Player portrait"]
+                      "Item descriptions", "Item portraits", "Player portrait",
+                      "Class portraits"]
     try:
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,
@@ -576,6 +590,17 @@ def generate_world():
         player_portrait_path = generate_player_portrait(player_prompt)
         portrait_bar.update(1)
 
+        portrait_bar.set_postfix_str(f"Class portraits ({len(class_data_list)})")
+        from src.generate.image_client import generate_class_portraits
+        class_portrait_db = {}
+        for i, cd in enumerate(class_data_list):
+            prompt = cd.get("portrait_prompt") or f"a {cd['archetype']} character, fantasy pixel art"
+            class_portrait_db[str(i)] = {"portrait_prompt": prompt, "name": cd.get("name", "")}
+        generate_class_portraits(class_portrait_db)
+        for i, cd in enumerate(class_data_list):
+            cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
+        portrait_bar.update(1)
+
         portrait_bar.close()
         portraits_generated = True
         logger.info("Portraits generated successfully.")
@@ -585,14 +610,14 @@ def generate_world():
         player_portrait_path = None
     phase_bar.update(1)
 
-    # --- 11. NPC positions for home coords ---
+    # --- 12. NPC positions for home coords ---
     phase_bar.set_postfix_str("NPC positions")
     npc_positions = {}
     for npc in active_npcs:
         npc_positions[str(npc["id"])] = [npc.get("x", 0), npc.get("y", 0)]
     phase_bar.update(1)
 
-    # --- 12. Write data files ---
+    # --- 13. Write data files ---
     phase_bar.set_postfix_str("Write files")
 
     os.makedirs(os.path.dirname(MAZE_PATH), exist_ok=True)
@@ -615,6 +640,10 @@ def generate_world():
     with open(QUEST_PATH, "w") as f:
         json.dump(quest_list, f, indent=2)
 
+    os.makedirs(os.path.dirname(CLASS_PATH), exist_ok=True)
+    with open(CLASS_PATH, "w") as f:
+        json.dump(class_data_list, f, indent=2)
+
     manifest = {
         "world_seed": WORLD_SEED,
         "environment": maze.environment,
@@ -626,6 +655,7 @@ def generate_world():
         "active_npc_count": len(active_npcs),
         "quest_count": len(quest_list),
         "event_count": len(event_list),
+        "class_count": len(class_data_list),
         "portraits_generated": portraits_generated,
         "player_portrait": player_portrait_path,
         "game_mode": GAME_MODE,

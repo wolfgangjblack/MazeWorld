@@ -158,6 +158,11 @@ def generate_event_illustrations(event_database: dict, save_dir: str = "data/por
     generate_portraits(event_database, save_dir, prefix="evt_")
 
 
+def generate_class_portraits(class_database: dict, save_dir: str = "data/portraits/classes"):
+    """Generate and save a portrait for each player class."""
+    generate_portraits(class_database, save_dir, prefix="class_")
+
+
 def generate_player_portrait(portrait_prompt: str, save_dir: str = "data/portraits") -> str | None:
     """Generate and save the player character portrait. Returns path or None."""
     filepath = os.path.join(save_dir, "player.png")

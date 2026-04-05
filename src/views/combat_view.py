@@ -152,7 +152,7 @@ class CombatView:
         self.screen.blit(label, (20, y))
 
         actions = list(self.ACTIONS)
-        if combat.player.player_class != "jester":
+        if not combat.player.player_class or combat.player.player_class.archetype != "jester":
             actions = actions[:-1]  # remove Gamble for non-jesters
 
         for i, action in enumerate(actions):

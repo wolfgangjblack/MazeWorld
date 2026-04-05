@@ -242,6 +242,40 @@ class LlamaPromptSet(PromptSet):
         )
 
 
+    def class_generation(self, env: str, env_name: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You generate 4 player classes for a fantasy RPG. Output a JSON array of 4 objects. "
+                "Each: name, archetype (warrior|mage|healer|jester), flavor_text, starting_weapon, "
+                "stats ({STR,DEX,CON,INT,WIS,CHA,LUCK} totaling 72), "
+                "abilities [{name,description,stat,cost_hunger,cost_thirst}], "
+                "spells [{name,description,element,damage_dice,spell_type,cost_hunger,cost_thirst}], "
+                "portrait_prompt, ability_pool (4 extra abilities), spell_pool (4 extra spells). "
+                "Warrior: STR/CON 14-18, 4 abilities, no spells. "
+                "Mage: INT 14-18, 4 spells (2 damage, 2 utility). "
+                "Healer: WIS 14-18, 4 spells (1 heal, 1 buff, 1 damage, 1 utility). "
+                "Jester: LUCK 14-18, random 0-3 from others."
+            ),
+            examples=[],
+            user_message=f"environment: '{env}', env_name: '{env_name}'",
+            max_tokens=2000,
+        )
+
+    def class_portrait_description(self, class_data: dict) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You generate image prompts for fantasy RPG character portraits. "
+                "Output a short visual description. High fantasy pixel art style."
+            ),
+            examples=[
+                (str({"name": "Ranger", "archetype": "warrior", "environment": "forest"}),
+                 "A rugged ranger in green leather, longbow on back, standing in a forest clearing."),
+            ],
+            user_message=str(class_data),
+            max_tokens=60,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs for few-shot."""
     examples: list[tuple[str, str]] = []

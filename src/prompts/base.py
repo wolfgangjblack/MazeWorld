@@ -51,3 +51,9 @@ class PromptSet(ABC):
 
     @abstractmethod
     def player_image_description(self) -> LLMRequest: ...
+
+    @abstractmethod
+    def class_generation(self, env: str, env_name: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def class_portrait_description(self, class_data: dict) -> LLMRequest: ...
