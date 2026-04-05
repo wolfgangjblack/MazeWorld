@@ -132,6 +132,7 @@ class PlayerCharacter(BaseModel):
     # --- Phase 4: Items, Inventory & Shops ---
     money: int = 0
     equipped_weapon: Optional[str] = None
+    learned_spells: List[str] = Field(default_factory=list)
 
     class Config:
         arbitrary_types_allowed = True
@@ -421,3 +422,22 @@ class PlayerCharacter(BaseModel):
             self.money -= amount
             return True
         return False
+
+    def use_spell_scroll(self, scroll_name: str) -> str:
+        """Use a spell scroll. Jesters learn the spell permanently instead of consuming."""
+        from src.models.items import SpellScroll
+        if scroll_name not in self.inventory:
+            return "You don't have that scroll."
+        item = self.inventory[scroll_name]
+        if not isinstance(item, SpellScroll):
+            return f"{scroll_name} is not a spell scroll."
+
+        if self.player_class == "jester":
+            if item.spell_effect not in self.learned_spells:
+                self.learned_spells.append(item.spell_effect)
+            self.remove_from_inventory(scroll_name)
+            return f"You study the {scroll_name} and learn {item.spell_effect} permanently!"
+
+        result = item.use(self)
+        self.remove_from_inventory(scroll_name)
+        return result

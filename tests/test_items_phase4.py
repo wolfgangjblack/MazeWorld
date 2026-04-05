@@ -176,3 +176,128 @@ def test_item_stats_attack_dice():
     stats = ItemStats(attack_dice="2d6", stat_modifier="DEX")
     assert stats.attack_dice == "2d6"
     assert stats.stat_modifier == "DEX"
+
+
+# --- Jester spell scroll learning ---
+
+def test_jester_learns_spell_permanently():
+    player = PlayerCharacter(x=0, y=0, player_class="jester")
+    scroll = _make_scroll(name="scroll of fire", spell_effect="damage")
+    player.inventory = {scroll.name: scroll}
+    msg = player.use_spell_scroll("scroll of fire")
+    assert "learn" in msg.lower()
+    assert "damage" in player.learned_spells
+    assert "scroll of fire" not in player.inventory
+
+
+def test_jester_no_duplicate_learned_spell():
+    player = PlayerCharacter(x=0, y=0, player_class="jester")
+    player.learned_spells = ["damage"]
+    scroll = _make_scroll(name="scroll of fire", spell_effect="damage")
+    player.inventory = {scroll.name: scroll}
+    player.use_spell_scroll("scroll of fire")
+    assert player.learned_spells.count("damage") == 1
+
+
+def test_non_jester_consumes_scroll():
+    player = PlayerCharacter(x=0, y=0, player_class="warrior", health=50)
+    scroll = _make_scroll(name="scroll of heal", health=25, spell_effect="heal")
+    player.inventory = {scroll.name: scroll}
+    msg = player.use_spell_scroll("scroll of heal")
+    assert "crumbles" in msg.lower()
+    assert player.health == 75
+    assert len(player.learned_spells) == 0
+    assert "scroll of heal" not in player.inventory
+
+
+def test_use_spell_scroll_missing():
+    player = PlayerCharacter(x=0, y=0)
+    msg = player.use_spell_scroll("phantom scroll")
+    assert "don't have" in msg.lower()
+
+
+def test_use_spell_scroll_not_scroll():
+    player = PlayerCharacter(x=0, y=0)
+    food = Food(category="food", name="bread", desc="test",
+                item_stats=ItemStats(nutrition_value=20))
+    player.inventory = {"bread": food}
+    msg = player.use_spell_scroll("bread")
+    assert "not a spell scroll" in msg.lower()
+
+
+# --- Item generation helpers ---
+
+def test_build_items_json_structure():
+    """Test _build_items_json converts LLM output to proper items.json format."""
+    from world_gen import _build_items_json
+    llm_result = {
+        "food": [
+            {"name": "forest bread", "desc": "Hearty bread.", "nutrition_value": 20, "health_value": 0},
+            {"name": "berries", "desc": "Wild berries.", "nutrition_value": 10, "health_value": 5},
+        ],
+        "drink": [
+            {"name": "spring water", "desc": "Cool water.", "hydration_value": 15, "health_value": 0},
+        ],
+        "tools": [
+            {"name": "hatchet", "desc": "A small hatchet.", "attribute": "cutting"},
+        ],
+        "weapons": [
+            {"name": "oak club", "desc": "Heavy club.", "weapon_type": "heavy",
+             "stat_modifier": "STR", "attack_dice": "1d6"},
+        ],
+        "spell_scrolls": [
+            {"name": "scroll of heal", "desc": "Heals wounds.", "spell_effect": "heal"},
+        ],
+    }
+    items = _build_items_json(llm_result, room_level=1)
+    # Check food IDs start at 200
+    assert "200" in items
+    assert items["200"]["category"] == "food"
+    assert items["200"]["name"] == "forest bread"
+    # Check drink IDs start at 300
+    assert "300" in items
+    assert items["300"]["category"] == "drink"
+    # Check tool IDs start at 400
+    assert "400" in items
+    assert items["400"]["item_stats"]["attribute"] == "cutting"
+    # Check weapon IDs start at 500
+    assert "500" in items
+    assert items["500"]["weapon_type"] == "heavy"
+    assert items["500"]["item_stats"]["attack_dice"] == "1d6"
+    # Check scroll IDs start at 600
+    assert "600" in items
+    assert items["600"]["spell_effect"] == "heal"
+
+
+def test_weapon_dice_scaling():
+    """Test that WEAPON_DICE_BY_LEVEL maps room levels to appropriate dice."""
+    from src.generate.generate_llm_primatives import WEAPON_DICE_BY_LEVEL
+    assert set(WEAPON_DICE_BY_LEVEL[1]) == {"1d4", "1d6"}
+    assert set(WEAPON_DICE_BY_LEVEL[4]) == {"1d10", "1d12"}
+
+
+def test_validate_puzzle_tools():
+    """Test that _validate_puzzle_tools fixes invalid tool_attribute references."""
+    from unittest.mock import MagicMock
+    from world_gen import _validate_puzzle_tools
+    from src.models.items import Tool, ItemStats
+
+    mock_reg = MagicMock()
+    tool = Tool(category="tool", name="hatchet", desc="A hatchet",
+                item_stats=ItemStats(attribute="cutting", uses=3))
+    mock_reg.item_registry = {400: tool}
+
+    events = [
+        {
+            "type": "puzzle",
+            "choices": [
+                {"text": "Dig through", "tool_attribute": "digging", "dc": 10},
+                {"text": "Walk away", "tool_attribute": None, "dc": 0},
+            ],
+        },
+    ]
+    _validate_puzzle_tools(events, mock_reg)
+    # "digging" doesn't exist in registry, should be replaced with "cutting"
+    assert events[0]["choices"][0]["tool_attribute"] == "cutting"
+    # None stays None
+    assert events[0]["choices"][1]["tool_attribute"] is None
