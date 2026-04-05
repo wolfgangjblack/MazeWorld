@@ -1,6 +1,6 @@
 import json
 from unittest.mock import patch
-from src.generate.generate_llm_primatives import (
+from src.generate.generators.llm_primitives import (
     generate_personality_primative,
     generate_npc_convo,
     generate_image_description,
@@ -18,7 +18,7 @@ SAMPLE_PERSONALITY = {
 }
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_personality_primative_parses_json(mock_generate):
     mock_generate.return_value = json.dumps({
         "name": "helena", "job": "herbalist",
@@ -31,7 +31,7 @@ def test_personality_primative_parses_json(mock_generate):
     assert result["environment_name"] == "Iron Oak"
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_personality_primative_parses_local_format(mock_generate):
     mock_generate.return_value = (
         "some preamble\n========================================\n"
@@ -44,7 +44,7 @@ def test_personality_primative_parses_local_format(mock_generate):
     assert result["environment"] == "desert"
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_personality_primative_returns_error_on_failure(mock_generate):
     mock_generate.return_value = "totally unparseable garbage"
     env = {"environment": {"type": "city", "name": "Test"}}
@@ -52,7 +52,7 @@ def test_personality_primative_returns_error_on_failure(mock_generate):
     assert "error" in result
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_generate_npc_convo_extracts_response(mock_generate):
     mock_generate.return_value = (
         "preamble\n##Output: Welcome to the forest, traveler!\nmore stuff"
@@ -67,7 +67,7 @@ def test_generate_npc_convo_extracts_response(mock_generate):
     assert "hunter" in request.system
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_image_description_contains_style_prefix(mock_generate):
     mock_generate.return_value = "A cheerful hunter standing in a lush forest"
     result = generate_image_description(SAMPLE_PERSONALITY)
@@ -76,7 +76,7 @@ def test_image_description_contains_style_prefix(mock_generate):
     assert "cheerful hunter" in result
 
 
-@patch("src.generate.generate_llm_primatives.generate")
+@patch("src.generate.generators.llm_primitives.generate")
 def test_image_description_extracts_from_local_format(mock_generate):
     mock_generate.return_value = (
         "preamble\n##Output: A stoic ranger in iron armor\nmore stuff"

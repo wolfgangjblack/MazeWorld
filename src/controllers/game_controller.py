@@ -1,6 +1,6 @@
 import random
 import pygame
-from src.views.game_view import GameView
+from src.views.gameplay_view import GameView
 from src.models.npc import RandomNPC, AggressiveNPC
 from src.models.items import EscortItem
 from src.registry import registry

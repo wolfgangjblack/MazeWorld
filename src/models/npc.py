@@ -40,9 +40,18 @@ class NPC(BaseModel):
         if not self.name:
             self.generate_personality_document()
 
-    def generate_personality_document(self):
-        """Generate personality attributes for the NPC."""
+    def generate_personality_document(self, maze_environment: str | None = None):
+        """Generate personality attributes for the NPC.
+
+        Args:
+            maze_environment: The environment of the maze this NPC belongs to.
+                NPCs inherit their maze's environment rather than picking randomly.
+        """
+        if maze_environment:
+            self.environment = maze_environment
         if not self.environment:
+            # Last resort — should not happen in normal gameplay since NPCs
+            # are always placed inside a maze with a known environment.
             self.environment = random.choice(ENVIRONMENT_TYPES)
 
         self.name = self.name or random.choice(NAMES)
@@ -98,8 +107,8 @@ class StaticNPC(NPC):
     """NPC that doesn't move."""
     color: tuple = (0, 255, 0)
 
-    def prepare(self):
-        self.generate_personality_document()
+    def prepare(self, maze_environment: str | None = None):
+        self.generate_personality_document(maze_environment)
         self.build_identity()
 
 
@@ -110,8 +119,8 @@ class RandomNPC(NPC):
     home_y: int = 0
     movement_range: int = 2
 
-    def prepare(self):
-        self.generate_personality_document()
+    def prepare(self, maze_environment: str | None = None):
+        self.generate_personality_document(maze_environment)
         self.build_identity()
 
     def update_position(self, maze, current_time: int):
@@ -136,8 +145,8 @@ class AggressiveNPC(NPC):
     color: Tuple[int, int, int] = (255, 0, 0)
     dist: int = 5
 
-    def prepare(self):
-        self.generate_personality_document()
+    def prepare(self, maze_environment: str | None = None):
+        self.generate_personality_document(maze_environment)
         self.build_identity()
 
     def update_position(self, maze, player_pos, current_time):

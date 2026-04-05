@@ -1,5 +1,5 @@
 import pytest
-from src.models.player_character import PlayerCharacter
+from src.models.player import PlayerCharacter
 from src.models.items import Food, Drink, Tool, ItemStats
 from src.models.npc import StaticNPC
 
