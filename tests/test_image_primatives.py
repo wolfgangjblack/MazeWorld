@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from src.generate import generate_image_primatives as img_mod
+from src.generate import image_client as img_mod
 
 
 @pytest.fixture(autouse=True)

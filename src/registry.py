@@ -89,7 +89,7 @@ class GameRegistry:
         self.event_registry: dict = {}
         path = "data/events/events.json"
         if os.path.exists(path):
-            from src.models.event import create_event_from_data
+            from src.models.encounter import create_event_from_data
             events_data = load_json_data(path)
             for evt in events_data:
                 event_obj = create_event_from_data(evt)

@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.registry import registry
 from src.models.maze import Maze
-from src.models.player_character import PlayerCharacter
+from src.models.player import PlayerCharacter
 from config import NUM_FOOD, NUM_DRINKS, NUM_TOOLS
 
 

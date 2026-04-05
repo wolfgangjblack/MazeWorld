@@ -1,6 +1,6 @@
 from src.prompts.base import LLMRequest
-from src.prompts.llama_prompts import LlamaPromptSet, _history_to_examples
-from src.prompts.claude_prompts import ClaudePromptSet
+from src.prompts.generator_prompts.llama_prompts import LlamaPromptSet, _history_to_examples
+from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
 
 
 SAMPLE_DOC = {

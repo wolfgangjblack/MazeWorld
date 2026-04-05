@@ -1,7 +1,52 @@
 from typing import Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
-    
+
+
+class Stats(BaseModel):
+    """D&D-style stat block for player classes."""
+    STR: int = 10
+    DEX: int = 10
+    CON: int = 10
+    INT: int = 10
+    WIS: int = 10
+    CHA: int = 10
+    LUCK: int = 10
+
+    def modifier(self, stat: str) -> int:
+        return (getattr(self, stat) - 10) // 2
+
+
+class Ability(BaseModel):
+    name: str
+    description: str
+    stat: str = "STR"
+    cost_hunger: int = 0
+    cost_thirst: int = 0
+
+
+class Spell(BaseModel):
+    name: str
+    description: str
+    element: str = "fire"
+    damage_dice: str = "1d6"
+    spell_type: str = "damage"  # damage | healing | buff | utility
+    cost_hunger: int = 5
+    cost_thirst: int = 0
+
+
+class PlayerClass(BaseModel):
+    name: str
+    archetype: str  # "warrior" | "mage" | "healer" | "jester"
+    flavor_text: str = ""
+    environment: str = ""
+    stats: Stats = Field(default_factory=Stats)
+    starting_weapon: str = ""
+    abilities: list[Ability] = Field(default_factory=list)
+    spells: list[Spell] = Field(default_factory=list)
+    portrait_path: Optional[str] = None
+
+
 class PlayerCharacter(BaseModel):
     x: int
     y: int
