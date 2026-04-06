@@ -7,7 +7,7 @@ from src.registry import registry
 
 EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
 DEBUG_EVENT_COLOR = (128, 0, 128)  # Purple — shown when debug reveal is active
-DOOR_COLOR = (255, 215, 0)    # Gold — for door tiles (Phase 7)
+DOOR_COLOR = (255, 215, 0)    # TODO(Phase 7): Gold for door tiles — use when multi-room portals implemented
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
 

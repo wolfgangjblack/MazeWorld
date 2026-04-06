@@ -140,6 +140,54 @@ class RandomNPC(NPC):
             self.x, self.y = new_x, new_y
 
 
+class MerchantNPC(NPC):
+    """NPC that sells items. Stays in place like a StaticNPC."""
+    color: Tuple[int, int, int] = (255, 215, 0)  # gold
+    shop_inventory: List[dict] = Field(default_factory=list)
+    # Each entry: {"item_id": int, "price": int, "stock": int}
+
+    def prepare(self):
+        self.generate_personality_document()
+        self.build_identity()
+
+    def get_shop_items(self) -> list[dict]:
+        """Return available shop items (stock > 0)."""
+        return [entry for entry in self.shop_inventory if entry.get("stock", 0) > 0]
+
+    def buy_from(self, item_index: int, player) -> str:
+        """Player buys an item from this merchant. Returns message."""
+        available = self.get_shop_items()
+        if item_index < 0 or item_index >= len(available):
+            return "Invalid selection."
+        entry = available[item_index]
+        price = entry["price"]
+        if not player.spend_money(price):
+            return "You don't have enough money."
+        from src.registry import registry
+        item_template = registry.get_item(entry["item_id"])
+        if not item_template:
+            player.add_money(price)  # refund
+            return "Item not available."
+        player.add_to_inventory(item_template.clone())
+        entry["stock"] -= 1
+        return f"Bought {item_template.name} for {price} gold."
+
+    def sell_to(self, item_name: str, player) -> str:
+        """Player sells an item to this merchant. Returns message."""
+        if item_name not in player.inventory:
+            return "You don't have that item."
+        from src.models.items import EscortItem
+        item = player.inventory[item_name]
+        if isinstance(item, EscortItem):
+            return "You can't sell that."
+        sell_price = max(1, item.item_stats.price // 2)
+        player.add_money(sell_price)
+        player.remove_from_inventory(item_name)
+        if player.equipped_weapon == item_name:
+            player.equipped_weapon = None
+        return f"Sold {item_name} for {sell_price} gold."
+
+
 class AggressiveNPC(NPC):
     """NPC that moves randomly until the player is within 5 squares and in line of sight."""
     color: Tuple[int, int, int] = (255, 0, 0)

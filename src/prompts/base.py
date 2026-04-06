@@ -44,6 +44,9 @@ class PromptSet(ABC):
                                  quest_context: dict | None = None) -> LLMRequest: ...
 
     @abstractmethod
+    def item_generation(self, env: str, env_name: str, room_level: int) -> LLMRequest: ...
+
+    @abstractmethod
     def item_image_description(self, item_data: dict) -> LLMRequest: ...
 
     @abstractmethod

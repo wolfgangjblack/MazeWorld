@@ -12,13 +12,14 @@ import os
 import pygame
 
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS, WORLD_SEED,
+    SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
+    NUM_WEAPONS, NUM_SPELL_SCROLLS, WORLD_SEED,
 )
 from src.registry import registry
 from src.models.maze import Maze
 from src.models.dialogue_box import DialogueBox
 from src.models.player import PlayerCharacter
-from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
+from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.controllers.game_controller import GameController
 from src.controllers.screen_controller import ScreenController, ScreenState
 from src.views.start_view import StartView
@@ -29,6 +30,7 @@ NPC_CLASS_MAP = {
     "StaticNPC": StaticNPC,
     "RandomNPC": RandomNPC,
     "AggressiveNPC": AggressiveNPC,
+    "MerchantNPC": MerchantNPC,
 }
 
 
@@ -63,7 +65,7 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None):
         maze = Maze()
         maze.generate()
         maze.place_event_tiles()
-        maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
+        maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS)
         player_start = None
         npc_positions = {}
 

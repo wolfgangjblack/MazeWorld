@@ -25,14 +25,26 @@ SAMPLE_REQUEST = LLMRequest(
 
 
 def test_get_device_returns_torch_device():
-    import torch
-    device = llm_client._get_device()
-    assert isinstance(device, torch.device)
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    mock_torch.backends.mps.is_available.return_value = False
+    mock_device = MagicMock()
+    mock_torch.device.return_value = mock_device
+    with patch.dict("sys.modules", {"torch": mock_torch}):
+        device = llm_client._get_device()
+    assert device is mock_device
+    mock_torch.device.assert_called_with("cpu")
 
 
 def test_get_device_caches():
-    d1 = llm_client._get_device()
-    d2 = llm_client._get_device()
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    mock_torch.backends.mps.is_available.return_value = False
+    mock_device = MagicMock()
+    mock_torch.device.return_value = mock_device
+    with patch.dict("sys.modules", {"torch": mock_torch}):
+        d1 = llm_client._get_device()
+        d2 = llm_client._get_device()
     assert d1 is d2
 
 
@@ -42,12 +54,21 @@ def test_get_llm_raises_without_hf_token():
             llm_client._get_llm()
 
 
+def _mock_transformers_and_torch():
+    """Create mock transformers + torch modules to avoid native-lib crashes."""
+    mock_transformers = MagicMock()
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = False
+    mock_torch.backends.mps.is_available.return_value = False
+    mock_torch.device.return_value = MagicMock()
+    return mock_transformers, mock_torch
+
+
 def test_get_llm_raises_on_load_failure():
-    with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
-        with patch(
-            "transformers.AutoTokenizer.from_pretrained",
-            side_effect=OSError("download failed"),
-        ):
+    mock_transformers, mock_torch = _mock_transformers_and_torch()
+    mock_transformers.AutoTokenizer.from_pretrained.side_effect = OSError("download failed")
+    with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
+        with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
             with pytest.raises(RuntimeError, match="Failed to load LLM"):
                 llm_client._get_llm()
     assert llm_client._model is None
@@ -55,13 +76,15 @@ def test_get_llm_raises_on_load_failure():
 
 
 def test_get_llm_caches_on_success():
+    mock_transformers, mock_torch = _mock_transformers_and_torch()
     mock_tok = MagicMock()
     mock_model = MagicMock()
-    with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
-        with patch("transformers.AutoTokenizer.from_pretrained", return_value=mock_tok):
-            with patch("transformers.AutoModelForCausalLM.from_pretrained", return_value=mock_model):
-                m1, t1 = llm_client._get_llm()
-                m2, t2 = llm_client._get_llm()
+    mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tok
+    mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_model
+    with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
+        with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
+            m1, t1 = llm_client._get_llm()
+            m2, t2 = llm_client._get_llm()
     assert m1 is m2
     assert t1 is t2
     assert mock_model.to.call_count == 1

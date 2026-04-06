@@ -1,5 +1,4 @@
 import os
-import torch
 from config import LLM_BACKEND, LLM_MODEL_PATH, HF_ENV
 from src.prompts.base import LLMRequest
 
@@ -9,6 +8,7 @@ _device = None
 
 
 def _get_device():
+    import torch
     global _device
     if _device is None:
         if torch.cuda.is_available():
@@ -25,14 +25,15 @@ def _get_llm():
     if _tokenizer is not None and _model is not None:
         return _model, _tokenizer
 
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-
     hf_token = os.getenv(HF_ENV)
     if not hf_token:
         raise RuntimeError(
             f"Environment variable '{HF_ENV}' is not set. "
             "Set it to a valid HuggingFace token."
         )
+
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+
     try:
         _tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH, token=hf_token)
         _model = AutoModelForCausalLM.from_pretrained(LLM_MODEL_PATH, token=hf_token)
@@ -80,6 +81,7 @@ def _generate_api(request: LLMRequest) -> str:
 
 
 def _generate_local(request: LLMRequest) -> str:
+    import torch
     model, tokenizer = _get_llm()
     device = _get_device()
 
