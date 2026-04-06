@@ -122,6 +122,8 @@ class PlayerCharacter(BaseModel):
     profile_image: Optional[str] = None
     active_quests: List[str] = Field(default_factory=list)
     completed_quests: List[str] = Field(default_factory=list)
+    failed_quests: List[str] = Field(default_factory=list)
+    followers: List[Any] = Field(default_factory=list)  # List[Follower]
     abilities: List[Any] = Field(default_factory=list)
     spells: List[Any] = Field(default_factory=list)
     equipped_weapon: str = ""
@@ -303,6 +305,29 @@ class PlayerCharacter(BaseModel):
 
     def has_completed(self, quest_id: str) -> bool:
         return quest_id in self.completed_quests
+
+    def fail_quest(self, quest_id: str):
+        if quest_id in self.active_quests:
+            self.active_quests.remove(quest_id)
+        if quest_id not in self.failed_quests:
+            self.failed_quests.append(quest_id)
+
+    def add_follower(self, follower) -> bool:
+        """Add a follower. Returns False if at max capacity."""
+        from src.models.follower import MAX_FOLLOWERS
+        if len(self.followers) >= MAX_FOLLOWERS:
+            return False
+        self.followers.append(follower)
+        return True
+
+    def remove_follower(self, npc_id: int):
+        self.followers = [f for f in self.followers if f.npc_id != npc_id]
+
+    def get_follower_by_quest(self, quest_id: str):
+        for f in self.followers:
+            if f.quest_id == quest_id:
+                return f
+        return None
 
     # --- Combat helpers ---
 

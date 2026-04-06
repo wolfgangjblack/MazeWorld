@@ -276,6 +276,52 @@ class LlamaPromptSet(PromptSet):
         )
 
 
+    def story_generation(self, story_seed: str, room_count: int,
+                         environments: list[str]) -> LLMRequest:
+        context = str({
+            "story_seed": story_seed,
+            "room_count": room_count,
+            "environments": environments,
+        })
+        return LLMRequest(
+            system=(
+                "You generate overarching stories for a fantasy game. "
+                "Output a JSON: {title, synopsis, faction: {name, description, leader}, "
+                "escalation_arc: [per-room strings], climax, final_boss_name, "
+                "key_npc_names: [strings], beats: [{room_id, summary, faction_presence, escalation}]}. "
+                "One beat per room. escalation 1-5 increasing."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=800,
+        )
+
+    def story_quest_generation(self, env: str, env_name: str,
+                               story_beat: str, faction_name: str,
+                               available_npcs: list[dict],
+                               available_items: list[dict],
+                               available_events: list[dict],
+                               quest_type: str) -> LLMRequest:
+        context = str({
+            "environment": env, "environment_name": env_name,
+            "story_beat": story_beat, "faction_name": faction_name,
+            "quest_type": quest_type,
+            "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
+            "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
+            "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
+        })
+        return LLMRequest(
+            system=(
+                "You generate story quests for a fantasy game referencing a faction and story beat. "
+                "Output JSON: {title, description, giver_npc_id, is_story_quest: true}. "
+                "Add type-specific fields. Use ONLY ids from context."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=300,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs for few-shot."""
     examples: list[tuple[str, str]] = []

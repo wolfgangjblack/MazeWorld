@@ -99,6 +99,30 @@ def generate_quest_primative(environment: dict, npcs: list[dict],
     return _parse_json_response(raw)
 
 
+def generate_story_primative(story_seed: str, room_count: int,
+                             environments: list[str]) -> dict:
+    """Generate the overarching story from a seed, room count, and environment list."""
+    prompts = get_prompt_set()
+    request = prompts.story_generation(story_seed, room_count, environments)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_story_quest_primative(environment: dict, story_beat: str,
+                                   faction_name: str, npcs: list[dict],
+                                   items: list[dict], events: list[dict],
+                                   quest_type: str) -> dict:
+    """Generate a story-connected quest."""
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+    request = prompts.story_quest_generation(
+        env, env_name, story_beat, faction_name, npcs, items, events, quest_type,
+    )
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
 def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = None) -> dict:
     """Generate a multiple-choice dialogue tree for offline-static mode."""
     prompts = get_prompt_set()

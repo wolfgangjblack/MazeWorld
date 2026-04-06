@@ -289,6 +289,71 @@ class ClaudePromptSet(PromptSet):
         )
 
 
+    def story_generation(self, story_seed: str, room_count: int,
+                         environments: list[str]) -> LLMRequest:
+        context = json.dumps({
+            "story_seed": story_seed,
+            "room_count": room_count,
+            "environments": environments,
+        })
+        return LLMRequest(
+            system=(
+                "You generate overarching stories for a fantasy dungeon-crawling game. "
+                "Given a story seed, room count, and environment list, respond with ONLY a JSON object:\n"
+                "{\n"
+                '  "title": "story title",\n'
+                '  "synopsis": "2-3 sentence overview",\n'
+                '  "faction": {"name": "...", "description": "...", "leader": "..."},\n'
+                '  "escalation_arc": ["room 1 escalation description", "room 2...", ...],\n'
+                '  "climax": "description of final confrontation",\n'
+                '  "final_boss_name": "name of the final boss",\n'
+                '  "key_npc_names": ["important NPC name 1", "..."],\n'
+                '  "beats": [{"room_id": "room_0", "summary": "...", "faction_presence": "...", "escalation": 1}, ...]\n'
+                "}\n"
+                "The escalation_arc should have one entry per room, increasing in tension. "
+                "Beats array should have one entry per room. "
+                "faction_presence describes how the faction manifests in that room. "
+                "escalation is 1-5, increasing per room."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=800,
+        )
+
+    def story_quest_generation(self, env: str, env_name: str,
+                               story_beat: str, faction_name: str,
+                               available_npcs: list[dict],
+                               available_items: list[dict],
+                               available_events: list[dict],
+                               quest_type: str) -> LLMRequest:
+        context = json.dumps({
+            "environment": env, "environment_name": env_name,
+            "story_beat": story_beat, "faction_name": faction_name,
+            "quest_type": quest_type,
+            "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
+            "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
+            "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
+        })
+        return LLMRequest(
+            system=(
+                "You generate story-connected quests for a fantasy game. The quest MUST reference "
+                "the faction and story beat provided. Respond with ONLY a JSON object with keys: "
+                "title, description, giver_npc_id (int from available NPCs), is_story_quest (true). "
+                "For fetch quests: target_items [{item_id, count}]. "
+                "For escort quests: escort_npc_id. "
+                "For delivery quests: delivery_item_id, target_npc_id. "
+                "For combat quests: target_event_id, target_monster_name. "
+                "For dialogue quests: dc (10-18), dialogue_tree. "
+                "For multi_step: sub_quest_ids (leave empty, will be filled). "
+                "Use ONLY ids from the provided context. "
+                "Make the quest title and description reference the faction and story."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=300,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs."""
     examples: list[tuple[str, str]] = []
