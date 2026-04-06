@@ -1,7 +1,7 @@
 """Turn-based combat controller.
 
 Handles initiative, turn order, action resolution for all combat actions:
-Attack, Multi-Attack, Cast Spell, Use Item, Flee, Rest, and Jester's Gamble.
+Attack, Multi-Attack, Cast Spell, Use Item, Flee, and Jester's Gamble.
 """
 
 import random
@@ -12,13 +12,18 @@ from src.models.monster import Monster
 from src.models.spell import Spell, elemental_multiplier
 
 
+def roll_buff_duration(caster) -> int:
+    """Roll buff duration: 1d4 + (caster INT modifier // 2), minimum 1."""
+    int_mod = caster.get_stat_mod("INT")
+    return max(1, random.randint(1, 4) + int_mod // 2)
+
+
 class CombatAction(str, Enum):
     ATTACK = "attack"
     MULTI_ATTACK = "multi_attack"
     CAST_SPELL = "cast_spell"
     USE_ITEM = "use_item"
     FLEE = "flee"
-    REST = "rest"
     GAMBLE = "gamble"  # Jester only
 
 
@@ -235,8 +240,9 @@ class CombatController:
 
         if spell.spell_type == "buff_stat":
             stat = spell.buff_stat or "STR"
-            self.player.apply_buff(stat, spell.buff_value, spell.buff_duration)
-            msg = f"You cast {spell.name}! +{spell.buff_value} {stat} for {spell.buff_duration} turns."
+            duration = roll_buff_duration(self.player)
+            self.player.apply_buff(stat, spell.buff_value, duration)
+            msg = f"You cast {spell.name}! +{spell.buff_value} {stat} for {duration} turns."
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -345,20 +351,6 @@ class CombatController:
             self.advance_turn()
             return {"success": False, "message": msg, "damage": damage}
 
-    def player_rest(self) -> dict:
-        """Skip turn for small HP/hunger/thirst recovery."""
-        hp_restore = random.randint(1, 4)
-        hunger_restore = 2
-        thirst_restore = 2
-        self.player.health = min(self.player.max_health, self.player.health + hp_restore)
-        self.player.hunger = min(self.player.max_hunger, self.player.hunger + hunger_restore)
-        self.player.thirst = min(self.player.max_thirst, self.player.thirst + thirst_restore)
-        msg = f"You rest and recover {hp_restore} HP, {hunger_restore} hunger, {thirst_restore} thirst."
-        self.log.append(msg)
-        self.player.tick_buffs()
-        self.advance_turn()
-        return {"success": True, "message": msg}
-
     def player_gamble(self) -> dict:
         """Jester's Gamble: roll on random effect table, LUCK influences distribution."""
         if not self.player.player_class or self.player.player_class.archetype != "jester":
@@ -393,8 +385,9 @@ class CombatController:
             msg += f" — You heal {heal} HP!"
         elif effect_key == "buff_self":
             stat = random.choice(["STR", "DEX", "CON", "INT", "WIS"])
-            self.player.apply_buff(stat, 2, 3)
-            msg += f" — +2 {stat} for 3 turns!"
+            duration = roll_buff_duration(self.player)
+            self.player.apply_buff(stat, 2, duration)
+            msg += f" — +2 {stat} for {duration} turns!"
         elif effect_key == "damage_self":
             damage = random.randint(1, 6)
             self.player.health = max(0, self.player.health - damage)

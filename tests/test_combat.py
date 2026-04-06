@@ -26,6 +26,7 @@ from src.models.spell import (
 from src.controllers.combat_controller import (
     CombatController,
     CombatState,
+    roll_buff_duration,
 )
 
 
@@ -517,24 +518,6 @@ class TestCombatEndConditions:
 
 
 # ---------------------------------------------------------------------------
-# Rest action
-# ---------------------------------------------------------------------------
-
-class TestRest:
-    def test_rest_recovers_stats(self, warrior, weak_monster):
-        warrior.health = 50
-        warrior.hunger = 50
-        warrior.thirst = 50
-        cc = CombatController(warrior, [weak_monster])
-        cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
-        cc.turn_index = 0
-        cc.player_rest()
-        assert warrior.health > 50
-        assert warrior.hunger == 52
-        assert warrior.thirst == 52
-
-
-# ---------------------------------------------------------------------------
 # Use Item in combat
 # ---------------------------------------------------------------------------
 
@@ -572,6 +555,67 @@ class TestBuffs:
         assert len(healer.active_buffs) == 1
         healer.tick_buffs()
         assert len(healer.active_buffs) == 0
+
+
+# ---------------------------------------------------------------------------
+# Buff duration roll (1d4 + INT mod // 2)
+# ---------------------------------------------------------------------------
+
+class TestBuffDuration:
+    def test_roll_buff_duration_uses_int_mod(self, healer, weak_monster):
+        """Duration should be 1d4 + (INT modifier // 2), minimum 1."""
+        # healer has INT=10 → mod 0 → 0 // 2 = 0, so duration = 1d4 + 0 = 1..4
+        durations = set()
+        for seed in range(50):
+            random.seed(seed)
+            d = roll_buff_duration(healer)
+            assert 1 <= d <= 4
+            durations.add(d)
+        assert len(durations) > 1  # not all the same
+
+    def test_high_int_increases_duration(self):
+        """High INT should add to the duration."""
+        p = _make_player("mage", dict(STR=8, DEX=12, CON=10, INT=18, WIS=12, CHA=10, LUCK=10))
+        # INT=18 → mod +4 → 4 // 2 = 2, so duration = 1d4 + 2 = 3..6
+        for seed in range(50):
+            random.seed(seed)
+            d = roll_buff_duration(p)
+            assert 3 <= d <= 6
+
+    def test_low_int_floors_at_one(self):
+        """Even with negative INT mod, duration should be at least 1."""
+        p = _make_player("warrior", dict(STR=16, DEX=14, CON=14, INT=4, WIS=8, CHA=10, LUCK=10))
+        # INT=4 → mod -3 → -3 // 2 = -2, raw = 1d4 + (-2) → could be -1..2
+        # But min is 1
+        for seed in range(50):
+            random.seed(seed)
+            d = roll_buff_duration(p)
+            assert d >= 1
+
+    def test_buff_spell_uses_rolled_duration(self, healer, weak_monster):
+        """Casting a buff spell should apply a rolled duration, not hardcoded 3."""
+        healer.spells = [
+            Spell(
+                name="Fortify", spell_type="buff_stat", element="light", stat="WIS",
+                buff_stat="CON", buff_value=2, buff_duration=3,
+                hunger_cost=0, thirst_cost=5, targets="self",
+            ),
+        ]
+        # Run many trials — duration should vary (not always 3)
+        durations = set()
+        for seed in range(50):
+            random.seed(seed)
+            healer.active_buffs = []
+            healer.thirst = 100
+            m = Monster(id="m", name="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
+            cc = CombatController(healer, [m])
+            cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
+            cc.turn_index = 0
+            cc.player_cast_spell(0, 0)
+            if healer.active_buffs:
+                durations.add(healer.active_buffs[0].turns_remaining)
+        # Should have more than one unique duration value
+        assert len(durations) > 1
 
 
 # ---------------------------------------------------------------------------
