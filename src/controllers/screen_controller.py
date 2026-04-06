@@ -9,6 +9,7 @@ class ScreenState(Enum):
     ROOM_INTRO = "room_intro"
     GAMEPLAY = "gameplay"
     PLAYER_MENU = "player_menu"
+    LOAD_GAME = "load_game"
     COMBAT = "combat"
     ENCOUNTER = "encounter"
     DIALOGUE = "dialogue"

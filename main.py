@@ -8,6 +8,7 @@ Usage:
 
 import argparse
 import os
+import time
 
 import pygame
 
@@ -25,6 +26,9 @@ from src.controllers.screen_controller import ScreenController, ScreenState
 from src.views.start_view import StartView
 from src.views.class_select_view import ClassSelectView
 from src.views.room_intro_view import RoomIntroView
+from src.views.player_menu_view import PlayerMenuView
+from src.views.load_game_view import LoadGameView
+from src.systems import save_manager
 
 NPC_CLASS_MAP = {
     "StaticNPC": StaticNPC,
@@ -51,7 +55,7 @@ def run_generation():
 
 
 def setup_game(screen, font, player_name="Adventurer", selected_class=None):
-    """Load game data and create all game objects. Returns (game_controller,)."""
+    """Load game data and create all game objects. Returns GameController."""
     has_pregen = registry.has_manifest() and registry.manifest_matches_seed(WORLD_SEED)
 
     dialogue_box = DialogueBox(screen, font)
@@ -128,6 +132,90 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None):
     return GameController(screen, font, maze, player, npcs, dialogue_box, events, quests)
 
 
+def setup_game_from_save(screen, font, save_state):
+    """Restore a full game from a SaveState. Returns GameController."""
+    from src.models.follower import Follower
+
+    dialogue_box = DialogueBox(screen, font)
+
+    # --- Restore maze ---
+    maze = Maze()
+    maze.grid = [list(row) for row in save_state.maze_grid]
+    maze.environment = save_state.maze_environment
+    maze.environment_name = save_state.maze_environment_name
+
+    # --- Restore player ---
+    player = save_manager.deserialize_player(save_state.player_data)
+
+    # --- Restore followers ---
+    player.followers = [Follower(**fd) for fd in save_state.follower_data]
+
+    # --- Restore NPCs (merge saved mutable state onto base templates) ---
+    npcs = []
+    saved_npc_map = {s["id"]: s for s in save_state.npc_states}
+
+    has_pregen = registry.has_manifest() and registry.manifest_matches_seed(save_state.seed)
+    if has_pregen:
+        for npc_data in registry.get_active_npcs():
+            cls = NPC_CLASS_MAP.get(npc_data.get("type", "StaticNPC"), StaticNPC)
+            kwargs = dict(npc_data)
+            kwargs.pop("selected", None)
+            npc_id = kwargs.get("id", 0)
+
+            # Apply saved state
+            saved = saved_npc_map.get(npc_id, {})
+            kwargs["x"] = saved.get("x", kwargs.get("x", 0))
+            kwargs["y"] = saved.get("y", kwargs.get("y", 0))
+            if cls is RandomNPC:
+                kwargs.setdefault("home_x", saved.get("home_x", kwargs["x"]))
+                kwargs.setdefault("home_y", saved.get("home_y", kwargs["y"]))
+
+            npc = cls(**kwargs)
+            npc.interaction_history = saved.get("interaction_history", [])
+            npc.has_met_player = saved.get("has_met_player", False)
+
+            # Restore merchant shop inventory
+            if hasattr(npc, 'shop_inventory') and "shop_inventory" in saved:
+                npc.shop_inventory = saved["shop_inventory"]
+
+            npc.prepare(maze_environment=maze.environment)
+            npcs.append(npc)
+
+    # --- Restore events ---
+    events = registry.event_registry
+    for eid, saved_evt in save_state.event_states.items():
+        if eid in events:
+            events[eid].resolved = saved_evt.get("resolved", False)
+            # Restore monster HP for combat events
+            if hasattr(events[eid], 'monsters') and "monster_states" in saved_evt:
+                for i, ms in enumerate(saved_evt["monster_states"]):
+                    if i < len(events[eid].monsters):
+                        events[eid].monsters[i].hp = ms.get("hp", events[eid].monsters[i].hp)
+                        events[eid].monsters[i].status_effects = ms.get("status_effects", {})
+                events[eid].combat_started = saved_evt.get("combat_started", False)
+                events[eid].player_fled = saved_evt.get("player_fled", False)
+
+    # --- Restore quests ---
+    quests = registry.quest_registry
+    for qid, saved_q in save_state.quest_states.items():
+        if qid in quests:
+            quests[qid].status = saved_q.get("status", "not_started")
+            if hasattr(quests[qid], 'current_step') and "current_step" in saved_q:
+                quests[qid].current_step = saved_q["current_step"]
+
+    # --- Build controller ---
+    gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests)
+
+    # Restore event position map from save
+    gc.event_position_map = {}
+    for key, eid in save_state.event_position_map.items():
+        parts = key.split(",")
+        if len(parts) == 2:
+            gc.event_position_map[(int(parts[0]), int(parts[1]))] = eid
+
+    return gc
+
+
 def main():
     args = parse_args()
 
@@ -162,14 +250,22 @@ def main():
 
     # --- Screen state machine ---
     screen_ctrl = ScreenController(ScreenState.START)
-    start_view = StartView(screen, font)
+    start_view = StartView(screen, font, has_saves=save_manager.has_saves())
     class_select_view = None
     room_intro_view = None
+    load_game_view = None
+    player_menu_view = None
+    game_controller = None
     selected_class = None
     player_name = "Adventurer"
+    gameplay_start_time = 0.0
+    accumulated_play_time = 0.0
+    # Track where load was opened from: "start" or "gameplay"
+    load_source = "start"
 
     def _handle_start() -> str | None:
-        nonlocal class_select_view
+        nonlocal class_select_view, load_game_view, load_source
+        start_view.has_saves = save_manager.has_saves()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
@@ -182,6 +278,12 @@ def main():
                         screen_ctrl.replace(ScreenState.CLASS_SELECT)
                     else:
                         screen_ctrl.replace(ScreenState.GAMEPLAY)
+                    return None
+                if action == "load_game":
+                    saves = save_manager.list_saves()
+                    load_game_view = LoadGameView(screen, font, saves)
+                    load_source = "start"
+                    screen_ctrl.replace(ScreenState.LOAD_GAME)
                     return None
                 if action == "quit":
                     return "quit"
@@ -243,15 +345,120 @@ def main():
         return None
 
     def _handle_gameplay() -> str | None:
-        game_controller = setup_game(screen, font, player_name, selected_class)
-        game_controller.run()
+        nonlocal game_controller, gameplay_start_time, player_menu_view
+        nonlocal load_game_view, load_source
+
+        if game_controller is None:
+            game_controller = setup_game(screen, font, player_name, selected_class)
+            gameplay_start_time = time.time()
+
+        result = game_controller.run()
+
+        if result == "open_menu":
+            # Open player menu overlay
+            can_save = not game_controller.is_in_combat
+            player_menu_view = PlayerMenuView(
+                screen, font,
+                can_save=can_save,
+                has_saves=save_manager.has_saves(),
+            )
+            screen_ctrl.push(ScreenState.PLAYER_MENU)
+            return None
+
+        # Game loop ended (window closed)
         return "quit"
+
+    def _handle_player_menu() -> str | None:
+        nonlocal game_controller, player_menu_view
+        nonlocal load_game_view, load_source, gameplay_start_time
+        nonlocal accumulated_play_time
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = player_menu_view.handle_input(event)
+                if action == "back":
+                    screen_ctrl.pop()
+                    return None
+                if action == "save":
+                    elapsed = time.time() - gameplay_start_time
+                    total_time = accumulated_play_time + elapsed
+                    try:
+                        filepath = save_manager.save_game(
+                            game_controller, WORLD_SEED, total_time,
+                        )
+                        player_menu_view.set_status("Game saved!")
+                    except Exception as e:
+                        player_menu_view.set_status(f"Save failed: {e}", is_error=True)
+                    return None
+                if action == "load":
+                    saves = save_manager.list_saves()
+                    load_game_view = LoadGameView(screen, font, saves)
+                    load_source = "gameplay"
+                    screen_ctrl.push(ScreenState.LOAD_GAME)
+                    return None
+
+        # Draw the game underneath, then the menu overlay
+        if game_controller:
+            current_time = pygame.time.get_ticks()
+            game_controller.draw(current_time)
+        player_menu_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_load_game() -> str | None:
+        nonlocal game_controller, gameplay_start_time, accumulated_play_time
+        nonlocal load_game_view
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                result = load_game_view.handle_input(event)
+                if result is None:
+                    pass
+                elif result["action"] == "back":
+                    if load_source == "start":
+                        screen_ctrl.replace(ScreenState.START)
+                    else:
+                        # Pop back to player menu
+                        screen_ctrl.pop()
+                    return None
+                elif result["action"] == "load":
+                    filepath = result["filepath"]
+                    save_state = save_manager.load_game(filepath)
+                    if save_state is None:
+                        load_game_view.error_message = "Failed to load save file (corrupt or invalid)."
+                        return None
+
+                    # Restore game from save
+                    try:
+                        game_controller = setup_game_from_save(
+                            screen, font, save_state,
+                        )
+                        accumulated_play_time = save_state.time_played_seconds
+                        gameplay_start_time = time.time()
+                        # Clear the screen stack and go to gameplay
+                        screen_ctrl._stack = [ScreenState.GAMEPLAY]
+                    except Exception as e:
+                        load_game_view.error_message = f"Load failed: {e}"
+                        return None
+                    return None
+
+        load_game_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
 
     screen_handlers: dict[ScreenState, callable] = {
         ScreenState.START: _handle_start,
         ScreenState.CLASS_SELECT: _handle_class_select,
         ScreenState.ROOM_INTRO: _handle_room_intro,
         ScreenState.GAMEPLAY: _handle_gameplay,
+        ScreenState.PLAYER_MENU: _handle_player_menu,
+        ScreenState.LOAD_GAME: _handle_load_game,
     }
 
     running = True

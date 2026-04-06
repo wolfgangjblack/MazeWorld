@@ -45,6 +45,10 @@ class GameController:
         # Combat target selection
         self.combat_target_index = 0
 
+        # Player menu / save-load state
+        self.player_menu_active = False
+        self.pending_action = None  # Set to "save", "load", "quit" to signal main loop
+
         self.game_view = GameView(screen, font, dialogue_box)
 
     def _build_event_position_map(self):
@@ -73,8 +77,17 @@ class GameController:
                     quest.status = "completed"
                     self.player.complete_quest(qid)
 
-    def run(self):
-        """Main game loop."""
+    @property
+    def is_in_combat(self) -> bool:
+        """True if player is in an active combat encounter."""
+        return (
+            self.dialogue_box.event_active
+            or self.dialogue_box.dialogue_active
+            or self.shop_active
+        )
+
+    def run(self) -> str | None:
+        """Main game loop. Returns action: 'menu_save', 'menu_load', or None."""
         clock = pygame.time.Clock()
 
         while self.running:
@@ -85,7 +98,13 @@ class GameController:
             pygame.display.flip()
             clock.tick(60)
 
-        pygame.quit()
+            # Check if game controller wants to hand control back
+            if self.pending_action:
+                action = self.pending_action
+                self.pending_action = None
+                return action
+
+        return None
 
     def handle_events(self):
         """Handle all pygame events."""
@@ -217,6 +236,11 @@ class GameController:
             self._talk_to_follower()
             return
 
+        # Player menu (save/load)
+        if event.key == pygame.K_TAB:
+            self.pending_action = "open_menu"
+            return
+
         # Available in all builds (including packaged exe) for troubleshooting
         if event.key == pygame.K_F1:
             self.debug_reveal = not self.debug_reveal
@@ -226,6 +250,8 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
+            # Esc also opens menu in normal gameplay
+            self.pending_action = "open_menu"
             return
 
     def _handle_event_input(self, event):

@@ -131,7 +131,7 @@ def test_save_state_defaults():
     ss = SaveState()
     assert ss.seed == -1
     assert ss.room_id == "room_1"
-    assert ss.quest_log == []
+    assert ss.version == 1
 
 
 def test_save_state_with_data():
@@ -139,10 +139,10 @@ def test_save_state_with_data():
         seed=1234,
         room_id="room_3",
         player_data={"x": 5, "y": 10, "health": 80},
-        rooms_cleared=["room_1", "room_2"],
+        quest_states={"q1": {"status": "active"}, "q2": {"status": "completed"}},
     )
     assert ss.seed == 1234
-    assert len(ss.rooms_cleared) == 2
+    assert len(ss.quest_states) == 2
 
 
 # --- DayNightCycle ---
