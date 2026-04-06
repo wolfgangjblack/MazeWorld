@@ -120,18 +120,7 @@ def _fix_stats(raw: dict, archetype: str) -> Stats:
             val = 10
         values[stat] = int(val)
 
-    # Jester special case: pick 1 dump stat from secondary if none assigned
     effective_roles = dict(roles)
-    if archetype == "jester" and not roles.get("dump"):
-        # Pick the lowest non-LUCK stat as the dump stat
-        non_luck = [(s, values[s]) for s in roles.get("secondary", []) if s != "LUCK"]
-        if non_luck:
-            dump_stat = min(non_luck, key=lambda x: x[1])[0]
-            effective_roles = {
-                "primary": roles["primary"],
-                "secondary": [s for s in roles["secondary"] if s != dump_stat],
-                "dump": [dump_stat],
-            }
 
     # Clamp to role ranges
     for stat in effective_roles.get("primary", []):
