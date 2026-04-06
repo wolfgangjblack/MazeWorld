@@ -34,6 +34,15 @@ TYPE_COLORS = {
     "event": PURPLE,
 }
 
+ELEMENT_COLORS = {
+    "fire": RED,
+    "water": BLUE,
+    "forest": GREEN,
+    "light": YELLOW,
+    "dark": PURPLE,
+}
+
+_PORTRAIT_CACHE_MAX = 64
 _portrait_cache: dict[str, pygame.Surface | None] = {}
 
 
@@ -46,6 +55,8 @@ def _load_portrait(path: str | None, size: tuple[int, int] = (128, 128)) -> pyga
         try:
             img = pygame.image.load(path).convert_alpha()
             img = pygame.transform.scale(img, size)
+            if len(_portrait_cache) >= _PORTRAIT_CACHE_MAX:
+                _portrait_cache.pop(next(iter(_portrait_cache)))
             _portrait_cache[path] = img
             return img
         except Exception:
@@ -192,12 +203,7 @@ class EncounterView:
         """Draw a compact monster info card."""
         # Portrait placeholder
         elem = monster.elemental_affinity
-        color = RED if elem == "fire" else \
-                BLUE if elem == "water" else \
-                GREEN if elem == "forest" else \
-                YELLOW if elem == "light" else \
-                PURPLE if elem == "dark" else \
-                LIGHT_GRAY
+        color = ELEMENT_COLORS.get(elem, LIGHT_GRAY)
         pygame.draw.rect(self.screen, color, (x, y, 48, 48))
         pygame.draw.rect(self.screen, WHITE, (x, y, 48, 48), 1)
 
