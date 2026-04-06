@@ -231,3 +231,100 @@ class EventValidator(BaseValidator):
                 reasons.append("Puzzle has no solvable path with available tools")
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class ItemValidator(BaseValidator):
+    """Validates item data for completeness and sensible values."""
+
+    VALID_CATEGORIES = {"food", "drink", "tool", "weapon", "spell_scroll"}
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+
+        if not data.get("name"):
+            reasons.append("Item missing name")
+
+        category = data.get("category", "")
+        if category not in self.VALID_CATEGORIES:
+            reasons.append(f"Invalid item category '{category}'")
+
+        stats = data.get("item_stats", {})
+        if not stats:
+            reasons.append("Item missing item_stats")
+            return ValidationResult(passed=False, reasons=reasons, data=data)
+
+        if category == "weapon":
+            dice = stats.get("attack_dice", "")
+            if not dice:
+                reasons.append("Weapon has no attack_dice")
+        elif category == "tool":
+            if not stats.get("attribute"):
+                reasons.append("Tool has no attribute")
+        elif category == "food":
+            if stats.get("nutrition_value", 0) <= 0:
+                reasons.append("Food has no nutrition_value")
+        elif category == "drink":
+            if stats.get("hydration_value", 0) <= 0:
+                reasons.append("Drink has no hydration_value")
+
+        price = stats.get("price", 0)
+        if price < 0:
+            reasons.append(f"Item has negative price: {price}")
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class NPCValidator(BaseValidator):
+    """Validates NPC data for required fields and identity."""
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+
+        if not data.get("name"):
+            reasons.append("NPC missing name")
+        if not data.get("type"):
+            reasons.append("NPC missing type")
+        if not data.get("environment"):
+            reasons.append("NPC missing environment")
+        if not data.get("personality"):
+            reasons.append("NPC missing personality")
+        if not data.get("opening_greeting"):
+            reasons.append("NPC missing opening_greeting")
+
+        npc_type = data.get("type", "")
+        if npc_type == "MerchantNPC":
+            if not data.get("shop_inventory"):
+                reasons.append("Merchant NPC has no shop_inventory")
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class MonsterValidator(BaseValidator):
+    """Validates monster data for combat-readiness."""
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+
+        if not data.get("name"):
+            reasons.append("Monster missing name")
+
+        hp = data.get("hp", 0)
+        if hp <= 0:
+            reasons.append(f"Monster has invalid hp: {hp}")
+
+        max_hp = data.get("max_hp", 0)
+        if max_hp <= 0:
+            reasons.append(f"Monster has invalid max_hp: {max_hp}")
+
+        if not data.get("attack_dice"):
+            reasons.append("Monster missing attack_dice")
+
+        ac = data.get("ac", 0)
+        if ac <= 0:
+            reasons.append(f"Monster has invalid ac: {ac}")
+
+        level = data.get("level", 0)
+        if level <= 0:
+            reasons.append(f"Monster has invalid level: {level}")
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)

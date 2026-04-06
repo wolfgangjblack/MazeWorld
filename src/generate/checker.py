@@ -185,3 +185,89 @@ class EventChecker(BaseChecker):
                 issues.append("Puzzle has no walk-away option")
 
         return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class ItemChecker(BaseChecker):
+    """Checks generated item data for required fields and valid categories."""
+
+    VALID_CATEGORIES = {"food", "drink", "tool", "weapon", "spell_scroll"}
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        issues: list[str] = []
+
+        if not data.get("name"):
+            issues.append("Item missing name")
+
+        category = data.get("category", "")
+        if category not in self.VALID_CATEGORIES:
+            issues.append(f"Invalid item category '{category}'")
+
+        stats = data.get("item_stats", {})
+        if not stats:
+            issues.append("Item missing item_stats")
+
+        if category == "weapon":
+            if not stats.get("attack_dice"):
+                issues.append("Weapon missing attack_dice")
+            if not stats.get("stat_modifier"):
+                issues.append("Weapon missing stat_modifier")
+        elif category == "tool":
+            if not stats.get("attribute"):
+                issues.append("Tool missing attribute")
+        elif category in ("food", "drink"):
+            if stats.get("nutrition_value", 0) == 0 and stats.get("hydration_value", 0) == 0:
+                if category == "food":
+                    issues.append("Food item has no nutrition_value")
+                else:
+                    issues.append("Drink item has no hydration_value")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class NPCChecker(BaseChecker):
+    """Checks NPC data for required personality and identity fields."""
+
+    REQUIRED_FIELDS = {"name", "type", "environment"}
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        issues: list[str] = []
+
+        missing = self.REQUIRED_FIELDS - set(data.keys())
+        if missing:
+            issues.append(f"NPC missing fields: {', '.join(sorted(missing))}")
+
+        if not data.get("name"):
+            issues.append("NPC has empty name")
+
+        npc_type = data.get("type", "")
+        valid_types = {"StaticNPC", "RandomNPC", "AggressiveNPC", "MerchantNPC"}
+        if npc_type and npc_type not in valid_types:
+            issues.append(f"Invalid NPC type '{npc_type}'")
+
+        if not data.get("personality"):
+            issues.append("NPC missing personality trait")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class MonsterChecker(BaseChecker):
+    """Checks monster data for combat-required fields."""
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        issues: list[str] = []
+
+        if not data.get("name"):
+            issues.append("Monster missing name")
+
+        hp = data.get("hp", 0)
+        if hp <= 0:
+            issues.append(f"Monster has invalid hp: {hp}")
+
+        if not data.get("attack_dice"):
+            issues.append("Monster missing attack_dice")
+
+        ac = data.get("ac", 0)
+        if ac <= 0:
+            issues.append(f"Monster has invalid ac: {ac}")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)

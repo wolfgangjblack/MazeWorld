@@ -1154,8 +1154,21 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
     }
 
 
+class GenerationAborted(Exception):
+    """Raised when generation is aborted due to critical validation failures."""
+
+
 def generate_world():
-    """Main generation pipeline. Writes all data to data/."""
+    """Main generation pipeline. Writes all data to data/.
+
+    Architecture — Bible-driven iterative generation:
+        1. Story/Bible first — generate overarching story, seed WorldBible
+        2. Entities per room — NPCs, items, monsters read Bible for lore
+        3. Events/encounters — reference existing entities from Bible
+        4. Quests/gameplay — cross-room connections via Bible
+        5. Screens/portraits last — read Bible for consistent art style
+        6. Cross-validate full Bible, abort on critical failures
+    """
     logger.info("=== MazeWorld World Generator ===")
     logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
 
@@ -1164,6 +1177,9 @@ def generate_world():
 
     registry.load()
 
+    # --- Initialise pipeline-level validation report ---
+    report = ValidationReport()
+
     num_rooms = NUM_ROOMS
     room_results = []
 
@@ -1171,7 +1187,9 @@ def generate_world():
     # (We'll re-seed before actual generation so this peek doesn't consume randomness)
     rng_state = random.getstate()
 
-    # --- Generate overarching story ---
+    # =====================================================================
+    # LAYER 1: BIBLE / STORY FIRST
+    # =====================================================================
     from src.data.world_data import ENVIRONMENT_TYPES
     story_seed = STORY_SEED or _FALLBACK_STORY_SEED
     environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
@@ -1235,11 +1253,18 @@ def generate_world():
             key_npc_names=["The Faceless One"],
             beats=beats,
         )
+        report.add_warning("Story LLM generation failed, using fallback", phase="story")
     logger.info("Story: %s (faction: %s, %d beats)",
                 story.title, story.faction.name if story.faction else "none",
                 len(story.beats))
 
-    # --- Generate player classes (global, based on first room environment) ---
+    # --- Seed the WorldBible with the story ---
+    bible = create_world_bible(story)
+    logger.info("WorldBible created with story: %s", story.title)
+
+    # =====================================================================
+    # LAYER 2: ENTITIES — player classes (global, based on first environment)
+    # =====================================================================
     from src.generate.class_gen import generate_classes
     first_env = environments[0] if environments else "forest"
     first_env_name = _llm_generate_env_name(first_env)
@@ -1250,11 +1275,18 @@ def generate_world():
     # Restore RNG state and generate rooms
     random.setstate(rng_state)
 
-    # --- Generate each room ---
+    # =====================================================================
+    # LAYERS 2-4: PER-ROOM GENERATION (Bible-driven, sequential)
+    # Each room reads the Bible (including previous rooms), generates
+    # content, then writes back to Bible before the next room starts.
+    # =====================================================================
     for room_idx in range(num_rooms):
         room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_idx}")
         os.makedirs(room_dir, exist_ok=True)
-        result = _generate_room(room_idx, num_rooms, story, room_dir)
+        result = _generate_room(
+            room_idx, num_rooms, story, room_dir,
+            bible=bible, report=report,
+        )
         room_results.append(result)
 
     # --- Backward-compatible writes (room 0 data to legacy paths) ---
@@ -1268,7 +1300,6 @@ def generate_world():
         "event_positions": [{"x": ep["x"], "y": ep["y"], "event_id": ep["event_id"]}
                             for ep in r0["maze"].__dict__.get("_event_pos_map", [])],
     })
-    # Load event_positions from the room's maze file for legacy compat
     r0_maze_path = os.path.join(DATA_DIR, "rooms", "room_0", "maze.json")
     if os.path.exists(r0_maze_path):
         import shutil
@@ -1299,7 +1330,9 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
-    # --- Portraits (all rooms) ---
+    # =====================================================================
+    # LAYER 5: SCREENS / PORTRAITS LAST (read Bible for consistent style)
+    # =====================================================================
     portraits_generated = False
     player_portrait_path = None
     env_portrait_path = None
@@ -1379,10 +1412,63 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
-    # --- Manifest ---
-    room_manifest = []
+    # =====================================================================
+    # CROSS-VALIDATION & MANIFEST
+    # =====================================================================
+
+    # --- Cross-validate the full Bible ---
+    all_npc_pool = []
+    all_event_list = []
+    all_quest_list = []
+    all_item_placements = []
     for rr in room_results:
-        room_manifest.append({
+        all_npc_pool.extend(rr["npc_pool"])
+        all_event_list.extend(rr["event_list"])
+        all_quest_list.extend(rr["quest_list"])
+        all_item_placements.extend(rr["item_placements"])
+
+    cv_issues = cross_validate(
+        bible, all_npc_pool, all_event_list, all_quest_list, all_item_placements,
+    )
+    for issue in cv_issues:
+        report.add_warning(issue, phase="cross_validation")
+    if cv_issues:
+        logger.warning("Cross-validation found %d issues.", len(cv_issues))
+
+    # --- Final Bible write ---
+    write_world_bible(bible)
+
+    # --- Build manifest using build_manifest() ---
+    generated_at = datetime.now(timezone.utc).isoformat()
+    manifest = build_manifest(
+        seed=WORLD_SEED,
+        story_seed=story.seed,
+        game_mode=GAME_MODE,
+        num_rooms=num_rooms,
+        environments=[rr["environment"] for rr in room_results],
+        generated_at=generated_at,
+        validation=report.to_dict(),
+        active_npc_count=sum(len(rr["active_npcs"]) for rr in room_results),
+        item_count=len(all_items),
+        quest_count=sum(len(rr["quest_list"]) for rr in room_results),
+        event_list=all_event_list,
+        npc_pool=all_npc_pool,
+        player_portrait_path=player_portrait_path,
+        env_portrait_path=env_portrait_path,
+        environment=room_results[0]["environment"],
+        env_name=room_results[0]["environment_name"],
+        maze_width=MAZE_WIDTH,
+        maze_height=MAZE_HEIGHT,
+        class_count=len(class_data_list),
+        portraits_generated=portraits_generated,
+        story_title=story.title,
+        faction_name=story.faction.name if story.faction else "",
+    )
+
+    # Add per-room summary to manifest
+    manifest["rooms"] = []
+    for rr in room_results:
+        manifest["rooms"].append({
             "room_id": rr["room_id"],
             "environment": rr["environment"],
             "environment_name": rr["environment_name"],
@@ -1393,32 +1479,24 @@ def generate_world():
             "environment_portrait": rr.get("environment_portrait"),
         })
 
-    manifest = {
-        "world_seed": WORLD_SEED,
-        "num_rooms": num_rooms,
-        "environment": room_results[0]["environment"],
-        "environment_name": room_results[0]["environment_name"],
-        "maze_width": MAZE_WIDTH,
-        "maze_height": MAZE_HEIGHT,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "npc_pool_size": sum(len(rr["npc_pool"]) for rr in room_results),
-        "active_npc_count": sum(len(rr["active_npcs"]) for rr in room_results),
-        "quest_count": sum(len(rr["quest_list"]) for rr in room_results),
-        "event_count": sum(len(rr["event_list"]) for rr in room_results),
-        "class_count": len(class_data_list),
-        "portraits_generated": portraits_generated,
-        "player_portrait": player_portrait_path,
-        "environment_portrait": env_portrait_path,
-        "game_mode": GAME_MODE,
-        "story_title": story.title,
-        "faction_name": story.faction.name if story.faction else "",
-        "story_seed": story.seed,
-        "rooms": room_manifest,
-    }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
 
+    # --- Abort on critical validation failures ---
+    if report.status == "failed":
+        logger.error(
+            "BUILD ABORTED: %d critical validation failures. See manifest for details.",
+            report.critical_failures,
+        )
+        raise GenerationAborted(
+            f"Generation aborted: {report.critical_failures} critical failures. "
+            f"Details in {MANIFEST_PATH}"
+        )
+
     logger.info("=== Generation Complete (%d rooms) ===", num_rooms)
+    logger.info("  Validation: %s (%d warnings, %d major, %d critical)",
+                report.status, report.minor_warnings,
+                report.major_retries, report.critical_failures)
     for rr in room_results:
         logger.info("  Room %d: %s (%s) — %d NPCs, %d events, %d quests",
                      rr["room_idx"], rr["environment"], rr["environment_name"],
@@ -1426,3 +1504,4 @@ def generate_world():
                      len(rr["quest_list"]))
     logger.info("  Portraits: %s", "yes" if portraits_generated else "no")
     logger.info("  Manifest: %s", MANIFEST_PATH)
+    logger.info("  WorldBible: %d entities indexed", len(bible.entity_index))
