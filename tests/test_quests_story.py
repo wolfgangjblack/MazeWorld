@@ -459,66 +459,391 @@ class TestQuestValidation:
 # ---------------------------------------------------------------------------
 
 class TestQuestLog:
-    def _make_controller(self):
-        """Create a minimal mock GameController to test get_quest_log."""
-        # Import the actual class to test the method
-        from src.controllers.game_controller import GameController
-        ctrl = object.__new__(GameController)
-        ctrl.quests = {}
-        ctrl.player = _make_player()
-        ctrl.events = {}
-        ctrl.npcs = []
-        return ctrl
+    def _make_qm(self, quests=None):
+        from src.systems.quest_manager import QuestManager
+        return QuestManager(quests or {})
 
     def test_quest_log_empty(self):
-        ctrl = self._make_controller()
-        log = ctrl.get_quest_log()
+        qm = self._make_qm()
+        log = qm.get_quest_log()
         assert log == {"active": [], "completed": [], "failed": []}
 
     def test_quest_log_active(self):
-        ctrl = self._make_controller()
-        ctrl.quests["q1"] = FetchQuest(
-            id="q1", title="Get mushrooms", description="Find mushrooms",
-            giver_npc_id=100, status="active",
-        )
-        log = ctrl.get_quest_log()
+        qm = self._make_qm({
+            "q1": FetchQuest(id="q1", title="Get mushrooms", description="Find mushrooms",
+                             giver_npc_id=100, status="active"),
+        })
+        log = qm.get_quest_log()
         assert len(log["active"]) == 1
         assert log["active"][0]["title"] == "Get mushrooms"
 
     def test_quest_log_story_quest_flagged(self):
-        ctrl = self._make_controller()
-        ctrl.quests["q1"] = CombatQuest(
-            id="q1", title="Purge cult", description="D",
-            giver_npc_id=100, status="active",
-            is_story_quest=True, target_event_id="evt_001",
-        )
-        log = ctrl.get_quest_log()
+        qm = self._make_qm({
+            "q1": CombatQuest(id="q1", title="Purge cult", description="D",
+                              giver_npc_id=100, status="active",
+                              is_story_quest=True, target_event_id="evt_001"),
+        })
+        log = qm.get_quest_log()
         assert log["active"][0]["is_story_quest"] is True
 
     def test_quest_log_multi_step_progress(self):
-        ctrl = self._make_controller()
-        ctrl.quests["mq1"] = MultiStepQuest(
-            id="mq1", title="Chain", description="D",
-            giver_npc_id=100, status="active",
-            sub_quest_ids=["q1", "q2", "q3"], current_step=1,
-        )
-        log = ctrl.get_quest_log()
+        qm = self._make_qm({
+            "mq1": MultiStepQuest(id="mq1", title="Chain", description="D",
+                                  giver_npc_id=100, status="active",
+                                  sub_quest_ids=["q1", "q2", "q3"], current_step=1),
+        })
+        log = qm.get_quest_log()
         entry = log["active"][0]
         assert entry["current_step"] == 1
         assert entry["total_steps"] == 3
 
     def test_quest_log_all_sections(self):
-        ctrl = self._make_controller()
-        ctrl.quests["q1"] = FetchQuest(id="q1", title="A", description="D",
-                                        giver_npc_id=100, status="active")
-        ctrl.quests["q2"] = FetchQuest(id="q2", title="B", description="D",
-                                        giver_npc_id=100, status="completed")
-        ctrl.quests["q3"] = FetchQuest(id="q3", title="C", description="D",
-                                        giver_npc_id=100, status="failed")
-        log = ctrl.get_quest_log()
+        qm = self._make_qm({
+            "q1": FetchQuest(id="q1", title="A", description="D",
+                             giver_npc_id=100, status="active"),
+            "q2": FetchQuest(id="q2", title="B", description="D",
+                             giver_npc_id=100, status="completed"),
+            "q3": FetchQuest(id="q3", title="C", description="D",
+                             giver_npc_id=100, status="failed"),
+        })
+        log = qm.get_quest_log()
         assert len(log["active"]) == 1
         assert len(log["completed"]) == 1
         assert len(log["failed"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# QuestManager tests
+# ---------------------------------------------------------------------------
+
+class TestQuestManager:
+    def _make_qm(self, quests=None, events=None):
+        from src.systems.quest_manager import QuestManager
+        return QuestManager(quests or {}, events or {})
+
+    def test_kill_quest_already_cleared_at_startup(self):
+        """Kill quests are completable out of order — if encounter already cleared."""
+        q = CombatQuest(id="q1", title="Kill boss", description="D",
+                        giver_npc_id=100, target_event_id="evt_001",
+                        status="not_started")
+        event = MagicMock(resolved=True, id="evt_001")
+        qm = self._make_qm({"q1": q}, {"evt_001": event})
+        player = _make_player()
+
+        qm.check_kill_quests_already_cleared(player)
+
+        assert q.status == "completed"
+        assert "q1" in player.completed_quests
+
+    def test_kill_quest_not_cleared_stays_not_started(self):
+        q = CombatQuest(id="q1", title="Kill boss", description="D",
+                        giver_npc_id=100, target_event_id="evt_001",
+                        status="not_started")
+        event = MagicMock(resolved=False, id="evt_001")
+        qm = self._make_qm({"q1": q}, {"evt_001": event})
+        player = _make_player()
+
+        qm.check_kill_quests_already_cleared(player)
+
+        assert q.status == "not_started"
+        assert "q1" not in player.completed_quests
+
+    def test_complete_quest_grants_money(self):
+        q = FetchQuest(id="q1", title="T", description="D",
+                       giver_npc_id=100, status="active",
+                       reward=QuestReward(money=50))
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        msg = qm.complete_quest(q, player)
+
+        assert q.status == "completed"
+        assert "q1" in player.completed_quests
+        assert player.money == 50
+        assert "+50 gold" in msg
+
+    def test_fail_quest_applies_penalties(self):
+        q = FetchQuest(id="q1", title="T", description="D",
+                       giver_npc_id=100, status="active",
+                       failure_penalty=QuestFailurePenalty(hp_damage=15, hunger_damage=10))
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        msg = qm.fail_quest(q, player)
+
+        assert q.status == "failed"
+        assert "q1" in player.failed_quests
+        assert player.health == 85
+        assert player.hunger == 90
+        assert "Lost 15 HP" in msg
+
+    def test_on_event_resolved_completes_combat_quest(self):
+        q = CombatQuest(id="q1", title="Kill", description="D",
+                        giver_npc_id=100, target_event_id="evt_001",
+                        status="active")
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        result = qm.on_event_resolved("evt_001", player)
+
+        assert result is q
+        assert q.status == "completed"
+
+    def test_multi_step_advancement(self):
+        sub1 = FetchQuest(id="s1", title="Step 1", description="D",
+                          giver_npc_id=100, status="active")
+        sub2 = FetchQuest(id="s2", title="Step 2", description="D",
+                          giver_npc_id=100, status="not_started")
+        parent = MultiStepQuest(id="mq", title="Chain", description="D",
+                                giver_npc_id=100, status="active",
+                                sub_quest_ids=["s1", "s2"])
+        qm = self._make_qm({"s1": sub1, "s2": sub2, "mq": parent})
+        player = _make_player()
+        player.accept_quest("mq")
+        player.accept_quest("s1")
+
+        qm.complete_quest(sub1, player)
+
+        assert parent.current_step == 1
+        assert sub2.status == "active"
+        assert "s2" in player.active_quests
+
+    def test_multi_step_completes_parent(self):
+        sub1 = FetchQuest(id="s1", title="Step 1", description="D",
+                          giver_npc_id=100, status="active")
+        parent = MultiStepQuest(id="mq", title="Chain", description="D",
+                                giver_npc_id=100, status="active",
+                                sub_quest_ids=["s1"])
+        qm = self._make_qm({"s1": sub1, "mq": parent})
+        player = _make_player()
+        player.accept_quest("mq")
+        player.accept_quest("s1")
+
+        qm.complete_quest(sub1, player)
+
+        assert parent.status == "completed"
+        assert "mq" in player.completed_quests
+
+    def test_quest_log_state_transitions(self):
+        """Quest log correctly reflects state transitions: active -> completed."""
+        q = FetchQuest(id="q1", title="T", description="D",
+                       giver_npc_id=100, status="active")
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        log = qm.get_quest_log()
+        assert len(log["active"]) == 1
+        assert len(log["completed"]) == 0
+
+        qm.complete_quest(q, player)
+
+        log = qm.get_quest_log()
+        assert len(log["active"]) == 0
+        assert len(log["completed"]) == 1
+
+    def test_quest_log_fail_transition(self):
+        q = FetchQuest(id="q1", title="T", description="D",
+                       giver_npc_id=100, status="active")
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        qm.fail_quest(q, player)
+
+        log = qm.get_quest_log()
+        assert len(log["active"]) == 0
+        assert len(log["failed"]) == 1
+
+    def test_try_offer_quest_with_prereq(self):
+        q = FetchQuest(id="q2", title="T", description="D",
+                       giver_npc_id=100, status="not_started",
+                       prerequisite_quest_id="q1")
+        qm = self._make_qm({"q2": q})
+        npc = MagicMock(quest_id="q2", id=100)
+        player = _make_player()
+
+        # Prereq not met
+        result = qm.try_offer_quest(npc, player)
+        assert result is None
+        assert q.status == "not_started"
+
+        # Prereq met
+        player.completed_quests.append("q1")
+        result = qm.try_offer_quest(npc, player)
+        assert result is q
+        assert q.status == "active"
+
+    def test_check_room_quest_failures(self):
+        q = FetchQuest(id="q1", title="Room task", description="D",
+                       giver_npc_id=100, status="active", room_id="room_1",
+                       failure_penalty=QuestFailurePenalty(hp_damage=5))
+        qm = self._make_qm({"q1": q})
+        player = _make_player()
+        player.accept_quest("q1")
+
+        msgs = qm.check_room_quest_failures(player, current_room=2)
+
+        assert len(msgs) == 1
+        assert q.status == "failed"
+        assert player.health == 95
+
+
+# ---------------------------------------------------------------------------
+# FollowerManager tests
+# ---------------------------------------------------------------------------
+
+class TestFollowerManager:
+    def _make_fm(self, player=None, npcs=None, quests=None):
+        from src.systems.follower_manager import FollowerManager
+        return FollowerManager(player or _make_player(), npcs or [], quests or {})
+
+    def test_talk_to_follower_none(self):
+        fm = self._make_fm()
+        msg = fm.talk_to_follower()
+        assert "No followers" in msg
+
+    def test_talk_to_follower_with_hints(self):
+        player = _make_player()
+        f = Follower(npc_id=100, name="Elara",
+                     dialogue_hints=["Watch out!", "Keep moving."])
+        player.add_follower(f)
+        fm = self._make_fm(player)
+        msg = fm.talk_to_follower()
+        assert "Elara" in msg
+
+    def test_talk_to_follower_with_story_context(self):
+        player = _make_player()
+        f = Follower(npc_id=100, name="Elara",
+                     dialogue_hints=["Watch out!"])
+        player.add_follower(f)
+        fm = self._make_fm(player)
+        msg = fm.talk_to_follower(story_context="The cult grows stronger")
+        assert "recent events" in msg.lower()
+
+    def test_follower_joins_via_escort(self):
+        from src.models.quest import EscortQuest
+        player = _make_player()
+        npc = MagicMock(id=200, personality="brave")
+        npc.name = "GuardNPC"  # MagicMock 'name' kwarg is reserved
+        quest = EscortQuest(
+            id="eq1", title="Escort", description="D",
+            giver_npc_id=100, escort_npc_id=200,
+            target_zone=[10, 10], destination_room=2)
+        fm = self._make_fm(player, [npc], {"eq1": quest})
+        msg = fm.start_escort(quest, npc)
+        assert msg is not None
+        assert "following you" in msg
+        assert len(player.followers) == 1
+        assert player.followers[0].npc_id == 200
+
+    def test_follower_leaves_on_room_progression(self):
+        """Follower quest fails when player passes drop-off room."""
+        player = _make_player()
+        q = Quest(id="eq1", type="escort", title="Escort quest", description="D",
+                  giver_npc_id=100, status="active",
+                  failure_penalty=QuestFailurePenalty(hp_damage=10))
+        f = Follower(npc_id=200, name="Elara", quest_id="eq1",
+                     destination_room=1, farewell_text="Goodbye!")
+        player.add_follower(f)
+        player.accept_quest("eq1")
+        fm = self._make_fm(player, [], {"eq1": q})
+
+        msgs = fm.check_room_progression(current_room=2)
+
+        assert len(msgs) == 1
+        assert "Goodbye!" in msgs[0]
+        assert "Quest failed" in msgs[0]
+        assert len(player.followers) == 0
+        assert q.status == "failed"
+        assert player.health == 90
+
+    def test_follower_stays_at_destination(self):
+        player = _make_player()
+        f = Follower(npc_id=200, name="Elara", quest_id="eq1",
+                     destination_room=2)
+        player.add_follower(f)
+        fm = self._make_fm(player)
+
+        msgs = fm.check_room_progression(current_room=2)
+
+        assert len(msgs) == 0
+        assert len(player.followers) == 1
+
+    def test_remove_follower_for_quest(self):
+        player = _make_player()
+        f = Follower(npc_id=200, name="Elara", quest_id="eq1",
+                     farewell_text="Until we meet again!")
+        player.add_follower(f)
+        fm = self._make_fm(player)
+
+        farewell = fm.remove_follower_for_quest("eq1")
+
+        assert farewell is not None
+        assert "Until we meet again!" in farewell
+        assert len(player.followers) == 0
+
+    def test_get_follower_info(self):
+        player = _make_player()
+        q = Quest(id="eq1", type="escort", title="Escort Guard", description="D",
+                  giver_npc_id=100)
+        f = Follower(npc_id=200, name="Guard", quest_id="eq1",
+                     personality="loyal", destination_room=2)
+        player.add_follower(f)
+        fm = self._make_fm(player, [], {"eq1": q})
+
+        info = fm.get_follower_info()
+
+        assert len(info) == 1
+        assert info[0]["name"] == "Guard"
+        assert info[0]["quest_summary"] == "Escort Guard"
+        assert info[0]["destination_room"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Story generation validation tests
+# ---------------------------------------------------------------------------
+
+class TestStoryGeneration:
+    def test_story_produces_faction(self):
+        story = OverarchingStory(
+            seed="test",
+            title="The Dark Convergence",
+            synopsis="A cult threatens the land.",
+            faction=Faction(name="Shadow Cult", description="Evil", leader="Lord Kael"),
+            escalation_arc=["Whispers", "Encounters", "Assault"],
+            climax="Face Lord Kael.",
+            final_boss_name="Lord Kael",
+        )
+        assert story.faction is not None
+        assert story.faction.name == "Shadow Cult"
+
+    def test_story_produces_arc(self):
+        story = OverarchingStory(
+            seed="test",
+            escalation_arc=["Low tension", "Rising", "Climax"],
+        )
+        assert len(story.escalation_arc) == 3
+
+    def test_story_produces_final_boss(self):
+        story = OverarchingStory(
+            seed="test",
+            final_boss_name="Lord Kael",
+        )
+        assert story.final_boss_name == "Lord Kael"
+
+    def test_story_beats_match_rooms(self):
+        beats = [
+            RoomStoryBeat(room_id=f"room_{i}", summary=f"Beat {i}", escalation=i+1)
+            for i in range(3)
+        ]
+        story = OverarchingStory(seed="test", beats=beats)
+        assert len(story.beats) == 3
+        assert story.beats[0].room_id == "room_0"
+        assert story.beats[2].escalation == 3
 
 
 # ---------------------------------------------------------------------------

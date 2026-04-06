@@ -409,6 +409,8 @@ def main():
                 screen, font,
                 can_save=can_save,
                 has_saves=_cached_has_saves,
+                quest_log=game_controller.get_quest_log(),
+                follower_info=game_controller.get_follower_info(),
             )
             screen_ctrl.push(ScreenState.PLAYER_MENU)
             return None
@@ -499,6 +501,14 @@ def main():
                     load_game_view = LoadGameView(screen, font, saves)
                     load_source = "gameplay"
                     screen_ctrl.push(ScreenState.LOAD_GAME)
+                    return None
+                if action and action.startswith("talk_follower_"):
+                    try:
+                        idx = int(action.split("_")[-1])
+                        msg = game_controller.follower_manager.talk_to_follower(idx)
+                        player_menu_view.set_status(msg)
+                    except (ValueError, IndexError):
+                        pass
                     return None
 
         # Draw the game underneath, then the menu overlay

@@ -5,8 +5,6 @@ from src.views.combat_view import CombatView
 from src.views.gameplay_view import GameView
 from src.views.shop_view import ShopView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
-from src.models.items import EscortItem
-from src.models.follower import Follower
 from src.models.time import DayNightCycle
 from src.systems.fog_of_war import FogOfWar
 from src.systems.day_night import (
@@ -17,6 +15,8 @@ from src.systems.day_night import (
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
 from src.systems.survival import SurvivalSystem
+from src.systems.quest_manager import QuestManager
+from src.systems.follower_manager import FollowerManager
 
 
 class GameController:
@@ -36,12 +36,21 @@ class GameController:
         # Day/Night Cycle
         self.day_night = day_night or DayNightCycle()
 
+        # Managers
+        self.quest_manager = QuestManager(self.quests, self.events)
+        self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
+
         # Build a lookup from grid position to event id
         self.event_position_map: dict[tuple[int, int], str] = {}
         self._build_event_position_map()
 
         # Check for kill quests already cleared at startup
-        self._check_kill_quests_already_cleared()
+        self.quest_manager.check_kill_quests_already_cleared(self.player)
+
+        # Inject story context into dialogue box
+        story = registry.get_story()
+        if story:
+            self.dialogue_box.story_context = self._build_story_context(story)
 
         # Initial fog reveal at player start position
         self._update_fog()
@@ -86,6 +95,30 @@ class GameController:
 
         self.game_view = GameView(screen, font, dialogue_box)
 
+    @staticmethod
+    def _build_story_context(story) -> str:
+        """Build a concise story summary for NPC dialogue flavoring."""
+        parts = []
+        if story.title:
+            parts.append(f"The overarching story is '{story.title}'.")
+        if story.synopsis:
+            parts.append(story.synopsis)
+        if story.faction:
+            parts.append(
+                f"A faction called '{story.faction.name}' is active: "
+                f"{story.faction.description}")
+            if story.faction.leader:
+                parts.append(f"Their leader is {story.faction.leader}.")
+        if story.final_boss_name:
+            parts.append(
+                f"Rumors speak of a powerful being called {story.final_boss_name}.")
+        # Include the most recent beat for immediacy
+        if story.beats:
+            last_beat = story.beats[-1]
+            if last_beat.summary:
+                parts.append(f"Recent events: {last_beat.summary}")
+        return " ".join(parts)
+
     def _build_event_position_map(self):
         """Map event tile positions to event IDs using maze data."""
         if not self.events:
@@ -99,18 +132,6 @@ class GameController:
                     self.event_position_map[(ep["x"], ep["y"])] = ep["event_id"]
         except Exception:
             pass
-
-    def _check_kill_quests_already_cleared(self):
-        """Kill quests are completable out of order — if encounter already cleared."""
-        for qid, quest in self.quests.items():
-            if quest.type != "combat" or quest.status != "not_started":
-                continue
-            target_eid = getattr(quest, 'target_event_id', '')
-            if target_eid:
-                event = self.events.get(target_eid)
-                if event and getattr(event, 'resolved', False):
-                    quest.status = "completed"
-                    self.player.complete_quest(qid)
 
     @property
     def has_active_overlay(self) -> bool:
@@ -199,7 +220,15 @@ class GameController:
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
             self.current_npc = self.player.get_nearby_npc(self.npcs)
 
-        self._check_escort_completion()
+        # Check escort zone completion
+        completed_escort = self.quest_manager.check_escort_zone(self.player)
+        if completed_escort:
+            farewell = self.follower_manager.remove_follower_for_quest(completed_escort.id)
+            msg = "Your escort has arrived safely!"
+            if farewell:
+                msg += f" {farewell}"
+            self.dialogue_box.set_item_message(msg)
+            self.item_message_active = True
 
     def _start_full_combat(self, combat_event):
         """Initialize CombatController + CombatView for a multi-turn combat encounter."""
@@ -586,13 +615,7 @@ class GameController:
                     pass  # Event stays active
                 elif current_event.resolved:
                     self.maze.grid[self.player.y][self.player.x] = 0
-
-                    for qid, quest in self.quests.items():
-                        if (quest.type == "combat"
-                                and getattr(quest, 'target_event_id', '') == current_event.id
-                                and quest.status == "active"):
-                            quest.status = "completed"
-                            self.player.complete_quest(qid)
+                    self.quest_manager.on_event_resolved(current_event.id, self.player)
                 return
 
             if event.key == pygame.K_ESCAPE:
@@ -805,13 +828,7 @@ class GameController:
         """Clean up after combat ends."""
         if combat_event.resolved:
             self.maze.grid[self.player.y][self.player.x] = 0
-            # Check quest completion
-            for qid, quest in self.quests.items():
-                if (quest.type == "combat"
-                        and getattr(quest, 'target_event_id', '') == combat_event.id
-                        and quest.status == "active"):
-                    quest.status = "completed"
-                    self.player.complete_quest(qid)
+            self.quest_manager.on_event_resolved(combat_event.id, self.player)
 
         self.dialogue_box.end_event()
 
@@ -828,121 +845,30 @@ class GameController:
             self.item_message_active = True
             return
 
-        self._check_quest_turn_in(npc)
+        # Check quest turn-in first
+        turned_in = self.quest_manager.check_turn_in(npc, self.player)
+        if turned_in:
+            msg = f"Quest completed: {turned_in.title}!"
+            if turned_in.reward and turned_in.reward.money:
+                msg += f" +{turned_in.reward.money} gold!"
+            # Handle escort follower removal on turn-in
+            if turned_in.type == "escort":
+                farewell = self.follower_manager.remove_follower_for_quest(turned_in.id)
+                if farewell:
+                    msg += f" {farewell}"
+            self.dialogue_box.set_item_message(msg)
+            self.item_message_active = True
+            return
 
         self.dialogue_box.start_dialogue(npc)
 
-        if npc.quest_id and npc.quest_id in self.quests:
-            quest = self.quests[npc.quest_id]
-            if quest.status == "not_started":
-                # Time-gated quest: only offer at correct time
-                if quest.time_gate and not is_event_active_at_time(quest, self.day_night.current_period):
-                    return
-                prereq = quest.prerequisite_quest_id
-                if not prereq or self.player.has_completed(prereq):
-                    quest.status = "active"
-                    self.player.accept_quest(quest.id)
-
-                    # Also activate first sub-quest for multi-step
-                    if quest.type == "multi_step":
-                        first_sub = quest.get_current_sub_quest_id()
-                        if first_sub and first_sub in self.quests:
-                            sub = self.quests[first_sub]
-                            if sub.status == "not_started":
-                                sub.status = "active"
-                                self.player.accept_quest(sub.id)
-
-                    if quest.type == "escort" and hasattr(quest, 'escort_npc_id'):
-                        self._start_follower_escort(quest, npc)
-
-                    # Check if kill quest target already cleared
-                    if quest.type == "combat":
-                        target_eid = getattr(quest, 'target_event_id', '')
-                        event = self.events.get(target_eid)
-                        if event and getattr(event, 'resolved', False):
-                            self._complete_quest(quest)
-
-    def _check_quest_turn_in(self, npc):
-        """Check if any active quests can be completed by talking to this NPC."""
-        for qid, quest in list(self.quests.items()):
-            if quest.status != "active" or qid not in self.player.active_quests:
-                continue
-
-            if quest.type == "fetch" and quest.giver_npc_id == npc.id:
-                completed = True
-                for req in getattr(quest, 'target_items', []):
-                    item_id = req["item_id"]
-                    count = req.get("count", 1)
-                    item_obj = registry.get_item(item_id)
-                    if item_obj and item_obj.name in self.player.inventory:
-                        if self.player.inventory[item_obj.name].quantity >= count:
-                            continue
-                    completed = False
-                    break
-                if completed:
-                    for req in getattr(quest, 'target_items', []):
-                        item_obj = registry.get_item(req["item_id"])
-                        if item_obj:
-                            for _ in range(req.get("count", 1)):
-                                self.player.remove_from_inventory(item_obj.name)
-                    self._complete_quest(quest)
-
-            elif quest.type == "delivery" and getattr(quest, 'target_npc_id', None) == npc.id:
-                delivery_item = registry.get_item(getattr(quest, 'delivery_item_id', 0))
-                if delivery_item and delivery_item.name in self.player.inventory:
-                    self.player.remove_from_inventory(delivery_item.name)
-                    self._complete_quest(quest)
-
-    def _complete_quest(self, quest):
-        """Mark quest as completed and grant reward."""
-        quest.status = "completed"
-        self.player.complete_quest(quest.id)
-        reward_msg = f"Quest completed: {quest.title}!"
-        if quest.reward:
-            if quest.reward.item_id:
-                reward = registry.get_item(quest.reward.item_id)
-                if reward:
-                    self.player.add_to_inventory(reward.clone())
-            money = getattr(quest.reward, 'money', 0)
-            if money > 0:
-                self.player.add_money(money)
-                reward_msg += f" +{money} gold!"
-
-        # Remove follower if escort quest
-        if quest.type == "escort":
-            follower = self.player.get_follower_by_quest(quest.id)
-            if follower:
-                farewell = follower.farewell_text
-                self.player.remove_follower(follower.npc_id)
-                self.dialogue_box.set_item_message(
-                    f"{reward_msg} {follower.name}: {farewell}")
+        # Try to offer quest
+        offered = self.quest_manager.try_offer_quest(npc, self.player)
+        if offered and offered.type == "escort":
+            escort_msg = self.follower_manager.start_escort(offered, npc)
+            if escort_msg:
+                self.dialogue_box.set_item_message(escort_msg)
                 self.item_message_active = True
-                self._check_multi_step_progress(quest.id)
-                return
-
-        self.dialogue_box.set_item_message(reward_msg)
-        self.item_message_active = True
-        self._check_multi_step_progress(quest.id)
-
-    def _check_escort_completion(self):
-        """Check if any active escort quest target zone has been reached."""
-        for item_name, item in list(self.player.inventory.items()):
-            if isinstance(item, EscortItem):
-                tx, ty = item.target_zone
-                if abs(self.player.x - tx) <= 2 and abs(self.player.y - ty) <= 2:
-                    self.player.remove_from_inventory(item_name)
-                    for qid, quest in self.quests.items():
-                        if (quest.type == "escort"
-                                and getattr(quest, 'escort_npc_id', None) == item.npc_id
-                                and quest.status == "active"):
-                            quest.status = "completed"
-                            self.player.complete_quest(qid)
-                            if quest.reward and quest.reward.item_id:
-                                reward = registry.get_item(quest.reward.item_id)
-                                if reward:
-                                    self.player.add_to_inventory(reward.clone())
-                    self.dialogue_box.set_item_message("Your escort has arrived safely!")
-                    self.item_message_active = True
 
     def _handle_rest_input(self, event):
         """Handle input while rest menu is active."""
@@ -962,122 +888,17 @@ class GameController:
 
     def _talk_to_follower(self):
         """Talk to the first follower for hints/personality."""
-        if not self.player.followers:
-            self.dialogue_box.set_item_message("No followers to talk to.")
-            self.item_message_active = True
-            return
-        follower = self.player.followers[0]
-        hint = follower.get_hint()
-        self.dialogue_box.set_item_message(f"{follower.name}: {hint}")
-        self.item_message_active = True
-
-    def _start_follower_escort(self, quest, npc):
-        """Start an escort quest by adding the NPC as a follower."""
-        escort_npc_id = getattr(quest, 'escort_npc_id', None)
-        if not escort_npc_id:
-            return
-        npc_to_escort = None
-        for n in self.npcs:
-            if n.id == escort_npc_id:
-                npc_to_escort = n
-                break
-        if not npc_to_escort:
-            return
-
-        follower = Follower(
-            npc_id=escort_npc_id,
-            name=npc_to_escort.name or f"NPC_{escort_npc_id}",
-            quest_id=quest.id,
-            joined_in_room=1,
-            destination_room=getattr(quest, 'destination_room', 1),
-            personality=getattr(npc_to_escort, 'personality', ''),
-            farewell_text="Thank you for escorting me. Farewell!",
-            dialogue_hints=[
-                "I think we need to keep moving...",
-                "Be careful, I've heard rumors of danger ahead.",
-                "I appreciate your help, adventurer.",
-            ],
-        )
-
-        if self.player.add_follower(follower):
-            self.npcs.remove(npc_to_escort)
-            self.dialogue_box.set_item_message(f"{follower.name} is now following you!")
-            self.item_message_active = True
-
-            from src.models.items import EscortItem, ItemStats
-            escort_item = EscortItem(
-                category="escort",
-                name=f"{npc_to_escort.name} (escort)",
-                desc=f"Escorting {npc_to_escort.name} to safety.",
-                item_stats=ItemStats(),
-                npc_id=escort_npc_id,
-                target_zone=tuple(getattr(quest, 'target_zone', [0, 0])),
-            )
-            self.player.add_to_inventory(escort_item)
-        else:
-            self.dialogue_box.set_item_message("You already have the maximum number of followers!")
-            self.item_message_active = True
-
-    def _fail_quest(self, quest):
-        """Fail a quest and apply penalties."""
-        quest.status = "failed"
-        self.player.fail_quest(quest.id)
-        penalty_msg = quest.apply_failure_penalty(self.player)
-        msg = f"Quest failed: {quest.title}!"
-        if penalty_msg:
-            msg += f" ({penalty_msg})"
+        msg = self.follower_manager.talk_to_follower()
         self.dialogue_box.set_item_message(msg)
         self.item_message_active = True
 
-        if quest.type == "escort":
-            follower = self.player.get_follower_by_quest(quest.id)
-            if follower:
-                self.player.remove_follower(follower.npc_id)
-
-    def _check_multi_step_progress(self, completed_quest_id: str):
-        """Check if completing a sub-quest advances any multi-step quest."""
-        for qid, quest in self.quests.items():
-            if quest.type != "multi_step" or quest.status != "active":
-                continue
-            current_sub = quest.get_current_sub_quest_id()
-            if current_sub == completed_quest_id:
-                all_done = quest.advance_step()
-                if all_done:
-                    self._complete_quest(quest)
-                else:
-                    next_sub = quest.get_current_sub_quest_id()
-                    if next_sub and next_sub in self.quests:
-                        next_q = self.quests[next_sub]
-                        if next_q.status == "not_started":
-                            next_q.status = "active"
-                            self.player.accept_quest(next_q.id)
-                    self.dialogue_box.set_item_message(
-                        f"Quest progress: {quest.title} — step {quest.current_step}/{len(quest.sub_quest_ids)}")
-                    self.item_message_active = True
-
     def get_quest_log(self) -> dict:
         """Return quests organized by status for the quest log view."""
-        active = []
-        completed = []
-        failed = []
-        for qid, quest in self.quests.items():
-            entry = {
-                "id": qid,
-                "title": quest.title,
-                "description": quest.description,
-                "type": quest.type,
-                "is_story_quest": getattr(quest, 'is_story_quest', False),
-            }
-            if quest.type == "multi_step":
-                entry["current_step"] = getattr(quest, 'current_step', 0)
-                entry["total_steps"] = len(getattr(quest, 'sub_quest_ids', []))
-            if quest.status == "active":
-                active.append(entry)
-            elif quest.status == "completed":
-                completed.append(entry)
-            elif quest.status == "failed":
-                failed.append(entry)
-        return {"active": active, "completed": completed, "failed": failed}
+        return self.quest_manager.get_quest_log()
+
+    def get_follower_info(self) -> list[dict]:
+        """Return follower info for the player menu."""
+        return self.follower_manager.get_follower_info()
 
     def _open_shop(self, merchant_npc):
         """Open the shop interface for a MerchantNPC."""

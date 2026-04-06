@@ -32,6 +32,9 @@ class DialogueBox:
         self.auto_scroll = False
         self._scroll_target = "top"
 
+        # Story context for NPC dialogue flavoring
+        self.story_context = ""
+
         # Async generation state
         self.generating = False
         self._generation_thread = None
@@ -78,9 +81,12 @@ class DialogueBox:
 
     def _start_generation(self, npc, user_input):
         """Launch LLM response generation on a background thread."""
+        ctx = self.story_context
+
         def _run():
             try:
-                self._generation_result = generate_npc_response(npc, user_input)
+                self._generation_result = generate_npc_response(
+                    npc, user_input, story_context=ctx)
             except Exception:
                 self._generation_result = f"{npc.name}: [Unable to generate response]"
         self._generation_thread = threading.Thread(target=_run, daemon=True)

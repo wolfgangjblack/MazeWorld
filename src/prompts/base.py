@@ -33,7 +33,8 @@ class PromptSet(ABC):
 
     @abstractmethod
     def npc_response(self, identity: str, history: list[dict],
-                     npc_name: str, player_input: str) -> LLMRequest: ...
+                     npc_name: str, player_input: str,
+                     story_context: str = "") -> LLMRequest: ...
 
     @abstractmethod
     def image_description(self, personality_doc: dict) -> LLMRequest: ...
