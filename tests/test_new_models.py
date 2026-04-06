@@ -50,7 +50,7 @@ def test_player_class_creation():
 def test_player_class_with_abilities():
     ab = Ability(name="Bash", description="Smash a door.", stat="STR", cost_hunger=5)
     sp = Spell(name="Fireball", description="Fire!", element="fire",
-               damage_dice="2d6", spell_type="damage", cost_hunger=10)
+               stat="INT", damage_dice=6, spell_type="damage_single", hunger_cost=10)
     pc = PlayerClass(
         name="Battlemage",
         archetype="mage",
@@ -149,32 +149,30 @@ def test_save_state_with_data():
 
 def test_day_night_defaults():
     dnc = DayNightCycle()
-    assert dnc.current_period == TimePeriod.DAY
+    assert dnc.current_period == TimePeriod.DAWN
     assert dnc.ticks == 0
 
 
 def test_day_night_advance():
-    dnc = DayNightCycle(ticks_per_period=10)
-    # Cycle order: DAY(0) -> DUSK(1) -> NIGHT(2) -> DAWN(3)
-    # 10 ticks / 10 per period = index 1 = DUSK
-    dnc.advance(10)
+    dnc = DayNightCycle(cycle_length=100)
+    # Period order: Dawn(15%) -> Day(35%) -> Dusk(15%) -> Night(35%)
+    # Dawn: 0-14, Day: 15-49, Dusk: 50-64, Night: 65-99
+    dnc.advance(15)
+    assert dnc.current_period == TimePeriod.DAY
+
+    dnc.advance(35)  # ticks=50
     assert dnc.current_period == TimePeriod.DUSK
 
-    # 20 ticks / 10 per period = index 2 = NIGHT
-    dnc.advance(10)
+    dnc.advance(15)  # ticks=65
     assert dnc.current_period == TimePeriod.NIGHT
-
-    # 30 ticks / 10 per period = index 3 = DAWN
-    dnc.advance(10)
-    assert dnc.current_period == TimePeriod.DAWN
 
 
 def test_day_night_full_cycle():
-    dnc = DayNightCycle(ticks_per_period=5)
-    periods_seen = []
-    for _ in range(20):
+    dnc = DayNightCycle(cycle_length=100)
+    periods_seen = set()
+    for _ in range(100):
         dnc.advance(1)
-        periods_seen.append(dnc.current_period)
+        periods_seen.add(dnc.current_period)
     # Should cycle through all 4 periods
     assert TimePeriod.DAWN in periods_seen
     assert TimePeriod.DAY in periods_seen
@@ -184,11 +182,11 @@ def test_day_night_full_cycle():
 
 # --- CombatState ---
 
-def test_combat_state_defaults():
-    cs = CombatState()
-    assert cs.active is False
-    assert cs.turn_index == 0
-    assert cs.combatants == []
+def test_combat_state_values():
+    assert CombatState.ONGOING.value == "ongoing"
+    assert CombatState.VICTORY.value == "victory"
+    assert CombatState.DEFEAT.value == "defeat"
+    assert CombatState.FLED.value == "fled"
 
 
 # --- CombatAction enum ---
@@ -196,6 +194,8 @@ def test_combat_state_defaults():
 def test_combat_actions():
     assert CombatAction.ATTACK.value == "attack"
     assert CombatAction.FLEE.value == "flee"
+    assert CombatAction.GAMBLE.value == "gamble"
+    assert CombatAction.SWAP_WEAPON.value == "swap_weapon"
 
 
 # --- Follower ---

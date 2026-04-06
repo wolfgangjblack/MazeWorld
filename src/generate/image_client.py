@@ -43,6 +43,12 @@ def generate_class_portraits(class_database: dict, save_dir: str = "data/portrai
     generate_portraits(class_database, save_dir, prefix="class_")
 
 
+def generate_and_save_image(prompt: str, filepath: str) -> bool:
+    """Generate a single image and save to *filepath*. Returns True on success."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    return get_image_backend().generate_and_save(prompt, filepath)
+
+
 def generate_player_portrait(portrait_prompt: str, save_dir: str = "data/portraits") -> str | None:
     filepath = os.path.join(save_dir, "player.png")
     if get_image_backend().generate_and_save(portrait_prompt, filepath):

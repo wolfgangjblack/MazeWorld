@@ -15,9 +15,11 @@ from tqdm import tqdm
 from config import (
     WORLD_SEED, STORY_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
     NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS,
+    NUM_ROOMS,
 )
 from src.models.maze import Maze
 from src.models.monster import generate_encounter_monsters
+from src.generate.validator import ValidationReport
 from src.registry import registry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -58,6 +60,110 @@ CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
 
 _FALLBACK_STORY_SEED = "A dark cult is gathering power in the shadows, corrupting the land."
+
+MAX_RETRIES = 3
+
+
+def _retry_with_feedback(generate_fn, validate_fn, fallback, label: str = "content",
+                          max_retries: int = MAX_RETRIES):
+    """Generate content with retry-on-validation-failure.
+
+    1. Call *generate_fn()* to produce content.
+    2. Call *validate_fn(content)* → (passed: bool, reasons: list[str]).
+    3. On failure, retry up to *max_retries* times, passing failure reasons back
+       to the generator via *generate_fn(feedback=reasons)*.
+    4. On exhaustion, return *fallback*.
+    """
+    feedback: list[str] | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            content = generate_fn(feedback=feedback) if feedback else generate_fn()
+        except Exception as e:
+            logger.warning("[%s] attempt %d generation error: %s", label, attempt, e)
+            feedback = [str(e)]
+            continue
+
+        passed, reasons = validate_fn(content)
+        if passed:
+            logger.info("[%s] passed validation on attempt %d.", label, attempt)
+            return content
+
+        logger.warning("[%s] attempt %d failed validation: %s", label, attempt, reasons)
+        feedback = reasons
+
+    logger.warning("[%s] exhausted %d retries, using fallback.", label, max_retries)
+    return fallback
+
+
+def build_manifest(
+    *,
+    seed: int,
+    story_seed: str,
+    game_mode: str,
+    num_rooms: int,
+    environments: list[str],
+    generated_at: str,
+    validation: dict,
+    active_npc_count: int,
+    item_count: int,
+    quest_count: int,
+    event_list: list[dict],
+    npc_pool: list[dict],
+    player_portrait_path: str | None,
+    env_portrait_path: str | None,
+    environment: str,
+    env_name: str,
+    maze_width: int,
+    maze_height: int,
+    class_count: int,
+    portraits_generated: bool,
+    story_title: str,
+    faction_name: str,
+) -> dict:
+    """Build the manifest dict written to data/manifest.json.
+
+    All counting logic (images, monsters) lives here so it's testable
+    without running the full pipeline.
+    """
+    image_count = sum(1 for p in [player_portrait_path, env_portrait_path] if p)
+    image_count += sum(1 for n in npc_pool if n.get("portrait"))
+
+    monster_count = sum(
+        len(e.get("monsters", []))
+        for e in event_list if e.get("event_type") == "combat"
+    )
+
+    return {
+        "seed": seed,
+        "story_seed": story_seed,
+        "game_mode": game_mode,
+        "num_rooms": num_rooms,
+        "environments": environments,
+        "generated_at": generated_at,
+        "validation": validation,
+        "content_index": {
+            "rooms": num_rooms,
+            "npcs": active_npc_count,
+            "items": item_count,
+            "quests": quest_count,
+            "encounters": len(event_list),
+            "monsters": monster_count,
+            "images": image_count,
+            "music_tracks": 0,
+        },
+        # Extended fields (non-PDR, kept for registry/debug use)
+        "environment": environment,
+        "environment_name": env_name,
+        "maze_width": maze_width,
+        "maze_height": maze_height,
+        "npc_pool_size": len(npc_pool),
+        "class_count": class_count,
+        "portraits_generated": portraits_generated,
+        "player_portrait": player_portrait_path,
+        "environment_portrait": env_portrait_path,
+        "story_title": story_title,
+        "faction_name": faction_name,
+    }
 
 
 def _compute_zones(width: int, height: int, zone_size: int) -> list[tuple[int, int]]:
@@ -128,19 +234,8 @@ def _llm_generate_env_name(env_type: str) -> str:
     return fallback_names.get(env_type, "Unknown Land")
 
 
-def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
-    """Call LLM to generate an event. Returns dict or fallback."""
-    try:
-        from src.generate.generators.llm_primitives import generate_event_primitive
-        result = generate_event_primitive(
-            {"environment": {"type": env_type, "name": env_name}},
-            event_type,
-        )
-        if "error" not in result:
-            return result
-    except Exception as e:
-        logger.warning("LLM event generation failed: %s", e)
-
+def _event_fallback(event_type: str) -> dict:
+    """Static fallback event when LLM generation fails."""
     if event_type == "combat":
         return {
             "name": random.choice(["Goblin", "Giant Rat", "Skeleton", "Slime", "Bandit"]),
@@ -149,16 +244,41 @@ def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
             "damage_type": random.choice(["health", "hunger", "thirst"]),
             "damage_range": [5, 15],
         }
-    else:
-        return {
-            "name": random.choice(["Locked Chest", "Crumbling Bridge", "Strange Rune", "Trapped Door"]),
-            "description": "A mysterious obstacle blocks your path...",
-            "difficulty": random.randint(1, 3),
-            "choices": [
-                {"text": "Try to force through", "stat_check": "health", "dc": 12, "auto_success": False},
-                {"text": "Walk away", "auto_success": True},
-            ],
-        }
+    return {
+        "name": random.choice(["Locked Chest", "Crumbling Bridge", "Strange Rune", "Trapped Door"]),
+        "description": "A mysterious obstacle blocks your path...",
+        "difficulty": random.randint(1, 3),
+        "choices": [
+            {"text": "Try to force through", "stat_check": "health", "dc": 12, "auto_success": False},
+            {"text": "Walk away", "auto_success": True},
+        ],
+    }
+
+
+def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
+    """Call LLM to generate an event with retry-on-failure. Returns dict or fallback."""
+    from src.generate.checker import EventChecker
+    checker = EventChecker()
+
+    def _generate(feedback: list[str] | None = None):
+        from src.generate.generators.llm_primitives import generate_event_primitive
+        ctx = {"environment": {"type": env_type, "name": env_name}}
+        if feedback:
+            ctx["retry_feedback"] = "; ".join(feedback)
+        result = generate_event_primitive(ctx, event_type)
+        if "error" in result:
+            raise ValueError(result["error"])
+        result.setdefault("type", event_type)
+        return result
+
+    def _validate(content):
+        cr = checker.check(content)
+        return cr.passed, cr.issues
+
+    return _retry_with_feedback(
+        _generate, _validate, _event_fallback(event_type),
+        label=f"event:{event_type}",
+    )
 
 
 def _llm_generate_event_image(event_data: dict) -> str:
@@ -237,18 +357,26 @@ def _llm_generate_story_quest(env_type: str, env_name: str, story_beat: str,
 
 def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
                         events: list, quest_type: str) -> dict | None:
-    """Call LLM to generate quest title/description. Returns dict or None on failure."""
-    try:
+    """Call LLM to generate quest title/description with retry. Returns dict or None."""
+
+    def _generate(feedback: list[str] | None = None):
         from src.generate.generators.llm_primitives import generate_quest_primitive
-        result = generate_quest_primitive(
-            {"environment": {"type": env_type, "name": env_name}},
-            npcs, items, events, quest_type,
-        )
-        if "error" not in result:
-            return result
-    except Exception as e:
-        logger.warning("LLM quest generation failed: %s", e)
-    return None
+        ctx = {"environment": {"type": env_type, "name": env_name}}
+        if feedback:
+            ctx["retry_feedback"] = "; ".join(feedback)
+        result = generate_quest_primitive(ctx, npcs, items, events, quest_type)
+        if "error" in result:
+            raise ValueError(result["error"])
+        return result
+
+    def _validate(content):
+        if not content or not isinstance(content, dict):
+            return False, ["Empty or invalid quest data"]
+        if not content.get("title"):
+            return False, ["Missing quest title"]
+        return True, []
+
+    return _retry_with_feedback(_generate, _validate, None, label=f"quest:{quest_type}")
 
 
 def _build_identity(personality: dict) -> str:
@@ -433,7 +561,9 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
     return items
 
 
-def _validate_puzzle_tools(event_list: list[dict], reg) -> None:
+def _validate_puzzle_tools(
+    event_list: list[dict], reg, report: ValidationReport | None = None,
+) -> None:
     """Ensure puzzle events only reference tool attributes that exist in the registry."""
     from src.models.items import Tool
     available_attrs = set()
@@ -447,6 +577,12 @@ def _validate_puzzle_tools(event_list: list[dict], reg) -> None:
         for choice in event.get("choices", []):
             attr = choice.get("tool_attribute")
             if attr and attr not in available_attrs:
+                if report:
+                    report.add_warning(
+                        f"Puzzle choice referenced invalid tool_attribute '{attr}'; replaced",
+                        entity_id=event.get("id", ""),
+                        phase="events",
+                    )
                 if available_attrs:
                     choice["tool_attribute"] = random.choice(list(available_attrs))
                 else:
@@ -485,6 +621,8 @@ def generate_world():
     """Main generation pipeline. Writes all data to data/."""
     logger.info("=== MazeWorld World Generator ===")
     logger.info("Seed: %s, Mode: %s", WORLD_SEED, GAME_MODE)
+
+    report = ValidationReport(rooms_validated=NUM_ROOMS)
 
     if WORLD_SEED != -1:
         random.seed(WORLD_SEED)
@@ -661,6 +799,10 @@ def generate_world():
             beats=beats,
         )
     else:
+        report.add_major(
+            "LLM story generation failed; using template fallback",
+            phase="story",
+        )
         from src.models.story import OverarchingStory, Faction, RoomStoryBeat
         story = OverarchingStory(
             seed=story_seed,
@@ -779,7 +921,7 @@ def generate_world():
         event_list.append(event_data)
 
     # Validate puzzle events reference tools that actually exist
-    _validate_puzzle_tools(event_list, registry)
+    _validate_puzzle_tools(event_list, registry, report)
 
     event_position_map = []
     for idx, (ex, ey) in enumerate(event_positions):
@@ -905,6 +1047,13 @@ def generate_world():
                 if _validate_quest(quest_data, npc_pool, item_placements, event_list, quest_list + pool):
                     pool.append(quest_data)
 
+        if len(pool) < target_count:
+            report.add_warning(
+                f"Quest pool for zone ({zone_x},{zone_y}) filled {len(pool)}/{target_count} "
+                f"after {attempts} attempts",
+                phase="quests",
+            )
+
         # --- Ensure minimums: 1 story quest ---
         has_story = any(q.get("is_story_quest") for q in pool)
         if not has_story and faction_name:
@@ -1007,7 +1156,7 @@ def generate_world():
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,
             generate_item_portraits, generate_player_portrait,
-            _generate_and_save,
+            generate_and_save_image,
         )
         from src.generate.generators.llm_primitives import (
             generate_player_image_description, generate_item_image_description,
@@ -1070,7 +1219,7 @@ def generate_world():
         portrait_bar.set_postfix_str("Environment portrait")
         env_portrait_prompt = f"a {maze.environment} landscape, fantasy pixel art, wide angle, atmospheric"
         env_portrait_path = os.path.join("data/portraits", "environment.png")
-        if not _generate_and_save(env_portrait_prompt, env_portrait_path):
+        if not generate_and_save_image(env_portrait_prompt, env_portrait_path):
             env_portrait_path = None
         portrait_bar.update(1)
 
@@ -1079,6 +1228,9 @@ def generate_world():
         logger.info("Portraits generated successfully.")
     except Exception as e:
         logger.warning("Portrait generation skipped: %s", e)
+        report.add_warning(
+            f"Portrait generation skipped: {e}", phase="portraits",
+        )
         portraits_generated = False
         player_portrait_path = None
         env_portrait_path = None
@@ -1122,26 +1274,49 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
-    manifest = {
-        "world_seed": WORLD_SEED,
-        "environment": maze.environment,
-        "environment_name": env_name,
-        "maze_width": MAZE_WIDTH,
-        "maze_height": MAZE_HEIGHT,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "npc_pool_size": len(npc_pool),
-        "active_npc_count": len(active_npcs),
-        "quest_count": len(quest_list),
-        "event_count": len(event_list),
-        "class_count": len(class_data_list),
-        "portraits_generated": portraits_generated,
-        "player_portrait": player_portrait_path,
-        "environment_portrait": env_portrait_path,
-        "game_mode": GAME_MODE,
-        "story_title": story.title,
-        "faction_name": story.faction.name if story.faction else "",
-        "story_seed": story.seed,
-    }
+    # --- Build and write WorldBible ---
+    from src.generate.world_editor import build_world_bible, cross_validate, write_world_bible
+    bible = build_world_bible(
+        story=story,
+        npc_pool=npc_pool,
+        event_list=event_list,
+        quest_list=quest_list,
+        item_placements=item_placements,
+        event_position_map=event_position_map,
+        maze_environment=maze.environment,
+    )
+    xval_issues = cross_validate(bible, npc_pool, event_list, quest_list, item_placements)
+    if xval_issues:
+        logger.warning("WorldBible cross-validation issues: %s", xval_issues)
+    world_bible_path = write_world_bible(bible)
+
+    manifest = build_manifest(
+        seed=WORLD_SEED,
+        story_seed=story.seed,
+        game_mode=GAME_MODE,
+        num_rooms=NUM_ROOMS,
+        environments=[maze.environment],
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        validation=report.to_dict(),
+        active_npc_count=len(active_npcs),
+        item_count=len(item_placements),
+        quest_count=len(quest_list),
+        event_list=event_list,
+        npc_pool=npc_pool,
+        player_portrait_path=player_portrait_path,
+        env_portrait_path=env_portrait_path,
+        environment=maze.environment,
+        env_name=env_name,
+        maze_width=MAZE_WIDTH,
+        maze_height=MAZE_HEIGHT,
+        class_count=len(class_data_list),
+        portraits_generated=portraits_generated,
+        story_title=story.title,
+        faction_name=story.faction.name if story.faction else "",
+    )
+    manifest["world_bible"] = world_bible_path
+    manifest["world_bible_entities"] = len(bible.entity_index)
+    manifest["cross_validation_issues"] = len(xval_issues)
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
 
@@ -1153,5 +1328,6 @@ def generate_world():
     logger.info("  NPCs: %d pool / %d active", len(npc_pool), len(active_npcs))
     logger.info("  Events: %d", len(event_list))
     logger.info("  Quests: %d", len(quest_list))
+    logger.info("  WorldBible: %d entities indexed", len(bible.entity_index))
     logger.info("  Portraits: %s", "yes" if portraits_generated else "no (prompts saved)")
     logger.info("  Manifest: %s", MANIFEST_PATH)

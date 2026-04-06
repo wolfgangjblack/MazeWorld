@@ -58,13 +58,7 @@ class LocalLLMBackend(LLMBackend):
         model, tokenizer = self._get_llm()
         device = self._get_device()
 
-        parts = [request.system]
-        for user_msg, asst_msg in request.examples:
-            parts.append(f"##Input: {user_msg}")
-            parts.append(f"##Output: {asst_msg}")
-        parts.append(f"##Input: {request.user_message}")
-        parts.append("##Output:")
-        prompt_text = "\n========================================\n".join(parts)
+        prompt_text = request.format_for_completion()
 
         inputs = tokenizer(
             prompt_text, return_tensors="pt", truncation=True, max_length=1024

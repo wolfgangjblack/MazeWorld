@@ -49,5 +49,11 @@ class SaveState(BaseModel):
     # Event position map (tile positions to event IDs)
     event_position_map: dict = Field(default_factory=dict)
 
+    # Fog of war revealed tiles
+    fog_data: dict = Field(default_factory=dict)
+
+    # Day/night cycle state
+    day_night_data: dict = Field(default_factory=dict)
+
     # Timing
     time_played_seconds: float = 0.0
