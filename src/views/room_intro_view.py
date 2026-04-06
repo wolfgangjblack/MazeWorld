@@ -2,7 +2,7 @@
 
 import os
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
 
 TITLE_COLOR = (220, 180, 60)

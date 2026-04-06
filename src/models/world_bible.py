@@ -1,7 +1,6 @@
 """WorldBible — cross-content reference index for the generated world."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
 
 from src.models.story import OverarchingStory
 

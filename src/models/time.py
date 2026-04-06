@@ -5,10 +5,10 @@ from enum import Enum
 
 
 class TimePeriod(str, Enum):
-    DAWN = "dawn"
     DAY = "day"
     DUSK = "dusk"
     NIGHT = "night"
+    DAWN = "dawn"
 
 
 class DayNightCycle(BaseModel):

@@ -1,6 +1,5 @@
 """Tests for the ScreenController state machine."""
 
-import pytest
 from src.controllers.screen_controller import ScreenController, ScreenState
 
 

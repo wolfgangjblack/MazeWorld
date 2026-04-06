@@ -1,4 +1,5 @@
 import random
+import uuid as _uuid
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
@@ -15,10 +16,14 @@ class Monster(BaseModel):
 
     Monsters have D&D-lite stats used by the combat controller for
     initiative, attack rolls, AC, and damage.
+
+    ``species`` is the creature kind (e.g. "Wolf", "Goblin").
+    ``name`` is an optional unique name for bosses (e.g. "Smaug").
     """
 
-    id: str
-    name: str
+    id: str = Field(default_factory=lambda: str(_uuid.uuid4()))
+    species: str
+    name: Optional[str] = None
     level: int = 1
     hp: int = 10
     max_hp: int = 10
@@ -50,6 +55,11 @@ class Monster(BaseModel):
     def take_damage(self, amount: int):
         self.hp = max(0, self.hp - amount)
 
+    @property
+    def display_name(self) -> str:
+        """Name for UI display: the unique name if set, otherwise the species."""
+        return self.name or self.species
+
     def roll_loot(self) -> List[int]:
         """Roll loot table, return list of item_ids that dropped."""
         drops = []
@@ -69,12 +79,12 @@ LEVEL_SCALING = {
 
 
 def create_scaled_monster(
-    id: str,
-    name: str,
+    species: str,
     level: int,
     damage_type: str = "physical",
     elemental_affinity: Optional[str] = None,
     loot_table: Optional[List[LootDrop]] = None,
+    name: Optional[str] = None,
 ) -> Monster:
     """Create a monster with stats scaled to its level."""
     level_key = min(level, 4)
@@ -85,13 +95,12 @@ def create_scaled_monster(
     str_mod = max(0, level - 1)
     dex_mod = max(0, (level - 1) // 2)
 
-    # Default loot: one generic drop with 40-60% probability
     if loot_table is None:
         drop_chance = random.uniform(0.4, 0.6)
         loot_table = [LootDrop(item_id=level * 100, probability=drop_chance)]
 
     return Monster(
-        id=id,
+        species=species,
         name=name,
         level=level,
         hp=hp,
@@ -159,8 +168,7 @@ def generate_encounter(
         nonlocal counter
         counter += 1
         return create_scaled_monster(
-            id=f"enc-{counter}",
-            name=template["name"],
+            species=template["name"],
             level=level,
             damage_type=template.get("damage_type", "physical"),
             elemental_affinity=template.get("elemental_affinity"),

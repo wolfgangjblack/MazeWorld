@@ -1,7 +1,6 @@
 """Save state serialization model."""
 
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class SaveState(BaseModel):

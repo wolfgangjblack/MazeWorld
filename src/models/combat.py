@@ -4,7 +4,6 @@ Populated in Phase 2 when the combat system is built.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
 from enum import Enum
 
 
