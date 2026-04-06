@@ -4,7 +4,7 @@ import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
 
-MENU_ITEMS = ["New Game", "Load Game", "Tutorial", "Quit"]
+MENU_ITEMS = ["Start New Game", "Config", "Quit"]
 
 # Colors
 TITLE_COLOR = (220, 180, 60)
@@ -39,18 +39,21 @@ class StartView:
             text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
             self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
 
-        # Stub labels
-        stub_items = {"Load Game", "Tutorial"}
-        for i, item in enumerate(MENU_ITEMS):
-            if item in stub_items and i == self.selected_index:
-                hint = self.font.render("(coming soon)", True, (120, 120, 120))
-                hint_x = (SCREEN_WIDTH - hint.get_width()) // 2
-                self.screen.blit(hint, (hint_x, start_y + len(MENU_ITEMS) * (line_height + 10) + 20))
+        # Footer hint
+        hint_text = {
+            "Start New Game": "Press Enter to begin",
+            "Config": "View and edit settings",
+            "Quit": "Exit the game",
+        }.get(MENU_ITEMS[self.selected_index], "")
+        if hint_text:
+            hint = self.font.render(hint_text, True, (120, 120, 120))
+            hint_x = (SCREEN_WIDTH - hint.get_width()) // 2
+            self.screen.blit(hint, (hint_x, start_y + len(MENU_ITEMS) * (line_height + 10) + 20))
 
     def handle_input(self, event) -> str | None:
         """Process a keydown event. Returns an action string or None.
 
-        Actions: "new_game", "quit", or None (no action taken).
+        Actions: "new_game", "config", "quit", or None (no action taken).
         """
         if event.key == pygame.K_UP:
             self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
@@ -58,9 +61,10 @@ class StartView:
             self.selected_index = (self.selected_index + 1) % len(MENU_ITEMS)
         elif event.key == pygame.K_RETURN:
             selected = MENU_ITEMS[self.selected_index]
-            if selected == "New Game":
+            if selected == "Start New Game":
                 return "new_game"
+            elif selected == "Config":
+                return "config"
             elif selected == "Quit":
                 return "quit"
-            # Load Game and Tutorial are stubs — no action
         return None
