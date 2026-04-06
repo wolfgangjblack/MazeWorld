@@ -7,6 +7,7 @@ from src.models.items import EscortItem
 from src.models.follower import Follower
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
+from src.systems.survival import SurvivalSystem
 
 
 class GameController:
@@ -27,6 +28,9 @@ class GameController:
 
         # Check for kill quests already cleared at startup
         self._check_kill_quests_already_cleared()
+
+        # Survival system
+        self.survival = SurvivalSystem()
 
         # UI / State variables
         self.inventory_active = False
@@ -49,7 +53,7 @@ class GameController:
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit" to signal main loop
+        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_menu" to signal main loop
 
         self.game_view = GameView(screen, font, dialogue_box)
 
@@ -223,7 +227,11 @@ class GameController:
                 dx, dy = 0, -1
             elif event.key == pygame.K_DOWN:
                 dx, dy = 0, 1
-            self.player.move(dx=dx, dy=dy, maze=self.maze)
+            self.player.move(dx=dx, dy=dy, maze=self.maze, survival_system=self.survival)
+            # Check for game over from starvation
+            if self.player.health <= 0:
+                self.pending_action = "game_over"
+                return
             self.after_move_check()
             return
 
@@ -271,8 +279,13 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
-            # Esc also opens menu in normal gameplay
-            self.pending_action = "open_menu"
+            # Esc opens pause menu in normal gameplay
+            self.pending_action = "open_pause"
+            return
+
+        # M key opens full tabbed menu
+        if event.key == pygame.K_m:
+            self.pending_action = "open_full_menu"
             return
 
     def _handle_event_input(self, event):
@@ -546,6 +559,10 @@ class GameController:
                     self.player.complete_quest(qid)
 
         self.dialogue_box.end_event()
+
+        # Check for player death after combat
+        if self.player.health <= 0:
+            self.pending_action = "game_over"
 
     def _handle_npc_interaction(self, npc):
         """Start dialogue with an NPC, handling quest offers and completions."""
