@@ -2,15 +2,13 @@
 unified Spell model, weapon swapping, prompt framing, and API client caching.
 """
 
-import random
-import pytest
 
 from src.models.combat import CombatAction, CombatState
-from src.models.spell import Spell, SPELL_COSTS
+from src.models.spell import Spell
 from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.monster import Monster
-from src.models.weapon import Weapon, STARTER_WEAPONS
-from src.controllers.combat_controller import CombatController, roll_buff_duration
+from src.models.weapon import STARTER_WEAPONS
+from src.controllers.combat_controller import CombatController
 from src.prompts.base import LLMRequest
 from src.generate.backends.llm_api import ApiLLMBackend
 from src.generate.class_gen import _parse_spells, _parse_damage_dice

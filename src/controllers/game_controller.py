@@ -345,7 +345,7 @@ class GameController:
         # Monster turn — auto-execute on any key
         if not cc.is_player_turn():
             if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                result = cc.execute_monster_turn()
+                cc.execute_monster_turn()
                 # Continue executing monster turns until it's the player's turn or combat ends
                 while cc.state == CombatState.ONGOING and not cc.is_player_turn():
                     cc.execute_monster_turn()

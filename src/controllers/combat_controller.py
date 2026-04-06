@@ -7,7 +7,7 @@ Attack, Multi-Attack, Cast Spell, Use Item, Flee, and Jester's Gamble.
 import random
 from typing import List, Optional
 
-from src.models.combat import CombatAction, CombatState
+from src.models.combat import CombatState
 from src.models.monster import Monster
 from src.models.spell import Spell, elemental_multiplier
 
