@@ -2,8 +2,6 @@ import random
 import pygame
 from src.views.gameplay_view import GameView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
-from src.models.items import EscortItem
-from src.models.follower import Follower
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
 from src.systems.quest_manager import QuestManager
@@ -162,7 +160,7 @@ class GameController:
         completed_escort = self.quest_manager.check_escort_zone(self.player)
         if completed_escort:
             farewell = self.follower_manager.remove_follower_for_quest(completed_escort.id)
-            msg = f"Your escort has arrived safely!"
+            msg = "Your escort has arrived safely!"
             if farewell:
                 msg += f" {farewell}"
             self.dialogue_box.set_item_message(msg)

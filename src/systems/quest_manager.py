@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.models.player import PlayerCharacter
 
-from src.models.quest import (
-    Quest, FetchQuest, EscortQuest, DeliveryQuest, DialogueQuest,
-    CombatQuest, MultiStepQuest,
-)
+from src.models.quest import Quest
 from src.registry import registry
 
 

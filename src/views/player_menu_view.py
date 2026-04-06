@@ -164,7 +164,6 @@ class PlayerMenuView:
             ("Failed", self.quest_log.get("failed", []), FAILED_COLOR),
         ]
 
-        lines_skipped = 0
         for section_name, quests, default_color in sections:
             if y > max_y:
                 break

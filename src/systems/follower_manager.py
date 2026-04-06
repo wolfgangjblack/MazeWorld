@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.models.player import PlayerCharacter
-    from src.models.quest import Quest
 
-from src.models.follower import Follower, MAX_FOLLOWERS
+from src.models.follower import Follower
 
 
 class FollowerManager:
