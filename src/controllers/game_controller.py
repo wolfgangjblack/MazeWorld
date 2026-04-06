@@ -12,7 +12,7 @@ from src.systems.fog_of_war import FogOfWar
 from src.systems.day_night import (
     apply_rest, apply_combat_rest, player_has_torch,
     consume_torch_use, is_event_active_at_time, is_npc_available,
-    get_night_overlay_alpha, REST_OPTIONS,
+    get_night_overlay_alpha,
 )
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
@@ -136,9 +136,6 @@ class GameController:
         """Reveal tiles around the player's current position."""
         radius = self._get_visibility_radius()
         self.fog.update(self.player.x, self.player.y, self.maze, radius)
-        # Consume one torch use when moving at night
-        if self.day_night.is_night and player_has_torch(self.player):
-            consume_torch_use(self.player)
 
     def run(self) -> str | None:
         """Main game loop. Returns 'open_menu' when the player opens the menu, or None on window close."""
@@ -182,6 +179,9 @@ class GameController:
         self.day_night.advance(1)
         # Update fog of war
         self._update_fog()
+        # Consume torch use only on movement (not rest or startup)
+        if self.day_night.is_night and player_has_torch(self.player):
+            consume_torch_use(self.player)
 
         if self.player.is_on_event_tile(self.maze):
             event = self._get_event_at_player()

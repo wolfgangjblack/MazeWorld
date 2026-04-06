@@ -5,19 +5,18 @@ Player reveals tiles within a visibility radius as they move.
 Line-of-sight raycasting ensures walls block visibility.
 """
 
-from typing import List, Tuple
+from typing import List
 
-from config import MAZE_WIDTH, MAZE_HEIGHT
+from config import (
+    MAZE_WIDTH, MAZE_HEIGHT, FOG_DEFAULT_RADIUS,
+    FOG_NIGHT_PENALTY, FOG_DIM_EDGE,
+)
 
 
-# Default visibility radius in tiles
-DEFAULT_VISIBILITY_RADIUS = 3
-
-# Night reduces visibility by this many tiles
-NIGHT_VISIBILITY_PENALTY = 2
-
-# Edge-of-radius dimming zone (tiles from edge that count as "dim")
-DIM_EDGE_TILES = 1
+# Use config.py constants as the single source of truth
+DEFAULT_VISIBILITY_RADIUS = FOG_DEFAULT_RADIUS
+NIGHT_VISIBILITY_PENALTY = FOG_NIGHT_PENALTY
+DIM_EDGE_TILES = FOG_DIM_EDGE
 
 
 class FogOfWar:
@@ -118,11 +117,16 @@ class FogOfWar:
         return False
 
     def is_currently_visible(self, x: int, y: int, player_x: int,
-                             player_y: int, radius: int) -> bool:
-        """Check if a tile is within the player's current visibility radius."""
+                             player_y: int, radius: int,
+                             maze=None) -> bool:
+        """Check if a tile is within the player's current visibility radius and has LOS."""
         dx = x - player_x
         dy = y - player_y
-        return dx * dx + dy * dy <= radius * radius
+        if dx * dx + dy * dy > radius * radius:
+            return False
+        if maze is not None:
+            return self._has_line_of_sight(player_x, player_y, x, y, maze)
+        return True
 
     def is_dim(self, x: int, y: int, player_x: int, player_y: int,
                radius: int) -> bool:

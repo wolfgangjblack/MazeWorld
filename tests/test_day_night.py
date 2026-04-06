@@ -6,11 +6,11 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.models.time import DayNightCycle, TimePeriod, PERIOD_SEQUENCE
+from src.models.time import DayNightCycle, TimePeriod
 from src.systems.day_night import (
     apply_rest, apply_combat_rest, player_has_torch, consume_torch_use,
     is_event_active_at_time, is_npc_available, get_night_overlay_alpha,
-    REST_OPTIONS, COMBAT_REST_HP,
+    COMBAT_REST_HP,
 )
 from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import Tool, ItemStats

@@ -51,7 +51,7 @@ class GameView:
                 # Only draw NPCs in revealed/visible tiles (if fog active)
                 if fog and not debug_reveal:
                     if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y,
-                                                     visibility_radius):
+                                                     visibility_radius, maze=maze):
                         continue
                 self.npc_view.draw_npc(self.screen, npc)
 

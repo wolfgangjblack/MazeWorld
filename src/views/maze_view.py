@@ -74,7 +74,7 @@ class MazeView:
                 # Apply fog dimming for revealed-but-not-currently-visible tiles
                 if fog and not debug_reveal:
                     if not fog.is_currently_visible(x, y, player_x, player_y,
-                                                    visibility_radius):
+                                                    visibility_radius, maze=maze):
                         dim = pygame.Surface((GRID_SIZE, GRID_SIZE), pygame.SRCALPHA)
                         dim.fill((0, 0, 0, 140))
                         screen.blit(dim, (screen_x, screen_y))
