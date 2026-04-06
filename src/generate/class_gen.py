@@ -8,9 +8,10 @@ import logging
 import random
 
 from src.models.player import (
-    Stats, Ability, Spell, PlayerClass,
+    Stats, Ability, PlayerClass,
     STAT_NAMES, STAT_BUDGET, ARCHETYPE_STAT_ROLES,
 )
+from src.models.spell import Spell
 
 logger = logging.getLogger(__name__)
 
@@ -198,12 +199,36 @@ def _parse_abilities(raw_list: list) -> list[Ability]:
                     name=a.get("name", "Unknown"),
                     description=a.get("description", ""),
                     stat=a.get("stat", "STR"),
-                    cost_hunger=a.get("cost_hunger", 0),
-                    cost_thirst=a.get("cost_thirst", 0),
+                    cost_hunger=a.get("hunger_cost", a.get("cost_hunger", 0)),
+                    cost_thirst=a.get("thirst_cost", a.get("cost_thirst", 0)),
                 ))
             except Exception:
                 pass
     return abilities
+
+
+_SPELL_TYPE_MAP = {
+    "damage": "damage_single",
+    "healing": "heal",
+    "buff": "buff_stat",
+    "utility": "buff_sustain",
+}
+
+
+def _parse_damage_dice(val) -> int:
+    """Convert damage_dice from str ('1d8') or int to int (sides of die)."""
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        # Parse '1d8' → 8, '2d6' → 6, '0' → 0
+        val = val.strip()
+        if "d" in val:
+            return int(val.split("d")[-1])
+        try:
+            return int(val)
+        except ValueError:
+            return 6
+    return 6
 
 
 def _parse_spells(raw_list: list) -> list[Spell]:
@@ -211,14 +236,23 @@ def _parse_spells(raw_list: list) -> list[Spell]:
     for s in raw_list:
         if isinstance(s, dict):
             try:
+                raw_type = s.get("spell_type", "damage")
+                spell_type = _SPELL_TYPE_MAP.get(raw_type, raw_type)
+                hunger = s.get("hunger_cost", s.get("cost_hunger", 5))
+                thirst = s.get("thirst_cost", s.get("cost_thirst", 0))
                 spells.append(Spell(
                     name=s.get("name", "Unknown Spell"),
                     description=s.get("description", ""),
                     element=s.get("element", "fire"),
-                    damage_dice=s.get("damage_dice", "1d6"),
-                    spell_type=s.get("spell_type", "damage"),
-                    cost_hunger=s.get("cost_hunger", 5),
-                    cost_thirst=s.get("cost_thirst", 0),
+                    stat=s.get("stat", "INT"),
+                    damage_dice=_parse_damage_dice(s.get("damage_dice", 6)),
+                    spell_type=spell_type,
+                    hunger_cost=hunger,
+                    thirst_cost=thirst,
+                    targets=s.get("targets", "single"),
+                    heal_amount=s.get("heal_amount", 0),
+                    buff_stat=s.get("buff_stat"),
+                    buff_value=s.get("buff_value", 2),
                 ))
             except Exception:
                 pass
@@ -253,24 +287,32 @@ def _pad_spells(existing: list[Spell], target: int, archetype: str) -> list[Spel
     if archetype == "mage":
         defaults = [
             Spell(name=f"{element.title()} Bolt", description=f"A bolt of {element} energy.",
-                  element=element, damage_dice="1d8", spell_type="damage", cost_hunger=5),
+                  element=element, stat="INT", damage_dice=8, spell_type="damage_single",
+                  hunger_cost=5, targets="single"),
             Spell(name=f"{element.title()} Blast", description=f"An explosion of {element} force.",
-                  element=element, damage_dice="2d6", spell_type="damage", cost_hunger=8),
+                  element=element, stat="INT", damage_dice=6, spell_type="damage_multi",
+                  hunger_cost=10, targets="multi"),
             Spell(name=f"{element.title()} Shield", description=f"A protective {element} barrier.",
-                  element=element, damage_dice="0", spell_type="utility", cost_hunger=5),
+                  element=element, stat="INT", spell_type="buff_stat", buff_stat="CON",
+                  hunger_cost=5, targets="self"),
             Spell(name=f"{element.title()} Sight", description=f"See hidden things using {element} magic.",
-                  element=element, damage_dice="0", spell_type="utility", cost_hunger=3),
+                  element=element, stat="INT", spell_type="buff_sustain",
+                  hunger_cost=3, targets="self"),
         ]
     elif archetype == "healer":
         defaults = [
             Spell(name="Healing Light", description="Restore HP to a target.",
-                  element=element, damage_dice="1d8", spell_type="healing", cost_hunger=5),
+                  element=element, stat="WIS", spell_type="heal", heal_amount=10,
+                  thirst_cost=8, targets="self"),
             Spell(name="Bolster", description="Temporarily boost an ally's defense.",
-                  element=element, damage_dice="0", spell_type="buff", cost_hunger=5),
+                  element=element, stat="WIS", spell_type="buff_stat", buff_stat="CON",
+                  thirst_cost=5, targets="self"),
             Spell(name=f"{element.title()} Strike", description=f"A damaging bolt of {element}.",
-                  element=element, damage_dice="1d6", spell_type="damage", cost_hunger=5),
+                  element=element, stat="WIS", damage_dice=6, spell_type="damage_single",
+                  hunger_cost=5, targets="single"),
             Spell(name="Purify", description="Remove a negative effect.",
-                  element=element, damage_dice="0", spell_type="utility", cost_hunger=3),
+                  element=element, stat="WIS", spell_type="buff_sustain",
+                  hunger_cost=3, targets="self"),
         ]
     else:
         defaults = []

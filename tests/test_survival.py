@@ -229,7 +229,8 @@ class TestSpellCostBalance:
         from src.models.player import Spell
         player = _make_player(hunger=50, thirst=50)
         spell = Spell(name="Fireball", description="Fire!", element="fire",
-                      cost_hunger=5, cost_thirst=0)
+                      spell_type="damage_single", stat="INT",
+                      hunger_cost=5, thirst_cost=0)
         assert player.can_afford_spell(spell)
         player.pay_spell_cost(spell)
         assert player.hunger == 45
@@ -240,7 +241,8 @@ class TestSpellCostBalance:
         from src.models.player import Spell
         player = _make_player(hunger=3, thirst=50)
         spell = Spell(name="Fireball", description="Fire!", element="fire",
-                      cost_hunger=5, cost_thirst=0)
+                      spell_type="damage_single", stat="INT",
+                      hunger_cost=5, thirst_cost=0)
         assert not player.can_afford_spell(spell)
 
     def test_spell_drain_interaction(self):
@@ -249,7 +251,8 @@ class TestSpellCostBalance:
         from src.models.player import Spell
         player = _make_player(con=10, hunger=100, thirst=100)
         spell = Spell(name="Heal", description="Heal", element="light",
-                      cost_hunger=0, cost_thirst=8)
+                      spell_type="heal", stat="WIS",
+                      hunger_cost=0, thirst_cost=8)
 
         # Move enough to drain some thirst
         for _ in range(DRAIN_INTERVAL * 5):
