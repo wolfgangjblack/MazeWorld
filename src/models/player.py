@@ -195,16 +195,20 @@ class PlayerCharacter(BaseModel):
         }
         self.money = STARTING_MONEY
         
-    def move(self, dx: int, dy: int, maze):
+    def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
         new_y = self.y + dy
-        
+
         if not maze.is_wall(new_x, new_y):
             self.x = new_x
             self.y = new_y
-            self.hunger = max(0, self.hunger - 1)
-            self.thirst = max(0, self.thirst -1)
-            self.apply_hunger_thirst_effects()
+            if survival_system is not None:
+                survival_system.on_move(self)
+            else:
+                # Legacy fallback
+                self.hunger = max(0, self.hunger - 1)
+                self.thirst = max(0, self.thirst - 1)
+                self.apply_hunger_thirst_effects()
 
     def add_to_inventory(self, item):
         """Add an item to the player's inventory."""
