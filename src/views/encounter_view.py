@@ -242,7 +242,6 @@ class EncounterView:
 
         # Action hints based on phase
         phase = dialogue_box.combat_phase
-        prompt_y = SCREEN_HEIGHT - 35
         if phase == "player_turn":
             if dialogue_box.player_stunned_turns > 0:
                 self._draw_prompt("Stunned! Press Enter to skip turn", ORANGE)
