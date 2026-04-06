@@ -1,6 +1,7 @@
 import random
 from typing import Any, Dict, List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field
+from src.models.spell import Spell
 from src.registry import registry
 
 StatName = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
@@ -73,16 +74,6 @@ class Ability(BaseModel):
     description: str
     stat: StatName = "STR"
     cost_hunger: int = 0
-    cost_thirst: int = 0
-
-
-class Spell(BaseModel):
-    name: str
-    description: str
-    element: str = "fire"
-    damage_dice: str = "1d6"
-    spell_type: str = "damage"  # damage | healing | buff | utility
-    cost_hunger: int = 5
     cost_thirst: int = 0
 
 
@@ -390,14 +381,11 @@ class PlayerCharacter(BaseModel):
         return (luck_mod + normal_mod) // 2
 
     def can_afford_spell(self, spell) -> bool:
-        return self.hunger >= getattr(spell, 'hunger_cost', getattr(spell, 'cost_hunger', 0)) and \
-               self.thirst >= getattr(spell, 'thirst_cost', getattr(spell, 'cost_thirst', 0))
+        return self.hunger >= spell.hunger_cost and self.thirst >= spell.thirst_cost
 
     def pay_spell_cost(self, spell):
-        h_cost = getattr(spell, 'hunger_cost', getattr(spell, 'cost_hunger', 0))
-        t_cost = getattr(spell, 'thirst_cost', getattr(spell, 'cost_thirst', 0))
-        self.hunger = max(0, self.hunger - h_cost)
-        self.thirst = max(0, self.thirst - t_cost)
+        self.hunger = max(0, self.hunger - spell.hunger_cost)
+        self.thirst = max(0, self.thirst - spell.thirst_cost)
 
     def apply_buff(self, stat: str, value: int, duration: int):
         self.active_buffs.append(ActiveBuff(stat=stat, value=value, turns_remaining=duration))

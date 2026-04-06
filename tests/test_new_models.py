@@ -50,7 +50,7 @@ def test_player_class_creation():
 def test_player_class_with_abilities():
     ab = Ability(name="Bash", description="Smash a door.", stat="STR", cost_hunger=5)
     sp = Spell(name="Fireball", description="Fire!", element="fire",
-               damage_dice="2d6", spell_type="damage", cost_hunger=10)
+               stat="INT", damage_dice=6, spell_type="damage_single", hunger_cost=10)
     pc = PlayerClass(
         name="Battlemage",
         archetype="mage",
@@ -184,11 +184,11 @@ def test_day_night_full_cycle():
 
 # --- CombatState ---
 
-def test_combat_state_defaults():
-    cs = CombatState()
-    assert cs.active is False
-    assert cs.turn_index == 0
-    assert cs.combatants == []
+def test_combat_state_values():
+    assert CombatState.ONGOING.value == "ongoing"
+    assert CombatState.VICTORY.value == "victory"
+    assert CombatState.DEFEAT.value == "defeat"
+    assert CombatState.FLED.value == "fled"
 
 
 # --- CombatAction enum ---
@@ -196,6 +196,8 @@ def test_combat_state_defaults():
 def test_combat_actions():
     assert CombatAction.ATTACK.value == "attack"
     assert CombatAction.FLEE.value == "flee"
+    assert CombatAction.GAMBLE.value == "gamble"
+    assert CombatAction.SWAP_WEAPON.value == "swap_weapon"
 
 
 # --- Follower ---

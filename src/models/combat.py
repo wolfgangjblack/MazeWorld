@@ -1,9 +1,9 @@
-"""Combat data models — CombatState, TurnOrder, Action.
+"""Combat data models — CombatAction and CombatState enums.
 
-Populated in Phase 2 when the combat system is built.
+Single source of truth for combat enumerations used by
+CombatController, CombatView, and GameController.
 """
 
-from pydantic import BaseModel, Field
 from enum import Enum
 
 
@@ -14,11 +14,12 @@ class CombatAction(str, Enum):
     USE_ITEM = "use_item"
     FLEE = "flee"
     REST = "rest"
+    GAMBLE = "gamble"  # Jester only
+    SWAP_WEAPON = "swap_weapon"
 
 
-class CombatState(BaseModel):
-    """Tracks the state of an active combat encounter."""
-    active: bool = False
-    turn_index: int = 0
-    combatants: list = Field(default_factory=list)
-    round_number: int = 1
+class CombatState(str, Enum):
+    ONGOING = "ongoing"
+    VICTORY = "victory"
+    DEFEAT = "defeat"
+    FLED = "fled"

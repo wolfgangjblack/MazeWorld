@@ -7,9 +7,15 @@ from src.prompts.base import LLMRequest
 class ApiLLMBackend(LLMBackend):
     """Anthropic Claude API backend for text generation."""
 
-    def generate(self, request: LLMRequest) -> str:
+    def __init__(self):
+        self._client = None
+
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+
         from anthropic import Anthropic
-        from config import ANTHROPIC_MODEL, ANTHROPIC_KEY_ENV
+        from config import ANTHROPIC_KEY_ENV
 
         api_key = os.getenv(ANTHROPIC_KEY_ENV)
         if not api_key:
@@ -18,7 +24,13 @@ class ApiLLMBackend(LLMBackend):
                 "Provide an Anthropic API key or set LLM_BACKEND='local'."
             )
 
-        client = Anthropic(api_key=api_key)
+        self._client = Anthropic(api_key=api_key)
+        return self._client
+
+    def generate(self, request: LLMRequest) -> str:
+        from config import ANTHROPIC_MODEL
+
+        client = self._get_client()
         messages = []
         for user_msg, asst_msg in request.examples:
             if user_msg:
