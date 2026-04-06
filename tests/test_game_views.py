@@ -105,7 +105,16 @@ class TestGameControllerDebugToggle:
         player.x = 1
         player.y = 1
         player.inventory = {}
+        player.get_stat_mod = MagicMock(return_value=0)
+        player.player_class = None
+        player.is_on_event_tile = MagicMock(return_value=False)
+        player.is_item_at_player_position = MagicMock(return_value=False)
+        player.get_nearby_npc = MagicMock(return_value=None)
+        player.followers = []
         maze = _make_mini_maze()
+        maze.is_wall = MagicMock(side_effect=lambda x, y: (
+            not (0 <= x < 3 and 0 <= y < 3) or maze.grid[y][x] == 1
+        ))
 
         with patch("src.controllers.game_controller.GameView"):
             ctrl = GameController(

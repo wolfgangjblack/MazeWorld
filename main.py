@@ -35,6 +35,8 @@ from src.views.gameover_view import GameOverView
 from src.views.victory_view import VictoryView
 from src.views.menu_view import MenuView
 from src.systems import save_manager
+from src.systems.fog_of_war import FogOfWar
+from src.models.time import DayNightCycle
 
 logger = logging.getLogger(__name__)
 
@@ -217,8 +219,17 @@ def setup_game_from_save(screen, font, save_state):
             save_state.seed,
         )
 
+    # --- Restore fog of war and day/night cycle ---
+    fog = None
+    if save_state.fog_data:
+        fog = FogOfWar.deserialize(save_state.fog_data)
+    day_night = None
+    if save_state.day_night_data:
+        day_night = DayNightCycle.deserialize(save_state.day_night_data)
+
     # --- Build controller ---
-    gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests)
+    gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
+                        fog=fog, day_night=day_night)
 
     # Restore event position map from save
     gc.event_position_map = {}

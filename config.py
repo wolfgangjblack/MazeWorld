@@ -51,6 +51,16 @@ NUM_WEAPONS = 2
 NUM_SPELL_SCROLLS = 1
 STARTING_MONEY = 50
 
+## Fog of War settings
+# ------------------------------------
+FOG_DEFAULT_RADIUS = 3
+FOG_NIGHT_PENALTY = 2
+FOG_DIM_EDGE = 1
+
+## Day/Night Cycle settings
+# ------------------------------------
+DAY_NIGHT_CYCLE_LENGTH = 200  # total actions per full day cycle
+
 ## Audio settings
 # ------------------------------------
 MASTER_VOLUME = max(0, min(100, int(os.getenv("MASTER_VOLUME", "80"))))

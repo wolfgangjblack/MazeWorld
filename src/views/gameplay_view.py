@@ -24,7 +24,11 @@ class GameView:
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
                   current_npc, player_at_item, quests=None, debug_reveal=False,
+                  shop_active=False, shop_npc=None, shop_mode="buy",
+                  shop_selected_index=0,
                   quest_log_active=False, quest_log=None, followers=None,
+                  fog=None, visibility_radius=3, night_alpha=0,
+                  time_period=None, day_number=None,
                   item_detail_active=False):
         self.screen.fill(BLACK)
 
@@ -38,13 +42,23 @@ class GameView:
                 self.draw_item_detail(player)
         else:
             self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
-                                     debug_reveal=debug_reveal)
+                                     debug_reveal=debug_reveal,
+                                     fog=fog, player_x=player.x, player_y=player.y,
+                                     visibility_radius=visibility_radius,
+                                     night_alpha=night_alpha)
 
             for npc in npcs:
+                # Only draw NPCs in revealed/visible tiles (if fog active)
+                if fog and not debug_reveal:
+                    if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y,
+                                                     visibility_radius, maze=maze):
+                        continue
                 self.npc_view.draw_npc(self.screen, npc)
 
             self.player_view.draw_player(self.screen, player)
-            self.player_view.draw_hud(self.screen, player)
+            self.player_view.draw_hud(self.screen, player,
+                                       time_period=time_period,
+                                       day_number=day_number)
 
             # Show follower count in HUD area
             if followers:
