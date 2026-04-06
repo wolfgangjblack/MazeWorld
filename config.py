@@ -17,7 +17,9 @@ MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
 WORLD_SEED = 1234 # Set to -1 for random seed
+STORY_SEED = ""  # 1-liner story prompt; empty = LLM generates freely
 EVENT_PERCENT = 0.1
+EVENT_DENSITY = EVENT_PERCENT  # Alias: configurable encounter density
 
 # Dialogue box
 DIALOGUE_BOX_HEIGHT = 100

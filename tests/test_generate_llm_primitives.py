@@ -1,7 +1,7 @@
 import json
 from unittest.mock import patch
 from src.generate.generators.llm_primitives import (
-    generate_personality_primative,
+    generate_personality_primitive,
     generate_npc_convo,
     generate_image_description,
 )
@@ -19,36 +19,36 @@ SAMPLE_PERSONALITY = {
 
 
 @patch("src.generate.generators.llm_primitives.generate")
-def test_personality_primative_parses_json(mock_generate):
+def test_personality_primitive_parses_json(mock_generate):
     mock_generate.return_value = json.dumps({
         "name": "helena", "job": "herbalist",
         "personality": "mysterious", "hobby": "collecting herbs"
     })
     env = {"environment": {"type": "forest", "name": "Iron Oak"}}
-    result = generate_personality_primative(env)
+    result = generate_personality_primitive(env)
     assert result["name"] == "helena"
     assert result["environment"] == "forest"
     assert result["environment_name"] == "Iron Oak"
 
 
 @patch("src.generate.generators.llm_primitives.generate")
-def test_personality_primative_parses_local_format(mock_generate):
+def test_personality_primitive_parses_local_format(mock_generate):
     mock_generate.return_value = (
         "some preamble\n========================================\n"
         "##Output: {'name': 'khalid', 'job': 'merchant', "
         "'personality': 'charming', 'hobby': 'haggling'}\n========"
     )
     env = {"environment": {"type": "desert", "name": "Sandstone"}}
-    result = generate_personality_primative(env)
+    result = generate_personality_primitive(env)
     assert result["name"] == "khalid"
     assert result["environment"] == "desert"
 
 
 @patch("src.generate.generators.llm_primitives.generate")
-def test_personality_primative_returns_error_on_failure(mock_generate):
+def test_personality_primitive_returns_error_on_failure(mock_generate):
     mock_generate.return_value = "totally unparseable garbage"
     env = {"environment": {"type": "city", "name": "Test"}}
-    result = generate_personality_primative(env)
+    result = generate_personality_primitive(env)
     assert "error" in result
 
 

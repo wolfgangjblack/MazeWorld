@@ -60,3 +60,15 @@ class PromptSet(ABC):
 
     @abstractmethod
     def class_portrait_description(self, class_data: dict) -> LLMRequest: ...
+
+    @abstractmethod
+    def story_generation(self, story_seed: str, room_count: int,
+                         environments: list[str]) -> LLMRequest: ...
+
+    @abstractmethod
+    def story_quest_generation(self, env: str, env_name: str,
+                               story_beat: str, faction_name: str,
+                               available_npcs: list[dict],
+                               available_items: list[dict],
+                               available_events: list[dict],
+                               quest_type: str) -> LLMRequest: ...

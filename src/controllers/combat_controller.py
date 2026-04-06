@@ -61,8 +61,9 @@ class Combatant:
     def name(self) -> str:
         return "Player" if self.is_player else self.entity.name
 
+    @property
     def is_alive(self) -> bool:
-        return self.entity.is_alive()
+        return self.entity.is_alive
 
     def tick_debuffs(self):
         if self.ac_penalty_turns > 0:
@@ -108,7 +109,7 @@ class CombatController:
 
     def get_turn_order(self) -> List[str]:
         """Return ordered list of combatant names."""
-        return [c.name for c in self.combatants if c.is_alive()]
+        return [c.name for c in self.combatants if c.is_alive]
 
     def current_combatant(self) -> Combatant:
         return self.combatants[self.turn_index]
@@ -123,12 +124,12 @@ class CombatController:
             return
 
         # Check victory / defeat
-        if not self.player.is_alive():
+        if not self.player.is_alive:
             self.state = CombatState.DEFEAT
             self.log.append("You have been slain!")
             return
 
-        alive_monsters = [m for m in self.monsters if m.is_alive()]
+        alive_monsters = [m for m in self.monsters if m.is_alive]
         if not alive_monsters:
             self.state = CombatState.VICTORY
             self.log.append("All enemies defeated!")
@@ -137,7 +138,7 @@ class CombatController:
         # Advance index, skipping dead combatants
         for _ in range(len(self.combatants)):
             self.turn_index = (self.turn_index + 1) % len(self.combatants)
-            if self.combatants[self.turn_index].is_alive():
+            if self.combatants[self.turn_index].is_alive:
                 break
 
     def is_player_turn(self) -> bool:
@@ -162,7 +163,7 @@ class CombatController:
             damage = self.player.roll_weapon_damage()
             target.take_damage(damage)
             msg = f"You hit {target.name} for {damage} damage! (roll {attack_roll} vs AC {dc})"
-            if not target.is_alive():
+            if not target.is_alive:
                 msg += f" {target.name} is slain!"
             self.log.append(msg)
             result = {"success": True, "message": msg, "damage": damage}
@@ -202,7 +203,7 @@ class CombatController:
                 target.take_damage(damage)
                 total_damage += damage
                 hit_msg = f"Hit {target.name} for {damage}!"
-                if not target.is_alive():
+                if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"
                 messages.append(hit_msg)
             else:
@@ -299,7 +300,7 @@ class CombatController:
                 elif mult < 1.0:
                     eff = " (resisted)"
                 hit_msg = f"{spell.name} hits {target.name} for {damage}{eff}!"
-                if not target.is_alive():
+                if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"
                 messages.append(hit_msg)
             else:
@@ -326,7 +327,7 @@ class CombatController:
 
     def player_flee(self) -> dict:
         """Attempt to flee: 1d20 + DEX vs DC 12 + max monster level."""
-        max_level = max(m.level for m in self.monsters if m.is_alive())
+        max_level = max(m.level for m in self.monsters if m.is_alive)
         flee_roll = random.randint(1, 20) + self.player.get_stat_mod("DEX")
         dc = 12 + max_level
 
@@ -338,7 +339,7 @@ class CombatController:
         else:
             # Fail — strongest alive monster gets a free attack
             attacker = max(
-                (m for m in self.monsters if m.is_alive()),
+                (m for m in self.monsters if m.is_alive),
                 key=lambda m: m.level,
             )
             damage = self._monster_attack_player(attacker)
@@ -377,7 +378,7 @@ class CombatController:
             damage = random.randint(1, 10)
             target.take_damage(damage)
             msg += f" — {target.name} takes {damage} damage!"
-            if not target.is_alive():
+            if not target.is_alive:
                 msg += f" {target.name} is slain!"
         elif effect_key == "heal_self":
             heal = random.randint(1, 8)
@@ -413,7 +414,7 @@ class CombatController:
             elif mult < 1.0:
                 eff = " (resisted)"
             msg += f" — Wild {elem} magic hits {target.name} for {damage}{eff}!"
-            if not target.is_alive():
+            if not target.is_alive:
                 msg += f" {target.name} is slain!"
         else:
             msg += " — The magic fizzles."
@@ -434,7 +435,7 @@ class CombatController:
             return {"success": False, "message": "It's the player's turn."}
 
         monster: Monster = combatant.entity
-        if not monster.is_alive():
+        if not monster.is_alive:
             self.advance_turn()
             return {"success": True, "message": f"{monster.display_name} is dead, skipping."}
 
@@ -443,7 +444,7 @@ class CombatController:
 
         if damage > 0:
             msg = f"{monster.display_name} attacks you for {damage} damage!"
-            if not self.player.is_alive():
+            if not self.player.is_alive:
                 msg += " You have been slain!"
                 self.state = CombatState.DEFEAT
         else:
@@ -461,7 +462,7 @@ class CombatController:
         """Roll loot for all dead monsters. Returns list of item_ids."""
         all_loot: List[int] = []
         for m in self.monsters:
-            if not m.is_alive():
+            if not m.is_alive:
                 all_loot.extend(m.roll_loot())
         return all_loot
 
@@ -470,7 +471,7 @@ class CombatController:
     # ------------------------------------------------------------------
 
     def _alive_monsters(self) -> List[Monster]:
-        return [m for m in self.monsters if m.is_alive()]
+        return [m for m in self.monsters if m.is_alive]
 
     def _get_alive_monster(self, index: int) -> Optional[Monster]:
         alive = self._alive_monsters()

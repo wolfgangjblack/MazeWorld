@@ -27,6 +27,7 @@ class GameRegistry:
         self._load_events()
         self._load_quests()
         self._load_classes()
+        self._load_story()
         self._loaded = True
 
     def reload(self):
@@ -131,6 +132,23 @@ class GameRegistry:
 
     def get_class_options(self):
         return self.class_options
+
+    # -- story ---------------------------------------------------------------
+
+    def _load_story(self):
+        self.story = None
+        path = "data/story/story.json"
+        if os.path.exists(path):
+            from src.models.story import OverarchingStory
+            story_data = load_json_data(path)
+            if isinstance(story_data, dict):
+                try:
+                    self.story = OverarchingStory(**story_data)
+                except Exception:
+                    pass
+
+    def get_story(self):
+        return self.story
 
     # -- starter inventory ---------------------------------------------------
 

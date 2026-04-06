@@ -13,10 +13,11 @@ from datetime import datetime, timezone
 from tqdm import tqdm
 
 from config import (
-    WORLD_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
+    WORLD_SEED, STORY_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
     NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS,
 )
 from src.models.maze import Maze
+from src.models.monster import generate_encounter_monsters
 from src.registry import registry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -31,6 +32,7 @@ PHASES = [
     "Zone mapping",
     "NPC pool",
     "Player start",
+    "Story generation",
     "Events",
     "Quests",
     "Dialogue trees",
@@ -42,15 +44,20 @@ PHASES = [
 
 NPC_TYPES = ["StaticNPC", "RandomNPC", "AggressiveNPC"]
 MERCHANT_CHANCE = 0.15  # Chance per zone to spawn a merchant instead of a regular NPC
-QUEST_TYPES = ["fetch", "escort", "delivery", "dialogue_gated", "combat"]
+QUEST_TYPES = ["fetch", "escort", "delivery", "dialogue", "combat"]
+STORY_QUEST_TYPES = ["fetch", "combat", "dialogue", "delivery"]
+QUEST_DENSITY_MULTIPLIER = 3  # generate 3x pool, then select
 
 DATA_DIR = "data"
 MAZE_PATH = os.path.join(DATA_DIR, "maze", "maze.json")
 NPC_PATH = os.path.join(DATA_DIR, "npcs", "npcs.json")
 EVENT_PATH = os.path.join(DATA_DIR, "events", "events.json")
 QUEST_PATH = os.path.join(DATA_DIR, "quests", "quests.json")
+STORY_PATH = os.path.join(DATA_DIR, "story", "story.json")
 CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+
+_FALLBACK_STORY_SEED = "A dark cult is gathering power in the shadows, corrupting the land."
 
 
 def _compute_zones(width: int, height: int, zone_size: int) -> list[tuple[int, int]]:
@@ -65,8 +72,8 @@ def _compute_zones(width: int, height: int, zone_size: int) -> list[tuple[int, i
 def _llm_generate_personality(env_type: str, env_name: str) -> dict:
     """Call LLM to generate a personality dict. Returns dict or fallback."""
     try:
-        from src.generate.generators.llm_primitives import generate_personality_primative
-        result = generate_personality_primative({
+        from src.generate.generators.llm_primitives import generate_personality_primitive
+        result = generate_personality_primitive({
             "environment": {"type": env_type, "name": env_name}
         })
         if "error" not in result:
@@ -124,8 +131,8 @@ def _llm_generate_env_name(env_type: str) -> str:
 def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
     """Call LLM to generate an event. Returns dict or fallback."""
     try:
-        from src.generate.generators.llm_primitives import generate_event_primative
-        result = generate_event_primative(
+        from src.generate.generators.llm_primitives import generate_event_primitive
+        result = generate_event_primitive(
             {"environment": {"type": env_type, "name": env_name}},
             event_type,
         )
@@ -198,12 +205,42 @@ def _llm_generate_dialogue_tree(npc_personality: dict, quest_context: dict | Non
     }
 
 
+def _llm_generate_story(story_seed: str, room_count: int,
+                        environments: list[str]) -> dict | None:
+    """Call LLM to generate the overarching story. Returns dict or None."""
+    try:
+        from src.generate.generators.llm_primitives import generate_story_primitive
+        result = generate_story_primitive(story_seed, room_count, environments)
+        if "error" not in result:
+            return result
+    except Exception as e:
+        logger.warning("LLM story generation failed: %s", e)
+    return None
+
+
+def _llm_generate_story_quest(env_type: str, env_name: str, story_beat: str,
+                               faction_name: str, npcs: list, items: list,
+                               events: list, quest_type: str) -> dict | None:
+    """Call LLM to generate a story-connected quest."""
+    try:
+        from src.generate.generators.llm_primitives import generate_story_quest_primitive
+        result = generate_story_quest_primitive(
+            {"environment": {"type": env_type, "name": env_name}},
+            story_beat, faction_name, npcs, items, events, quest_type,
+        )
+        if "error" not in result:
+            return result
+    except Exception as e:
+        logger.warning("LLM story quest generation failed: %s", e)
+    return None
+
+
 def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
                         events: list, quest_type: str) -> dict | None:
     """Call LLM to generate quest title/description. Returns dict or None on failure."""
     try:
-        from src.generate.generators.llm_primitives import generate_quest_primative
-        result = generate_quest_primative(
+        from src.generate.generators.llm_primitives import generate_quest_primitive
+        result = generate_quest_primitive(
             {"environment": {"type": env_type, "name": env_name}},
             npcs, items, events, quest_type,
         )
@@ -288,8 +325,8 @@ WEAPON_PRICE_BY_DICE = {
 def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1) -> dict | None:
     """Call LLM to generate environment-themed items. Returns items dict keyed by ID, or None."""
     try:
-        from src.generate.generators.llm_primitives import generate_item_primative
-        result = generate_item_primative(
+        from src.generate.generators.llm_primitives import generate_item_primitive
+        result = generate_item_primitive(
             {"environment": {"type": env_type, "name": env_name}},
             room_level,
         )
@@ -590,14 +627,98 @@ def generate_world():
         player_start = (1, 1)
     phase_bar.update(1)
 
-    # --- 7. Generate events ---
+    # --- 7. Generate overarching story ---
+    phase_bar.set_postfix_str("Story generation")
+    story_seed = STORY_SEED or _FALLBACK_STORY_SEED
+    story_data = _llm_generate_story(
+        story_seed, 1, [maze.environment],
+    )
+    if story_data:
+        from src.models.story import OverarchingStory, Faction, RoomStoryBeat
+        faction_data = story_data.get("faction", {})
+        faction = Faction(
+            name=faction_data.get("name", "The Shadow Cult"),
+            description=faction_data.get("description", "A mysterious faction."),
+            leader=faction_data.get("leader", "Unknown"),
+        ) if faction_data else None
+        beats = []
+        for bd in story_data.get("beats", []):
+            beats.append(RoomStoryBeat(
+                room_id=bd.get("room_id", "room_0"),
+                summary=bd.get("summary", ""),
+                faction_presence=bd.get("faction_presence"),
+                escalation=bd.get("escalation", 1),
+            ))
+        story = OverarchingStory(
+            seed=story_seed,
+            title=story_data.get("title", "The Dark Convergence"),
+            synopsis=story_data.get("synopsis", "A dark force threatens the land."),
+            faction=faction,
+            escalation_arc=story_data.get("escalation_arc", []),
+            climax=story_data.get("climax", "The final confrontation awaits."),
+            final_boss_name=story_data.get("final_boss_name", "The Dark Lord"),
+            key_npc_names=story_data.get("key_npc_names", []),
+            beats=beats,
+        )
+    else:
+        from src.models.story import OverarchingStory, Faction, RoomStoryBeat
+        story = OverarchingStory(
+            seed=story_seed,
+            title="The Shadow's Grasp",
+            synopsis="A dark cult spreads corruption through the land. Only a brave adventurer can stop them.",
+            faction=Faction(
+                name="The Shadow Cult",
+                description="A secretive order seeking to plunge the world into darkness.",
+                leader="The Faceless One",
+            ),
+            escalation_arc=["Whispers of darkness", "The cult reveals itself"],
+            climax="Face the cult leader in a final showdown.",
+            final_boss_name="The Faceless One",
+            key_npc_names=["The Faceless One"],
+            beats=[RoomStoryBeat(
+                room_id="room_0",
+                summary="Signs of cult activity are everywhere.",
+                faction_presence="Cult symbols etched into walls, nervous townsfolk.",
+                escalation=3,
+            )],
+        )
+    logger.info("Story: %s (faction: %s)", story.title,
+                story.faction.name if story.faction else "none")
+    phase_bar.update(1)
+
+    # --- 8. Generate events (combat with monsters, puzzle, event encounters) ---
     phase_bar.set_postfix_str("Events")
     event_list = []
+
+    # Compute room levels based on distance from player start
+    def _room_level_for_pos(x, y):
+        dist = abs(x - player_start[0]) + abs(y - player_start[1])
+        max_dist = MAZE_WIDTH + MAZE_HEIGHT
+        fraction = dist / max(1, max_dist)
+        return min(4, max(1, int(fraction * 4) + 1))
+
+    # Collect available tool attributes for puzzle solvability checks
+    available_tool_attrs = set()
+    for p in item_placements:
+        item_obj = registry.get_item(p["item_id"])
+        if item_obj:
+            stats = getattr(item_obj, 'item_stats', None)
+            if stats and getattr(stats, 'attribute', None):
+                available_tool_attrs.add(stats.attribute)
+
     all_item_ids = registry.item_ids()
-    event_bar = tqdm(event_positions, desc="  Events (data+image prompt)",
+    event_bar = tqdm(event_positions, desc="  Events (data+image+monsters)",
                      unit="evt", leave=True)
     for idx, (ex, ey) in enumerate(event_bar):
-        event_type = random.choice(["combat", "puzzle"])
+        # Weight encounter types: 50% combat, 25% puzzle, 25% event
+        roll = random.random()
+        if roll < 0.50:
+            event_type = "combat"
+        elif roll < 0.75:
+            event_type = "puzzle"
+        else:
+            event_type = "event"
+
         event_data = _llm_generate_event(maze.environment, env_name, event_type)
         event_data["id"] = f"evt_{idx:03d}"
         event_data["type"] = event_type
@@ -606,11 +727,52 @@ def generate_world():
         if "description" not in event_data:
             event_data["description"] = "Something happens!"
 
-        # Add loot tables and money drops to combat events
-        if event_type == "combat" and all_item_ids:
-            difficulty = event_data.get("difficulty", 3)
-            event_data["loot_table"] = _generate_loot_table(all_item_ids, difficulty)
-            event_data["money_drop"] = [difficulty * 2, difficulty * 8]
+        room_level = _room_level_for_pos(ex, ey)
+
+        if event_type == "combat":
+            monsters = generate_encounter_monsters(maze.environment, room_level)
+            event_data["monsters"] = [m.to_dict() for m in monsters]
+            event_data["room_level"] = room_level
+            if event_data["name"].startswith("Event ") and monsters:
+                event_data["name"] = f"{monsters[0].name} Encounter"
+            if not event_data.get("description") or event_data["description"] == "Something happens!":
+                names = ", ".join(m.name for m in monsters)
+                event_data["description"] = f"You are ambushed by {names}!"
+            # Loot tables and money drops
+            if all_item_ids:
+                difficulty = event_data.get("difficulty", 3)
+                event_data["loot_table"] = _generate_loot_table(all_item_ids, difficulty)
+                event_data["money_drop"] = [difficulty * 2, difficulty * 8]
+
+        elif event_type == "event":
+            choices = event_data.get("choices", [])
+            has_walk = any(c.get("auto_success") for c in choices)
+            if not has_walk:
+                choices.append({"text": "Walk away", "auto_success": True})
+            event_data["choices"] = choices
+            event_data["failure_damage_type"] = random.choice(["health", "hunger", "thirst"])
+            event_data["failure_damage_range"] = [3 + room_level, 8 + room_level * 2]
+
+        elif event_type == "puzzle":
+            choices = event_data.get("choices", [])
+            solvable = False
+            for c in choices:
+                if c.get("auto_success"):
+                    continue
+                if c.get("tool_attribute") in available_tool_attrs:
+                    solvable = True
+                    break
+            if not solvable and available_tool_attrs and choices:
+                attr = random.choice(list(available_tool_attrs))
+                choices.insert(0, {
+                    "text": f"Use a {attr} tool",
+                    "tool_attribute": attr,
+                    "dc": 8 + room_level,
+                    "auto_success": False,
+                })
+            if not any(c.get("auto_success") for c in choices):
+                choices.append({"text": "Leave it alone", "auto_success": True})
+            event_data["choices"] = choices
 
         event_data["portrait_prompt"] = _llm_generate_event_image(event_data)
         event_data["profile_image"] = None
@@ -624,7 +786,7 @@ def generate_world():
         event_position_map.append({"x": ex, "y": ey, "event_id": event_list[idx]["id"]})
     phase_bar.update(1)
 
-    # --- 8. Generate quests ---
+    # --- 9. Generate quests (3x density pool with minimums) ---
     phase_bar.set_postfix_str("Quests")
     quest_list = []
     quest_id_counter = 0
@@ -632,101 +794,189 @@ def generate_world():
     items_for_quest = [{"id": p["item_id"], "name": registry.get_item_name(p["item_id"])}
                        for p in item_placements]
     events_for_quest = [{"id": e["id"], "name": e["name"]} for e in event_list]
+    combat_events_for_quest = [{"id": e["id"], "name": e["name"]}
+                               for e in event_list if e.get("type") == "combat"]
     npcs_for_quest = [{"id": n["id"], "name": n["name"]} for n in active_npcs]
 
-    quest_bar = tqdm(quest_zones, desc="  Quests (per zone)", unit="zone", leave=True)
+    # Story context
+    faction_name = story.faction.name if story.faction else ""
+    story_beat_text = story.beats[0].summary if story.beats else ""
+
+    def _build_quest_data(quest_type, llm_quest, is_story=False):
+        nonlocal quest_id_counter
+        quest_data = {
+            "id": f"q_{quest_id_counter:03d}",
+            "type": quest_type,
+            "title": llm_quest.get("title", f"Quest {quest_id_counter}") if llm_quest else f"Quest {quest_id_counter}",
+            "description": llm_quest.get("description", f"A {quest_type} quest.") if llm_quest else f"A {quest_type} quest.",
+            "giver_npc_id": (llm_quest.get("giver_npc_id") if llm_quest and llm_quest.get("giver_npc_id")
+                             else (random.choice(npcs_for_quest)["id"] if npcs_for_quest else 100)),
+            "room_id": "room_0",
+            "is_story_quest": is_story,
+            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200},
+            "failure_penalty": {"hp_damage": random.choice([0, 5, 10]),
+                                "hunger_damage": random.choice([0, 5]),
+                                "thirst_damage": random.choice([0, 5])},
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+        return quest_data
+
+    def _populate_quest_fields(quest_data, quest_type, zone_x, zone_y):
+        """Fill in type-specific fields. Returns False if quest should be skipped."""
+        if quest_type == "fetch" and items_for_quest:
+            target = random.choice(items_for_quest)
+            quest_data["target_items"] = [{"item_id": target["id"], "count": 1}]
+            if not quest_data.get("is_story_quest"):
+                quest_data["title"] = f"Gather {target['name']}"
+                quest_data["description"] = f"Find and bring back a {target['name']}."
+
+        elif quest_type == "escort" and len(active_npcs) >= 2:
+            escort_npc = random.choice([n for n in active_npcs
+                                        if n["id"] != quest_data["giver_npc_id"]])
+            zone_open = [
+                (x, y) for (x, y) in maze.find_open_spaces()
+                if not (zone_x <= x < zone_x + 20 and zone_y <= y < zone_y + 20)
+            ]
+            if zone_open:
+                target = random.choice(zone_open)
+                quest_data["escort_npc_id"] = escort_npc["id"]
+                quest_data["target_zone"] = list(target)
+                if not quest_data.get("is_story_quest"):
+                    quest_data["title"] = f"Escort {escort_npc['name']}"
+                    quest_data["description"] = f"Take {escort_npc['name']} to safety."
+            else:
+                return False
+
+        elif quest_type == "delivery" and items_for_quest and len(active_npcs) >= 2:
+            delivery_item = random.choice(items_for_quest)
+            target_npc = random.choice([n for n in active_npcs
+                                        if n["id"] != quest_data["giver_npc_id"]])
+            quest_data["delivery_item_id"] = delivery_item["id"]
+            quest_data["target_npc_id"] = target_npc["id"]
+            if not quest_data.get("is_story_quest"):
+                quest_data["title"] = f"Deliver {delivery_item['name']}"
+                quest_data["description"] = f"Bring a {delivery_item['name']} to {target_npc['name']}."
+
+        elif quest_type == "combat" and combat_events_for_quest:
+            target_event = random.choice(combat_events_for_quest)
+            quest_data["target_event_id"] = target_event["id"]
+            if not quest_data.get("is_story_quest"):
+                quest_data["title"] = f"Defeat the {target_event['name']}"
+                quest_data["description"] = f"Find and defeat the {target_event['name']}."
+
+        elif quest_type == "dialogue":
+            giver = next((n for n in active_npcs
+                          if n["id"] == quest_data["giver_npc_id"]), None)
+            quest_data["dc"] = random.randint(10, 15)
+            quest_data["dialogue_tree"] = {
+                "prompt": "What business do you have with me?",
+                "choices": [
+                    {"text": "I need your help.", "next_node_id": "success"},
+                    {"text": "Never mind.", "next_node_id": "fail"},
+                ],
+            }
+            quest_data["can_fail"] = True
+            quest_data["can_retry"] = True
+            if not quest_data.get("is_story_quest"):
+                quest_data["title"] = f"Convince {giver['name'] if giver else 'the NPC'}"
+                quest_data["description"] = "Use your words carefully."
+
+        else:
+            return False
+        return True
+
+    quest_bar = tqdm(quest_zones, desc="  Quests (3x pool + minimums)", unit="zone", leave=True)
     for zone_x, zone_y in quest_bar:
-        generated_in_zone = 0
+        # --- Generate 3x density pool ---
+        pool = []
+        target_count = QUEST_DENSITY_MULTIPLIER
         attempts = 0
-        while generated_in_zone < 1 and attempts < 10:
+        while len(pool) < target_count and attempts < target_count * 5:
             attempts += 1
             quest_type = random.choice(QUEST_TYPES)
-
             llm_quest = _llm_generate_quest(
                 maze.environment, env_name,
                 npcs_for_quest, items_for_quest, events_for_quest, quest_type,
             )
+            quest_data = _build_quest_data(quest_type, llm_quest, is_story=False)
+            if _populate_quest_fields(quest_data, quest_type, zone_x, zone_y):
+                if _validate_quest(quest_data, npc_pool, item_placements, event_list, quest_list + pool):
+                    pool.append(quest_data)
 
-            quest_data = {
-                "id": f"q_{quest_id_counter:03d}",
-                "type": quest_type,
-                "title": llm_quest.get("title", f"Quest {quest_id_counter}") if llm_quest else f"Quest {quest_id_counter}",
-                "description": llm_quest.get("description", f"A {quest_type} quest.") if llm_quest else f"A {quest_type} quest.",
-                "giver_npc_id": random.choice(npcs_for_quest)["id"] if npcs_for_quest else 100,
-                "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200},
-                "prerequisite_quest_id": None,
-                "portrait_prompt": None,
-                "profile_image": None,
-            }
+        # --- Ensure minimums: 1 story quest ---
+        has_story = any(q.get("is_story_quest") for q in pool)
+        if not has_story and faction_name:
+            story_type = random.choice(STORY_QUEST_TYPES)
+            story_llm = _llm_generate_story_quest(
+                maze.environment, env_name, story_beat_text, faction_name,
+                npcs_for_quest, items_for_quest, events_for_quest, story_type,
+            )
+            story_qdata = _build_quest_data(story_type, story_llm, is_story=True)
+            if _populate_quest_fields(story_qdata, story_type, zone_x, zone_y):
+                if _validate_quest(story_qdata, npc_pool, item_placements, event_list, quest_list + pool):
+                    pool.append(story_qdata)
 
-            if quest_type == "fetch" and items_for_quest:
-                target = random.choice(items_for_quest)
-                quest_data["target_items"] = [{"item_id": target["id"], "count": 1}]
-                quest_data["title"] = f"Gather {target['name']}"
-                quest_data["description"] = f"Find and bring back a {target['name']}."
+        # --- Ensure minimum: 1 faction combat quest if combat events exist ---
+        has_combat = any(q.get("type") == "combat" for q in pool)
+        if not has_combat and combat_events_for_quest:
+            combat_qdata = _build_quest_data("combat", None, is_story=True)
+            target_evt = random.choice(combat_events_for_quest)
+            combat_qdata["target_event_id"] = target_evt["id"]
+            combat_qdata["title"] = f"Purge the {faction_name}: {target_evt['name']}"
+            combat_qdata["description"] = f"The {faction_name} has corrupted creatures. Defeat the {target_evt['name']}."
+            if _validate_quest(combat_qdata, npc_pool, item_placements, event_list, quest_list + pool):
+                pool.append(combat_qdata)
 
-            elif quest_type == "escort" and len(active_npcs) >= 2:
-                escort_npc = random.choice([n for n in active_npcs
-                                            if n["id"] != quest_data["giver_npc_id"]])
-                zone_open = [
-                    (x, y) for (x, y) in maze.find_open_spaces()
-                    if not (zone_x <= x < zone_x + 20 and zone_y <= y < zone_y + 20)
-                ]
-                if zone_open:
-                    target = random.choice(zone_open)
-                    quest_data["escort_npc_id"] = escort_npc["id"]
-                    quest_data["target_zone"] = list(target)
-                    quest_data["title"] = f"Escort {escort_npc['name']}"
-                    quest_data["description"] = f"Take {escort_npc['name']} to safety."
-                else:
-                    continue
+        # --- Select from pool: pick 1 per zone (random from pool) ---
+        if pool:
+            selected = random.choice(pool)
+            selected["id"] = f"q_{quest_id_counter:03d}"
+            giver_npc = next((n for n in npc_pool
+                              if n["id"] == selected["giver_npc_id"]), None)
+            if giver_npc:
+                giver_npc["quest_id"] = selected["id"]
+            quest_list.append(selected)
+            quest_id_counter += 1
 
-            elif quest_type == "delivery" and items_for_quest and len(active_npcs) >= 2:
-                delivery_item = random.choice(items_for_quest)
-                target_npc = random.choice([n for n in active_npcs
-                                            if n["id"] != quest_data["giver_npc_id"]])
-                quest_data["delivery_item_id"] = delivery_item["id"]
-                quest_data["target_npc_id"] = target_npc["id"]
-                quest_data["title"] = f"Deliver {delivery_item['name']}"
-                quest_data["description"] = (
-                    f"Bring a {delivery_item['name']} to {target_npc['name']}."
-                )
-
-            elif quest_type == "combat" and events_for_quest:
-                target_event = random.choice(events_for_quest)
-                quest_data["target_event_id"] = target_event["id"]
-                quest_data["title"] = f"Defeat the {target_event['name']}"
-                quest_data["description"] = f"Find and defeat the {target_event['name']}."
-
-            elif quest_type == "dialogue_gated":
-                giver = next((n for n in active_npcs
-                              if n["id"] == quest_data["giver_npc_id"]), None)
-                quest_data["dialogue_tree"] = {
-                    "prompt": "What business do you have with me?",
-                    "choices": [
-                        {"text": "I need your help.", "next_node_id": "success"},
-                        {"text": "Never mind.", "next_node_id": "fail"},
-                    ],
-                }
-                quest_data["can_fail"] = True
-                quest_data["title"] = f"Convince {giver['name'] if giver else 'the NPC'}"
-                quest_data["description"] = "Use your words carefully."
-
-            if _validate_quest(quest_data, npc_pool, item_placements,
-                               event_list, quest_list):
-                giver_npc = next((n for n in npc_pool
-                                  if n["id"] == quest_data["giver_npc_id"]), None)
-                if giver_npc:
-                    giver_npc["quest_id"] = quest_data["id"]
-                quest_list.append(quest_data)
-                quest_id_counter += 1
-                generated_in_zone += 1
+    # --- Generate multi-step quest chains (1 per world, linking 2-3 sub-quests) ---
+    # TODO: Multi-step quests should be generated as a cohesive chain during
+    # the generation phase — not assembled by picking the first N quests.
+    # The LLM should generate the multi-step quest as a special type with
+    # sub-quests that form a logical narrative arc (e.g., dialogue -> fetch -> combat).
+    # This requires a dedicated story_quest_generation call that produces the
+    # parent + sub-quests together, ensuring type diversity and narrative coherence.
+    # Current approach is a placeholder that links arbitrary quests.
+    if len(quest_list) >= 3:
+        sub_ids = [q["id"] for q in quest_list[:3]]
+        multi_quest = {
+            "id": f"q_{quest_id_counter:03d}",
+            "type": "multi_step",
+            "title": f"The {faction_name} Conspiracy" if faction_name else "A Grand Adventure",
+            "description": f"Unravel the {faction_name}'s plot through a series of connected tasks." if faction_name else "Complete a chain of connected quests.",
+            "giver_npc_id": quest_list[0]["giver_npc_id"],
+            "room_id": "room_0",
+            "is_story_quest": True,
+            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200,
+                       "xp": 50, "story_info": "A crucial revelation about the faction's plans."},
+            "failure_penalty": {"hp_damage": 10, "hunger_damage": 5, "thirst_damage": 5},
+            "sub_quest_ids": sub_ids,
+            "current_step": 0,
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+        quest_list.append(multi_quest)
+        quest_id_counter += 1
 
     quest_bar.close()
-    logger.info("Generated %d quests.", len(quest_list))
+    logger.info("Generated %d quests (%d story quests).",
+                len(quest_list),
+                sum(1 for q in quest_list if q.get("is_story_quest")))
     phase_bar.update(1)
 
-    # --- 9. Offline static dialogue trees ---
+    # --- 10. Offline static dialogue trees ---
     phase_bar.set_postfix_str("Dialogue trees")
     if GAME_MODE == "offline_static":
         dialogue_bar = tqdm(active_npcs, desc="  Dialogue trees", unit="npc", leave=True)
@@ -737,7 +987,7 @@ def generate_world():
         dialogue_bar.close()
     phase_bar.update(1)
 
-    # --- 10. Player classes ---
+    # --- 11. Player classes ---
     phase_bar.set_postfix_str("Player classes")
     from src.generate.class_gen import generate_classes
     player_classes = generate_classes(maze.environment, env_name)
@@ -748,7 +998,7 @@ def generate_world():
     logger.info("Generated %d player classes.", len(player_classes))
     phase_bar.update(1)
 
-    # --- 11. Portrait generation (try, skip on failure) ---
+    # --- 12. Portrait generation (try, skip on failure) ---
     phase_bar.set_postfix_str("Portraits")
     portrait_steps = ["NPC portraits", "Event illustrations",
                       "Item descriptions", "Item portraits", "Player portrait",
@@ -834,14 +1084,14 @@ def generate_world():
         env_portrait_path = None
     phase_bar.update(1)
 
-    # --- 12. NPC positions for home coords ---
+    # --- 13. NPC positions for home coords ---
     phase_bar.set_postfix_str("NPC positions")
     npc_positions = {}
     for npc in active_npcs:
         npc_positions[str(npc["id"])] = [npc.get("x", 0), npc.get("y", 0)]
     phase_bar.update(1)
 
-    # --- 13. Write data files ---
+    # --- 14. Write data files ---
     phase_bar.set_postfix_str("Write files")
 
     os.makedirs(os.path.dirname(MAZE_PATH), exist_ok=True)
@@ -864,6 +1114,10 @@ def generate_world():
     with open(QUEST_PATH, "w") as f:
         json.dump(quest_list, f, indent=2)
 
+    os.makedirs(os.path.dirname(STORY_PATH), exist_ok=True)
+    with open(STORY_PATH, "w") as f:
+        json.dump(story.model_dump(), f, indent=2)
+
     os.makedirs(os.path.dirname(CLASS_PATH), exist_ok=True)
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
@@ -884,6 +1138,9 @@ def generate_world():
         "player_portrait": player_portrait_path,
         "environment_portrait": env_portrait_path,
         "game_mode": GAME_MODE,
+        "story_title": story.title,
+        "faction_name": story.faction.name if story.faction else "",
+        "story_seed": story.seed,
     }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
