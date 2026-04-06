@@ -11,8 +11,6 @@ import logging
 import os
 import time
 
-logger = logging.getLogger(__name__)
-
 import pygame
 
 from config import (
@@ -32,6 +30,8 @@ from src.views.room_intro_view import RoomIntroView
 from src.views.player_menu_view import PlayerMenuView
 from src.views.load_game_view import LoadGameView
 from src.systems import save_manager
+
+logger = logging.getLogger(__name__)
 
 NPC_CLASS_MAP = {
     "StaticNPC": StaticNPC,
@@ -395,7 +395,7 @@ def main():
                     elapsed = time.time() - gameplay_start_time
                     total_time = accumulated_play_time + elapsed
                     try:
-                        filepath = save_manager.save_game(
+                        save_manager.save_game(
                             game_controller, WORLD_SEED, total_time,
                         )
                         _cached_has_saves = True

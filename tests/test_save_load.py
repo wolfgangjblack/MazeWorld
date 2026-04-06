@@ -9,8 +9,8 @@ import pytest
 
 from src.models.save import SaveState, SaveMetadata
 from src.systems import save_manager
-from src.models.player import PlayerCharacter, PlayerClass, Stats, Ability, Spell, ActiveBuff
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, ItemStats
+from src.models.player import PlayerCharacter, PlayerClass, Stats, Ability
+from src.models.items import Food, Weapon, ItemStats
 from src.models.follower import Follower
 
 

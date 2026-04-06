@@ -1,9 +1,8 @@
 """Tests for portrait loading and display in DialogueBoxView."""
 import os
-import tempfile
 import pytest
 import pygame
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.views.dialogue_view import _load_portrait, _portrait_cache, DialogueBoxView
 from config import SCREEN_WIDTH, SCREEN_HEIGHT

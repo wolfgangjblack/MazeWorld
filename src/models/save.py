@@ -1,8 +1,6 @@
 """Save state serialization model — full game state snapshot."""
 
-from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class SaveMetadata(BaseModel):
