@@ -65,8 +65,17 @@ class GameRegistry:
     # -- items ---------------------------------------------------------------
 
     def _load_items(self):
-        items_data = load_json_data('data/items/items.json')
-        self.item_registry: dict = {}
+        self._load_items_from('data/items/items.json')
+
+    def _load_items_from(self, path: str):
+        """Load items from a specific JSON file, merging into the existing registry."""
+        if not os.path.exists(path):
+            if not hasattr(self, 'item_registry'):
+                self.item_registry = {}
+            return
+        items_data = load_json_data(path)
+        if not hasattr(self, 'item_registry'):
+            self.item_registry = {}
         for item_id_str, item_info in items_data.items():
             item_id = int(item_id_str)
             self.item_registry[item_id] = create_item_from_data(item_id, item_info)
@@ -160,6 +169,49 @@ class GameRegistry:
 
     def get_story(self):
         return self.story
+
+    # -- room loading --------------------------------------------------------
+
+    def load_room(self, room_index: int):
+        """Load room-specific data (NPCs, events, quests) from data/rooms/room_N/."""
+        room_dir = os.path.join("data", "rooms", f"room_{room_index}")
+        if not os.path.isdir(room_dir):
+            return False
+
+        # Load room NPCs
+        npc_path = os.path.join(room_dir, "npcs.json")
+        if os.path.exists(npc_path):
+            self.npc_templates = load_json_data(npc_path)
+
+        # Load room events
+        event_path = os.path.join(room_dir, "events.json")
+        if os.path.exists(event_path):
+            from src.models.encounter import create_event_from_data
+            events_data = load_json_data(event_path)
+            self.event_registry = {}
+            for evt in events_data:
+                event_obj = create_event_from_data(evt)
+                self.event_registry[event_obj.id] = event_obj
+
+        # Load room quests
+        quest_path = os.path.join(room_dir, "quests.json")
+        if os.path.exists(quest_path):
+            from src.models.quest import create_quest_from_data
+            quests_data = load_json_data(quest_path)
+            self.quest_registry = {}
+            for qd in quests_data:
+                quest_obj = create_quest_from_data(qd)
+                self.quest_registry[quest_obj.id] = quest_obj
+
+        # Merge room items into item registry (additive — player carries items across rooms)
+        items_path = os.path.join(room_dir, "items.json")
+        if os.path.exists(items_path):
+            self._load_items_from(items_path)
+
+        return True
+
+    def get_room_dir(self, room_index: int) -> str:
+        return os.path.join("data", "rooms", f"room_{room_index}")
 
     # -- starter inventory ---------------------------------------------------
 

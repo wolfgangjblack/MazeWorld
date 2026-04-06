@@ -15,7 +15,7 @@ import pygame
 
 from config import (
     SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
-    NUM_WEAPONS, NUM_SPELL_SCROLLS, WORLD_SEED,
+    NUM_WEAPONS, NUM_SPELL_SCROLLS, WORLD_SEED, NUM_ROOMS,
 )
 from src.registry import registry
 from src.models.maze import Maze
@@ -28,11 +28,12 @@ from src.views.start_view import StartView
 from src.views.config_view import ConfigView
 from src.views.class_select_view import ClassSelectView
 from src.views.room_intro_view import RoomIntroView
+from src.views.level_up_view import LevelUpView
+from src.views.victory_view import VictoryView
 from src.views.player_menu_view import PlayerMenuView
 from src.views.load_game_view import LoadGameView
 from src.views.pause_view import PauseView
 from src.views.gameover_view import GameOverView
-from src.views.victory_view import VictoryView
 from src.views.menu_view import MenuView
 from src.systems import save_manager
 from src.systems.fog_of_war import FogOfWar
@@ -64,14 +65,25 @@ def run_generation():
     registry.reload()
 
 
-def setup_game(screen, font, player_name="Adventurer", selected_class=None):
-    """Load game data and create all game objects. Returns GameController."""
+def setup_game(screen, font, player_name="Adventurer", selected_class=None,
+               room_index=0, player=None):
+    """Load game data and create all game objects. Returns GameController.
+
+    If ``player`` is provided (room transition), reuse it instead of creating new.
+    """
     has_pregen = registry.has_manifest() and registry.manifest_matches_seed(WORLD_SEED)
+    total_rooms = registry.manifest.get("num_rooms", 1) if registry.manifest else NUM_ROOMS
 
-    dialogue_box = DialogueBox(screen, font)
-
-    # --- Load or generate maze ---
-    if has_pregen and os.path.exists("data/maze/maze.json"):
+    # Load room-specific data if available
+    room_dir = registry.get_room_dir(room_index)
+    room_maze_path = os.path.join(room_dir, "maze.json")
+    if has_pregen and os.path.exists(room_maze_path):
+        registry.load_room(room_index)
+        maze, maze_data = Maze.load_from_json(room_maze_path)
+        player_start = maze_data.get("player_start", [1, 1])
+        npc_positions = maze_data.get("npc_positions", {})
+    elif has_pregen and os.path.exists("data/maze/maze.json"):
+        # Legacy fallback (single-room world)
         maze, maze_data = Maze.load_from_json("data/maze/maze.json")
         player_start = maze_data.get("player_start", [1, 1])
         npc_positions = maze_data.get("npc_positions", {})
@@ -83,20 +95,25 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None):
         player_start = None
         npc_positions = {}
 
-    # --- Create player ---
-    if player_start:
-        player = PlayerCharacter(x=player_start[0], y=player_start[1], name=player_name)
+    dialogue_box = DialogueBox(screen, font)
+
+    # --- Create or reuse player ---
+    if player is None:
+        if player_start:
+            player = PlayerCharacter(x=player_start[0], y=player_start[1], name=player_name)
+        else:
+            player = PlayerCharacter(x=0, y=0, name=player_name)
+        if selected_class:
+            player.apply_class(selected_class)
+        player.initialize_inventory()
+        if not selected_class and registry.manifest and registry.manifest.get("player_portrait"):
+            player.profile_image = registry.manifest["player_portrait"]
     else:
-        player = PlayerCharacter(x=0, y=0, name=player_name)
-
-    # Apply selected class
-    if selected_class:
-        player.apply_class(selected_class)
-
-    player.initialize_inventory()
-
-    if not selected_class and registry.manifest and registry.manifest.get("player_portrait"):
-        player.profile_image = registry.manifest["player_portrait"]
+        # Room transition — place player at start of new room
+        if player_start:
+            player.x, player.y = player_start[0], player_start[1]
+        else:
+            player.x, player.y = 1, 1
 
     # --- Create NPCs ---
     npcs = []
@@ -125,7 +142,6 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None):
             npc = cls(**kwargs)
             npcs.append(npc)
 
-    # Fallback: place characters if no pre-gen positions
     if not has_pregen:
         for char in [player] + npcs:
             char.x, char.y = maze.place_character()
@@ -135,11 +151,11 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None):
             npc.home_x, npc.home_y = npc.x, npc.y
         npc.prepare(maze_environment=maze.environment)
 
-    # --- Load events and quests ---
     events = registry.event_registry
     quests = registry.quest_registry
 
-    return GameController(screen, font, maze, player, npcs, dialogue_box, events, quests)
+    return GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
+                          current_room=room_index, total_rooms=total_rooms)
 
 
 def setup_game_from_save(screen, font, save_state):
@@ -379,11 +395,18 @@ def main():
         return None
 
     def _handle_room_intro() -> str | None:
+        nonlocal game_controller
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
             if event.type == pygame.KEYDOWN:
                 if room_intro_view and room_intro_view.handle_input(event):
+                    if current_room_index > 0 and game_controller is not None:
+                        # Room transition: create new controller for new room
+                        player = game_controller.player
+                        game_controller = setup_game(
+                            screen, font, room_index=current_room_index,
+                            player=player)
                     screen_ctrl.replace(ScreenState.GAMEPLAY)
                     return None
         if room_intro_view:
@@ -392,13 +415,21 @@ def main():
         clock.tick(60)
         return None
 
+    current_room_index = 0
+    level_up_view = None
+    victory_view = None
+    # Accumulated stats across rooms
+    game_stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
+
     def _handle_gameplay() -> str | None:
         nonlocal game_controller, gameplay_start_time, player_menu_view
-        nonlocal load_game_view, load_source
-        nonlocal pause_view, gameover_view, victory_view, menu_view
+        nonlocal load_game_view, load_source, current_room_index
+        nonlocal pause_view, gameover_view, menu_view
+        nonlocal room_intro_view, level_up_view, game_stats, victory_view
 
         if game_controller is None:
-            game_controller = setup_game(screen, font, player_name, selected_class)
+            game_controller = setup_game(screen, font, player_name, selected_class,
+                                         room_index=current_room_index)
             gameplay_start_time = time.time()
 
         result = game_controller.run()
@@ -434,23 +465,40 @@ def main():
             screen_ctrl.push(ScreenState.GAME_OVER)
             return None
 
-        if result == "victory":
-            elapsed = time.time() - gameplay_start_time
-            total_time = accumulated_play_time + elapsed
-            monsters_killed = sum(
-                1 for e in game_controller.events.values()
-                if getattr(e, 'resolved', False)
-            )
-            victory_view = VictoryView(
-                screen, font, game_controller.player,
-                time_played=total_time,
-                monsters_killed=monsters_killed,
-                money_earned=game_controller.player.money,
-            )
-            screen_ctrl.push(ScreenState.VICTORY)
+        if result == "room_transition":
+            # Accumulate stats from current room
+            for k in game_stats:
+                game_stats[k] += game_controller.stats.get(k, 0)
+
+            current_room_index += 1
+            total_rooms = game_controller.total_rooms
+
+            if current_room_index >= total_rooms:
+                # Final room cleared — victory!
+                game_stats["rooms_cleared"] += 1
+                player = game_controller.player
+                victory_view = VictoryView(
+                    screen, font, player, game_stats, total_rooms)
+                screen_ctrl.replace(ScreenState.VICTORY)
+                return None
+
+            # Level up before entering next room
+            player = game_controller.player
+            level_up_view = LevelUpView(screen, font, player)
+            screen_ctrl.replace(ScreenState.LEVEL_UP)
             return None
 
-        # Game loop ended (window closed)
+        if result == "victory":
+            # Direct victory signal (final boss defeated)
+            for k in game_stats:
+                game_stats[k] += game_controller.stats.get(k, 0)
+            player = game_controller.player
+            total_rooms = game_controller.total_rooms
+            victory_view = VictoryView(
+                screen, font, player, game_stats, total_rooms)
+            screen_ctrl.replace(ScreenState.VICTORY)
+            return None
+
         return "quit"
 
     def _handle_player_menu() -> str | None:
@@ -646,6 +694,121 @@ def main():
         clock.tick(60)
         return None
 
+    def _handle_level_up() -> str | None:
+        nonlocal level_up_view, room_intro_view, game_controller
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                result = level_up_view.handle_input(event)
+                if result:
+                    if result["action"] == "chosen":
+                        player = game_controller.player
+                        # Jester: randomly assign from other class pools
+                        if (player.player_class
+                                and player.player_class.archetype == "jester"):
+                            _apply_jester_level_up(player, result["type"], result["choice"])
+                        else:
+                            player.apply_level_up(result["type"], result["choice"])
+                    elif result["action"] == "skip":
+                        if game_controller:
+                            game_controller.player.level += 1
+
+                    # Show room intro for the new room
+                    _setup_room_intro_for_transition()
+                    screen_ctrl.replace(ScreenState.ROOM_INTRO)
+                    return None
+        if level_up_view:
+            level_up_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _apply_jester_level_up(player, choice_type, choice):
+        """Jester level-up: apply the choice but it was randomly picked from other pools."""
+        # The choice comes from the jester's own pool which was populated from
+        # other class pools during generation. Just apply it normally.
+        player.apply_level_up(choice_type, choice)
+
+    def _setup_room_intro_for_transition():
+        nonlocal room_intro_view, game_controller
+        # Load new room data to get environment info
+        room_dir = registry.get_room_dir(current_room_index)
+        maze_path = os.path.join(room_dir, "maze.json")
+        env_name = "Unknown Land"
+        env_type = "unknown"
+        env_portrait = None
+        if os.path.exists(maze_path):
+            import json
+            with open(maze_path) as f:
+                mdata = json.load(f)
+            env_name = mdata.get("environment_name", env_name)
+            env_type = mdata.get("environment", env_type)
+        # Get story beat for this room
+        story_text = ""
+        story = registry.get_story()
+        if story:
+            beat = next((b for b in story.beats
+                         if b.room_id == f"room_{current_room_index}"), None)
+            if beat:
+                story_text = beat.summary
+        if not story_text:
+            story_text = f"You enter a new {env_type}, deeper into the dungeon."
+
+        # Check for room portrait
+        if registry.manifest:
+            rooms = registry.manifest.get("rooms", [])
+            for rm in rooms:
+                if rm.get("room_id") == f"room_{current_room_index}":
+                    env_portrait = rm.get("environment_portrait")
+                    break
+
+        room_intro_view = RoomIntroView(
+            screen, font, env_name, env_type, story_text,
+            portrait_path=env_portrait,
+        )
+
+    def _handle_room_intro_transition() -> str | None:
+        """Handle room intro during room transitions (reuses room_intro_view)."""
+        nonlocal game_controller
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                if room_intro_view and room_intro_view.handle_input(event):
+                    # Create new game controller for the new room
+                    player = game_controller.player
+                    game_controller = setup_game(
+                        screen, font, room_index=current_room_index,
+                        player=player)
+                    # Transfer stats
+                    game_controller.stats = dict(game_stats)
+                    screen_ctrl.replace(ScreenState.GAMEPLAY)
+                    return None
+        if room_intro_view:
+            room_intro_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_victory() -> str | None:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                if victory_view:
+                    result = victory_view.handle_input(event)
+                    if result == "quit":
+                        return "quit"
+                    if result == "menu":
+                        screen_ctrl.reset_to(ScreenState.START)
+                        return None
+        if victory_view:
+            victory_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
     screen_handlers: dict[ScreenState, callable] = {
         ScreenState.START: _handle_start,
         ScreenState.CONFIG: _handle_config,
@@ -656,6 +819,7 @@ def main():
         ScreenState.LOAD_GAME: _handle_load_game,
         ScreenState.PAUSE: _handle_pause,
         ScreenState.GAME_OVER: _handle_game_over,
+        ScreenState.LEVEL_UP: _handle_level_up,
         ScreenState.VICTORY: _handle_victory,
     }
 

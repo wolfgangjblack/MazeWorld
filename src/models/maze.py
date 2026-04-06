@@ -13,15 +13,22 @@ if WORLD_SEED != -1:
 # Directions for maze carving (up, down, left, right)
 DIRECTIONS = [(0, -1), (0, 1), (-1, 0), (1, 0)]  # (dx, dy)
 
+DOOR_TILE_ID = -2  # Special tile value for exit doors
+
+
 class Maze:
     def __init__(self):
         """Initialize the maze object with a grid."""
         self.event_percent = EVENT_PERCENT
         self.event_tile_id = -1
+        self.door_tile_id = DOOR_TILE_ID
         self.wall_tile_id = 1
         self.environment = random.choice(ENVIRONMENT_TYPES)
         self.environment_name: str = ""
         self.grid = self.initialize_maze()
+        self.door_position: tuple[int, int] | None = None
+        self.door_revealed: bool = False
+        self.gate_encounter_id: str | None = None
 
     def initialize_maze(self):
         """Initialize a grid where all cells are walls (1)."""
@@ -125,6 +132,28 @@ class Maze:
             self.grid[y][x] = self.event_tile_id
             open_spaces.remove((x, y))
         
+    def place_door(self, player_start: tuple[int, int]) -> tuple[int, int] | None:
+        """Place an exit door far from the player start. Returns door position."""
+        open_spaces = self.find_open_spaces()
+        if not open_spaces:
+            return None
+        # Pick the farthest open space from player start
+        px, py = player_start
+        open_spaces.sort(key=lambda p: abs(p[0] - px) + abs(p[1] - py), reverse=True)
+        # Pick from the farthest 10% to add some variance
+        top_n = max(1, len(open_spaces) // 10)
+        dx, dy = random.choice(open_spaces[:top_n])
+        self.door_position = (dx, dy)
+        # Door starts hidden (remains a wall tile); reveal_door() places the tile
+        return self.door_position
+
+    def reveal_door(self):
+        """Make the door visible on the map as a gold door tile."""
+        if self.door_position and not self.door_revealed:
+            dx, dy = self.door_position
+            self.grid[dy][dx] = self.door_tile_id
+            self.door_revealed = True
+
     def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1,
                     num_weapons: int = 0, num_spell_scrolls: int = 0):
         open_spaces = self.find_open_spaces()
@@ -163,6 +192,11 @@ class Maze:
             "environment": self.environment,
             "environment_name": self.environment_name,
         }
+        if self.door_position:
+            data["door_position"] = list(self.door_position)
+            data["door_revealed"] = self.door_revealed
+        if self.gate_encounter_id:
+            data["gate_encounter_id"] = self.gate_encounter_id
         if extra:
             data.update(extra)
         with open(path, "w") as f:
@@ -176,8 +210,13 @@ class Maze:
         maze = cls.__new__(cls)
         maze.event_percent = EVENT_PERCENT
         maze.event_tile_id = -1
+        maze.door_tile_id = DOOR_TILE_ID
         maze.wall_tile_id = 1
         maze.environment = data["environment"]
         maze.environment_name = data.get("environment_name", "")
         maze.grid = data["grid"]
+        door_pos = data.get("door_position")
+        maze.door_position = tuple(door_pos) if door_pos else None
+        maze.door_revealed = data.get("door_revealed", False)
+        maze.gate_encounter_id = data.get("gate_encounter_id")
         return maze, data

@@ -28,6 +28,10 @@ MAP_COLORS = {
     "player": (0, 120, 255),
 }
 
+# Multi-room progression
+NUM_ROOMS = 1  # Number of rooms in the dungeon (1 = single room, no progression)
+DOOR_REVEAL_THRESHOLD = 0.4  # Fraction of encounters to clear before exit door reveals
+
 # Dialogue box
 DIALOGUE_BOX_HEIGHT = 100
 DIALOGUE_BOX_HEIGHT_ACTIVE = 250
