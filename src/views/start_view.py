@@ -1,10 +1,10 @@
-"""Start screen — New Game, Load Game, Tutorial (stub), Quit."""
+"""Start screen — New Game, Load Game, Tutorial (stub), Config, Quit."""
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
 
-MENU_ITEMS = ["New Game", "Load Game", "Tutorial", "Quit"]
+MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Quit"]
 
 # Colors
 TITLE_COLOR = (220, 180, 60)
@@ -47,13 +47,20 @@ class StartView:
             text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
             self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
 
-        # Hint for disabled/stub items
-        hint_text = None
+        # Footer hint
         selected_item = MENU_ITEMS[self.selected_index]
-        if selected_item == "Tutorial":
-            hint_text = "(coming soon)"
-        elif selected_item == "Load Game" and not self.has_saves:
-            hint_text = "(no save files found)"
+        if self._is_disabled(self.selected_index):
+            if selected_item == "Load Game":
+                hint_text = "(no save files found)"
+            else:
+                hint_text = "(coming soon)"
+        else:
+            hint_text = {
+                "Start New Game": "Press Enter to begin",
+                "Load Game": "Continue a saved game",
+                "Config": "View and edit settings",
+                "Quit": "Exit the game",
+            }.get(selected_item, "")
 
         if hint_text:
             hint = self.font.render(hint_text, True, (120, 120, 120))
@@ -71,7 +78,7 @@ class StartView:
     def handle_input(self, event) -> str | None:
         """Process a keydown event. Returns an action string or None.
 
-        Actions: "new_game", "load_game", "quit", or None.
+        Actions: "new_game", "load_game", "config", "quit", or None.
         """
         if event.key == pygame.K_UP:
             self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
@@ -81,10 +88,12 @@ class StartView:
             if self._is_disabled(self.selected_index):
                 return None
             selected = MENU_ITEMS[self.selected_index]
-            if selected == "New Game":
+            if selected == "Start New Game":
                 return "new_game"
             elif selected == "Load Game":
                 return "load_game"
+            elif selected == "Config":
+                return "config"
             elif selected == "Quit":
                 return "quit"
         return None

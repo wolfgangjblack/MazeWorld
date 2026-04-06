@@ -25,6 +25,7 @@ from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.controllers.game_controller import GameController
 from src.controllers.screen_controller import ScreenController, ScreenState
 from src.views.start_view import StartView
+from src.views.config_view import ConfigView
 from src.views.class_select_view import ClassSelectView
 from src.views.room_intro_view import RoomIntroView
 from src.views.player_menu_view import PlayerMenuView
@@ -261,6 +262,7 @@ def main():
     screen_ctrl = ScreenController(ScreenState.START)
     _cached_has_saves = save_manager.has_saves()
     start_view = StartView(screen, font, has_saves=_cached_has_saves)
+    config_view = ConfigView(screen, font)
     class_select_view = None
     room_intro_view = None
     load_game_view = None
@@ -295,9 +297,26 @@ def main():
                     load_source = "start"
                     screen_ctrl.replace(ScreenState.LOAD_GAME)
                     return None
+                if action == "config":
+                    screen_ctrl.replace(ScreenState.CONFIG)
+                    return None
                 if action == "quit":
                     return "quit"
         start_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_config() -> str | None:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = config_view.handle_input(event)
+                if action == "back":
+                    screen_ctrl.replace(ScreenState.START)
+                    return None
+        config_view.draw()
         pygame.display.flip()
         clock.tick(60)
         return None
@@ -464,6 +483,7 @@ def main():
 
     screen_handlers: dict[ScreenState, callable] = {
         ScreenState.START: _handle_start,
+        ScreenState.CONFIG: _handle_config,
         ScreenState.CLASS_SELECT: _handle_class_select,
         ScreenState.ROOM_INTRO: _handle_room_intro,
         ScreenState.GAMEPLAY: _handle_gameplay,
