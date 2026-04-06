@@ -1,11 +1,11 @@
-"""Base Validator — rule-based + optional LLM validation for generated content.
+"""Validation — rule-based + optional LLM validation for generated content.
 
-Each concrete validator implements ``validate()`` which receives checked data
-and returns a ``ValidationResult`` with pass/fail and reasons.
-
-Hard rules (stat ranges, required fields, valid references) are checked
-deterministically. Soft rules (theme coherence) can optionally call the LLM.
+Contains:
+- ``ValidationReport``: accumulates pipeline-level findings (warnings, failures)
+- ``BaseValidator`` / concrete validators: Phase 2 per-entity validation
 """
+
+from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
@@ -17,6 +17,88 @@ from src.models.player import (
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Pipeline-level validation report (PR #24)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ValidationReport:
+    """Accumulates validation findings during world generation.
+
+    Matches the PDR manifest ``validation`` block schema::
+
+        {
+            "status": "passed",
+            "rooms_validated": 1,
+            "critical_failures": 0,
+            "major_retries": 0,
+            "minor_warnings": 0,
+            "details": []
+        }
+    """
+
+    rooms_validated: int = 0
+    critical_failures: int = 0
+    major_retries: int = 0
+    minor_warnings: int = 0
+    details: list[dict] = field(default_factory=list)
+
+    # -- Mutation helpers -----------------------------------------------------
+
+    def add_warning(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
+        self.minor_warnings += 1
+        self.details.append({
+            "severity": "minor",
+            "message": message,
+            "entity_id": entity_id,
+            "phase": phase,
+        })
+
+    def add_major(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
+        self.major_retries += 1
+        self.details.append({
+            "severity": "major",
+            "message": message,
+            "entity_id": entity_id,
+            "phase": phase,
+        })
+
+    def add_critical(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
+        self.critical_failures += 1
+        self.details.append({
+            "severity": "critical",
+            "message": message,
+            "entity_id": entity_id,
+            "phase": phase,
+        })
+
+    # -- Derived status -------------------------------------------------------
+
+    @property
+    def status(self) -> str:
+        if self.critical_failures > 0:
+            return "failed"
+        if self.minor_warnings > 0 or self.major_retries > 0:
+            return "passed_with_warnings"
+        return "passed"
+
+    # -- Serialisation --------------------------------------------------------
+
+    def to_dict(self) -> dict:
+        return {
+            "status": self.status,
+            "rooms_validated": self.rooms_validated,
+            "critical_failures": self.critical_failures,
+            "major_retries": self.major_retries,
+            "minor_warnings": self.minor_warnings,
+            "details": list(self.details),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Per-entity validators
+# ---------------------------------------------------------------------------
 
 @dataclass
 class ValidationResult:

@@ -142,7 +142,14 @@ class PlayerCharacter(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
-        
+
+    def _get_inv_manager(self):
+        """Lazy-init InventoryManager bound to this player's inventory."""
+        if not hasattr(self, '_inv_manager') or self._inv_manager is None:
+            from src.systems.inventory import InventoryManager
+            self._inv_manager = InventoryManager(self.inventory, self)
+        return self._inv_manager
+
     def apply_class(self, player_class: PlayerClass):
         """Apply a selected class to this character."""
         self.player_class = player_class
@@ -192,60 +199,40 @@ class PlayerCharacter(BaseModel):
         }
         self.money = STARTING_MONEY
         
-    def move(self, dx: int, dy: int, maze):
+    def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
         new_y = self.y + dy
-        
+
         if not maze.is_wall(new_x, new_y):
             self.x = new_x
             self.y = new_y
-            self.hunger = max(0, self.hunger - 1)
-            self.thirst = max(0, self.thirst -1)
-            self.apply_hunger_thirst_effects()
+            if survival_system is not None:
+                survival_system.on_move(self)
+            else:
+                # Legacy fallback
+                self.hunger = max(0, self.hunger - 1)
+                self.thirst = max(0, self.thirst - 1)
+                self.apply_hunger_thirst_effects()
 
     def add_to_inventory(self, item):
         """Add an item to the player's inventory."""
-        if item.name in self.inventory:
-            self.inventory[item.name].quantity += item.quantity
-        else:
-            self.inventory[item.name] = item
-            
+        self._get_inv_manager().add(item)
+
     def remove_from_inventory(self, item_name):
         """Remove an item from the player's inventory."""
-        if item_name in self.inventory:
-            self.inventory[item_name].quantity -= 1
-            if self.inventory[item_name].quantity == 0:
-                del self.inventory[item_name]
+        self._get_inv_manager().remove(item_name)
 
     def get_inventory(self):
         """Return the player's inventory as a list of tuples (item name, quantity)."""
-        return [(item.name, item.quantity) for item in self.inventory.values()]
+        return self._get_inv_manager().get_list()
 
     def use_item(self):
         """Use the currently selected item."""
-        inventory_items = list(self.inventory.values())
-        if inventory_items:
-            item = inventory_items[self.selected_item_index]
-            from src.models.items import EscortItem
-            if isinstance(item, EscortItem):
-                return item.use(self)
-            message = item.use(self)
-            self.remove_from_inventory(item.name)
-            return message
-        return "No item to use."
+        return self._get_inv_manager().use_selected(self.selected_item_index)
 
     def give_item(self):
         """Give the currently selected item."""
-        inventory_items = list(self.inventory.values())
-        if len(inventory_items) > 0:
-            item = inventory_items[self.selected_item_index]
-            from src.models.items import EscortItem
-            if isinstance(item, EscortItem):
-                return item.give()
-            message = item.give()
-            self.remove_from_inventory(item.name)
-            return message
-        return "No item to give."
+        return self._get_inv_manager().give_selected(self.selected_item_index)
     
     def update_hunger_and_thirst(self):
         """Decrease hunger and thirst over time."""
@@ -276,14 +263,7 @@ class PlayerCharacter(BaseModel):
 
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
-        cell_value = maze.grid[self.y][self.x]
-        if registry.is_item(cell_value):
-            item_template = registry.get_item(cell_value)
-            item = item_template.clone()
-            self.add_to_inventory(item)
-            maze.grid[self.y][self.x] = 0  # Remove the item from the maze
-            return f"Picked up {item.name}."
-        return ""
+        return self._get_inv_manager().pick_up_from_maze(maze, self.x, self.y)
     
     def check_health(self):
         """Check if the player is alive."""
@@ -420,27 +400,11 @@ class PlayerCharacter(BaseModel):
 
     def equip_weapon(self, weapon_name: str) -> str:
         """Equip a weapon from inventory."""
-        from src.models.items import Weapon
-        if weapon_name not in self.inventory:
-            return "You don't have that weapon."
-        item = self.inventory[weapon_name]
-        if not isinstance(item, Weapon):
-            return f"{weapon_name} is not a weapon."
-        if self.equipped_weapon == weapon_name:
-            self.equipped_weapon = None
-            return f"You unequipped the {weapon_name}."
-        self.equipped_weapon = weapon_name
-        return f"You equipped the {weapon_name}."
+        return self._get_inv_manager().equip_weapon(weapon_name)
 
     def get_equipped_weapon(self):
         """Return the equipped Weapon object, or None."""
-        from src.models.items import Weapon
-        if self.equipped_weapon and self.equipped_weapon in self.inventory:
-            item = self.inventory[self.equipped_weapon]
-            if isinstance(item, Weapon):
-                return item
-        self.equipped_weapon = None
-        return None
+        return self._get_inv_manager().get_equipped_weapon()
 
     def add_money(self, amount: int):
         """Add money to the player's wallet."""
@@ -455,19 +419,4 @@ class PlayerCharacter(BaseModel):
 
     def use_spell_scroll(self, scroll_name: str) -> str:
         """Use a spell scroll. Jesters learn the spell permanently instead of consuming."""
-        from src.models.items import SpellScroll
-        if scroll_name not in self.inventory:
-            return "You don't have that scroll."
-        item = self.inventory[scroll_name]
-        if not isinstance(item, SpellScroll):
-            return f"{scroll_name} is not a spell scroll."
-
-        if self.player_class and self.player_class.archetype == "jester":
-            if item.spell_effect not in self.learned_spells:
-                self.learned_spells.append(item.spell_effect)
-            self.remove_from_inventory(scroll_name)
-            return f"You study the {scroll_name} and learn {item.spell_effect} permanently!"
-
-        result = item.use(self)
-        self.remove_from_inventory(scroll_name)
-        return result
+        return self._get_inv_manager().use_spell_scroll(scroll_name)

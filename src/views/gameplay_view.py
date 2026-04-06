@@ -4,6 +4,7 @@ from src.views.npc_view import NPCView
 from src.views.maze_view import MazeView
 from src.views.player_view import PlayerView
 from src.views.dialogue_view import DialogueBoxView
+from src.views.encounter_view import EncounterView
 from src.registry import registry
 
 
@@ -16,22 +17,25 @@ class GameView:
         self.npc_view = NPCView()
         self.player_view = PlayerView()
         self.dialogue_view = DialogueBoxView(screen, font)
+        self.encounter_view = EncounterView(screen, font)
+        self.small_font = pygame.font.Font(None, 22)
+        self.title_font = pygame.font.Font(None, 36)
+        self.quest_font = pygame.font.Font(None, 24)
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
                   current_npc, player_at_item, quests=None, debug_reveal=False,
-                  shop_active=False, shop_npc=None, shop_mode="buy",
-                  shop_selected_index=0,
-                  quest_log_active=False, quest_log=None, followers=None):
+                  quest_log_active=False, quest_log=None, followers=None,
+                  item_detail_active=False):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
 
-        if shop_active and shop_npc:
-            self.draw_shop(player, shop_npc, shop_mode, shop_selected_index)
-        elif quest_log_active and quest_log:
+        if quest_log_active and quest_log:
             self.draw_quest_log(quest_log)
         elif inventory_active:
             self.draw_inventory(player)
+            if item_detail_active:
+                self.draw_item_detail(player)
         else:
             self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
                                      debug_reveal=debug_reveal)
@@ -49,7 +53,7 @@ class GameView:
                 self.screen.blit(ft, (10, SCREEN_HEIGHT - 70))
 
         if (current_npc and not item_message_active and
-            not inventory_active and not shop_active
+            not inventory_active
             and not self.dialogue_box.dialogue_active
             and not self.dialogue_box.event_active and not quest_log_active):
             from src.models.npc import MerchantNPC
@@ -129,72 +133,133 @@ class GameView:
                     detail_surface = self.font.render(detail, True, (80, 80, 80))
                     self.screen.blit(detail_surface, (150, y_start + index * 30 + 16))
 
-        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  Esc: Close"
+        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  D: Details  |  Esc: Close"
         exit_text = self.font.render(controls, True, (0, 0, 0))
-        self.screen.blit(exit_text, (120, SCREEN_HEIGHT - 120))
+        self.screen.blit(exit_text, (105, SCREEN_HEIGHT - 120))
 
-    def draw_shop(self, player, merchant_npc, mode, selected_index):
-        """Draw the shop interface with buy/sell columns."""
-        bg = pygame.Rect(50, 60, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 120)
-        pygame.draw.rect(self.screen, (220, 210, 180), bg)
-        pygame.draw.rect(self.screen, (100, 80, 40), bg, 3)
+    def draw_item_detail(self, player):
+        """Draw item detail popup overlay for the currently selected inventory item."""
+        inventory_items = list(player.inventory.values())
+        if not inventory_items or player.selected_item_index >= len(inventory_items):
+            return
 
-        # Header
-        shop_title = self.font.render(f"{merchant_npc.name}'s Shop", True, (100, 60, 20))
-        self.screen.blit(shop_title, (SCREEN_WIDTH // 2 - shop_title.get_width() // 2, 70))
-        money_text = self.font.render(f"Your Gold: {player.money}", True, (180, 150, 0))
-        self.screen.blit(money_text, (SCREEN_WIDTH - 230, 70))
+        item = inventory_items[player.selected_item_index]
 
-        # Tab indicator
-        buy_color = (180, 0, 0) if mode == "buy" else (80, 80, 80)
-        sell_color = (180, 0, 0) if mode == "sell" else (80, 80, 80)
-        self.screen.blit(self.font.render("[B]uy", True, buy_color), (100, 100))
-        self.screen.blit(self.font.render("[S]ell", True, sell_color), (200, 100))
+        # Semi-transparent backdrop
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.fill((0, 0, 0))
+        overlay.set_alpha(180)
+        self.screen.blit(overlay, (0, 0))
 
-        col_x = 80
-        y_start = 130
-        line_height = 28
+        # Detail panel
+        panel_w, panel_h = 500, 380
+        panel_x = (SCREEN_WIDTH - panel_w) // 2
+        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        pygame.draw.rect(self.screen, (50, 45, 40), (panel_x, panel_y, panel_w, panel_h))
+        pygame.draw.rect(self.screen, (200, 180, 120), (panel_x, panel_y, panel_w, panel_h), 2)
 
-        if mode == "buy":
-            available = merchant_npc.get_shop_items()
-            for i, entry in enumerate(available):
-                item = registry.get_item(entry["item_id"])
-                if not item:
-                    continue
-                selected = i == selected_index
-                color = (200, 0, 0) if selected else (0, 0, 0)
-                name_text = f"{item.name}"
-                price_text = f"{entry['price']}g"
-                stock_text = f"x{entry['stock']}"
+        y = panel_y + 15
+        content_x = panel_x + 20
 
-                self.screen.blit(self.font.render(name_text, True, color),
-                                 (col_x, y_start + i * line_height))
-                self.screen.blit(self.font.render(price_text, True, color),
-                                 (col_x + 300, y_start + i * line_height))
-                self.screen.blit(self.font.render(stock_text, True, color),
-                                 (col_x + 400, y_start + i * line_height))
+        # Portrait
+        portrait_rect_bottom = y
+        if item.profile_image:
+            try:
+                import os
+                if os.path.exists(item.profile_image):
+                    img = pygame.image.load(item.profile_image)
+                    img = pygame.transform.scale(img, (96, 96))
+                    img_x = panel_x + panel_w - 116
+                    self.screen.blit(img, (img_x, y))
+                    portrait_rect_bottom = y + 96
+            except Exception:
+                pass
 
-                if selected and item:
-                    desc_surface = self.font.render(item.desc[:60], True, (80, 80, 80))
-                    self.screen.blit(desc_surface, (col_x, y_start + i * line_height + 14))
-        else:
-            # Sell mode - show player inventory
-            inventory = player.get_inventory()
-            for i, (item_name, quantity) in enumerate(inventory):
-                selected = i == selected_index
-                color = (200, 0, 0) if selected else (0, 0, 0)
-                item_obj = player.inventory.get(item_name)
-                sell_price = max(1, item_obj.item_stats.price // 2) if item_obj else 0
+        # Item name
+        name_color = (255, 215, 0)
+        name_surf = self.title_font.render(item.name, True, name_color)
+        self.screen.blit(name_surf, (content_x, y))
+        y += 35
 
-                self.screen.blit(self.font.render(f"{quantity}x {item_name}", True, color),
-                                 (col_x, y_start + i * line_height))
-                if sell_price > 0:
-                    self.screen.blit(self.font.render(f"Sell: {sell_price}g", True, color),
-                                     (col_x + 350, y_start + i * line_height))
+        # Category / type
+        type_name = type(item).__name__
+        cat_surf = self.small_font.render(f"Type: {type_name}  |  Category: {item.category}", True, (160, 160, 160))
+        self.screen.blit(cat_surf, (content_x, y))
+        y += 22
 
-        controls = "Up/Down: Select  |  Enter: Confirm  |  B/S: Switch Tab  |  Esc: Close"
-        self.screen.blit(self.font.render(controls, True, (60, 60, 60)),
-                         (80, SCREEN_HEIGHT - 90))
+        # Equipped indicator
+        if hasattr(player, 'equipped_weapon') and player.equipped_weapon == item.name:
+            eq_surf = self.font.render("[EQUIPPED]", True, (100, 255, 100))
+            self.screen.blit(eq_surf, (content_x, y))
+            y += 24
+
+        y = max(y, portrait_rect_bottom + 10)
+
+        # Description (word-wrapped)
+        y += 5
+        desc_label = self.font.render("Description:", True, (200, 200, 200))
+        self.screen.blit(desc_label, (content_x, y))
+        y += 22
+        desc_text = item.desc
+        max_line_w = panel_w - 40
+        words = desc_text.split()
+        lines = []
+        current_line = ""
+        for word in words:
+            test = f"{current_line} {word}".strip()
+            if self.small_font.size(test)[0] <= max_line_w:
+                current_line = test
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        for line in lines[:4]:
+            line_surf = self.small_font.render(line, True, (220, 220, 220))
+            self.screen.blit(line_surf, (content_x, y))
+            y += 18
+
+        # Stats section
+        y += 10
+        stats = item.item_stats
+        stat_label = self.font.render("Stats:", True, (200, 200, 200))
+        self.screen.blit(stat_label, (content_x, y))
+        y += 24
+
+        stat_lines = []
+        if stats.attack_dice:
+            stat_lines.append(f"Damage: {stats.attack_dice}")
+        if stats.stat_modifier:
+            stat_lines.append(f"Stat: {stats.stat_modifier}")
+        if stats.nutrition_value:
+            stat_lines.append(f"Nutrition: {stats.nutrition_value:+d}")
+        if stats.hydration_value:
+            stat_lines.append(f"Hydration: {stats.hydration_value:+d}")
+        if stats.health_value:
+            stat_lines.append(f"Health: {stats.health_value:+d}")
+        if stats.uses > 1:
+            stat_lines.append(f"Uses: {stats.uses}")
+        if stats.price:
+            stat_lines.append(f"Value: {stats.price}g")
+        if stats.attribute:
+            stat_lines.append(f"Attribute: {stats.attribute}")
+
+        if not stat_lines:
+            stat_lines.append("No notable stats.")
+
+        # Render stats in two columns
+        col_w = (panel_w - 40) // 2
+        for i, stat_text in enumerate(stat_lines):
+            sx = content_x + (i % 2) * col_w
+            sy = y + (i // 2) * 20
+            stat_surf = self.small_font.render(stat_text, True, (180, 220, 180))
+            self.screen.blit(stat_surf, (sx, sy))
+
+        # Close hint
+        hint = self.small_font.render("Esc / D: Close detail", True, (120, 120, 120))
+        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2,
+                                panel_y + panel_h - 25))
 
     def draw_quest_log(self, quest_log):
         """Draw the quest log overlay with active/completed/failed sections."""
@@ -207,8 +272,6 @@ class GameView:
         self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, y))
         y += 40
 
-        small_font = pygame.font.Font(None, 24)
-
         sections = [
             ("Active Quests", quest_log.get("active", []), (100, 255, 100)),
             ("Completed", quest_log.get("completed", []), (150, 150, 150)),
@@ -219,31 +282,39 @@ class GameView:
             self.screen.blit(header, (70, y))
             y += 30
             if not entries:
-                none_text = small_font.render("  (none)", True, (120, 120, 120))
+                none_text = self.quest_font.render("  (none)", True, (120, 120, 120))
                 self.screen.blit(none_text, (90, y))
                 y += 22
             for entry in entries:
-                # Story quests get a star
                 prefix = "★ " if entry.get("is_story_quest") else "  "
                 title_text = f"{prefix}{entry['title']}"
                 if entry.get("type") == "multi_step" and "current_step" in entry:
                     title_text += f" [{entry['current_step']}/{entry['total_steps']}]"
-                qt = small_font.render(title_text, True, color)
+                qt = self.quest_font.render(title_text, True, color)
                 self.screen.blit(qt, (90, y))
                 y += 22
                 if y > SCREEN_HEIGHT - 120:
-                    more = small_font.render("  ... (more)", True, (120, 120, 120))
+                    more = self.quest_font.render("  ... (more)", True, (120, 120, 120))
                     self.screen.blit(more, (90, y))
                     break
             y += 10
 
-        exit_text = small_font.render("Press 'Q' or 'Esc' to close", True, (180, 180, 180))
+        exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (180, 180, 180))
         self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2,
                                      SCREEN_HEIGHT - 60))
 
     def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
         if self.dialogue_box.event_active:
-            self.dialogue_view.draw(self.dialogue_box)
+            event = self.dialogue_box.current_event
+            # Use full-screen encounter view for puzzle/event types,
+            # and for combat initiative (trigger screen before combat starts).
+            # Once multi-turn combat is underway, use the dialogue view's combat renderer.
+            if event and (event.type in ("puzzle", "event")
+                         or (event.type == "combat"
+                             and self.dialogue_box.combat_phase == "initiative")):
+                self.encounter_view.draw(self.dialogue_box)
+            else:
+                self.dialogue_view.draw(self.dialogue_box)
         elif item_message_active or self.dialogue_box.dialogue_active:
             self.dialogue_view.draw(self.dialogue_box)
         elif player_at_item:

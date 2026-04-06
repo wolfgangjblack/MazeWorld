@@ -1,11 +1,13 @@
 import random
 import pygame
 from src.views.gameplay_view import GameView
+from src.views.shop_view import ShopView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.models.follower import Follower
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
+from src.systems.survival import SurvivalSystem
 
 
 class GameController:
@@ -27,8 +29,12 @@ class GameController:
         # Check for kill quests already cleared at startup
         self._check_kill_quests_already_cleared()
 
+        # Survival system
+        self.survival = SurvivalSystem()
+
         # UI / State variables
         self.inventory_active = False
+        self.item_detail_active = False
         self.quest_log_active = False
         self.item_message_active = False
         self.item_message = None
@@ -40,15 +46,14 @@ class GameController:
         # Shop state
         self.shop_active = False
         self.shop_npc = None
-        self.shop_mode = "buy"  # "buy" or "sell"
-        self.shop_selected_index = 0
+        self.shop_view = None
 
         # Combat target selection
         self.combat_target_index = 0
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit" to signal main loop
+        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
 
         self.game_view = GameView(screen, font, dialogue_box)
 
@@ -160,8 +165,13 @@ class GameController:
 
         # 2. If inventory is active
         if self.inventory_active:
+            if self.item_detail_active:
+                if event.key in (pygame.K_ESCAPE, pygame.K_d):
+                    self.item_detail_active = False
+                return
             if event.key == pygame.K_ESCAPE:
                 self.inventory_active = False
+                self.item_detail_active = False
                 return
             else:
                 self.handle_inventory_input(event)
@@ -217,7 +227,11 @@ class GameController:
                 dx, dy = 0, -1
             elif event.key == pygame.K_DOWN:
                 dx, dy = 0, 1
-            self.player.move(dx=dx, dy=dy, maze=self.maze)
+            self.player.move(dx=dx, dy=dy, maze=self.maze, survival_system=self.survival)
+            # Check for game over from starvation
+            if self.player.health <= 0:
+                self.pending_action = "game_over"
+                return
             self.after_move_check()
             return
 
@@ -265,8 +279,13 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
-            # Esc also opens menu in normal gameplay
-            self.pending_action = "open_menu"
+            # Esc opens pause menu in normal gameplay
+            self.pending_action = "open_pause"
+            return
+
+        # M key opens full tabbed menu
+        if event.key == pygame.K_m:
+            self.pending_action = "open_full_menu"
             return
 
     def _handle_event_input(self, event):
@@ -541,6 +560,10 @@ class GameController:
 
         self.dialogue_box.end_event()
 
+        # Check for player death after combat
+        if self.player.health <= 0:
+            self.pending_action = "game_over"
+
     def _handle_npc_interaction(self, npc):
         """Start dialogue with an NPC, handling quest offers and completions."""
         self._check_quest_turn_in(npc)
@@ -779,48 +802,24 @@ class GameController:
         """Open the shop interface for a MerchantNPC."""
         self.shop_active = True
         self.shop_npc = merchant_npc
-        self.shop_mode = "buy"
-        self.shop_selected_index = 0
+        self.shop_view = ShopView(self.screen, self.font, merchant_npc, self.player)
 
     def _handle_shop_input(self, event):
         """Handle keyboard input while the shop is open."""
-        if event.key == pygame.K_ESCAPE:
+        result = self.shop_view.handle_input(event)
+        if result is None:
+            return
+        if result == "close":
             self.shop_active = False
             self.shop_npc = None
+            self.shop_view = None
             return
-
-        if event.key == pygame.K_b:
-            self.shop_mode = "buy"
-            self.shop_selected_index = 0
-            return
-        if event.key == pygame.K_s:
-            self.shop_mode = "sell"
-            self.shop_selected_index = 0
-            return
-
-        if self.shop_mode == "buy":
-            available = self.shop_npc.get_shop_items()
-            max_idx = len(available) - 1
-        else:
-            max_idx = len(self.player.get_inventory()) - 1
-
-        if max_idx < 0:
-            return
-
-        if event.key == pygame.K_UP:
-            self.shop_selected_index = max(0, self.shop_selected_index - 1)
-        elif event.key == pygame.K_DOWN:
-            self.shop_selected_index = min(max_idx, self.shop_selected_index + 1)
-        elif event.key == pygame.K_RETURN:
-            if self.shop_mode == "buy":
-                msg = self.shop_npc.buy_from(self.shop_selected_index, self.player)
-            else:
-                inventory = self.player.get_inventory()
-                if self.shop_selected_index < len(inventory):
-                    item_name = inventory[self.shop_selected_index][0]
-                    msg = self.shop_npc.sell_to(item_name, self.player)
-                else:
-                    msg = "Nothing to sell."
+        if result["action"] == "buy":
+            msg = self.shop_npc.buy_from(result["index"], self.player)
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(msg)
+        elif result["action"] == "sell":
+            msg = self.shop_npc.sell_to(result["item_name"], self.player)
             self.item_message_active = True
             self.dialogue_box.set_item_message(msg)
 
@@ -848,6 +847,9 @@ class GameController:
             message = self.player.equip_weapon(item_name)
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
+        elif event.key == pygame.K_d:
+            # Show item detail
+            self.item_detail_active = True
 
     def update(self, current_time):
         """Update game logic (NPC movement, etc.)"""
@@ -867,6 +869,16 @@ class GameController:
 
     def draw(self, current_time):
         """Draw the current game state."""
+        if self.shop_active and self.shop_view:
+            self.screen.fill((0, 0, 0))
+            self.shop_view.draw()
+            # Draw item messages on top of shop
+            if self.item_message_active:
+                self.game_view.draw_dialogue_and_messages(
+                    self.player, self.maze,
+                    self.item_message_active, False)
+            return
+
         self.game_view.draw_game(
             maze=self.maze,
             player=self.player,
@@ -877,11 +889,8 @@ class GameController:
             player_at_item=self.player_at_item,
             quests=self.quests,
             debug_reveal=self.debug_reveal,
-            shop_active=self.shop_active,
-            shop_npc=self.shop_npc,
-            shop_mode=self.shop_mode,
-            shop_selected_index=self.shop_selected_index,
             quest_log_active=self.quest_log_active,
             quest_log=self.get_quest_log() if self.quest_log_active else None,
             followers=self.player.followers,
+            item_detail_active=self.item_detail_active,
         )
