@@ -90,6 +90,17 @@ def _static_dialogue_response(npc, player_input: str) -> str:
     return f"{npc.name}: {prompt}"
 
 
+def has_dialogue_choices(npc) -> bool:
+    """Return True if the NPC's current dialogue tree node has choices."""
+    if GAME_MODE != "offline_static" or not npc or not npc.dialogue_tree:
+        return False
+    tree = npc.dialogue_tree
+    nodes = tree.get("nodes", {})
+    current_node_id = tree.get("_current", "start")
+    node = nodes.get(current_node_id, nodes.get("start", {}))
+    return bool(node.get("choices"))
+
+
 def _extract_response(raw: str) -> str:
     """Extract the usable NPC response from raw LLM output."""
     if "##Output:" in raw:
