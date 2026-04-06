@@ -18,8 +18,15 @@ MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
 WORLD_SEED = 1234 # Set to -1 for random seed
 STORY_SEED = ""  # 1-liner story prompt; empty = LLM generates freely
+NUM_ROOMS = int(os.getenv("NUM_ROOMS", "1"))
 EVENT_PERCENT = 0.1
 EVENT_DENSITY = EVENT_PERCENT  # Alias: configurable encounter density
+QUEST_DENSITY = float(os.getenv("QUEST_DENSITY", "0.1"))
+MAP_COLORS = {
+    "wall": (40, 40, 40),
+    "path": (200, 200, 200),
+    "player": (0, 120, 255),
+}
 
 # Dialogue box
 DIALOGUE_BOX_HEIGHT = 100
@@ -53,6 +60,12 @@ FOG_DIM_EDGE = 1
 ## Day/Night Cycle settings
 # ------------------------------------
 DAY_NIGHT_CYCLE_LENGTH = 200  # total actions per full day cycle
+
+## Audio settings
+# ------------------------------------
+MASTER_VOLUME = max(0, min(100, int(os.getenv("MASTER_VOLUME", "80"))))
+MUSIC_VOLUME = max(0, min(100, int(os.getenv("MUSIC_VOLUME", "60"))))
+MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "none")  # "none" | "local" | "api"
 
 ##GenAI Backend
 # ------------------------------------

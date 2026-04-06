@@ -5,9 +5,9 @@ Attack, Multi-Attack, Cast Spell, Use Item, Flee, and Jester's Gamble.
 """
 
 import random
-from enum import Enum
 from typing import List, Optional
 
+from src.models.combat import CombatState
 from src.models.monster import Monster
 from src.models.spell import Spell, elemental_multiplier
 
@@ -16,22 +16,6 @@ def roll_buff_duration(caster) -> int:
     """Roll buff duration: 1d4 + (caster INT modifier // 2), minimum 1."""
     int_mod = caster.get_stat_mod("INT")
     return max(1, random.randint(1, 4) + int_mod // 2)
-
-
-class CombatAction(str, Enum):
-    ATTACK = "attack"
-    MULTI_ATTACK = "multi_attack"
-    CAST_SPELL = "cast_spell"
-    USE_ITEM = "use_item"
-    FLEE = "flee"
-    GAMBLE = "gamble"  # Jester only
-
-
-class CombatState(str, Enum):
-    ONGOING = "ongoing"
-    VICTORY = "victory"
-    DEFEAT = "defeat"
-    FLED = "fled"
 
 
 # Jester Gamble effect table.  Weights shift with LUCK modifier.
@@ -351,6 +335,40 @@ class CombatController:
             self.player.tick_buffs()
             self.advance_turn()
             return {"success": False, "message": msg, "damage": damage}
+
+    def player_swap_weapon(self) -> dict:
+        """Swap the player's equipped weapon mid-combat (costs the turn)."""
+        from src.models.items import Weapon as ShopWeapon
+        available = {}
+        for name, item in self.player.inventory.items():
+            if isinstance(item, ShopWeapon) and name != self.player.equipped_weapon:
+                available[name] = item
+
+        if not available:
+            msg = "No other weapons in inventory to swap to!"
+            self.log.append(msg)
+            return {"success": False, "message": msg}
+
+        # Swap to the first available weapon that isn't currently equipped
+        weapon_name = next(iter(available))
+        old_name = self.player.equipped_weapon or "fists"
+        self.player.equipped_weapon = weapon_name
+        # Also update the weapon instance used for combat rolls
+        weapon_item = available[weapon_name]
+        if hasattr(weapon_item, 'item_stats') and hasattr(weapon_item.item_stats, 'stat_modifier'):
+            from src.models.weapon import Weapon
+            self.player.weapon = Weapon(
+                name=weapon_name,
+                weapon_type=getattr(weapon_item, 'weapon_type', 'simple'),
+                stat=weapon_item.item_stats.stat_modifier or "STR",
+                damage_dice=getattr(weapon_item.item_stats, 'damage_dice', 6),
+            )
+
+        msg = f"Swapped weapon: {old_name} → {weapon_name}!"
+        self.log.append(msg)
+        self.player.tick_buffs()
+        self.advance_turn()
+        return {"success": True, "message": msg}
 
     def player_gamble(self) -> dict:
         """Jester's Gamble: roll on random effect table, LUCK influences distribution."""

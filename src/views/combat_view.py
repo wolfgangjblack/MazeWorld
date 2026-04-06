@@ -10,7 +10,8 @@ Layout (top to bottom):
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
-from src.controllers.combat_controller import CombatController, CombatState
+from src.controllers.combat_controller import CombatController
+from src.models.combat import CombatState
 
 # Colors
 RED = (220, 50, 50)
@@ -134,7 +135,7 @@ class CombatView:
     # Action menu
     # ------------------------------------------------------------------
 
-    ACTIONS = ["Attack", "Multi-Attack", "Cast Spell", "Use Item", "Flee", "Gamble"]
+    ACTIONS = ["Attack", "Multi-Attack", "Cast Spell", "Use Item", "Flee", "Swap Weapon", "Gamble"]
 
     def _draw_action_menu(self, combat: CombatController, selected: int,
                           selected_target: int, selecting_target: bool):

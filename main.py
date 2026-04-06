@@ -30,6 +30,10 @@ from src.views.class_select_view import ClassSelectView
 from src.views.room_intro_view import RoomIntroView
 from src.views.player_menu_view import PlayerMenuView
 from src.views.load_game_view import LoadGameView
+from src.views.pause_view import PauseView
+from src.views.gameover_view import GameOverView
+from src.views.victory_view import VictoryView
+from src.views.menu_view import MenuView
 from src.systems import save_manager
 
 logger = logging.getLogger(__name__)
@@ -274,6 +278,10 @@ def main():
     accumulated_play_time = 0.0
     # Track where load was opened from: "start" or "gameplay"
     load_source = "start"
+    pause_view = None
+    gameover_view = None
+    victory_view = None
+    menu_view = None
 
     def _handle_start() -> str | None:
         nonlocal class_select_view, load_game_view, load_source
@@ -376,6 +384,7 @@ def main():
     def _handle_gameplay() -> str | None:
         nonlocal game_controller, gameplay_start_time, player_menu_view
         nonlocal load_game_view, load_source
+        nonlocal pause_view, gameover_view, victory_view, menu_view
 
         if game_controller is None:
             game_controller = setup_game(screen, font, player_name, selected_class)
@@ -393,14 +402,66 @@ def main():
             screen_ctrl.push(ScreenState.PLAYER_MENU)
             return None
 
+        if result == "open_pause":
+            can_save = not game_controller.has_active_overlay
+            pause_view = PauseView(screen, font, can_save=can_save)
+            screen_ctrl.push(ScreenState.PAUSE)
+            return None
+
+        if result == "open_full_menu":
+            menu_view = MenuView(screen, font, game_controller.player)
+            screen_ctrl.push(ScreenState.PLAYER_MENU)
+            return None
+
+        if result == "game_over":
+            gameover_view = GameOverView(
+                screen, font, game_controller.player,
+                has_saves=_cached_has_saves,
+            )
+            screen_ctrl.push(ScreenState.GAME_OVER)
+            return None
+
+        if result == "victory":
+            elapsed = time.time() - gameplay_start_time
+            total_time = accumulated_play_time + elapsed
+            monsters_killed = sum(
+                1 for e in game_controller.events.values()
+                if getattr(e, 'resolved', False)
+            )
+            victory_view = VictoryView(
+                screen, font, game_controller.player,
+                time_played=total_time,
+                monsters_killed=monsters_killed,
+                money_earned=game_controller.player.money,
+            )
+            screen_ctrl.push(ScreenState.VICTORY)
+            return None
+
         # Game loop ended (window closed)
         return "quit"
 
     def _handle_player_menu() -> str | None:
-        nonlocal game_controller, player_menu_view
+        nonlocal game_controller, player_menu_view, menu_view
         nonlocal load_game_view, load_source, gameplay_start_time
         nonlocal accumulated_play_time
 
+        # Full tabbed menu mode
+        if menu_view is not None:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "quit"
+                if event.type == pygame.KEYDOWN:
+                    action = menu_view.handle_input(event)
+                    if action == "close":
+                        menu_view = None
+                        screen_ctrl.pop()
+                        return None
+            menu_view.draw()
+            pygame.display.flip()
+            clock.tick(60)
+            return None
+
+        # Save/load menu mode
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
@@ -434,6 +495,89 @@ def main():
             current_time = pygame.time.get_ticks()
             game_controller.draw(current_time)
         player_menu_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_pause() -> str | None:
+        nonlocal pause_view, game_controller, gameplay_start_time
+        nonlocal accumulated_play_time, _cached_has_saves
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = pause_view.handle_input(event)
+                if action == "resume":
+                    screen_ctrl.pop()
+                    return None
+                if action == "save":
+                    elapsed = time.time() - gameplay_start_time
+                    total_time = accumulated_play_time + elapsed
+                    try:
+                        save_manager.save_game(
+                            game_controller, WORLD_SEED, total_time,
+                        )
+                        _cached_has_saves = True
+                        pause_view.set_status("Game saved!")
+                    except Exception as e:
+                        pause_view.set_status(f"Save failed: {e}", is_error=True)
+                    return None
+                if action == "quit_to_start":
+                    game_controller = None
+                    screen_ctrl.reset_to(ScreenState.START)
+                    return None
+
+        # Draw the game underneath, then the pause overlay
+        if game_controller:
+            current_time = pygame.time.get_ticks()
+            game_controller.draw(current_time)
+        pause_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_game_over() -> str | None:
+        nonlocal gameover_view, game_controller
+        nonlocal load_game_view, load_source
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = gameover_view.handle_input(event)
+                if action == "load":
+                    saves = save_manager.list_saves()
+                    load_game_view = LoadGameView(screen, font, saves)
+                    load_source = "start"
+                    screen_ctrl.replace(ScreenState.LOAD_GAME)
+                    return None
+                if action == "quit_to_start":
+                    game_controller = None
+                    screen_ctrl.reset_to(ScreenState.START)
+                    return None
+
+        gameover_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_victory() -> str | None:
+        nonlocal victory_view, game_controller
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = victory_view.handle_input(event)
+                if action == "new_game":
+                    game_controller = None
+                    screen_ctrl.reset_to(ScreenState.START)
+                    return None
+                if action == "quit":
+                    return "quit"
+
+        victory_view.draw()
         pygame.display.flip()
         clock.tick(60)
         return None
@@ -489,6 +633,9 @@ def main():
         ScreenState.GAMEPLAY: _handle_gameplay,
         ScreenState.PLAYER_MENU: _handle_player_menu,
         ScreenState.LOAD_GAME: _handle_load_game,
+        ScreenState.PAUSE: _handle_pause,
+        ScreenState.GAME_OVER: _handle_game_over,
+        ScreenState.VICTORY: _handle_victory,
     }
 
     running = True

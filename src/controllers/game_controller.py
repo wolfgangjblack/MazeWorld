@@ -1,6 +1,9 @@
 import random
 import pygame
+from src.controllers.combat_controller import CombatController, CombatState
+from src.views.combat_view import CombatView
 from src.views.gameplay_view import GameView
+from src.views.shop_view import ShopView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.models.follower import Follower
@@ -13,6 +16,7 @@ from src.systems.day_night import (
 )
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
+from src.systems.survival import SurvivalSystem
 
 
 class GameController:
@@ -42,8 +46,12 @@ class GameController:
         # Initial fog reveal at player start position
         self._update_fog()
 
+        # Survival system
+        self.survival = SurvivalSystem()
+
         # UI / State variables
         self.inventory_active = False
+        self.item_detail_active = False
         self.quest_log_active = False
         self.item_message_active = False
         self.item_message = None
@@ -58,15 +66,23 @@ class GameController:
         # Shop state
         self.shop_active = False
         self.shop_npc = None
-        self.shop_mode = "buy"  # "buy" or "sell"
-        self.shop_selected_index = 0
+        self.shop_view = None
 
         # Combat target selection
         self.combat_target_index = 0
 
+        # Full combat system (CombatController + CombatView)
+        self.combat_controller: CombatController | None = None
+        self.combat_view: CombatView | None = None
+        self.combat_event = None  # The CombatEvent that triggered combat
+        self.combat_selected_action = 0
+        self.combat_selected_target = 0
+        self.combat_selecting_target = False
+        self.combat_game_over_selection = 0
+
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit" to signal main loop
+        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
 
         self.game_view = GameView(screen, font, dialogue_box)
 
@@ -98,9 +114,10 @@ class GameController:
 
     @property
     def has_active_overlay(self) -> bool:
-        """True if any modal UI is open (dialogue, event, or shop)."""
+        """True if any modal UI is open (dialogue, event, shop, or combat)."""
         return (
-            self.dialogue_box.event_active
+            self._in_full_combat
+            or self.dialogue_box.event_active
             or self.dialogue_box.dialogue_active
             or self.shop_active
         )
@@ -171,7 +188,10 @@ class GameController:
             if event and not event.resolved:
                 # Time-gated events: only trigger at correct time
                 if is_event_active_at_time(event, self.day_night.current_period):
-                    self.dialogue_box.start_event(event)
+                    if event.type == "combat" and hasattr(event, 'monsters') and event.monsters:
+                        self._start_full_combat(event)
+                    else:
+                        self.dialogue_box.start_event(event)
                 # Wrong time: silently pass over (event stays)
             else:
                 self.maze.grid[self.player.y][self.player.x] = 0
@@ -181,8 +201,32 @@ class GameController:
 
         self._check_escort_completion()
 
+    def _start_full_combat(self, combat_event):
+        """Initialize CombatController + CombatView for a multi-turn combat encounter."""
+        # Resolve player weapon for combat
+        from src.models.weapon import STARTER_WEAPONS
+        if self.player.weapon is None and self.player.player_class:
+            self.player.weapon = STARTER_WEAPONS.get(self.player.player_class.archetype)
+
+        self.combat_event = combat_event
+        self.combat_controller = CombatController(self.player, list(combat_event.monsters))
+        self.combat_view = CombatView(self.screen, self.font)
+        self.combat_selected_action = 0
+        self.combat_selected_target = 0
+        self.combat_selecting_target = False
+        self.combat_game_over_selection = 0
+
+    @property
+    def _in_full_combat(self) -> bool:
+        return self.combat_controller is not None
+
     def handle_keydown(self, event):
-        # 0. If an event is active
+        # 0. Full combat system active
+        if self._in_full_combat:
+            self._handle_full_combat_input(event)
+            return
+
+        # 0.5. If an event is active (legacy/puzzle/event)
         if self.dialogue_box.event_active:
             self._handle_event_input(event)
             return
@@ -209,8 +253,13 @@ class GameController:
 
         # 2. If inventory is active
         if self.inventory_active:
+            if self.item_detail_active:
+                if event.key in (pygame.K_ESCAPE, pygame.K_d):
+                    self.item_detail_active = False
+                return
             if event.key == pygame.K_ESCAPE:
                 self.inventory_active = False
+                self.item_detail_active = False
                 return
             else:
                 self.handle_inventory_input(event)
@@ -266,7 +315,11 @@ class GameController:
                 dx, dy = 0, -1
             elif event.key == pygame.K_DOWN:
                 dx, dy = 0, 1
-            self.player.move(dx=dx, dy=dy, maze=self.maze)
+            self.player.move(dx=dx, dy=dy, maze=self.maze, survival_system=self.survival)
+            # Check for game over from starvation
+            if self.player.health <= 0:
+                self.pending_action = "game_over"
+                return
             self.after_move_check()
             return
 
@@ -321,9 +374,171 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
-            # Esc also opens menu in normal gameplay
-            self.pending_action = "open_menu"
+            # Esc opens pause menu in normal gameplay
+            self.pending_action = "open_pause"
             return
+
+        # M key opens full tabbed menu
+        if event.key == pygame.K_m:
+            self.pending_action = "open_full_menu"
+            return
+
+    # ------------------------------------------------------------------
+    # Full Combat System (CombatController + CombatView)
+    # ------------------------------------------------------------------
+
+    def _handle_full_combat_input(self, event):
+        """Handle input while the full CombatController combat is active."""
+        cc = self.combat_controller
+        if cc is None:
+            return
+
+        # Combat is over — handle end-screen input
+        if cc.state != CombatState.ONGOING:
+            self._handle_combat_end_input(event)
+            return
+
+        # Monster turn — auto-execute on any key
+        if not cc.is_player_turn():
+            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                cc.execute_monster_turn()
+                # Continue executing monster turns until it's the player's turn or combat ends
+                while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+                    cc.execute_monster_turn()
+                self.combat_selecting_target = False
+                self.combat_selected_action = 0
+            return
+
+        # Player turn — target selection mode
+        if self.combat_selecting_target:
+            alive = [m for m in cc.monsters if m.is_alive]
+            if event.key == pygame.K_UP:
+                self.combat_selected_target = (self.combat_selected_target - 1) % max(len(alive), 1)
+            elif event.key == pygame.K_DOWN:
+                self.combat_selected_target = (self.combat_selected_target + 1) % max(len(alive), 1)
+            elif event.key == pygame.K_RETURN:
+                self._execute_player_combat_action(self.combat_selected_action,
+                                                   self.combat_selected_target)
+                self.combat_selecting_target = False
+                self.combat_selected_action = 0
+            elif event.key == pygame.K_ESCAPE:
+                self.combat_selecting_target = False
+            return
+
+        # Player turn — action menu
+        actions = self._get_combat_actions()
+        if event.key == pygame.K_UP:
+            self.combat_selected_action = (self.combat_selected_action - 1) % len(actions)
+        elif event.key == pygame.K_DOWN:
+            self.combat_selected_action = (self.combat_selected_action + 1) % len(actions)
+        elif event.key == pygame.K_RETURN:
+            action_name = actions[self.combat_selected_action]
+            # Actions that need a target
+            if action_name in ("Attack", "Cast Spell"):
+                self.combat_selecting_target = True
+                self.combat_selected_target = 0
+            else:
+                self._execute_player_combat_action(self.combat_selected_action, 0)
+
+    def _get_combat_actions(self) -> list[str]:
+        """Return the list of available combat actions for the current player."""
+        actions = list(CombatView.ACTIONS)  # ["Attack", "Multi-Attack", ...]
+        cc = self.combat_controller
+        if not cc or not cc.player.player_class or cc.player.player_class.archetype != "jester":
+            actions = [a for a in actions if a != "Gamble"]
+        return actions
+
+    def _execute_player_combat_action(self, action_index: int, target_index: int):
+        """Execute the selected player action through CombatController."""
+        cc = self.combat_controller
+        if cc is None:
+            return
+
+        actions = self._get_combat_actions()
+        action_name = actions[action_index] if action_index < len(actions) else "Attack"
+
+        if action_name == "Attack":
+            cc.player_attack(target_index)
+        elif action_name == "Multi-Attack":
+            cc.player_multi_attack()
+        elif action_name == "Cast Spell":
+            # Use first available spell for now; target_index is monster target
+            if cc.player.spells:
+                cc.player_cast_spell(0, target_index)
+        elif action_name == "Use Item":
+            items = list(cc.player.inventory.keys())
+            if items:
+                cc.player_use_item(items[0])
+        elif action_name == "Flee":
+            cc.player_flee()
+        elif action_name == "Gamble":
+            cc.player_gamble()
+        elif action_name == "Swap Weapon":
+            cc.player_swap_weapon()
+
+        # After player action, auto-execute monster turns
+        while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+            cc.execute_monster_turn()
+
+        self.combat_selected_action = 0
+
+    def _handle_combat_end_input(self, event):
+        """Handle input on the combat end screen (victory/defeat/fled)."""
+        cc = self.combat_controller
+
+        if cc.state == CombatState.DEFEAT:
+            if event.key == pygame.K_UP:
+                self.combat_game_over_selection = (self.combat_game_over_selection - 1) % 2
+            elif event.key == pygame.K_DOWN:
+                self.combat_game_over_selection = (self.combat_game_over_selection + 1) % 2
+            elif event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                if self.combat_game_over_selection == 0:
+                    self.pending_action = "load"
+                else:
+                    self.pending_action = "quit"
+                self._end_full_combat()
+            return
+
+        if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+            self._finalize_full_combat()
+
+    def _finalize_full_combat(self):
+        """Handle loot, quest completion, and cleanup after combat victory/fled."""
+        cc = self.combat_controller
+        combat_event = self.combat_event
+
+        if cc.state == CombatState.VICTORY:
+            combat_event.resolved = True
+            # Collect loot from CombatController
+            loot_ids = cc.collect_loot()
+            for item_id in loot_ids:
+                item = registry.get_item(item_id)
+                if item:
+                    self.player.add_to_inventory(item.clone())
+            # Money drop from event
+            if hasattr(combat_event, 'money_drop') and combat_event.money_drop[1] > 0:
+                money = random.randint(combat_event.money_drop[0], combat_event.money_drop[1])
+                if money > 0:
+                    self.player.add_money(money)
+
+            # Clear tile
+            self.maze.grid[self.player.y][self.player.x] = 0
+
+            # Check quest completion
+            for qid, quest in self.quests.items():
+                if (quest.type == "combat"
+                        and getattr(quest, 'target_event_id', '') == combat_event.id
+                        and quest.status == "active"):
+                    quest.status = "completed"
+                    self.player.complete_quest(qid)
+
+        self._end_full_combat()
+
+    def _end_full_combat(self):
+        """Clean up combat state."""
+        self.combat_controller = None
+        self.combat_view = None
+        self.combat_event = None
 
     def _handle_event_input(self, event):
         """Handle keyboard input during an active event."""
@@ -600,6 +815,10 @@ class GameController:
 
         self.dialogue_box.end_event()
 
+        # Check for player death after combat
+        if self.player.health <= 0:
+            self.pending_action = "game_over"
+
     def _handle_npc_interaction(self, npc):
         """Start dialogue with an NPC, handling quest offers and completions."""
         # Check NPC availability by time of day
@@ -864,48 +1083,24 @@ class GameController:
         """Open the shop interface for a MerchantNPC."""
         self.shop_active = True
         self.shop_npc = merchant_npc
-        self.shop_mode = "buy"
-        self.shop_selected_index = 0
+        self.shop_view = ShopView(self.screen, self.font, merchant_npc, self.player)
 
     def _handle_shop_input(self, event):
         """Handle keyboard input while the shop is open."""
-        if event.key == pygame.K_ESCAPE:
+        result = self.shop_view.handle_input(event)
+        if result is None:
+            return
+        if result == "close":
             self.shop_active = False
             self.shop_npc = None
+            self.shop_view = None
             return
-
-        if event.key == pygame.K_b:
-            self.shop_mode = "buy"
-            self.shop_selected_index = 0
-            return
-        if event.key == pygame.K_s:
-            self.shop_mode = "sell"
-            self.shop_selected_index = 0
-            return
-
-        if self.shop_mode == "buy":
-            available = self.shop_npc.get_shop_items()
-            max_idx = len(available) - 1
-        else:
-            max_idx = len(self.player.get_inventory()) - 1
-
-        if max_idx < 0:
-            return
-
-        if event.key == pygame.K_UP:
-            self.shop_selected_index = max(0, self.shop_selected_index - 1)
-        elif event.key == pygame.K_DOWN:
-            self.shop_selected_index = min(max_idx, self.shop_selected_index + 1)
-        elif event.key == pygame.K_RETURN:
-            if self.shop_mode == "buy":
-                msg = self.shop_npc.buy_from(self.shop_selected_index, self.player)
-            else:
-                inventory = self.player.get_inventory()
-                if self.shop_selected_index < len(inventory):
-                    item_name = inventory[self.shop_selected_index][0]
-                    msg = self.shop_npc.sell_to(item_name, self.player)
-                else:
-                    msg = "Nothing to sell."
+        if result["action"] == "buy":
+            msg = self.shop_npc.buy_from(result["index"], self.player)
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(msg)
+        elif result["action"] == "sell":
+            msg = self.shop_npc.sell_to(result["item_name"], self.player)
             self.item_message_active = True
             self.dialogue_box.set_item_message(msg)
 
@@ -933,6 +1128,9 @@ class GameController:
             message = self.player.equip_weapon(item_name)
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
+        elif event.key == pygame.K_d:
+            # Show item detail
+            self.item_detail_active = True
 
     def update(self, current_time):
         """Update game logic (NPC movement, etc.)"""
@@ -952,6 +1150,26 @@ class GameController:
 
     def draw(self, current_time):
         """Draw the current game state."""
+        if self._in_full_combat and self.combat_view and self.combat_controller:
+            self.combat_view.draw(
+                self.combat_controller,
+                selected_action=self.combat_selected_action,
+                selected_target=self.combat_selected_target,
+                selecting_target=self.combat_selecting_target,
+                game_over_selection=self.combat_game_over_selection,
+            )
+            return
+
+        if self.shop_active and self.shop_view:
+            self.screen.fill((0, 0, 0))
+            self.shop_view.draw()
+            # Draw item messages on top of shop
+            if self.item_message_active:
+                self.game_view.draw_dialogue_and_messages(
+                    self.player, self.maze,
+                    self.item_message_active, False)
+            return
+
         period = self.day_night.current_period
         night_alpha = get_night_overlay_alpha(period, self.day_night.period_progress)
 
@@ -965,10 +1183,6 @@ class GameController:
             player_at_item=self.player_at_item,
             quests=self.quests,
             debug_reveal=self.debug_reveal,
-            shop_active=self.shop_active,
-            shop_npc=self.shop_npc,
-            shop_mode=self.shop_mode,
-            shop_selected_index=self.shop_selected_index,
             quest_log_active=self.quest_log_active,
             quest_log=self.get_quest_log() if self.quest_log_active else None,
             followers=self.player.followers,
@@ -977,4 +1191,5 @@ class GameController:
             night_alpha=night_alpha,
             time_period=period,
             day_number=self.day_night.day_number,
+            item_detail_active=self.item_detail_active,
         )

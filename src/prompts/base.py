@@ -9,6 +9,16 @@ class LLMRequest:
     user_message: str = ""
     max_tokens: int = 150
 
+    def format_for_completion(self) -> str:
+        """Format as a single prompt string for completion-based models."""
+        parts = [self.system]
+        for user_msg, asst_msg in self.examples:
+            parts.append(f"User: {user_msg}")
+            parts.append(f"Assistant: {asst_msg}")
+        parts.append(f"User: {self.user_message}")
+        parts.append("Assistant:")
+        return "\n\n".join(parts)
+
 
 class PromptSet(ABC):
     @abstractmethod
