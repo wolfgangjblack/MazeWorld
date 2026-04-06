@@ -1,6 +1,8 @@
 from unittest.mock import patch
 from src.models.npc import StaticNPC
-from src.utils.conversation_utils import generate_npc_response, _extract_response
+from src.utils.conversation_utils import (
+    generate_npc_response, _extract_response, has_dialogue_choices,
+)
 
 
 def _make_npc(**overrides):
@@ -106,3 +108,73 @@ class TestExtractResponse:
     def test_output_prefix_takes_last_occurrence(self):
         raw = "##Output: first\n##Output: second"
         assert _extract_response(raw) == "second"
+
+
+# ---------------------------------------------------------------------------
+# has_dialogue_choices
+# ---------------------------------------------------------------------------
+
+class TestHasDialogueChoices:
+    @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
+    def test_true_when_node_has_choices(self):
+        npc = _make_npc()
+        npc.dialogue_tree = {
+            "nodes": {
+                "start": {
+                    "prompt": "Hello!",
+                    "choices": [
+                        {"text": "Hi", "next_node_id": "n2"},
+                        {"text": "Bye", "next_node_id": "end"},
+                    ],
+                },
+            },
+        }
+        assert has_dialogue_choices(npc) is True
+
+    @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
+    def test_false_when_node_has_no_choices(self):
+        npc = _make_npc()
+        npc.dialogue_tree = {
+            "nodes": {
+                "start": {"prompt": "Farewell."},
+            },
+        }
+        assert has_dialogue_choices(npc) is False
+
+    @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
+    def test_false_when_no_dialogue_tree(self):
+        npc = _make_npc()
+        npc.dialogue_tree = None
+        assert has_dialogue_choices(npc) is False
+
+    @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
+    def test_false_when_npc_is_none(self):
+        assert has_dialogue_choices(None) is False
+
+    @patch("src.utils.conversation_utils.GAME_MODE", "online")
+    def test_false_in_online_mode(self):
+        npc = _make_npc()
+        npc.dialogue_tree = {
+            "nodes": {
+                "start": {
+                    "prompt": "Hello!",
+                    "choices": [{"text": "Hi", "next_node_id": "n2"}],
+                },
+            },
+        }
+        assert has_dialogue_choices(npc) is False
+
+    @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
+    def test_respects_current_node(self):
+        npc = _make_npc()
+        npc.dialogue_tree = {
+            "_current": "end_node",
+            "nodes": {
+                "start": {
+                    "prompt": "Hello!",
+                    "choices": [{"text": "Hi", "next_node_id": "end_node"}],
+                },
+                "end_node": {"prompt": "Goodbye."},
+            },
+        }
+        assert has_dialogue_choices(npc) is False

@@ -5,10 +5,12 @@ from enum import Enum
 
 class ScreenState(Enum):
     START = "start"
+    CONFIG = "config"
     CLASS_SELECT = "class_select"
     ROOM_INTRO = "room_intro"
     GAMEPLAY = "gameplay"
     PLAYER_MENU = "player_menu"
+    LOAD_GAME = "load_game"
     COMBAT = "combat"
     ENCOUNTER = "encounter"
     DIALOGUE = "dialogue"
@@ -49,6 +51,10 @@ class ScreenController:
             self._stack[-1] = state
         else:
             self._stack.append(state)
+
+    def reset_to(self, state: ScreenState):
+        """Clear the stack and set a single screen."""
+        self._stack = [state]
 
     @property
     def depth(self) -> int:
