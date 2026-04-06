@@ -1,6 +1,6 @@
 import random
 import pytest
-from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
+from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.maze import Maze
 
 
@@ -195,6 +195,33 @@ def test_aggressive_npc_random_when_no_los():
             break
 
     assert moved, "NPC should eventually move randomly when player is not in line of sight"
+
+
+@pytest.mark.parametrize("cls,extra_kwargs", [
+    (StaticNPC, {}),
+    (RandomNPC, {"home_x": 0, "home_y": 0}),
+    (AggressiveNPC, {}),
+    (MerchantNPC, {}),
+])
+def test_npc_inherits_maze_environment(cls, extra_kwargs):
+    """All NPC types must inherit environment from the maze via prepare()."""
+    maze_env = "desert"
+    npc = cls(x=0, y=0, id=500, **extra_kwargs)
+    npc.prepare(maze_environment=maze_env)
+    assert npc.environment == maze_env
+
+
+@pytest.mark.parametrize("cls,extra_kwargs", [
+    (StaticNPC, {}),
+    (RandomNPC, {"home_x": 0, "home_y": 0}),
+    (AggressiveNPC, {}),
+    (MerchantNPC, {}),
+])
+def test_npc_environment_overrides_default(cls, extra_kwargs):
+    """Even if NPC already has an environment, prepare() with maze_environment overrides it."""
+    npc = cls(x=0, y=0, id=501, environment="forest", **extra_kwargs)
+    npc.prepare(maze_environment="tundra")
+    assert npc.environment == "tundra"
 
 
 def test_random_npc_stays_in_range():

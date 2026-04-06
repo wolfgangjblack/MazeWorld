@@ -146,8 +146,8 @@ class MerchantNPC(NPC):
     shop_inventory: List[dict] = Field(default_factory=list)
     # Each entry: {"item_id": int, "price": int, "stock": int}
 
-    def prepare(self):
-        self.generate_personality_document()
+    def prepare(self, maze_environment: str | None = None):
+        self.generate_personality_document(maze_environment)
         self.build_identity()
 
     def get_shop_items(self) -> list[dict]:
