@@ -107,6 +107,37 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
     return _parse_json_response(raw)
 
 
+WEAPON_DICE_BY_LEVEL = {
+    1: ["1d4", "1d6"],
+    2: ["1d6", "1d8"],
+    3: ["1d8", "1d10"],
+    4: ["1d10", "1d12"],
+}
+
+
+def generate_item_primative(environment: dict, room_level: int = 1) -> dict:
+    """Generate environment-themed items via LLM. Returns dict with category arrays."""
+    import random as _rng
+
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+
+    request = prompts.item_generation(env, env_name, room_level)
+    raw = generate(request)
+    result = _parse_json_response(raw)
+
+    if "error" in result:
+        return result
+
+    # Post-process: assign weapon dice scaled to room_level
+    dice_pool = WEAPON_DICE_BY_LEVEL.get(room_level, WEAPON_DICE_BY_LEVEL[1])
+    for weapon in result.get("weapons", []):
+        weapon["attack_dice"] = _rng.choice(dice_pool)
+
+    return result
+
+
 def generate_item_image_description(item_data: dict) -> str:
     """Generate a diffusion prompt for an item portrait."""
     prompts = get_prompt_set()

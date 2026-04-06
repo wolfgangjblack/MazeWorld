@@ -5,6 +5,7 @@ from typing import Optional, List
 class QuestReward(BaseModel):
     item_id: Optional[int] = None
     xp: int = 0
+    money: int = 0
 
 
 class Quest(BaseModel):

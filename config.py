@@ -38,6 +38,9 @@ GAME_MODE = os.getenv("GAME_MODE", "online")  # "online" | "offline_local" | "of
 NUM_FOOD = 2
 NUM_DRINKS = 2
 NUM_TOOLS = 1
+NUM_WEAPONS = 2
+NUM_SPELL_SCROLLS = 1
+STARTING_MONEY = 50
 
 ##GenAI Backend
 # ------------------------------------

@@ -1,7 +1,7 @@
 import random
 import pygame
 from src.views.gameplay_view import GameView
-from src.models.npc import RandomNPC, AggressiveNPC
+from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.registry import registry
 
@@ -29,6 +29,12 @@ class GameController:
         self.player_at_item = False
         self.current_npc = None
         self.running = True
+
+        # Shop state
+        self.shop_active = False
+        self.shop_npc = None
+        self.shop_mode = "buy"  # "buy" or "sell"
+        self.shop_selected_index = 0
 
         self.game_view = GameView(screen, font, dialogue_box)
 
@@ -94,6 +100,11 @@ class GameController:
         # 0. If an event is active
         if self.dialogue_box.event_active:
             self._handle_event_input(event)
+            return
+
+        # 0.5. If shop is active
+        if self.shop_active:
+            self._handle_shop_input(event)
             return
 
         # 1. If an item message is active
@@ -166,6 +177,11 @@ class GameController:
                 self._handle_npc_interaction(self.current_npc)
                 return
 
+        if event.key == pygame.K_s:
+            if self.current_npc and isinstance(self.current_npc, MerchantNPC):
+                self._open_shop(self.current_npc)
+                return
+
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
             return
@@ -194,10 +210,16 @@ class GameController:
                 self.dialogue_box.event_context["dice_roll"] = dice_roll
                 self.dialogue_box.awaiting_roll = False
 
-                if result.get("success") and result.get("reward_item_id"):
-                    reward_item = registry.get_item(result["reward_item_id"])
-                    if reward_item:
-                        self.player.add_to_inventory(reward_item.clone())
+                if result.get("success"):
+                    if result.get("reward_item_id"):
+                        reward_item = registry.get_item(result["reward_item_id"])
+                        if reward_item:
+                            self.player.add_to_inventory(reward_item.clone())
+                    # Handle loot drops from combat
+                    for loot_id in result.get("loot_item_ids", []):
+                        loot_item = registry.get_item(loot_id)
+                        if loot_item:
+                            self.player.add_to_inventory(loot_item.clone())
 
                 if current_event.resolved:
                     self.maze.grid[self.player.y][self.player.x] = 0
@@ -287,11 +309,17 @@ class GameController:
         """Mark quest as completed and grant reward."""
         quest.status = "completed"
         self.player.complete_quest(quest.id)
-        if quest.reward and quest.reward.item_id:
-            reward = registry.get_item(quest.reward.item_id)
-            if reward:
-                self.player.add_to_inventory(reward.clone())
-        self.dialogue_box.set_item_message(f"Quest completed: {quest.title}!")
+        reward_msg = f"Quest completed: {quest.title}!"
+        if quest.reward:
+            if quest.reward.item_id:
+                reward = registry.get_item(quest.reward.item_id)
+                if reward:
+                    self.player.add_to_inventory(reward.clone())
+            money = getattr(quest.reward, 'money', 0)
+            if money > 0:
+                self.player.add_money(money)
+                reward_msg += f" +{money} gold!"
+        self.dialogue_box.set_item_message(reward_msg)
         self.item_message_active = True
 
     def _start_escort(self, quest):
@@ -337,6 +365,55 @@ class GameController:
                     self.dialogue_box.set_item_message("Your escort has arrived safely!")
                     self.item_message_active = True
 
+    def _open_shop(self, merchant_npc):
+        """Open the shop interface for a MerchantNPC."""
+        self.shop_active = True
+        self.shop_npc = merchant_npc
+        self.shop_mode = "buy"
+        self.shop_selected_index = 0
+
+    def _handle_shop_input(self, event):
+        """Handle keyboard input while the shop is open."""
+        if event.key == pygame.K_ESCAPE:
+            self.shop_active = False
+            self.shop_npc = None
+            return
+
+        if event.key == pygame.K_b:
+            self.shop_mode = "buy"
+            self.shop_selected_index = 0
+            return
+        if event.key == pygame.K_s:
+            self.shop_mode = "sell"
+            self.shop_selected_index = 0
+            return
+
+        if self.shop_mode == "buy":
+            available = self.shop_npc.get_shop_items()
+            max_idx = len(available) - 1
+        else:
+            max_idx = len(self.player.get_inventory()) - 1
+
+        if max_idx < 0:
+            return
+
+        if event.key == pygame.K_UP:
+            self.shop_selected_index = max(0, self.shop_selected_index - 1)
+        elif event.key == pygame.K_DOWN:
+            self.shop_selected_index = min(max_idx, self.shop_selected_index + 1)
+        elif event.key == pygame.K_RETURN:
+            if self.shop_mode == "buy":
+                msg = self.shop_npc.buy_from(self.shop_selected_index, self.player)
+            else:
+                inventory = self.player.get_inventory()
+                if self.shop_selected_index < len(inventory):
+                    item_name = inventory[self.shop_selected_index][0]
+                    msg = self.shop_npc.sell_to(item_name, self.player)
+                else:
+                    msg = "Nothing to sell."
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(msg)
+
     def handle_inventory_input(self, event):
         inventory = self.player.get_inventory()
         if not inventory:
@@ -353,6 +430,12 @@ class GameController:
             self.dialogue_box.set_item_message(message)
         elif event.key == pygame.K_u:
             message = self.player.use_item()
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(message)
+        elif event.key == pygame.K_e:
+            # Equip weapon
+            item_name = inventory[self.player.selected_item_index][0]
+            message = self.player.equip_weapon(item_name)
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
 
@@ -383,4 +466,8 @@ class GameController:
             current_npc=self.current_npc,
             player_at_item=self.player_at_item,
             quests=self.quests,
+            shop_active=self.shop_active,
+            shop_npc=self.shop_npc,
+            shop_mode=self.shop_mode,
+            shop_selected_index=self.shop_selected_index,
         )

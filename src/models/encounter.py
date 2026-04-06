@@ -27,21 +27,52 @@ class Event(BaseModel):
         arbitrary_types_allowed = True
 
 
+class LootEntry(BaseModel):
+    """A single entry in a loot table."""
+    item_id: int
+    drop_chance: float = 0.5  # 0.0 to 1.0
+
 class CombatEvent(Event):
     type: str = "combat"
     damage_type: str = "health"  # "health" | "hunger" | "thirst"
     damage_range: List[int] = Field(default_factory=lambda: [5, 15])
     reward_item_id: Optional[int] = None
+    loot_table: List[LootEntry] = Field(default_factory=list)
+    money_drop: List[int] = Field(default_factory=lambda: [0, 0])  # [min, max]
 
     def resolve(self, dice_roll: int, player) -> dict:
-        """Roll vs difficulty. Win -> reward. Lose -> take damage."""
+        """Roll vs difficulty. Win -> reward + loot. Lose -> take damage.
+        If player has an equipped weapon, add its damage roll as a modifier.
+        """
         threshold = self.difficulty * 3
-        if dice_roll >= threshold:
+        weapon_bonus = 0
+        weapon = player.get_equipped_weapon() if hasattr(player, 'get_equipped_weapon') else None
+        if weapon and weapon.item_stats.stat_modifier:
+            weapon_bonus = player.get_stat_mod(weapon.item_stats.stat_modifier) if hasattr(player, 'get_stat_mod') else 0
+
+        total = dice_roll + weapon_bonus
+        if total >= threshold:
             self.resolved = True
+            # Roll loot drops
+            dropped_item_ids = []
+            for entry in self.loot_table:
+                if random.random() <= entry.drop_chance:
+                    dropped_item_ids.append(entry.item_id)
+            # Money drop
+            money = 0
+            if self.money_drop[1] > 0:
+                money = random.randint(self.money_drop[0], self.money_drop[1])
+            if money > 0:
+                player.add_money(money)
+            msg = f"You defeated the {self.name}!"
+            if money > 0:
+                msg += f" Found {money} gold."
             return {
                 "success": True,
-                "message": f"You defeated the {self.name}!",
+                "message": msg,
                 "reward_item_id": self.reward_item_id,
+                "loot_item_ids": dropped_item_ids,
+                "money_dropped": money,
             }
         else:
             damage = random.randint(self.damage_range[0], self.damage_range[1])
@@ -115,10 +146,15 @@ def create_event_from_data(data: dict) -> Event:
     """Construct the appropriate Event subclass from a data dict."""
     event_type = data.get("type", "combat")
     cls = EVENT_TYPE_MAP.get(event_type, CombatEvent)
+    data = dict(data)
     if event_type == "puzzle" and "choices" in data:
-        data = dict(data)
         data["choices"] = [
             EventChoice(**c) if isinstance(c, dict) else c
             for c in data["choices"]
+        ]
+    if event_type == "combat" and "loot_table" in data:
+        data["loot_table"] = [
+            LootEntry(**e) if isinstance(e, dict) else e
+            for e in data["loot_table"]
         ]
     return cls(**data)
