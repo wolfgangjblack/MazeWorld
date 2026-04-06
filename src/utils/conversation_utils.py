@@ -3,12 +3,13 @@ from src.prompts import get_prompt_set
 from src.generate.llm_client import generate
 
 
-def generate_npc_response(npc, player_input: str) -> str:
+def generate_npc_response(npc, player_input: str, story_context: str = "") -> str:
     """Generate an NPC response.
 
     - First meeting: uses pre-generated opening_greeting if available.
     - Online / offline_local: live LLM for ongoing conversation.
     - Offline_static: returns choices from npc.dialogue_tree (no LLM call).
+    - *story_context*: optional story summary (faction, beats) injected into prompts.
     """
     is_greeting = not player_input
 
@@ -40,6 +41,7 @@ def generate_npc_response(npc, player_input: str) -> str:
             history=npc.get_recent_history(),
             npc_name=npc.name,
             player_input="The player returns to speak with you.",
+            story_context=story_context,
         )
         raw = generate(request)
         response = _extract_response(raw)
@@ -52,6 +54,7 @@ def generate_npc_response(npc, player_input: str) -> str:
             history=npc.get_recent_history(),
             npc_name=npc.name,
             player_input=player_input,
+            story_context=story_context,
         )
         raw = generate(request)
         response = _extract_response(raw)

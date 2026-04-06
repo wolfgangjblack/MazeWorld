@@ -49,10 +49,18 @@ class ClaudePromptSet(PromptSet):
         )
 
     def npc_response(self, identity: str, history: list[dict],
-                     npc_name: str, player_input: str) -> LLMRequest:
+                     npc_name: str, player_input: str,
+                     story_context: str = "") -> LLMRequest:
         examples = _history_to_examples(history)
+        system = identity
+        if story_context:
+            system += (
+                f"\n\nWorld context you are aware of:\n{story_context}\n"
+                "Weave this knowledge naturally into conversation when relevant — "
+                "gossip, warnings, rumors, or opinions about the faction and events."
+            )
         return LLMRequest(
-            system=identity,
+            system=system,
             examples=examples,
             user_message=player_input,
             max_tokens=150,
