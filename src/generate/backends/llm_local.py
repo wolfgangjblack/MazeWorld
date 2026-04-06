@@ -1,0 +1,82 @@
+import os
+
+from src.generate.backends.base import LLMBackend
+from src.prompts.base import LLMRequest
+
+
+class LocalLLMBackend(LLMBackend):
+    """HuggingFace transformers backend for local text generation."""
+
+    def __init__(self):
+        self._tokenizer = None
+        self._model = None
+        self._device = None
+
+    def _get_device(self):
+        if self._device is None:
+            import torch
+            if torch.cuda.is_available():
+                self._device = torch.device("cuda")
+            elif torch.backends.mps.is_available():
+                self._device = torch.device("mps")
+            else:
+                self._device = torch.device("cpu")
+        return self._device
+
+    def _get_llm(self):
+        if self._tokenizer is not None and self._model is not None:
+            return self._model, self._tokenizer
+
+        from config import LLM_MODEL_PATH, HF_ENV
+        hf_token = os.getenv(HF_ENV)
+        if not hf_token:
+            raise RuntimeError(
+                f"Environment variable '{HF_ENV}' is not set. "
+                "Set it to a valid HuggingFace token."
+            )
+
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                LLM_MODEL_PATH, token=hf_token
+            )
+            self._model = AutoModelForCausalLM.from_pretrained(
+                LLM_MODEL_PATH, token=hf_token
+            )
+            self._model.to(self._get_device())
+        except Exception as e:
+            self._tokenizer, self._model = None, None
+            raise RuntimeError(
+                f"Failed to load LLM '{LLM_MODEL_PATH}': {e}"
+            ) from e
+
+        return self._model, self._tokenizer
+
+    def generate(self, request: LLMRequest) -> str:
+        import torch
+        model, tokenizer = self._get_llm()
+        device = self._get_device()
+
+        parts = [request.system]
+        for user_msg, asst_msg in request.examples:
+            parts.append(f"##Input: {user_msg}")
+            parts.append(f"##Output: {asst_msg}")
+        parts.append(f"##Input: {request.user_message}")
+        parts.append("##Output:")
+        prompt_text = "\n========================================\n".join(parts)
+
+        inputs = tokenizer(
+            prompt_text, return_tensors="pt", truncation=True, max_length=1024
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=request.max_tokens,
+                pad_token_id=tokenizer.eos_token_id,
+                temperature=1.0,
+            )
+
+        return tokenizer.decode(outputs[0], skip_special_tokens=True)

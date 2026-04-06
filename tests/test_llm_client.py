@@ -1,19 +1,9 @@
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from src.generate import llm_client
 from src.prompts.base import LLMRequest
-
-
-@pytest.fixture(autouse=True)
-def reset_globals():
-    llm_client._tokenizer = None
-    llm_client._model = None
-    llm_client._device = None
-    yield
-    llm_client._tokenizer = None
-    llm_client._model = None
-    llm_client._device = None
+from src.generate.backends.llm_local import LocalLLMBackend
+from src.generate.backends.llm_api import ApiLLMBackend
 
 
 SAMPLE_REQUEST = LLMRequest(
@@ -24,125 +14,120 @@ SAMPLE_REQUEST = LLMRequest(
 )
 
 
-def test_get_device_returns_torch_device():
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = False
-    mock_torch.backends.mps.is_available.return_value = False
-    mock_device = MagicMock()
-    mock_torch.device.return_value = mock_device
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        device = llm_client._get_device()
-    assert device is mock_device
-    mock_torch.device.assert_called_with("cpu")
+# -- LocalLLMBackend --------------------------------------------------------
 
+class TestLocalLLMBackend:
+    def setup_method(self):
+        self.backend = LocalLLMBackend()
 
-def test_get_device_caches():
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = False
-    mock_torch.backends.mps.is_available.return_value = False
-    mock_device = MagicMock()
-    mock_torch.device.return_value = mock_device
-    with patch.dict("sys.modules", {"torch": mock_torch}):
-        d1 = llm_client._get_device()
-        d2 = llm_client._get_device()
-    assert d1 is d2
+    def test_get_device_returns_cpu_fallback(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_device = MagicMock()
+        mock_torch.device.return_value = mock_device
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            device = self.backend._get_device()
+        assert device is mock_device
+        mock_torch.device.assert_called_with("cpu")
 
+    def test_get_device_caches(self):
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_device = MagicMock()
+        mock_torch.device.return_value = mock_device
+        with patch.dict("sys.modules", {"torch": mock_torch}):
+            d1 = self.backend._get_device()
+            d2 = self.backend._get_device()
+        assert d1 is d2
 
-def test_get_llm_raises_without_hf_token():
-    with patch.dict(os.environ, {}, clear=True):
-        with pytest.raises(RuntimeError, match="not set"):
-            llm_client._get_llm()
-
-
-def _mock_transformers_and_torch():
-    """Create mock transformers + torch modules to avoid native-lib crashes."""
-    mock_transformers = MagicMock()
-    mock_torch = MagicMock()
-    mock_torch.cuda.is_available.return_value = False
-    mock_torch.backends.mps.is_available.return_value = False
-    mock_torch.device.return_value = MagicMock()
-    return mock_transformers, mock_torch
-
-
-def test_get_llm_raises_on_load_failure():
-    mock_transformers, mock_torch = _mock_transformers_and_torch()
-    mock_transformers.AutoTokenizer.from_pretrained.side_effect = OSError("download failed")
-    with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
-        with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
-            with pytest.raises(RuntimeError, match="Failed to load LLM"):
-                llm_client._get_llm()
-    assert llm_client._model is None
-    assert llm_client._tokenizer is None
-
-
-def test_get_llm_caches_on_success():
-    mock_transformers, mock_torch = _mock_transformers_and_torch()
-    mock_tok = MagicMock()
-    mock_model = MagicMock()
-    mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tok
-    mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_model
-    with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
-        with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
-            m1, t1 = llm_client._get_llm()
-            m2, t2 = llm_client._get_llm()
-    assert m1 is m2
-    assert t1 is t2
-    assert mock_model.to.call_count == 1
-
-
-@patch.object(llm_client, "LLM_BACKEND", "local")
-@patch.object(llm_client, "_generate_local", return_value="local response")
-def test_generate_routes_to_local(mock_local):
-    result = llm_client.generate(SAMPLE_REQUEST)
-    assert result == "local response"
-    mock_local.assert_called_once_with(SAMPLE_REQUEST)
-
-
-@patch.object(llm_client, "LLM_BACKEND", "api")
-@patch.object(llm_client, "_generate_api", return_value="api response")
-def test_generate_routes_to_api(mock_api):
-    result = llm_client.generate(SAMPLE_REQUEST)
-    assert result == "api response"
-    mock_api.assert_called_once_with(SAMPLE_REQUEST)
-
-
-def _mock_anthropic_module():
-    """Create a mock anthropic module so tests work without installing it."""
-    import sys
-    mock_mod = MagicMock()
-    sys.modules["anthropic"] = mock_mod
-    return mock_mod
-
-
-def test_generate_api_raises_without_key():
-    _mock_anthropic_module()
-    try:
+    def test_get_llm_raises_without_hf_token(self):
         with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
-                llm_client._generate_api(SAMPLE_REQUEST)
-    finally:
+            with pytest.raises(RuntimeError, match="not set"):
+                self.backend._get_llm()
+
+    def test_get_llm_raises_on_load_failure(self):
+        mock_transformers = MagicMock()
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_torch.device.return_value = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained.side_effect = OSError("download failed")
+        with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
+            with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
+                with pytest.raises(RuntimeError, match="Failed to load LLM"):
+                    self.backend._get_llm()
+        assert self.backend._model is None
+        assert self.backend._tokenizer is None
+
+    def test_get_llm_caches_on_success(self):
+        mock_transformers = MagicMock()
+        mock_torch = MagicMock()
+        mock_torch.cuda.is_available.return_value = False
+        mock_torch.backends.mps.is_available.return_value = False
+        mock_torch.device.return_value = MagicMock()
+        mock_tok = MagicMock()
+        mock_model = MagicMock()
+        mock_transformers.AutoTokenizer.from_pretrained.return_value = mock_tok
+        mock_transformers.AutoModelForCausalLM.from_pretrained.return_value = mock_model
+        with patch.dict("sys.modules", {"transformers": mock_transformers, "torch": mock_torch}):
+            with patch.dict(os.environ, {"hf_write_read": "fake-token"}):
+                m1, t1 = self.backend._get_llm()
+                m2, t2 = self.backend._get_llm()
+        assert m1 is m2
+        assert t1 is t2
+        assert mock_model.to.call_count == 1
+
+
+# -- ApiLLMBackend ----------------------------------------------------------
+
+class TestApiLLMBackend:
+    def setup_method(self):
+        self.backend = ApiLLMBackend()
+
+    def test_generate_raises_without_key(self):
+        mock_mod = MagicMock()
         import sys
-        sys.modules.pop("anthropic", None)
+        sys.modules["anthropic"] = mock_mod
+        try:
+            with patch.dict(os.environ, {}, clear=True):
+                with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+                    self.backend.generate(SAMPLE_REQUEST)
+        finally:
+            sys.modules.pop("anthropic", None)
 
-
-def test_generate_api_calls_anthropic():
-    mock_mod = _mock_anthropic_module()
-    try:
-        mock_client = MagicMock()
-        mock_mod.Anthropic.return_value = mock_client
-        mock_client.messages.create.return_value = MagicMock(
-            content=[MagicMock(text="claude says hi")]
-        )
-
-        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-            result = llm_client._generate_api(SAMPLE_REQUEST)
-
-        assert result == "claude says hi"
-        mock_client.messages.create.assert_called_once()
-        call_kwargs = mock_client.messages.create.call_args.kwargs
-        assert call_kwargs["system"] == "You are a test assistant."
-        assert call_kwargs["max_tokens"] == 10
-        assert len(call_kwargs["messages"]) == 3
-    finally:
+    def test_generate_calls_anthropic(self):
+        mock_mod = MagicMock()
         import sys
-        sys.modules.pop("anthropic", None)
+        sys.modules["anthropic"] = mock_mod
+        try:
+            mock_client = MagicMock()
+            mock_mod.Anthropic.return_value = mock_client
+            mock_client.messages.create.return_value = MagicMock(
+                content=[MagicMock(text="claude says hi")]
+            )
+
+            with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+                result = self.backend.generate(SAMPLE_REQUEST)
+
+            assert result == "claude says hi"
+            mock_client.messages.create.assert_called_once()
+            call_kwargs = mock_client.messages.create.call_args.kwargs
+            assert call_kwargs["system"] == "You are a test assistant."
+            assert call_kwargs["max_tokens"] == 10
+            assert len(call_kwargs["messages"]) == 3
+        finally:
+            sys.modules.pop("anthropic", None)
+
+
+# -- generate() dispatch via registry ---------------------------------------
+
+def test_generate_delegates_to_registry():
+    from src.generate import llm_client
+    mock_backend = MagicMock()
+    mock_backend.generate.return_value = "mocked response"
+    with patch("src.generate.llm_client.get_llm_backend", return_value=mock_backend):
+        result = llm_client.generate(SAMPLE_REQUEST)
+    assert result == "mocked response"
+    mock_backend.generate.assert_called_once_with(SAMPLE_REQUEST)
