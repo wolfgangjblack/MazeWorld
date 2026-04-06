@@ -122,5 +122,13 @@
             "name": "scroll of sustenance",
             "desc": "Magically restores hunger and thirst.",
             "spell_effect": "sustain",
-            "item_stats": {"nutrition_value": 40, "hydration_value": 40, "price": 28}}
+            "item_stats": {"nutrition_value": 40, "hydration_value": 40, "price": 28}},
+    "700": {"category": "tool",
+            "name": "torch",
+            "desc": "A sturdy torch that cuts through the darkness. Restores full visibility at night.",
+            "item_stats": {"attribute": "light", "nutrition_value": 0, "hydration_value": 0, "health_value": 0, "uses": 10, "price": 15}},
+    "701": {"category": "tool",
+            "name": "lantern",
+            "desc": "An oil lantern with a steady flame. Lasts longer than a torch.",
+            "item_stats": {"attribute": "light", "nutrition_value": 0, "hydration_value": 0, "health_value": 0, "uses": 20, "price": 30}}
 }

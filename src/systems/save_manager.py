@@ -262,6 +262,14 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
     for (x, y), eid in game_controller.event_position_map.items():
         epm[f"{x},{y}"] = eid
 
+    # Serialize fog and day/night state
+    fog_data = {}
+    if hasattr(game_controller, 'fog') and game_controller.fog:
+        fog_data = game_controller.fog.serialize()
+    day_night_data = {}
+    if hasattr(game_controller, 'day_night') and game_controller.day_night:
+        day_night_data = game_controller.day_night.serialize()
+
     state = SaveState(
         version=1,
         metadata=metadata,
@@ -282,6 +290,8 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
         },
         follower_data=[serialize_follower(f) for f in player.followers],
         event_position_map=epm,
+        fog_data=fog_data,
+        day_night_data=day_night_data,
         time_played_seconds=time_played_seconds,
     )
 

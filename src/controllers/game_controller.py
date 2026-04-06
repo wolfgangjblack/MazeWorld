@@ -4,13 +4,20 @@ from src.views.gameplay_view import GameView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.models.follower import Follower
+from src.models.time import DayNightCycle
+from src.systems.fog_of_war import FogOfWar
+from src.systems.day_night import (
+    apply_rest, apply_combat_rest, player_has_torch,
+    consume_torch_use, is_event_active_at_time, is_npc_available,
+    get_night_overlay_alpha, REST_OPTIONS,
+)
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
 
 
 class GameController:
     def __init__(self, screen, font, maze, player, npcs, dialogue_box,
-                 events=None, quests=None):
+                 events=None, quests=None, fog=None, day_night=None):
         self.screen = screen
         self.font = font
         self.maze = maze
@@ -20,12 +27,20 @@ class GameController:
         self.events = events or {}
         self.quests = quests or {}
 
+        # Fog of War
+        self.fog = fog or FogOfWar()
+        # Day/Night Cycle
+        self.day_night = day_night or DayNightCycle()
+
         # Build a lookup from grid position to event id
         self.event_position_map: dict[tuple[int, int], str] = {}
         self._build_event_position_map()
 
         # Check for kill quests already cleared at startup
         self._check_kill_quests_already_cleared()
+
+        # Initial fog reveal at player start position
+        self._update_fog()
 
         # UI / State variables
         self.inventory_active = False
@@ -36,6 +51,9 @@ class GameController:
         self.current_npc = None
         self.running = True
         self.debug_reveal = False
+
+        # Rest menu state
+        self.rest_menu_active = False
 
         # Shop state
         self.shop_active = False
@@ -87,6 +105,24 @@ class GameController:
             or self.shop_active
         )
 
+    # --- Fog of War & Day/Night helpers ---
+
+    def _get_visibility_radius(self) -> int:
+        """Calculate current visibility radius (fog + night + torch)."""
+        return self.fog.get_visibility_radius(
+            self.player,
+            is_night=self.day_night.is_night,
+            has_torch=player_has_torch(self.player),
+        )
+
+    def _update_fog(self):
+        """Reveal tiles around the player's current position."""
+        radius = self._get_visibility_radius()
+        self.fog.update(self.player.x, self.player.y, self.maze, radius)
+        # Consume one torch use when moving at night
+        if self.day_night.is_night and player_has_torch(self.player):
+            consume_torch_use(self.player)
+
     def run(self) -> str | None:
         """Main game loop. Returns 'open_menu' when the player opens the menu, or None on window close."""
         clock = pygame.time.Clock()
@@ -125,10 +161,18 @@ class GameController:
         return None
 
     def after_move_check(self):
+        # Advance time on movement
+        self.day_night.advance(1)
+        # Update fog of war
+        self._update_fog()
+
         if self.player.is_on_event_tile(self.maze):
             event = self._get_event_at_player()
             if event and not event.resolved:
-                self.dialogue_box.start_event(event)
+                # Time-gated events: only trigger at correct time
+                if is_event_active_at_time(event, self.day_night.current_period):
+                    self.dialogue_box.start_event(event)
+                # Wrong time: silently pass over (event stays)
             else:
                 self.maze.grid[self.player.y][self.player.x] = 0
         else:
@@ -141,6 +185,11 @@ class GameController:
         # 0. If an event is active
         if self.dialogue_box.event_active:
             self._handle_event_input(event)
+            return
+
+        # 0.25. If rest menu is active
+        if self.rest_menu_active:
+            self._handle_rest_input(event)
             return
 
         # 0.5. If shop is active
@@ -251,6 +300,13 @@ class GameController:
             self._talk_to_follower()
             return
 
+        if event.key == pygame.K_r:
+            self.rest_menu_active = True
+            self.dialogue_box.set_item_message(
+                "Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
+            self.item_message_active = True
+            return
+
         # Player menu (save/load)
         if event.key == pygame.K_TAB:
             self.pending_action = "open_menu"
@@ -270,17 +326,7 @@ class GameController:
             return
 
     def _handle_event_input(self, event):
-        """Handle keyboard input during an active event.
-
-        TODO Phase 8: Check time_gate before triggering encounters.
-        Changes needed:
-          - DayNightCycle system must be instantiated and tracked in GameController
-          - In _handle_event_input: skip trigger if event.time_gate doesn't match current period
-          - In _handle_npc_interaction: skip quest offer if quest.time_gate doesn't match
-          - EventChoice.time_gate should gate individual choices within events
-          - Encounters with time_gate set should remain invisible when walked over at wrong time
-          - See PDR sections 4.3 (Encounters) and 4.11 (Day/Night) for full spec
-        """
+        """Handle keyboard input during an active event."""
         current_event = self.dialogue_box.current_event
         if not current_event:
             return
@@ -406,6 +452,8 @@ class GameController:
             if event.key == pygame.K_a:
                 # Apply poison damage before player acts
                 self._apply_player_poison()
+                # Advance time on combat action
+                self.day_night.advance(1)
 
                 result = combat_event.player_attack(self.player, self.combat_target_index)
                 self.dialogue_box.combat_log = list(combat_event.combat_log)
@@ -414,6 +462,17 @@ class GameController:
                 if outcome == "victory":
                     self._handle_combat_victory(combat_event)
                     return
+                combat_event.advance_turn()
+                self._advance_combat_to_next_turn(combat_event)
+                return
+
+            if event.key == pygame.K_r:
+                # Rest in combat: skip turn for small HP recovery
+                self._apply_player_poison()
+                self.day_night.advance(1)
+                msg = apply_combat_rest(self.player)
+                self.dialogue_box.add_combat_log(msg)
+                combat_event.combat_log.append(msg)
                 combat_event.advance_turn()
                 self._advance_combat_to_next_turn(combat_event)
                 return
@@ -543,6 +602,13 @@ class GameController:
 
     def _handle_npc_interaction(self, npc):
         """Start dialogue with an NPC, handling quest offers and completions."""
+        # Check NPC availability by time of day
+        if not is_npc_available(npc, self.day_night.current_period):
+            self.dialogue_box.set_item_message(
+                f"{npc.name or 'NPC'} is not available right now.")
+            self.item_message_active = True
+            return
+
         self._check_quest_turn_in(npc)
 
         self.dialogue_box.start_dialogue(npc)
@@ -550,6 +616,9 @@ class GameController:
         if npc.quest_id and npc.quest_id in self.quests:
             quest = self.quests[npc.quest_id]
             if quest.status == "not_started":
+                # Time-gated quest: only offer at correct time
+                if quest.time_gate and not is_event_active_at_time(quest, self.day_night.current_period):
+                    return
                 prereq = quest.prerequisite_quest_id
                 if not prereq or self.player.has_completed(prereq):
                     quest.status = "active"
@@ -655,6 +724,22 @@ class GameController:
                                     self.player.add_to_inventory(reward.clone())
                     self.dialogue_box.set_item_message("Your escort has arrived safely!")
                     self.item_message_active = True
+
+    def _handle_rest_input(self, event):
+        """Handle input while rest menu is active."""
+        hour_map = {pygame.K_1: 3, pygame.K_2: 6, pygame.K_3: 12}
+        if event.key in hour_map:
+            hours = hour_map[event.key]
+            msg = apply_rest(self.player, hours, self.day_night)
+            self._update_fog()
+            self.dialogue_box.set_item_message(msg)
+            self.rest_menu_active = False
+            return
+        if event.key == pygame.K_ESCAPE:
+            self.rest_menu_active = False
+            self.item_message_active = False
+            self.dialogue_box.clear_item_message()
+            return
 
     def _talk_to_follower(self):
         """Talk to the first follower for hints/personality."""
@@ -867,6 +952,9 @@ class GameController:
 
     def draw(self, current_time):
         """Draw the current game state."""
+        period = self.day_night.current_period
+        night_alpha = get_night_overlay_alpha(period, self.day_night.period_progress)
+
         self.game_view.draw_game(
             maze=self.maze,
             player=self.player,
@@ -884,4 +972,9 @@ class GameController:
             quest_log_active=self.quest_log_active,
             quest_log=self.get_quest_log() if self.quest_log_active else None,
             followers=self.player.followers,
+            fog=self.fog,
+            visibility_radius=self._get_visibility_radius(),
+            night_alpha=night_alpha,
+            time_period=period,
+            day_number=self.day_night.day_number,
         )
