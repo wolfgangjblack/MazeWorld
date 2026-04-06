@@ -21,7 +21,8 @@ class GameView:
                   current_npc, player_at_item, quests=None, debug_reveal=False,
                   shop_active=False, shop_npc=None, shop_mode="buy",
                   shop_selected_index=0,
-                  quest_log_active=False, quest_log=None, followers=None):
+                  quest_log_active=False, quest_log=None, followers=None,
+                  item_detail_active=False):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -32,6 +33,8 @@ class GameView:
             self.draw_quest_log(quest_log)
         elif inventory_active:
             self.draw_inventory(player)
+            if item_detail_active:
+                self.draw_item_detail(player)
         else:
             self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
                                      debug_reveal=debug_reveal)
@@ -129,9 +132,137 @@ class GameView:
                     detail_surface = self.font.render(detail, True, (80, 80, 80))
                     self.screen.blit(detail_surface, (150, y_start + index * 30 + 16))
 
-        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  Esc: Close"
+        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  D: Details  |  Esc: Close"
         exit_text = self.font.render(controls, True, (0, 0, 0))
-        self.screen.blit(exit_text, (120, SCREEN_HEIGHT - 120))
+        self.screen.blit(exit_text, (105, SCREEN_HEIGHT - 120))
+
+    def draw_item_detail(self, player):
+        """Draw item detail popup overlay for the currently selected inventory item."""
+        inventory_items = list(player.inventory.values())
+        if not inventory_items or player.selected_item_index >= len(inventory_items):
+            return
+
+        item = inventory_items[player.selected_item_index]
+
+        # Semi-transparent backdrop
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.fill((0, 0, 0))
+        overlay.set_alpha(180)
+        self.screen.blit(overlay, (0, 0))
+
+        # Detail panel
+        panel_w, panel_h = 500, 380
+        panel_x = (SCREEN_WIDTH - panel_w) // 2
+        panel_y = (SCREEN_HEIGHT - panel_h) // 2
+        pygame.draw.rect(self.screen, (50, 45, 40), (panel_x, panel_y, panel_w, panel_h))
+        pygame.draw.rect(self.screen, (200, 180, 120), (panel_x, panel_y, panel_w, panel_h), 2)
+
+        small_font = pygame.font.Font(None, 22)
+        title_font = pygame.font.Font(None, 36)
+        y = panel_y + 15
+        content_x = panel_x + 20
+
+        # Portrait
+        portrait_loaded = False
+        portrait_rect_bottom = y
+        if item.profile_image:
+            try:
+                import os
+                if os.path.exists(item.profile_image):
+                    img = pygame.image.load(item.profile_image)
+                    img = pygame.transform.scale(img, (96, 96))
+                    img_x = panel_x + panel_w - 116
+                    self.screen.blit(img, (img_x, y))
+                    portrait_loaded = True
+                    portrait_rect_bottom = y + 96
+            except Exception:
+                pass
+
+        # Item name
+        name_color = (255, 215, 0)
+        name_surf = title_font.render(item.name, True, name_color)
+        self.screen.blit(name_surf, (content_x, y))
+        y += 35
+
+        # Category / type
+        type_name = type(item).__name__
+        cat_surf = small_font.render(f"Type: {type_name}  |  Category: {item.category}", True, (160, 160, 160))
+        self.screen.blit(cat_surf, (content_x, y))
+        y += 22
+
+        # Equipped indicator
+        if hasattr(player, 'equipped_weapon') and player.equipped_weapon == item.name:
+            eq_surf = self.font.render("[EQUIPPED]", True, (100, 255, 100))
+            self.screen.blit(eq_surf, (content_x, y))
+            y += 24
+
+        y = max(y, portrait_rect_bottom + 10)
+
+        # Description (word-wrapped)
+        y += 5
+        desc_label = self.font.render("Description:", True, (200, 200, 200))
+        self.screen.blit(desc_label, (content_x, y))
+        y += 22
+        desc_text = item.desc
+        max_line_w = panel_w - 40
+        words = desc_text.split()
+        lines = []
+        current_line = ""
+        for word in words:
+            test = f"{current_line} {word}".strip()
+            if small_font.size(test)[0] <= max_line_w:
+                current_line = test
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        for line in lines[:4]:
+            line_surf = small_font.render(line, True, (220, 220, 220))
+            self.screen.blit(line_surf, (content_x, y))
+            y += 18
+
+        # Stats section
+        y += 10
+        stats = item.item_stats
+        stat_label = self.font.render("Stats:", True, (200, 200, 200))
+        self.screen.blit(stat_label, (content_x, y))
+        y += 24
+
+        stat_lines = []
+        if stats.attack_dice:
+            stat_lines.append(f"Damage: {stats.attack_dice}")
+        if stats.stat_modifier:
+            stat_lines.append(f"Stat: {stats.stat_modifier}")
+        if stats.nutrition_value:
+            stat_lines.append(f"Nutrition: {stats.nutrition_value:+d}")
+        if stats.hydration_value:
+            stat_lines.append(f"Hydration: {stats.hydration_value:+d}")
+        if stats.health_value:
+            stat_lines.append(f"Health: {stats.health_value:+d}")
+        if stats.uses > 1:
+            stat_lines.append(f"Uses: {stats.uses}")
+        if stats.price:
+            stat_lines.append(f"Value: {stats.price}g")
+        if stats.attribute:
+            stat_lines.append(f"Attribute: {stats.attribute}")
+
+        if not stat_lines:
+            stat_lines.append("No notable stats.")
+
+        # Render stats in two columns
+        col_w = (panel_w - 40) // 2
+        for i, stat_text in enumerate(stat_lines):
+            sx = content_x + (i % 2) * col_w
+            sy = y + (i // 2) * 20
+            stat_surf = small_font.render(stat_text, True, (180, 220, 180))
+            self.screen.blit(stat_surf, (sx, sy))
+
+        # Close hint
+        hint = small_font.render("Esc / D: Close detail", True, (120, 120, 120))
+        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2,
+                                panel_y + panel_h - 25))
 
     def draw_shop(self, player, merchant_npc, mode, selected_index):
         """Draw the shop interface with buy/sell columns."""
