@@ -9,9 +9,6 @@ from src.systems.survival import (
     SurvivalSystem,
     DRAIN_INTERVAL,
     STARVATION_INTERVAL,
-    THRESHOLD_WARNING,
-    THRESHOLD_PENALTY,
-    THRESHOLD_CRITICAL,
     BASE_HUNGER_DRAIN,
     BASE_THIRST_DRAIN,
     STARVATION_HP_DRAIN,
@@ -343,7 +340,7 @@ class TestNoDrainWhileStationary:
 
     def test_no_drain_without_move(self):
         """Survival system only drains on on_move(), not passively."""
-        survival = SurvivalSystem()
+        SurvivalSystem()
         player = _make_player(hunger=100, thirst=100)
         # Simply not calling on_move means no drain
         assert player.hunger == 100

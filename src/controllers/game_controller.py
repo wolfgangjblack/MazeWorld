@@ -53,7 +53,7 @@ class GameController:
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_menu" to signal main loop
+        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
 
         self.game_view = GameView(screen, font, dialogue_box)
 

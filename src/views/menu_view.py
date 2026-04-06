@@ -1,7 +1,7 @@
 """Tabbed player menu view — Inventory, Stats, Spells/Abilities tabs."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from config import SCREEN_WIDTH, SCREEN_HEIGHT
 
 TITLE_COLOR = (220, 180, 60)
 TAB_ACTIVE_COLOR = (255, 255, 100)
@@ -365,6 +365,7 @@ class MenuView:
         elif event.key == pygame.K_DOWN:
             self.selected_index = min(len(items) - 1, self.selected_index + 1)
         elif event.key in (pygame.K_RETURN, pygame.K_u):
+            self.player.selected_item_index = self.selected_index
             message = self.player.use_item()
             self.action_message = message
             self.action_message_timer = 60

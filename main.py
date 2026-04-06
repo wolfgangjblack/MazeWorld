@@ -424,9 +424,15 @@ def main():
         if result == "victory":
             elapsed = time.time() - gameplay_start_time
             total_time = accumulated_play_time + elapsed
+            monsters_killed = sum(
+                1 for e in game_controller.events.values()
+                if getattr(e, 'resolved', False)
+            )
             victory_view = VictoryView(
                 screen, font, game_controller.player,
                 time_played=total_time,
+                monsters_killed=monsters_killed,
+                money_earned=game_controller.player.money,
             )
             screen_ctrl.push(ScreenState.VICTORY)
             return None

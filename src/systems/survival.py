@@ -84,8 +84,8 @@ class SurvivalSystem:
 
     def _apply_penalties(self, player: PlayerCharacter):
         """Apply speed and capability penalties based on survival thresholds."""
-        hunger_penalty = player.hunger <= THRESHOLD_PENALTY and player.hunger > THRESHOLD_CRITICAL
-        thirst_penalty = player.thirst <= THRESHOLD_PENALTY and player.thirst > THRESHOLD_CRITICAL
+        hunger_penalty = player.hunger <= THRESHOLD_PENALTY
+        thirst_penalty = player.thirst <= THRESHOLD_PENALTY
 
         if hunger_penalty or thirst_penalty:
             player.speed = player.max_speed * SPEED_PENALTY_FACTOR
