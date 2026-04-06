@@ -63,6 +63,8 @@ class Monster(BaseModel):
     profile_image: Optional[str] = None
     portrait_prompt: Optional[str] = None
 
+    time_availability: str = "always"  # "day", "night", or "always"
+
     # Battle state (not persisted)
     status_effects: Dict[str, int] = Field(default_factory=dict)
 
@@ -374,3 +376,52 @@ def create_scaled_monster(
         magic_resistance=level,
         loot_table=loot_table,
     )
+
+
+# ---------------------------------------------------------------------------
+# Night monster variants
+# ---------------------------------------------------------------------------
+
+# Night-only monster pools (shadow/dark themed)
+NIGHT_MONSTER_POOLS = {
+    "forest":  ["Shadow Wolf", "Dark Treant", "Night Spider"],
+    "cave":    ["Shadow Bat", "Dark Slime", "Night Crawler"],
+    "dungeon": ["Shadow Wraith", "Dark Skeleton", "Night Phantom"],
+    "castle":  ["Shadow Knight", "Dark Gargoyle", "Night Specter"],
+    "house":   ["Shadow Rat", "Dark Poltergeist", "Night Shade"],
+    "city":    ["Shadow Thug", "Dark Stalker", "Night Assassin"],
+}
+
+
+def generate_night_monster(environment: str, room_level: int) -> Monster:
+    """Generate a night-only monster with dark elemental affinity and harder stats."""
+    pool = NIGHT_MONSTER_POOLS.get(environment, NIGHT_MONSTER_POOLS["city"])
+    monster = generate_monster(environment, room_level, name_override=random.choice(pool))
+    monster.elemental_affinity = "dark"
+    monster.damage_type = "dark"
+    monster.time_availability = "night"
+    monster.hp = int(monster.hp * 1.25)
+    monster.max_hp = monster.hp
+    monster.str_mod += 1
+    return monster
+
+
+def generate_night_variant(monster: Monster) -> Monster:
+    """Return a harder night variant of an existing monster.
+
+    +25% HP, +1 str_mod, dark elemental affinity, 'Nightstalker' name prefix.
+    """
+    data = monster.model_dump()
+    data.pop("status_effects", None)
+    data["id"] = str(_uuid.uuid4())
+    data["hp"] = int(monster.hp * 1.25)
+    data["max_hp"] = data["hp"]
+    data["str_mod"] = monster.str_mod + 1
+    data["elemental_affinity"] = "dark"
+    data["damage_type"] = "dark"
+    data["time_availability"] = "night"
+    name = monster.name or monster.species
+    if not name.startswith("Nightstalker"):
+        data["name"] = f"Nightstalker {name}"
+        data["species"] = f"Nightstalker {monster.species}"
+    return Monster(**data)

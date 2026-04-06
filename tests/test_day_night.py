@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.models.time import DayNightCycle, TimePeriod
+from src.models.time import DayNightCycle, TimePeriod, DEFAULT_CYCLE_MS
 from src.systems.day_night import (
     apply_rest, apply_combat_rest, player_has_torch, consume_torch_use,
     is_event_active_at_time, is_npc_available, get_night_overlay_alpha,
@@ -47,107 +47,108 @@ class TestDayNightCycleModel:
         cycle = DayNightCycle()
         assert cycle.current_period == TimePeriod.DAWN
 
-    def test_advance_moves_ticks(self):
+    def test_advance_moves_elapsed(self):
         cycle = DayNightCycle()
+        ms_per_step = DEFAULT_CYCLE_MS // 200
         cycle.advance(10)
-        assert cycle.ticks == 10
+        assert cycle.elapsed_ms == ms_per_step * 10
 
     def test_period_transitions(self):
         """Verify periods transition at correct thresholds.
 
-        With cycle_length=200:
-          Dawn: 0-29 (15%)
-          Day: 30-99 (35%)
-          Dusk: 100-129 (15%)
-          Night: 130-199 (35%)
+        With default 960,000 ms cycle:
+          Dawn: 0 - 143,999 ms (15%)
+          Day: 144,000 - 479,999 ms (35%)
+          Dusk: 480,000 - 623,999 ms (15%)
+          Night: 624,000 - 959,999 ms (35%)
         """
-        cycle = DayNightCycle(cycle_length=200)
+        cycle = DayNightCycle()
 
-        cycle.ticks = 0
+        cycle.elapsed_ms = 0
         assert cycle.current_period == TimePeriod.DAWN
 
-        cycle.ticks = 29
+        cycle.elapsed_ms = 143_999
         assert cycle.current_period == TimePeriod.DAWN
 
-        cycle.ticks = 30
+        cycle.elapsed_ms = 144_000
         assert cycle.current_period == TimePeriod.DAY
 
-        cycle.ticks = 99
+        cycle.elapsed_ms = 479_999
         assert cycle.current_period == TimePeriod.DAY
 
-        cycle.ticks = 100
+        cycle.elapsed_ms = 480_000
         assert cycle.current_period == TimePeriod.DUSK
 
-        cycle.ticks = 129
+        cycle.elapsed_ms = 623_999
         assert cycle.current_period == TimePeriod.DUSK
 
-        cycle.ticks = 130
+        cycle.elapsed_ms = 624_000
         assert cycle.current_period == TimePeriod.NIGHT
 
-        cycle.ticks = 199
+        cycle.elapsed_ms = 959_999
         assert cycle.current_period == TimePeriod.NIGHT
 
     def test_cycle_wraps(self):
-        cycle = DayNightCycle(cycle_length=200)
-        cycle.ticks = 200  # Start of next cycle
+        cycle = DayNightCycle()
+        cycle.elapsed_ms = DEFAULT_CYCLE_MS  # Start of next cycle
         assert cycle.current_period == TimePeriod.DAWN
 
     def test_is_night(self):
-        cycle = DayNightCycle(cycle_length=200)
-        cycle.ticks = 150
+        cycle = DayNightCycle()
+        cycle.elapsed_ms = 700_000
         assert cycle.is_night
 
-        cycle.ticks = 50
+        cycle.elapsed_ms = 300_000
         assert not cycle.is_night
 
     def test_day_number(self):
-        cycle = DayNightCycle(cycle_length=200)
+        cycle = DayNightCycle()
         assert cycle.day_number == 1
 
-        cycle.ticks = 200
+        cycle.elapsed_ms = DEFAULT_CYCLE_MS
         assert cycle.day_number == 2
 
-        cycle.ticks = 599
+        cycle.elapsed_ms = DEFAULT_CYCLE_MS * 3 - 1
         assert cycle.day_number == 3
 
     def test_advance_hours(self):
-        cycle = DayNightCycle(cycle_length=200)
-        # 1 hour = 200/24 ≈ 8.33 ticks, 6 hours = int(8.33 * 6) = 50
+        cycle = DayNightCycle()
+        # 6 hours = 6/24 of cycle = 240,000 ms
         cycle.advance_hours(6)
-        assert cycle.ticks == 50
+        assert cycle.elapsed_ms == 240_000
 
     def test_period_progress(self):
-        cycle = DayNightCycle(cycle_length=200)
-        cycle.ticks = 0
+        cycle = DayNightCycle()
+        cycle.elapsed_ms = 0
         assert cycle.period_progress == pytest.approx(0.0)
 
-        # Midpoint of dawn (0-30): tick 15
-        cycle.ticks = 15
+        # Midpoint of dawn (0 to 144,000): 72,000 ms
+        cycle.elapsed_ms = 72_000
         assert cycle.period_progress == pytest.approx(0.5)
 
 
 class TestTimeAdvancesOnActions:
-    def test_movement_advances_time(self):
-        """Simulating that movement calls cycle.advance(1)."""
+    def test_real_time_update(self):
+        """Real-time update via update() method."""
         cycle = DayNightCycle()
-        initial = cycle.ticks
-        cycle.advance(1)  # One movement step
-        assert cycle.ticks == initial + 1
+        cycle.update(1000)  # Set baseline
+        cycle.update(2000)  # +1000 ms
+        assert cycle.elapsed_ms == 1000
 
     def test_combat_advances_time(self):
-        """Each combat turn should advance time."""
+        """Each combat turn calls advance(1)."""
         cycle = DayNightCycle()
-        # Simulate 5 combat turns
+        ms_per_step = DEFAULT_CYCLE_MS // 200
         for _ in range(5):
             cycle.advance(1)
-        assert cycle.ticks == 5
+        assert cycle.elapsed_ms == ms_per_step * 5
 
     def test_rest_advances_time(self):
         """Rest should advance time by hours."""
-        cycle = DayNightCycle(cycle_length=200)
-        initial = cycle.ticks
+        cycle = DayNightCycle()
+        initial = cycle.elapsed_ms
         cycle.advance_hours(6)
-        assert cycle.ticks > initial
+        assert cycle.elapsed_ms > initial
 
 
 class TestRestMechanic:
@@ -185,10 +186,10 @@ class TestRestMechanic:
 
     def test_rest_advances_time(self):
         player = _make_player()
-        cycle = DayNightCycle(cycle_length=200)
-        initial_ticks = cycle.ticks
+        cycle = DayNightCycle()
+        initial = cycle.elapsed_ms
         apply_rest(player, 6, cycle)
-        assert cycle.ticks > initial_ticks
+        assert cycle.elapsed_ms > initial
 
     def test_combat_rest(self):
         player = _make_player(health=50)
@@ -302,12 +303,19 @@ class TestNightOverlay:
 
 class TestDayNightSerialization:
     def test_round_trip(self):
-        cycle = DayNightCycle(cycle_length=200)
-        cycle.advance(75)
+        cycle = DayNightCycle()
+        cycle.elapsed_ms = 500_000
 
         data = cycle.serialize()
         restored = DayNightCycle.deserialize(data)
 
-        assert restored.ticks == 75
-        assert restored.cycle_length == 200
+        assert restored.elapsed_ms == 500_000
         assert restored.current_period == cycle.current_period
+
+    def test_legacy_round_trip(self):
+        """Legacy saves with ticks/cycle_length should load correctly."""
+        legacy_data = {"ticks": 75, "cycle_length": 200}
+        restored = DayNightCycle.deserialize(legacy_data)
+        # 75/200 = 37.5% of cycle = 360,000 ms -> Day period
+        assert restored.elapsed_ms == 360_000
+        assert restored.current_period == TimePeriod.DAY

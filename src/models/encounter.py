@@ -25,6 +25,7 @@ class Event(BaseModel):
     profile_image: Optional[str] = None
     difficulty: int = 3
     resolved: bool = False
+    time_gate: Optional[str] = None  # "day" | "night" | None (always)
 
     class Config:
         arbitrary_types_allowed = True

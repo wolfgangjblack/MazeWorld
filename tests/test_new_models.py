@@ -150,28 +150,30 @@ def test_save_state_with_data():
 def test_day_night_defaults():
     dnc = DayNightCycle()
     assert dnc.current_period == TimePeriod.DAWN
-    assert dnc.ticks == 0
+    assert dnc.elapsed_ms == 0
 
 
 def test_day_night_advance():
-    dnc = DayNightCycle(cycle_length=100)
-    # Period order: Dawn(15%) -> Day(35%) -> Dusk(15%) -> Night(35%)
-    # Dawn: 0-14, Day: 15-49, Dusk: 50-64, Night: 65-99
-    dnc.advance(15)
+    dnc = DayNightCycle()
+    # Period transitions with default 960,000 ms cycle:
+    # Dawn: 0 - 143,999 (15%), Day: 144,000 - 479,999 (35%)
+    # Dusk: 480,000 - 623,999 (15%), Night: 624,000 - 959,999 (35%)
+    dnc.elapsed_ms = 144_000
     assert dnc.current_period == TimePeriod.DAY
 
-    dnc.advance(35)  # ticks=50
+    dnc.elapsed_ms = 480_000
     assert dnc.current_period == TimePeriod.DUSK
 
-    dnc.advance(15)  # ticks=65
+    dnc.elapsed_ms = 624_000
     assert dnc.current_period == TimePeriod.NIGHT
 
 
 def test_day_night_full_cycle():
-    dnc = DayNightCycle(cycle_length=100)
+    dnc = DayNightCycle()
     periods_seen = set()
-    for _ in range(100):
-        dnc.advance(1)
+    # Sample 200 evenly spaced points across a full cycle
+    for i in range(200):
+        dnc.elapsed_ms = i * (dnc.cycle_duration_ms // 200)
         periods_seen.add(dnc.current_period)
     # Should cycle through all 4 periods
     assert TimePeriod.DAWN in periods_seen

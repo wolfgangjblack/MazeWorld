@@ -18,8 +18,13 @@ from config import (
     NUM_ROOMS,
 )
 from src.models.maze import Maze
-from src.models.monster import generate_encounter_monsters
+from src.models.monster import generate_encounter_monsters, generate_night_monster
 from src.generate.validator import ValidationReport
+from src.generate.world_editor import (  # noqa: F401
+    create_world_bible, add_room_to_bible, get_bible_context,
+    cross_validate, write_world_bible,
+)
+
 from src.registry import registry
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -618,8 +623,14 @@ def _generate_loot_table(item_ids: list[int], difficulty: int) -> list[dict]:
 
 
 def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
-                    all_class_options: list | None = None):
-    """Generate all content for a single room. Returns room metadata dict."""
+                    all_class_options: list | None = None,
+                    bible=None, report: ValidationReport | None = None):
+    """Generate all content for a single room. Returns room metadata dict.
+
+    When *bible* is provided, generators read it for lore context so
+    content is narratively connected to previous rooms.  *report*
+    accumulates validation findings for the manifest.
+    """
     room_level = room_idx + 1
     room_id = f"room_{room_idx}"
     id_offset = room_idx * 1000  # Offset IDs to avoid collisions across rooms
@@ -691,6 +702,15 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
 
             npc_type = "MerchantNPC" if (is_merchant_zone and i == 0) else random.choice(NPC_TYPES)
 
+            # Assign NPC availability: ~30% day-only, ~20% night-only, ~50% always
+            avail_roll = random.random()
+            if avail_roll < 0.30:
+                npc_availability = "day"
+            elif avail_roll < 0.50:
+                npc_availability = "night"
+            else:
+                npc_availability = "always"
+
             npc_data = {
                 "id": npc_id_counter,
                 "type": npc_type,
@@ -708,6 +728,7 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
                 "dialogue_tree": None,
                 "quest_id": None,
                 "zone": [zone_x, zone_y],
+                "availability": npc_availability,
                 "selected": False,
             }
             if npc_type == "MerchantNPC":
@@ -782,8 +803,19 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
         if "description" not in event_data:
             event_data["description"] = "Something happens!"
 
+        # Assign time_gate to ~20% of events
+        gate_roll = random.random()
+        if gate_roll < 0.10:
+            event_data["time_gate"] = "day"
+        elif gate_roll < 0.20:
+            event_data["time_gate"] = "night"
+
         if event_type == "combat":
             monsters = generate_encounter_monsters(maze.environment, room_level)
+            # Add night-only monsters to some encounters (~30%)
+            if random.random() < 0.3:
+                night_monster = generate_night_monster(maze.environment, room_level)
+                monsters.append(night_monster)
             event_data["monsters"] = [m.to_dict() for m in monsters]
             event_data["room_level"] = room_level
             if event_data["name"].startswith("Event ") and monsters:
@@ -826,7 +858,7 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
         event_data["profile_image"] = None
         event_list.append(event_data)
 
-    _validate_puzzle_tools(event_list, registry)
+    _validate_puzzle_tools(event_list, registry, report=report)
 
     event_position_map = []
     for idx, (ex, ey) in enumerate(event_positions):
@@ -1072,6 +1104,37 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
     quest_path = os.path.join(room_dir, "quests.json")
     with open(quest_path, "w") as f:
         json.dump(quest_list, f, indent=2)
+
+    # --- Update Bible with this room's content ---
+    room_beat = next((b for b in story.beats if b.room_id == room_id), None)
+    beat_text = room_beat.summary if room_beat else ""
+    if bible is not None:
+        add_room_to_bible(
+            bible,
+            room_id=room_id,
+            room_level=room_level,
+            maze_environment=maze.environment,
+            story_beat=beat_text,
+            npc_pool=npc_pool,
+            event_list=event_list,
+            quest_list=quest_list,
+            item_placements=item_placements,
+            gate_encounter_id=gate_encounter_id or "",
+        )
+        # Persist Bible after each room so subsequent rooms can read it
+        write_world_bible(bible)
+        logger.info("Room %d: Bible updated (%d total entities).",
+                     room_idx, len(bible.entity_index))
+
+    # --- Update validation report ---
+    if report is not None:
+        report.rooms_validated += 1
+        if len(active_npcs) == 0:
+            report.add_critical("No active NPCs in room", phase=f"room_{room_idx}")
+        if len(event_list) == 0:
+            report.add_warning("No events in room", phase=f"room_{room_idx}")
+        if len(quest_list) == 0:
+            report.add_warning("No quests in room", phase=f"room_{room_idx}")
 
     return {
         "room_id": room_id,

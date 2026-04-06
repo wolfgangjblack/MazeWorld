@@ -25,6 +25,7 @@ class NPC(BaseModel):
     dialogue_tree: Optional[dict] = None
     quest_id: Optional[str] = None
     zone: Optional[List[int]] = None
+    availability: Optional[str] = None  # "day" | "night" | "always" | None
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False

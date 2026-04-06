@@ -5,13 +5,14 @@ from src.views.combat_view import CombatView
 from src.views.gameplay_view import GameView
 from src.views.shop_view import ShopView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
-from src.models.time import DayNightCycle
+from src.models.time import DayNightCycle, TimePeriod
 from src.systems.fog_of_war import FogOfWar
 from src.systems.day_night import (
     apply_rest, apply_combat_rest, player_has_torch,
     consume_torch_use, is_event_active_at_time, is_npc_available,
     get_night_overlay_alpha,
 )
+from src.models.monster import generate_night_variant
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
 from src.systems.survival import SurvivalSystem
@@ -248,8 +249,7 @@ class GameController:
         return None
 
     def after_move_check(self):
-        # Advance time on movement
-        self.day_night.advance(1)
+        # Time advances via real-time update() in the main loop
         # Update fog of war
         self._update_fog()
         # Consume torch use only on movement (not rest or startup)
@@ -290,6 +290,12 @@ class GameController:
         from src.models.weapon import STARTER_WEAPONS
         if self.player.weapon is None and self.player.player_class:
             self.player.weapon = STARTER_WEAPONS.get(self.player.player_class.archetype)
+
+        # At night, upgrade non-night-only monsters to nightstalker variants
+        if self.day_night.current_period == TimePeriod.NIGHT:
+            for i, monster in enumerate(combat_event.monsters):
+                if monster.time_availability == "always":
+                    combat_event.monsters[i] = generate_night_variant(monster)
 
         self.combat_event = combat_event
         self.combat_controller = CombatController(self.player, list(combat_event.monsters))
@@ -1076,7 +1082,10 @@ class GameController:
             self.item_detail_active = True
 
     def update(self, current_time):
-        """Update game logic (NPC movement, etc.)"""
+        """Update game logic (NPC movement, real-time day/night, etc.)"""
+        # Advance day/night cycle with real time
+        self.day_night.update(current_time)
+
         if self.dialogue_box.generating:
             self.dialogue_box.check_generation()
 
