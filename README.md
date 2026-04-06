@@ -2,7 +2,7 @@
 
 MazeWorld V1.0 is a procedurally generated 2D overhead RPG where players navigate maze environments, engage in turn-based combat, and interact with LLM-driven NPCs. All game content — classes, items, monsters, encounters, portraits — is generated via GenAI pipelines.
 
-## Current Features (Phases 1-5)
+## Current Features (Phases 1-6)
 
 **Codebase Architecture**
 - Restructured into `models/`, `generate/`, `controllers/`, `views/`, `systems/` with clean separation of concerns
@@ -34,6 +34,18 @@ MazeWorld V1.0 is a procedurally generated 2D overhead RPG where players navigat
 - 3 encounter types: combat (monster fights), puzzle (tool/ability solutions), event (multi-choice + dice checks)
 - Environment-themed monster pools with level-scaled stats (HP, AC, damage dice, elemental affinity)
 - Monster compositions: solo, pack (2-4), mixed (strong + weak)
+- Monster abilities: poison, stun, elemental attacks (battle-scoped only)
+- Puzzle solvability validation during generation
+
+**Quests, Story & Followers**
+- Overarching story generated from configurable `STORY_SEED` — faction, escalation arc, per-room story beats, final boss
+- 6 quest types: fetch, kill, escort, delivery, dialogue (CHA-based DC check), multi-step chains
+- Kill quests completable out of order (if encounter cleared before quest given)
+- Quest failure penalties (HP, hunger, thirst damage)
+- Quest log UI (Q key) with active/completed/failed sections, story quests marked distinctly
+- Follower system: up to 2 non-combatant followers managed via player menu
+- Follower dialogue with hints and personality, farewell on quest completion or failure
+- 3x quest density pool generated per zone, then selected with minimums (1 story, 1 faction combat)
 
 ## Three-Mode Architecture
 
@@ -50,7 +62,7 @@ pip install -r requirements.txt
 cp .env.example .env   # then edit with your values
 ```
 
-See `.env.example` for configuration options including `GAME_MODE`, `LLM_BACKEND`, `IMAGE_BACKEND`, and API keys.
+See `.env.example` for configuration options including `GAME_MODE`, `LLM_BACKEND`, `IMAGE_BACKEND`, `STORY_SEED`, and API keys.
 
 ## Running
 
@@ -73,18 +85,17 @@ python main.py --dev --skip-gen
 
 See `requirements.txt` for pinned versions.
 
-## What's Next (Phases 6-11)
+## What's Next (Phases 7-11)
 
 | Phase | Focus |
 |-------|-------|
-| 6 | Quests, overarching story, followers |
 | 7 | Multi-room exploration, doors, gate bosses, level-up |
 | 8 | Fog of war, day/night cycle |
 | 9 | Survival rebalance, save/load, full screen UX |
 | 10 | Agentic generation pipeline with validation |
 | 11 | PyInstaller packaging, final polish, V1.0 release |
 
-See [PDR_V1.md](../../PDR_V1.md) for the full design review and [ROADMAP.md](ROADMAP.md) for the development plan.
+See [PDR_V1.md](PDR_V1.md) for the full design review and [ROADMAP.md](ROADMAP.md) for the development plan.
 
 ## License
 
