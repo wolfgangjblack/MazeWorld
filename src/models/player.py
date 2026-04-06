@@ -57,8 +57,12 @@ class Stats(BaseModel):
                 errors.append(f"{stat}={val} not in primary range 14-18")
         for stat in roles.get("secondary", []):
             val = getattr(self, stat)
-            if not (11 <= val <= 14):
-                errors.append(f"{stat}={val} not in secondary range 11-14")
+            if archetype == "jester":
+                if not (9 <= val <= 13):
+                    errors.append(f"{stat}={val} not in secondary range 9-13")
+            else:
+                if not (11 <= val <= 14):
+                    errors.append(f"{stat}={val} not in secondary range 11-14")
         for stat in roles.get("dump", []):
             val = getattr(self, stat)
             if not (6 <= val <= 10):
