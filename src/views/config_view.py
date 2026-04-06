@@ -24,6 +24,10 @@ EDITABLE_SETTINGS: list[tuple[str, str, list | None, bool]] = [
 ]
 
 # ── Tab 1: Generation Settings (read-only) ──────────────────────────────────
+# These affect world generation output and must not change after data/ is built.
+# GAME_MODE is here (not editable) because switching modes post-generation would
+# cause a mismatch: e.g. offline_static needs precomputed dialogue trees that
+# only exist when the pipeline runs in that mode.
 GENERATION_SETTINGS: list[tuple[str, str]] = [
     ("GAME_MODE", "Game mode"),
     ("SCREEN_WIDTH", "Screen width (px)"),
@@ -159,7 +163,10 @@ class ConfigView:
         old = getattr(cfg, attr, None)
         if isinstance(old, int):
             try:
-                setattr(cfg, attr, int(value))
+                parsed = int(value)
+                if attr in ("MASTER_VOLUME", "MUSIC_VOLUME"):
+                    parsed = max(0, min(100, parsed))
+                setattr(cfg, attr, parsed)
             except ValueError:
                 pass
         elif isinstance(old, float):

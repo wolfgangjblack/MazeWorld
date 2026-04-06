@@ -53,8 +53,8 @@ STARTING_MONEY = 50
 
 ## Audio settings
 # ------------------------------------
-MASTER_VOLUME = int(os.getenv("MASTER_VOLUME", "80"))
-MUSIC_VOLUME = int(os.getenv("MUSIC_VOLUME", "60"))
+MASTER_VOLUME = max(0, min(100, int(os.getenv("MASTER_VOLUME", "80"))))
+MUSIC_VOLUME = max(0, min(100, int(os.getenv("MUSIC_VOLUME", "60"))))
 MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "none")  # "none" | "local" | "api"
 
 ##GenAI Backend

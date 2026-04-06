@@ -1,4 +1,5 @@
 import os
+import warnings
 from src.utils.dataloader_utils import load_json_data, create_item_from_data
 
 
@@ -49,7 +50,17 @@ class GameRegistry:
     def manifest_matches_seed(self, seed: int) -> bool:
         if not self.manifest:
             return False
-        return self.manifest.get("seed", self.manifest.get("world_seed")) == seed
+        manifest_seed = self.manifest.get("seed")
+        if manifest_seed is None:
+            manifest_seed = self.manifest.get("world_seed")
+            if manifest_seed is not None:
+                warnings.warn(
+                    "Manifest uses deprecated 'world_seed' key; "
+                    "regenerate to update to 'seed'.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+        return manifest_seed == seed
 
     # -- items ---------------------------------------------------------------
 

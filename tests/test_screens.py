@@ -456,34 +456,80 @@ def test_config_view_edit_volume(screen, font):
     cfg.MASTER_VOLUME = original
 
 
+def test_config_view_volume_clamped_above(screen, font):
+    """Volume values above 100 are clamped to 100."""
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MASTER_VOLUME")
+    view.selected_index = idx
+    original = cfg.MASTER_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    view.edit_buffer = "150"
+    view.handle_input(enter)
+    assert cfg.MASTER_VOLUME == 100
+
+    cfg.MASTER_VOLUME = original
+
+
+def test_config_view_volume_clamped_below(screen, font):
+    """Negative volume values are clamped to 0."""
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MUSIC_VOLUME")
+    view.selected_index = idx
+    original = cfg.MUSIC_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    view.edit_buffer = "-10"
+    view.handle_input(enter)
+    assert cfg.MUSIC_VOLUME == 0
+
+    cfg.MUSIC_VOLUME = original
+
+
 # --- Manifest schema ---
 
 def test_manifest_schema():
-    """Manifest output from pipeline matches PDR spec structure."""
-    import json
-    from datetime import datetime, timezone
+    """build_manifest() output matches PDR spec structure and computes counts."""
+    from src.generate.pipeline import build_manifest
 
-    # Build a minimal manifest matching what pipeline.py now produces
-    manifest = {
-        "seed": 1234,
-        "story_seed": "test",
-        "game_mode": "online",
-        "num_rooms": 1,
-        "environments": ["forest"],
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "validation": {"status": "passed"},
-        "content_index": {
-            "rooms": 1,
-            "npcs": 5,
-            "items": 10,
-            "quests": 3,
-            "encounters": 8,
-            "monsters": 4,
-            "images": 2,
-            "music_tracks": 0,
-        },
-    }
-    # All PDR-required top-level keys present
+    event_list = [
+        {"id": "e1", "event_type": "combat", "monsters": [{"name": "goblin"}, {"name": "orc"}]},
+        {"id": "e2", "event_type": "puzzle"},
+        {"id": "e3", "event_type": "combat", "monsters": [{"name": "dragon"}]},
+    ]
+    npc_pool = [
+        {"id": "n1", "portrait": "img/n1.png"},
+        {"id": "n2"},
+    ]
+
+    manifest = build_manifest(
+        seed=1234,
+        story_seed="test",
+        game_mode="online",
+        num_rooms=2,
+        environments=["forest"],
+        generated_at="2026-04-06T00:00:00+00:00",
+        validation={"status": "passed"},
+        active_npc_count=5,
+        item_count=10,
+        quest_count=3,
+        event_list=event_list,
+        npc_pool=npc_pool,
+        player_portrait_path="img/player.png",
+        env_portrait_path="img/env.png",
+        environment="forest",
+        env_name="Dark Forest",
+        maze_width=40,
+        maze_height=25,
+        class_count=4,
+        portraits_generated=True,
+        story_title="Rise of Shadows",
+        faction_name="Shadow Cult",
+    )
+
+    # PDR-required top-level keys
     for key in ("seed", "story_seed", "game_mode", "num_rooms",
                 "environments", "generated_at", "validation", "content_index"):
         assert key in manifest, f"Missing manifest key: {key}"
@@ -494,15 +540,129 @@ def test_manifest_schema():
                 "monsters", "images", "music_tracks"):
         assert key in ci, f"Missing content_index key: {key}"
 
+    # Counts are computed from inputs, not hardcoded
+    assert ci["monsters"] == 3  # 2 from e1 + 1 from e3
+    assert ci["encounters"] == 3
+    assert ci["images"] == 3  # player + env + 1 npc with portrait
+    assert ci["rooms"] == 2
+    assert ci["npcs"] == 5
+    assert ci["items"] == 10
+    assert ci["quests"] == 3
+
+    # Extended fields present
+    assert manifest["environment"] == "forest"
+    assert manifest["maze_width"] == 40
+    assert manifest["story_title"] == "Rise of Shadows"
+
+
+def test_manifest_schema_with_validation_report():
+    """build_manifest() preserves full ValidationReport structure."""
+    from src.generate.pipeline import build_manifest
+    from src.generate.validator import ValidationReport
+
+    report = ValidationReport(rooms_validated=1)
+    report.add_warning("test warning", entity_id="e1", phase="events")
+
+    manifest = build_manifest(
+        seed=1, story_seed="s", game_mode="online", num_rooms=1,
+        environments=["forest"], generated_at="2026-01-01T00:00:00+00:00",
+        validation=report.to_dict(),
+        active_npc_count=0, item_count=0, quest_count=0,
+        event_list=[], npc_pool=[],
+        player_portrait_path=None, env_portrait_path=None,
+        environment="forest", env_name="Test", maze_width=40, maze_height=25,
+        class_count=0, portraits_generated=False, story_title="", faction_name="",
+    )
+
+    v = manifest["validation"]
+    for key in ("status", "rooms_validated", "critical_failures",
+                "major_retries", "minor_warnings", "details"):
+        assert key in v, f"Missing validation key: {key}"
+
+    assert v["status"] == "passed_with_warnings"
+    assert v["minor_warnings"] == 1
+    assert len(v["details"]) == 1
+    assert v["details"][0]["severity"] == "minor"
+
+
+# --- ValidationReport unit tests ---
+
+def test_validation_report_empty_is_passed():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport(rooms_validated=1)
+    assert r.status == "passed"
+    assert r.to_dict()["status"] == "passed"
+    assert r.to_dict()["details"] == []
+
+
+def test_validation_report_warning_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_warning("minor issue", entity_id="x", phase="quests")
+    assert r.status == "passed_with_warnings"
+    assert r.minor_warnings == 1
+    assert len(r.details) == 1
+    assert r.details[0]["severity"] == "minor"
+    assert r.details[0]["message"] == "minor issue"
+
+
+def test_validation_report_major_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_major("retry happened", phase="story")
+    assert r.status == "passed_with_warnings"
+    assert r.major_retries == 1
+    assert r.details[0]["severity"] == "major"
+
+
+def test_validation_report_critical_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_warning("a warning")
+    r.add_critical("fatal problem", entity_id="q1", phase="quests")
+    assert r.status == "failed"
+    assert r.critical_failures == 1
+    assert r.minor_warnings == 1
+    assert len(r.details) == 2
+
+
+def test_validation_report_to_dict_shape():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport(rooms_validated=3)
+    r.add_warning("w1")
+    r.add_major("m1")
+    r.add_critical("c1")
+    d = r.to_dict()
+    assert d == {
+        "status": "failed",
+        "rooms_validated": 3,
+        "critical_failures": 1,
+        "major_retries": 1,
+        "minor_warnings": 1,
+        "details": [
+            {"severity": "minor", "message": "w1", "entity_id": "", "phase": ""},
+            {"severity": "major", "message": "m1", "entity_id": "", "phase": ""},
+            {"severity": "critical", "message": "c1", "entity_id": "", "phase": ""},
+        ],
+    }
+
 
 def test_registry_manifest_seed_compat():
     """Registry handles both old 'world_seed' and new 'seed' key."""
+    import warnings
     from src.registry import GameRegistry
 
     reg = GameRegistry()
-    reg.manifest = {"seed": 42}
-    assert reg.manifest_matches_seed(42)
-    assert not reg.manifest_matches_seed(99)
 
+    # New key — no warning
+    reg.manifest = {"seed": 42}
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        assert reg.manifest_matches_seed(42)
+        assert not reg.manifest_matches_seed(99)
+        assert len(w) == 0
+
+    # Old key — emits DeprecationWarning
     reg.manifest = {"world_seed": 42}
-    assert reg.manifest_matches_seed(42)
+    with pytest.warns(DeprecationWarning, match="world_seed"):
+        assert reg.manifest_matches_seed(42)
