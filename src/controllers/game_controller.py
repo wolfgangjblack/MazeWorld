@@ -88,6 +88,10 @@ class GameController:
         self.combat_selected_action = 0
         self.combat_selected_target = 0
         self.combat_selecting_target = False
+        self.combat_selecting_spell = False
+        self.combat_selected_spell = 0
+        self.combat_selecting_item = False
+        self.combat_selected_item = 0
         self.combat_game_over_selection = 0
 
         # Player menu / save-load state
@@ -297,6 +301,10 @@ class GameController:
         self.combat_selected_action = 0
         self.combat_selected_target = 0
         self.combat_selecting_target = False
+        self.combat_selecting_spell = False
+        self.combat_selected_spell = 0
+        self.combat_selecting_item = False
+        self.combat_selected_item = 0
         self.combat_game_over_selection = 0
 
     @property
@@ -529,7 +537,52 @@ class GameController:
                 while cc.state == CombatState.ONGOING and not cc.is_player_turn():
                     cc.execute_monster_turn()
                 self.combat_selecting_target = False
+                self.combat_selecting_spell = False
+                self.combat_selecting_item = False
                 self.combat_selected_action = 0
+            return
+
+        # Player turn — spell selection sub-menu
+        if self.combat_selecting_spell:
+            spells = cc.player.spells
+            if event.key == pygame.K_UP:
+                self.combat_selected_spell = (self.combat_selected_spell - 1) % max(len(spells), 1)
+            elif event.key == pygame.K_DOWN:
+                self.combat_selected_spell = (self.combat_selected_spell + 1) % max(len(spells), 1)
+            elif event.key == pygame.K_RETURN:
+                if spells:
+                    spell = spells[self.combat_selected_spell]
+                    if spell.targets == "self" or spell.spell_type in ("heal", "buff_stat", "buff_sustain"):
+                        cc.player_cast_spell(self.combat_selected_spell, 0)
+                        while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+                            cc.execute_monster_turn()
+                        self.combat_selecting_spell = False
+                        self.combat_selected_action = 0
+                    else:
+                        self.combat_selecting_spell = False
+                        self.combat_selecting_target = True
+                        self.combat_selected_target = 0
+            elif event.key == pygame.K_ESCAPE:
+                self.combat_selecting_spell = False
+            return
+
+        # Player turn — item selection sub-menu
+        if self.combat_selecting_item:
+            consumables = self._get_combat_consumables()
+            if event.key == pygame.K_UP:
+                self.combat_selected_item = (self.combat_selected_item - 1) % max(len(consumables), 1)
+            elif event.key == pygame.K_DOWN:
+                self.combat_selected_item = (self.combat_selected_item + 1) % max(len(consumables), 1)
+            elif event.key == pygame.K_RETURN:
+                if consumables:
+                    item_name = consumables[self.combat_selected_item]
+                    cc.player_use_item(item_name)
+                    while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+                        cc.execute_monster_turn()
+                    self.combat_selecting_item = False
+                    self.combat_selected_action = 0
+            elif event.key == pygame.K_ESCAPE:
+                self.combat_selecting_item = False
             return
 
         # Player turn — target selection mode
@@ -556,8 +609,16 @@ class GameController:
             self.combat_selected_action = (self.combat_selected_action + 1) % len(actions)
         elif event.key == pygame.K_RETURN:
             action_name = actions[self.combat_selected_action]
-            # Actions that need a target
-            if action_name in ("Attack", "Cast Spell"):
+            if action_name == "Cast Spell":
+                if cc.player.spells:
+                    self.combat_selecting_spell = True
+                    self.combat_selected_spell = 0
+            elif action_name == "Use Item":
+                consumables = self._get_combat_consumables()
+                if consumables:
+                    self.combat_selecting_item = True
+                    self.combat_selected_item = 0
+            elif action_name == "Attack":
                 self.combat_selecting_target = True
                 self.combat_selected_target = 0
             else:
@@ -570,6 +631,17 @@ class GameController:
         if not cc or not cc.player.player_class or cc.player.player_class.archetype != "jester":
             actions = [a for a in actions if a != "Gamble"]
         return actions
+
+    def _get_combat_consumables(self) -> list[str]:
+        """Return names of consumable items usable in combat."""
+        from src.models.items import Food, Drink
+        cc = self.combat_controller
+        if cc is None:
+            return []
+        return [
+            name for name, item in cc.player.inventory.items()
+            if isinstance(item, (Food, Drink))
+        ]
 
     def _execute_player_combat_action(self, action_index: int, target_index: int):
         """Execute the selected player action through CombatController."""
@@ -585,13 +657,12 @@ class GameController:
         elif action_name == "Multi-Attack":
             cc.player_multi_attack()
         elif action_name == "Cast Spell":
-            # Use first available spell for now; target_index is monster target
             if cc.player.spells:
-                cc.player_cast_spell(0, target_index)
+                cc.player_cast_spell(self.combat_selected_spell, target_index)
         elif action_name == "Use Item":
-            items = list(cc.player.inventory.keys())
-            if items:
-                cc.player_use_item(items[0])
+            consumables = self._get_combat_consumables()
+            if consumables:
+                cc.player_use_item(consumables[self.combat_selected_item])
         elif action_name == "Flee":
             cc.player_flee()
         elif action_name == "Gamble":
@@ -1099,6 +1170,10 @@ class GameController:
                 selected_action=self.combat_selected_action,
                 selected_target=self.combat_selected_target,
                 selecting_target=self.combat_selecting_target,
+                selecting_spell=self.combat_selecting_spell,
+                selected_spell=self.combat_selected_spell,
+                selecting_item=self.combat_selecting_item,
+                selected_item=self.combat_selected_item,
                 game_over_selection=self.combat_game_over_selection,
             )
             return
