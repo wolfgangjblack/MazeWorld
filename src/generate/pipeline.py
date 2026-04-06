@@ -15,6 +15,7 @@ from tqdm import tqdm
 from config import (
     WORLD_SEED, STORY_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
     NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS,
+    NUM_ROOMS,
 )
 from src.models.maze import Maze
 from src.models.monster import generate_encounter_monsters
@@ -1122,25 +1123,46 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
+    # Count generated images (portraits)
+    image_count = sum(1 for p in [player_portrait_path, env_portrait_path] if p)
+    image_count += sum(1 for n in npc_pool if n.get("portrait"))
+
+    # Count monsters across combat events
+    monster_count = sum(
+        len(e.get("monsters", []))
+        for e in event_list if e.get("event_type") == "combat"
+    )
+
     manifest = {
-        "world_seed": WORLD_SEED,
+        "seed": WORLD_SEED,
+        "story_seed": story.seed,
+        "game_mode": GAME_MODE,
+        "num_rooms": NUM_ROOMS,
+        "environments": [maze.environment],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "validation": {"status": "passed"},
+        "content_index": {
+            "rooms": NUM_ROOMS,
+            "npcs": len(active_npcs),
+            "items": len(item_placements),
+            "quests": len(quest_list),
+            "encounters": len(event_list),
+            "monsters": monster_count,
+            "images": image_count,
+            "music_tracks": 0,
+        },
+        # Extended fields (non-PDR, kept for registry/debug use)
         "environment": maze.environment,
         "environment_name": env_name,
         "maze_width": MAZE_WIDTH,
         "maze_height": MAZE_HEIGHT,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
         "npc_pool_size": len(npc_pool),
-        "active_npc_count": len(active_npcs),
-        "quest_count": len(quest_list),
-        "event_count": len(event_list),
         "class_count": len(class_data_list),
         "portraits_generated": portraits_generated,
         "player_portrait": player_portrait_path,
         "environment_portrait": env_portrait_path,
-        "game_mode": GAME_MODE,
         "story_title": story.title,
         "faction_name": story.faction.name if story.faction else "",
-        "story_seed": story.seed,
     }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)

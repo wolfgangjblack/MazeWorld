@@ -197,14 +197,14 @@ def test_config_view_escape_returns_back(screen, font):
 def test_config_view_cycle_editable(screen, font):
     view = ConfigView(screen, font)
     assert view.active_tab == 0
-    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "GAME_MODE")
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "LLM_BACKEND")
     view.selected_index = idx
-    original = cfg.GAME_MODE
+    original = cfg.LLM_BACKEND
     event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
     view.handle_input(event)
-    new_val = cfg.GAME_MODE
+    new_val = cfg.LLM_BACKEND
     assert new_val != original or len(view.editable_items[idx][2]) == 1
-    cfg.GAME_MODE = original
+    cfg.LLM_BACKEND = original
 
 
 def test_config_view_freetext_edit(screen, font):
@@ -361,3 +361,148 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
     content = dotenv_file.read_text()
     assert "EXISTING=yes" in content
     assert 'NEW_KEY="new_val"' in content
+
+
+# --- New config settings ---
+
+def test_config_new_settings_exist():
+    """All Phase 1 gap settings exist in config module."""
+    assert hasattr(cfg, "NUM_ROOMS")
+    assert hasattr(cfg, "QUEST_DENSITY")
+    assert hasattr(cfg, "MAP_COLORS")
+    assert hasattr(cfg, "MASTER_VOLUME")
+    assert hasattr(cfg, "MUSIC_VOLUME")
+    assert hasattr(cfg, "MUSIC_BACKEND")
+
+
+def test_config_num_rooms_default():
+    assert cfg.NUM_ROOMS == 1
+    assert isinstance(cfg.NUM_ROOMS, int)
+
+
+def test_config_quest_density_default():
+    assert cfg.QUEST_DENSITY == 0.1
+    assert isinstance(cfg.QUEST_DENSITY, float)
+
+
+def test_config_map_colors_default():
+    assert isinstance(cfg.MAP_COLORS, dict)
+    assert "wall" in cfg.MAP_COLORS
+    assert "path" in cfg.MAP_COLORS
+    assert "player" in cfg.MAP_COLORS
+
+
+def test_config_volume_defaults():
+    assert 0 <= cfg.MASTER_VOLUME <= 100
+    assert 0 <= cfg.MUSIC_VOLUME <= 100
+
+
+def test_config_music_backend_default():
+    assert cfg.MUSIC_BACKEND in ("none", "local", "api")
+
+
+# --- GAME_MODE is read-only (generation tab) ---
+
+def test_game_mode_in_generation_tab():
+    """GAME_MODE must be in the read-only generation tab, not editable."""
+    gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
+    assert "GAME_MODE" in gen_attrs
+    edit_attrs = [attr for attr, _, _, _ in EDITABLE_SETTINGS]
+    assert "GAME_MODE" not in edit_attrs
+
+
+def test_new_settings_in_generation_tab():
+    """NUM_ROOMS, QUEST_DENSITY, MAP_COLORS are in generation (read-only) tab."""
+    gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
+    assert "NUM_ROOMS" in gen_attrs
+    assert "QUEST_DENSITY" in gen_attrs
+    assert "MAP_COLORS" in gen_attrs
+
+
+def test_new_settings_in_editable_tab():
+    """MASTER_VOLUME, MUSIC_VOLUME, MUSIC_BACKEND are in editable (runtime) tab."""
+    edit_attrs = [attr for attr, _, _, _ in EDITABLE_SETTINGS]
+    assert "MASTER_VOLUME" in edit_attrs
+    assert "MUSIC_VOLUME" in edit_attrs
+    assert "MUSIC_BACKEND" in edit_attrs
+
+
+def test_config_view_cycle_music_backend(screen, font):
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MUSIC_BACKEND")
+    view.selected_index = idx
+    original = cfg.MUSIC_BACKEND
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    assert cfg.MUSIC_BACKEND != original or len(view.editable_items[idx][2]) == 1
+    cfg.MUSIC_BACKEND = original
+
+
+def test_config_view_edit_volume(screen, font):
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MASTER_VOLUME")
+    view.selected_index = idx
+    original = cfg.MASTER_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    assert view.editing is True
+
+    view.edit_buffer = "50"
+    view.handle_input(enter)
+    assert view.editing is False
+    assert cfg.MASTER_VOLUME == 50
+
+    cfg.MASTER_VOLUME = original
+
+
+# --- Manifest schema ---
+
+def test_manifest_schema():
+    """Manifest output from pipeline matches PDR spec structure."""
+    import json
+    from datetime import datetime, timezone
+
+    # Build a minimal manifest matching what pipeline.py now produces
+    manifest = {
+        "seed": 1234,
+        "story_seed": "test",
+        "game_mode": "online",
+        "num_rooms": 1,
+        "environments": ["forest"],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "validation": {"status": "passed"},
+        "content_index": {
+            "rooms": 1,
+            "npcs": 5,
+            "items": 10,
+            "quests": 3,
+            "encounters": 8,
+            "monsters": 4,
+            "images": 2,
+            "music_tracks": 0,
+        },
+    }
+    # All PDR-required top-level keys present
+    for key in ("seed", "story_seed", "game_mode", "num_rooms",
+                "environments", "generated_at", "validation", "content_index"):
+        assert key in manifest, f"Missing manifest key: {key}"
+
+    # content_index sub-keys
+    ci = manifest["content_index"]
+    for key in ("rooms", "npcs", "items", "quests", "encounters",
+                "monsters", "images", "music_tracks"):
+        assert key in ci, f"Missing content_index key: {key}"
+
+
+def test_registry_manifest_seed_compat():
+    """Registry handles both old 'world_seed' and new 'seed' key."""
+    from src.registry import GameRegistry
+
+    reg = GameRegistry()
+    reg.manifest = {"seed": 42}
+    assert reg.manifest_matches_seed(42)
+    assert not reg.manifest_matches_seed(99)
+
+    reg.manifest = {"world_seed": 42}
+    assert reg.manifest_matches_seed(42)

@@ -11,18 +11,21 @@ from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 # ── Tab 0: Editable Config (runtime) ────────────────────────────────────────
 # Each entry: (attr, label, choices | None, secret)
 EDITABLE_SETTINGS: list[tuple[str, str, list | None, bool]] = [
-    ("GAME_MODE", "Game mode", ["online", "offline_local", "offline_static"], False),
     ("LLM_BACKEND", "LLM backend", ["local", "api"], False),
     ("LLM_MODEL_PATH", "LLM model path", None, False),
     ("ANTHROPIC_MODEL", "Anthropic model", None, False),
     ("IMAGE_BACKEND", "Image backend", ["local", "api"], False),
     ("FAL_MODEL", "FAL model", None, False),
+    ("MUSIC_BACKEND", "Music backend", ["none", "local", "api"], False),
+    ("MASTER_VOLUME", "Master volume (0-100)", None, False),
+    ("MUSIC_VOLUME", "Music volume (0-100)", None, False),
     ("ANTHROPIC_API_KEY", "Anthropic API key", None, True),
     ("FAL_KEY", "FAL API key", None, True),
 ]
 
 # ── Tab 1: Generation Settings (read-only) ──────────────────────────────────
 GENERATION_SETTINGS: list[tuple[str, str]] = [
+    ("GAME_MODE", "Game mode"),
     ("SCREEN_WIDTH", "Screen width (px)"),
     ("SCREEN_HEIGHT", "Screen height (px)"),
     ("HUD_HEIGHT", "HUD height (px)"),
@@ -31,10 +34,13 @@ GENERATION_SETTINGS: list[tuple[str, str]] = [
     ("MAX_HALLWAY_SIZE", "Max hallway size"),
     ("MAZE_WIDTH", "Maze width (cells)"),
     ("MAZE_HEIGHT", "Maze height (cells)"),
+    ("NUM_ROOMS", "Number of rooms"),
     ("WORLD_SEED", "World seed"),
     ("STORY_SEED", "Story seed"),
     ("EVENT_PERCENT", "Event percent"),
     ("EVENT_DENSITY", "Event density"),
+    ("QUEST_DENSITY", "Quest density"),
+    ("MAP_COLORS", "Map colors"),
     ("NUM_FOOD", "Food items"),
     ("NUM_DRINKS", "Drink items"),
     ("NUM_TOOLS", "Tool items"),

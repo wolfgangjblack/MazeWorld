@@ -49,7 +49,7 @@ class GameRegistry:
     def manifest_matches_seed(self, seed: int) -> bool:
         if not self.manifest:
             return False
-        return self.manifest.get("world_seed") == seed
+        return self.manifest.get("seed", self.manifest.get("world_seed")) == seed
 
     # -- items ---------------------------------------------------------------
 
