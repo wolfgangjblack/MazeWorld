@@ -2,7 +2,7 @@ import pytest
 from src.models.items import (
     Weapon, SpellScroll, Food, Drink, Tool, ItemStats,
 )
-from src.models.player_character import PlayerCharacter
+from src.models.player import PlayerCharacter, PlayerClass
 
 
 # --- Weapon tests ---
@@ -180,8 +180,12 @@ def test_item_stats_attack_dice():
 
 # --- Jester spell scroll learning ---
 
+def _make_class(archetype="warrior"):
+    return PlayerClass(name=f"Test {archetype.title()}", archetype=archetype)
+
+
 def test_jester_learns_spell_permanently():
-    player = PlayerCharacter(x=0, y=0, player_class="jester")
+    player = PlayerCharacter(x=0, y=0, player_class=_make_class("jester"))
     scroll = _make_scroll(name="scroll of fire", spell_effect="damage")
     player.inventory = {scroll.name: scroll}
     msg = player.use_spell_scroll("scroll of fire")
@@ -191,7 +195,7 @@ def test_jester_learns_spell_permanently():
 
 
 def test_jester_no_duplicate_learned_spell():
-    player = PlayerCharacter(x=0, y=0, player_class="jester")
+    player = PlayerCharacter(x=0, y=0, player_class=_make_class("jester"))
     player.learned_spells = ["damage"]
     scroll = _make_scroll(name="scroll of fire", spell_effect="damage")
     player.inventory = {scroll.name: scroll}
@@ -200,7 +204,7 @@ def test_jester_no_duplicate_learned_spell():
 
 
 def test_non_jester_consumes_scroll():
-    player = PlayerCharacter(x=0, y=0, player_class="warrior", health=50)
+    player = PlayerCharacter(x=0, y=0, player_class=_make_class("warrior"), health=50)
     scroll = _make_scroll(name="scroll of heal", health=25, spell_effect="heal")
     player.inventory = {scroll.name: scroll}
     msg = player.use_spell_scroll("scroll of heal")
@@ -229,7 +233,7 @@ def test_use_spell_scroll_not_scroll():
 
 def test_build_items_json_structure():
     """Test _build_items_json converts LLM output to proper items.json format."""
-    from world_gen import _build_items_json
+    from src.generate.pipeline import _build_items_json
     llm_result = {
         "food": [
             {"name": "forest bread", "desc": "Hearty bread.", "nutrition_value": 20, "health_value": 0},
@@ -271,7 +275,7 @@ def test_build_items_json_structure():
 
 def test_weapon_dice_scaling():
     """Test that WEAPON_DICE_BY_LEVEL maps room levels to appropriate dice."""
-    from src.generate.generate_llm_primatives import WEAPON_DICE_BY_LEVEL
+    from src.generate.generators.llm_primitives import WEAPON_DICE_BY_LEVEL
     assert set(WEAPON_DICE_BY_LEVEL[1]) == {"1d4", "1d6"}
     assert set(WEAPON_DICE_BY_LEVEL[4]) == {"1d10", "1d12"}
 
@@ -279,7 +283,7 @@ def test_weapon_dice_scaling():
 def test_validate_puzzle_tools():
     """Test that _validate_puzzle_tools fixes invalid tool_attribute references."""
     from unittest.mock import MagicMock
-    from world_gen import _validate_puzzle_tools
+    from src.generate.pipeline import _validate_puzzle_tools
     from src.models.items import Tool, ItemStats
 
     mock_reg = MagicMock()

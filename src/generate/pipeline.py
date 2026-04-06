@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from config import (
     WORLD_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
-    NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
+    NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS,
 )
 from src.models.maze import Maze
 from src.registry import registry
@@ -41,6 +41,7 @@ PHASES = [
 ]
 
 NPC_TYPES = ["StaticNPC", "RandomNPC", "AggressiveNPC"]
+MERCHANT_CHANCE = 0.15  # Chance per zone to spawn a merchant instead of a regular NPC
 QUEST_TYPES = ["fetch", "escort", "delivery", "dialogue_gated", "combat"]
 
 DATA_DIR = "data"
@@ -275,6 +276,174 @@ def _validate_quest(quest: dict, npc_pool: list, item_placements: list,
     return True
 
 
+ITEM_ITEMS_PATH = os.path.join(DATA_DIR, "items", "items.json")
+
+# Weapon price ranges by dice tier
+WEAPON_PRICE_BY_DICE = {
+    "1d4": (8, 15), "1d6": (16, 25), "1d8": (28, 45),
+    "1d10": (40, 55), "2d4": (25, 35), "1d12": (55, 70),
+}
+
+
+def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1) -> dict | None:
+    """Call LLM to generate environment-themed items. Returns items dict keyed by ID, or None."""
+    try:
+        from src.generate.generators.llm_primitives import generate_item_primative
+        result = generate_item_primative(
+            {"environment": {"type": env_type, "name": env_name}},
+            room_level,
+        )
+        if "error" in result:
+            logger.warning("LLM item generation returned error: %s", result["error"])
+            return None
+        return _build_items_json(result, room_level)
+    except Exception as e:
+        logger.warning("LLM item generation failed: %s", e)
+        return None
+
+
+def _build_items_json(llm_result: dict, room_level: int) -> dict:
+    """Convert LLM-generated item pools into the items.json format keyed by ID."""
+    items = {}
+    item_id = 200
+
+    for raw in llm_result.get("food", [])[:4]:
+        items[str(item_id)] = {
+            "category": "food",
+            "name": raw["name"],
+            "desc": raw.get("desc", ""),
+            "room_level": room_level,
+            "item_stats": {
+                "nutrition_value": raw.get("nutrition_value", 15),
+                "hydration_value": 0,
+                "health_value": raw.get("health_value", 0),
+                "uses": 1,
+                "price": random.randint(5, 15),
+            },
+        }
+        item_id += 1
+
+    item_id = 300
+    for raw in llm_result.get("drink", [])[:4]:
+        items[str(item_id)] = {
+            "category": "drink",
+            "name": raw["name"],
+            "desc": raw.get("desc", ""),
+            "room_level": room_level,
+            "item_stats": {
+                "nutrition_value": 0,
+                "hydration_value": raw.get("hydration_value", 15),
+                "health_value": raw.get("health_value", 0),
+                "uses": 1,
+                "price": random.randint(5, 15),
+            },
+        }
+        item_id += 1
+
+    item_id = 400
+    for raw in llm_result.get("tools", [])[:3]:
+        items[str(item_id)] = {
+            "category": "tool",
+            "name": raw["name"],
+            "desc": raw.get("desc", ""),
+            "room_level": room_level,
+            "item_stats": {
+                "attribute": raw.get("attribute", "bludgeon"),
+                "nutrition_value": -5,
+                "hydration_value": -5,
+                "health_value": 0,
+                "uses": 3,
+                "price": random.randint(10, 25),
+            },
+        }
+        item_id += 1
+
+    item_id = 500
+    for raw in llm_result.get("weapons", [])[:3]:
+        dice = raw.get("attack_dice", "1d4")
+        lo, hi = WEAPON_PRICE_BY_DICE.get(dice, (10, 30))
+        items[str(item_id)] = {
+            "category": "weapon",
+            "name": raw["name"],
+            "desc": raw.get("desc", ""),
+            "weapon_type": raw.get("weapon_type", "simple"),
+            "room_level": room_level,
+            "item_stats": {
+                "attack_dice": dice,
+                "stat_modifier": raw.get("stat_modifier", "STR"),
+                "price": random.randint(lo, hi),
+            },
+        }
+        item_id += 1
+
+    item_id = 600
+    for raw in llm_result.get("spell_scrolls", [])[:2]:
+        items[str(item_id)] = {
+            "category": "spell_scroll",
+            "name": raw["name"],
+            "desc": raw.get("desc", ""),
+            "spell_effect": raw.get("spell_effect", "generic"),
+            "room_level": room_level,
+            "item_stats": {
+                "health_value": 25 if raw.get("spell_effect") == "heal" else 0,
+                "nutrition_value": 30 if raw.get("spell_effect") == "sustain" else 0,
+                "hydration_value": 30 if raw.get("spell_effect") == "sustain" else 0,
+                "price": random.randint(20, 40),
+            },
+        }
+        item_id += 1
+
+    return items
+
+
+def _validate_puzzle_tools(event_list: list[dict], reg) -> None:
+    """Ensure puzzle events only reference tool attributes that exist in the registry."""
+    from src.models.items import Tool
+    available_attrs = set()
+    for item in reg.item_registry.values():
+        if isinstance(item, Tool) and item.item_stats.attribute:
+            available_attrs.add(item.item_stats.attribute)
+
+    for event in event_list:
+        if event.get("type") != "puzzle":
+            continue
+        for choice in event.get("choices", []):
+            attr = choice.get("tool_attribute")
+            if attr and attr not in available_attrs:
+                if available_attrs:
+                    choice["tool_attribute"] = random.choice(list(available_attrs))
+                else:
+                    choice["tool_attribute"] = None
+
+
+def _generate_shop_inventory(reg) -> list[dict]:
+    """Generate a random shop inventory from available items in the registry."""
+    shop = []
+    all_ids = reg.item_ids()
+    num_items = random.randint(4, 8)
+    selected_ids = random.sample(all_ids, min(num_items, len(all_ids)))
+    for item_id in selected_ids:
+        item = reg.get_item(item_id)
+        if item:
+            price = item.item_stats.price if item.item_stats.price > 0 else random.randint(5, 30)
+            shop.append({
+                "item_id": item_id,
+                "price": price,
+                "stock": random.randint(1, 5),
+            })
+    return shop
+
+
+def _generate_loot_table(item_ids: list[int], difficulty: int) -> list[dict]:
+    """Generate a loot table for a combat event based on difficulty."""
+    num_entries = min(random.randint(1, 3), len(item_ids))
+    loot = []
+    for item_id in random.sample(item_ids, num_entries):
+        drop_chance = round(random.uniform(0.1, 0.3 + difficulty * 0.1), 2)
+        loot.append({"item_id": item_id, "drop_chance": min(drop_chance, 1.0)})
+    return loot
+
+
 def generate_world():
     """Main generation pipeline. Writes all data to data/."""
     logger.info("=== MazeWorld World Generator ===")
@@ -307,9 +476,22 @@ def generate_world():
                 event_positions.append((x, y))
     phase_bar.update(1)
 
-    # --- 3. Place items ---
+    # --- 3. Generate & place items ---
+    phase_bar.set_postfix_str("Item generation")
+    generated_items = _llm_generate_items(maze.environment, env_name, room_level=1)
+    if generated_items:
+        os.makedirs(os.path.dirname(ITEM_ITEMS_PATH), exist_ok=True)
+        with open(ITEM_ITEMS_PATH, "w") as f:
+            json.dump(generated_items, f, indent=2)
+        registry._loaded = False
+        registry._load_items()
+        registry._loaded = True
+        logger.info("LLM-generated %d environment-themed items.", len(generated_items))
+    else:
+        logger.info("Using static items from items.json (LLM generation skipped or failed).")
+
     phase_bar.set_postfix_str("Item placement")
-    maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
+    maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS)
     item_placements = []
     for y, row in enumerate(maze.grid):
         for x, cell in enumerate(row):
@@ -335,17 +517,20 @@ def generate_world():
                    unit="npc", leave=True)
     for zone_x, zone_y in npc_zones:
         zone_npcs = []
+        is_merchant_zone = random.random() < MERCHANT_CHANCE
         for i in range(3):
             personality = _llm_generate_personality(maze.environment, env_name)
             greeting = _llm_generate_greeting(personality)
             portrait_prompt = _llm_generate_image_desc(personality)
             identity = _build_identity(personality)
 
+            npc_type = "MerchantNPC" if (is_merchant_zone and i == 0) else random.choice(NPC_TYPES)
+
             npc_data = {
                 "id": npc_id_counter,
-                "type": random.choice(NPC_TYPES),
+                "type": npc_type,
                 "name": personality.get("name", f"NPC_{npc_id_counter}"),
-                "job": personality.get("job", "peasant"),
+                "job": "merchant" if npc_type == "MerchantNPC" else personality.get("job", "peasant"),
                 "personality": personality.get("personality", "stoic"),
                 "hobby": personality.get("hobby", "walking"),
                 "environment": maze.environment,
@@ -360,11 +545,20 @@ def generate_world():
                 "zone": [zone_x, zone_y],
                 "selected": False,
             }
+            # Generate shop inventory for merchants
+            if npc_type == "MerchantNPC":
+                shop_items = _generate_shop_inventory(registry)
+                npc_data["shop_inventory"] = shop_items
+
             zone_npcs.append(npc_data)
             npc_id_counter += 1
             npc_bar.update(1)
 
-        selected = random.choice(zone_npcs)
+        # Prefer selecting the merchant if this is a merchant zone
+        if is_merchant_zone:
+            selected = zone_npcs[0]
+        else:
+            selected = random.choice(zone_npcs)
         selected["selected"] = True
 
         zone_open = [
@@ -399,6 +593,7 @@ def generate_world():
     # --- 7. Generate events ---
     phase_bar.set_postfix_str("Events")
     event_list = []
+    all_item_ids = registry.item_ids()
     event_bar = tqdm(event_positions, desc="  Events (data+image prompt)",
                      unit="evt", leave=True)
     for idx, (ex, ey) in enumerate(event_bar):
@@ -411,9 +606,18 @@ def generate_world():
         if "description" not in event_data:
             event_data["description"] = "Something happens!"
 
+        # Add loot tables and money drops to combat events
+        if event_type == "combat" and all_item_ids:
+            difficulty = event_data.get("difficulty", 3)
+            event_data["loot_table"] = _generate_loot_table(all_item_ids, difficulty)
+            event_data["money_drop"] = [difficulty * 2, difficulty * 8]
+
         event_data["portrait_prompt"] = _llm_generate_event_image(event_data)
         event_data["profile_image"] = None
         event_list.append(event_data)
+
+    # Validate puzzle events reference tools that actually exist
+    _validate_puzzle_tools(event_list, registry)
 
     event_position_map = []
     for idx, (ex, ey) in enumerate(event_positions):

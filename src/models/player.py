@@ -432,7 +432,7 @@ class PlayerCharacter(BaseModel):
         if not isinstance(item, SpellScroll):
             return f"{scroll_name} is not a spell scroll."
 
-        if self.player_class == "jester":
+        if self.player_class and self.player_class.archetype == "jester":
             if item.spell_effect not in self.learned_spells:
                 self.learned_spells.append(item.spell_effect)
             self.remove_from_inventory(scroll_name)

@@ -1,6 +1,6 @@
 import pytest
-from src.models.event import CombatEvent, LootEntry
-from src.models.player_character import PlayerCharacter
+from src.models.encounter import CombatEvent, LootEntry
+from src.models.player import PlayerCharacter
 from src.models.items import Weapon, ItemStats
 
 

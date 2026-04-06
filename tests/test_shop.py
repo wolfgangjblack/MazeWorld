@@ -1,6 +1,6 @@
 import pytest
 from src.models.npc import MerchantNPC
-from src.models.player_character import PlayerCharacter
+from src.models.player import PlayerCharacter
 from src.models.items import Food, Weapon, ItemStats, EscortItem
 
 
