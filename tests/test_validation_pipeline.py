@@ -5,17 +5,17 @@ import os
 import pytest
 
 from src.models.player import (
-    Stats, Ability, Spell, PlayerClass,
-    STAT_NAMES, STAT_BUDGET, ARCHETYPE_STAT_ROLES,
+    Stats, Spell, PlayerClass,
+    STAT_NAMES,
 )
 from src.models.story import OverarchingStory, Faction, RoomStoryBeat
 from src.models.world_bible import WorldBible, RoomBible, EntityRef
 
 from src.generate.checker import (
-    CheckResult, BaseChecker, ClassChecker, QuestChecker, EventChecker,
+    ClassChecker, QuestChecker, EventChecker,
 )
 from src.generate.validator import (
-    ValidationResult, BaseValidator, ClassValidator, QuestValidator, EventValidator,
+    ClassValidator, QuestValidator, EventValidator,
 )
 from src.generate.world_editor import build_world_bible, cross_validate, write_world_bible
 from src.generate.class_gen import _fix_stats, _fallback_class, _validate_classes
@@ -97,7 +97,7 @@ class TestQuestChecker:
         }
         result = checker.check(quest, {"npc_ids": {100}})
         assert not result.passed
-        assert any("giver_npc_id" in i for i in result.issues)
+        assert any("giver NPC" in i for i in result.issues)
 
     def test_bad_fetch_item_fails(self):
         checker = QuestChecker()

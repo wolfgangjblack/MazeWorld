@@ -11,10 +11,56 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.models.player import (
-    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES, PlayerClass,
+    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def check_quest_references(
+    quest: dict,
+    *,
+    npc_ids: set | None = None,
+    item_ids: set | None = None,
+    event_ids: set | None = None,
+    quest_ids: set | None = None,
+    label: str = "",
+) -> list[str]:
+    """Check that a quest's entity references resolve to known IDs.
+
+    Callers are responsible for ensuring ID types are consistent
+    (e.g. all strings or all ints) between *quest* fields and the
+    provided sets.
+    """
+    issues: list[str] = []
+    prefix = f"{label}: " if label else ""
+    qtype = quest.get("type", "")
+
+    if npc_ids is not None and quest.get("giver_npc_id") not in npc_ids:
+        issues.append(f"{prefix}giver NPC {quest.get('giver_npc_id')} not found")
+
+    if qtype == "fetch":
+        for ti in quest.get("target_items", []):
+            if item_ids is not None and ti.get("item_id") not in item_ids:
+                issues.append(f"{prefix}fetch item {ti.get('item_id')} not on map")
+    elif qtype == "escort":
+        if npc_ids is not None and quest.get("escort_npc_id") not in npc_ids:
+            issues.append(f"{prefix}escort NPC {quest.get('escort_npc_id')} not found")
+    elif qtype == "delivery":
+        if item_ids is not None and quest.get("delivery_item_id") not in item_ids:
+            issues.append(f"{prefix}delivery item {quest.get('delivery_item_id')} not on map")
+        if npc_ids is not None and quest.get("target_npc_id") not in npc_ids:
+            issues.append(f"{prefix}target NPC {quest.get('target_npc_id')} not found")
+    elif qtype == "combat":
+        if event_ids is not None and quest.get("target_event_id") not in event_ids:
+            issues.append(f"{prefix}target event {quest.get('target_event_id')} not found")
+
+    if quest_ids is not None:
+        prereq = quest.get("prerequisite_quest_id")
+        if prereq and prereq not in quest_ids:
+            issues.append(f"{prefix}Prerequisite quest {prereq} not found")
+
+    return issues
 
 
 @dataclass
@@ -102,33 +148,17 @@ class QuestChecker(BaseChecker):
     def check(self, data: dict, context: dict | None = None) -> CheckResult:
         issues: list[str] = []
         ctx = context or {}
-        npc_ids = ctx.get("npc_ids", set())
-        item_ids = ctx.get("item_ids", set())
-        event_ids = ctx.get("event_ids", set())
+        npc_ids = ctx.get("npc_ids", set()) or None
+        item_ids = ctx.get("item_ids", set()) or None
+        event_ids = ctx.get("event_ids", set()) or None
 
         missing = self.REQUIRED_FIELDS - set(data.keys())
         if missing:
             issues.append(f"Missing fields: {', '.join(sorted(missing))}")
 
-        if npc_ids and data.get("giver_npc_id") not in npc_ids:
-            issues.append(f"giver_npc_id {data.get('giver_npc_id')} not in NPC pool")
-
-        qtype = data.get("type", "")
-        if qtype == "fetch":
-            for ti in data.get("target_items", []):
-                if item_ids and ti.get("item_id") not in item_ids:
-                    issues.append(f"fetch target item {ti.get('item_id')} not on map")
-        elif qtype == "combat":
-            if event_ids and data.get("target_event_id") not in event_ids:
-                issues.append(f"combat target event {data.get('target_event_id')} not found")
-        elif qtype == "escort":
-            if npc_ids and data.get("escort_npc_id") not in npc_ids:
-                issues.append(f"escort NPC {data.get('escort_npc_id')} not found")
-        elif qtype == "delivery":
-            if item_ids and data.get("delivery_item_id") not in item_ids:
-                issues.append(f"delivery item {data.get('delivery_item_id')} not on map")
-            if npc_ids and data.get("target_npc_id") not in npc_ids:
-                issues.append(f"delivery target NPC {data.get('target_npc_id')} not found")
+        issues.extend(check_quest_references(
+            data, npc_ids=npc_ids, item_ids=item_ids, event_ids=event_ids,
+        ))
 
         return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
 

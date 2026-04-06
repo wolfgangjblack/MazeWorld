@@ -7,7 +7,6 @@ Produces a ``WorldBible`` model that is serialised to ``data/world_bible.json``.
 import json
 import logging
 import os
-from typing import Optional
 
 from src.models.story import OverarchingStory
 from src.models.world_bible import EntityRef, RoomBible, WorldBible
@@ -125,33 +124,27 @@ def cross_validate(bible: WorldBible, npc_pool: list[dict],
                    event_list: list[dict], quest_list: list[dict],
                    item_placements: list[dict]) -> list[str]:
     """Run cross-content validation checks. Returns list of issues found."""
-    issues: list[str] = []
+    from src.generate.checker import check_quest_references
+
     npc_ids = {str(n["id"]) for n in npc_pool if n.get("selected")}
     event_ids = {e["id"] for e in event_list}
     item_ids = {p["item_id"] for p in item_placements}
 
+    issues: list[str] = []
     for quest in quest_list:
-        qid = quest["id"]
-        # Giver NPC exists
-        if str(quest.get("giver_npc_id", "")) not in npc_ids:
-            issues.append(f"Quest {qid}: giver NPC {quest.get('giver_npc_id')} missing")
+        # Normalize NPC ID fields to strings for comparison
+        normalized = dict(quest)
+        for key in ("giver_npc_id", "escort_npc_id", "target_npc_id"):
+            if key in normalized:
+                normalized[key] = str(normalized[key])
 
-        qtype = quest.get("type", "")
-        if qtype == "fetch":
-            for ti in quest.get("target_items", []):
-                if ti.get("item_id") not in item_ids:
-                    issues.append(f"Quest {qid}: fetch item {ti.get('item_id')} not on map")
-        elif qtype == "combat":
-            if quest.get("target_event_id") not in event_ids:
-                issues.append(f"Quest {qid}: target event {quest.get('target_event_id')} missing")
-        elif qtype == "escort":
-            if str(quest.get("escort_npc_id", "")) not in npc_ids:
-                issues.append(f"Quest {qid}: escort NPC {quest.get('escort_npc_id')} missing")
-        elif qtype == "delivery":
-            if quest.get("delivery_item_id") not in item_ids:
-                issues.append(f"Quest {qid}: delivery item {quest.get('delivery_item_id')} missing")
-            if str(quest.get("target_npc_id", "")) not in npc_ids:
-                issues.append(f"Quest {qid}: target NPC {quest.get('target_npc_id')} missing")
+        issues.extend(check_quest_references(
+            normalized,
+            npc_ids=npc_ids,
+            item_ids=item_ids,
+            event_ids=event_ids,
+            label=f"Quest {quest['id']}",
+        ))
 
     return issues
 

@@ -301,11 +301,7 @@ def _fallback_class(archetype: str, env_type: str, env_name: str) -> dict:
 
     # Build raw stat targets, then use _fix_stats for budget enforcement
     if archetype == "jester":
-        non_luck = [s for s in STAT_NAMES if s != "LUCK"]
-        dump_stat = random.choice(non_luck)
-        stats = {}
-        for s in non_luck:
-            stats[s] = 8 if s == dump_stat else 12
+        stats = {s: 11 for s in STAT_NAMES if s != "LUCK"}
         stats["LUCK"] = 16
     else:
         roles = ARCHETYPE_STAT_ROLES[archetype]

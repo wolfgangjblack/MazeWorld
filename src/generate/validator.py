@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.models.player import (
-    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES,
+    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES, Stats,
 )
 
 logger = logging.getLogger(__name__)
@@ -145,20 +145,11 @@ class ClassValidator(BaseValidator):
             archetype = data.get("archetype", "warrior")
             abilities = data.get("abilities", [])
             spells = data.get("spells", [])
-            # Build a simple object-like accessor
-            class _S:
-                pass
-            stats = _S()
-            for s in STAT_NAMES:
-                setattr(stats, s, stats_raw.get(s, 10))
-            stats.total = lambda: sum(stats_raw.get(s, 10) for s in STAT_NAMES)
+            stats = Stats(**{s: stats_raw.get(s, 10) for s in STAT_NAMES})
 
         # Stat budget
-        total = stats.total() if callable(getattr(stats, "total", None)) else sum(
-            getattr(stats, s, 10) for s in STAT_NAMES
-        )
-        if total != STAT_BUDGET:
-            reasons.append(f"Stat total {total} != {STAT_BUDGET}")
+        if stats.total() != STAT_BUDGET:
+            reasons.append(f"Stat total {stats.total()} != {STAT_BUDGET}")
 
         # Role ranges
         roles = ARCHETYPE_STAT_ROLES.get(archetype, {})
@@ -193,40 +184,21 @@ class QuestValidator(BaseValidator):
     """Validates a quest for completability within the current world state."""
 
     def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
-        reasons: list[str] = []
+        from src.generate.checker import check_quest_references
+
         ctx = context or {}
-        npc_ids: set = ctx.get("npc_ids", set())
-        item_ids: set = ctx.get("item_ids", set())
-        event_ids: set = ctx.get("event_ids", set())
-        quest_ids: set = ctx.get("quest_ids", set())
+        npc_ids = ctx.get("npc_ids", set()) or None
+        item_ids = ctx.get("item_ids", set()) or None
+        event_ids = ctx.get("event_ids", set()) or None
+        quest_ids = ctx.get("quest_ids", set()) or None
 
-        qtype = data.get("type", "")
-
-        # Giver NPC must exist
-        if npc_ids and data.get("giver_npc_id") not in npc_ids:
-            reasons.append(f"Giver NPC {data.get('giver_npc_id')} missing")
-
-        # Type-specific validations
-        if qtype == "fetch":
-            for ti in data.get("target_items", []):
-                if item_ids and ti.get("item_id") not in item_ids:
-                    reasons.append(f"Fetch item {ti.get('item_id')} not on map")
-        elif qtype == "escort":
-            if npc_ids and data.get("escort_npc_id") not in npc_ids:
-                reasons.append(f"Escort NPC {data.get('escort_npc_id')} missing")
-        elif qtype == "delivery":
-            if item_ids and data.get("delivery_item_id") not in item_ids:
-                reasons.append(f"Delivery item {data.get('delivery_item_id')} missing")
-            if npc_ids and data.get("target_npc_id") not in npc_ids:
-                reasons.append(f"Target NPC {data.get('target_npc_id')} missing")
-        elif qtype == "combat":
-            if event_ids and data.get("target_event_id") not in event_ids:
-                reasons.append(f"Target event {data.get('target_event_id')} missing")
-
-        # Prerequisite chain depth <= 2
-        prereq = data.get("prerequisite_quest_id")
-        if prereq and quest_ids and prereq not in quest_ids:
-            reasons.append(f"Prerequisite quest {prereq} not found")
+        reasons = check_quest_references(
+            data,
+            npc_ids=npc_ids,
+            item_ids=item_ids,
+            event_ids=event_ids,
+            quest_ids=quest_ids,
+        )
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
 
