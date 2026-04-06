@@ -1,10 +1,10 @@
-"""Start screen — New Game, Load Game, Config, Quit."""
+"""Start screen — New Game, Load Game, Tutorial (stub), Config, Quit."""
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
 
-MENU_ITEMS = ["Start New Game", "Load Game", "Config", "Quit"]
+MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Quit"]
 
 # Colors
 TITLE_COLOR = (220, 180, 60)
@@ -70,6 +70,8 @@ class StartView:
     def _is_disabled(self, index: int) -> bool:
         item = MENU_ITEMS[index]
         if item == "Load Game" and not self.has_saves:
+            return True
+        if item == "Tutorial":
             return True
         return False
 

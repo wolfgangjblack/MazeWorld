@@ -1,11 +1,28 @@
-"""Config screen — displays all settings, editable where appropriate."""
+"""Config screen — two-tab layout with editable runtime settings and read-only
+generation settings.  API keys are persisted to `.env` (gitignored)."""
+
+import os
+import re
 
 import pygame
 import config as cfg
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
-# Settings used at generation time — displayed but not editable
-READONLY_SETTINGS = [
+# ── Tab 0: Editable Config (runtime) ────────────────────────────────────────
+# Each entry: (attr, label, choices | None, secret)
+EDITABLE_SETTINGS: list[tuple[str, str, list | None, bool]] = [
+    ("GAME_MODE", "Game mode", ["online", "offline_local", "offline_static"], False),
+    ("LLM_BACKEND", "LLM backend", ["local", "api"], False),
+    ("LLM_MODEL_PATH", "LLM model path", None, False),
+    ("ANTHROPIC_MODEL", "Anthropic model", None, False),
+    ("IMAGE_BACKEND", "Image backend", ["local", "api"], False),
+    ("FAL_MODEL", "FAL model", None, False),
+    ("ANTHROPIC_API_KEY", "Anthropic API key", None, True),
+    ("FAL_KEY", "FAL API key", None, True),
+]
+
+# ── Tab 1: Generation Settings (read-only) ──────────────────────────────────
+GENERATION_SETTINGS: list[tuple[str, str]] = [
     ("SCREEN_WIDTH", "Screen width (px)"),
     ("SCREEN_HEIGHT", "Screen height (px)"),
     ("HUD_HEIGHT", "HUD height (px)"),
@@ -26,17 +43,9 @@ READONLY_SETTINGS = [
     ("STARTING_MONEY", "Starting money"),
 ]
 
-# Settings that can be changed at runtime
-EDITABLE_SETTINGS = [
-    ("GAME_MODE", "Game mode", ["online", "offline_local", "offline_static"]),
-    ("LLM_BACKEND", "LLM backend", ["local", "api"]),
-    ("LLM_MODEL_PATH", "LLM model path", None),
-    ("ANTHROPIC_MODEL", "Anthropic model", None),
-    ("IMAGE_BACKEND", "Image backend", ["local", "api"]),
-    ("FAL_MODEL", "FAL model", None),
-]
+TAB_NAMES = ["Editable Config", "Generation Settings"]
 
-# Colors
+# ── Colours ──────────────────────────────────────────────────────────────────
 TITLE_COLOR = (220, 180, 60)
 LABEL_COLOR = (180, 180, 180)
 VALUE_COLOR = (200, 200, 200)
@@ -44,13 +53,50 @@ READONLY_COLOR = (100, 100, 100)
 SELECTED_COLOR = (255, 255, 100)
 EDITABLE_VALUE_COLOR = (100, 220, 100)
 EDITING_COLOR = (255, 200, 80)
-SECTION_COLOR = (160, 130, 50)
+TAB_ACTIVE_COLOR = (255, 255, 100)
+TAB_INACTIVE_COLOR = (100, 100, 100)
+SECRET_COLOR = (180, 100, 100)
+
+_DOTENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".env")
+
+
+def _mask_secret(value: str) -> str:
+    """Return a masked representation of a secret value."""
+    if not value:
+        return "(not set)"
+    if len(value) <= 8:
+        return "****"
+    return f"****...{value[-4:]}"
+
+
+def _update_dotenv(key: str, value: str) -> None:
+    """Write *key=value* into the project `.env` file (create if needed)."""
+    path = os.path.normpath(_DOTENV_PATH)
+    lines: list[str] = []
+    found = False
+    if os.path.exists(path):
+        with open(path, "r") as fh:
+            lines = fh.readlines()
+    pattern = re.compile(rf'^{re.escape(key)}\s*=')
+    new_lines: list[str] = []
+    for line in lines:
+        if pattern.match(line):
+            new_lines.append(f"{key}={value}\n")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines.append("\n")
+        new_lines.append(f"{key}={value}\n")
+    with open(path, "w") as fh:
+        fh.writelines(new_lines)
 
 
 class ConfigView:
-    """Renders the config screen with read-only and editable settings."""
+    """Two-tab config screen: Editable Config | Generation Settings."""
 
-    SCROLL_VISIBLE = 14  # max visible rows before scrolling
+    SCROLL_VISIBLE = 12
 
     def __init__(self, screen, font):
         self.screen = screen
@@ -58,26 +104,52 @@ class ConfigView:
         self.title_font = pygame.font.Font(None, 48)
         self.small_font = pygame.font.Font(None, 24)
 
-        # Build flat list: each entry is (attr, label, readonly, choices)
-        self.items: list[tuple[str, str, bool, list | None]] = []
-        for attr, label in READONLY_SETTINGS:
-            self.items.append((attr, label, True, None))
-        for attr, label, choices in EDITABLE_SETTINGS:
-            self.items.append((attr, label, False, choices))
+        # Build per-tab item lists
+        # Editable: (attr, label, choices|None, secret)
+        self.editable_items = list(EDITABLE_SETTINGS)
+        # Generation: (attr, label)  — always read-only
+        self.generation_items = list(GENERATION_SETTINGS)
 
+        self.active_tab = 0  # 0 = editable, 1 = generation
         self.selected_index = 0
         self.scroll_offset = 0
         self.editing = False
         self.edit_buffer = ""
 
-        # Track which section headers land at which row for drawing
-        self._readonly_count = len(READONLY_SETTINGS)
+    @property
+    def _current_items(self):
+        if self.active_tab == 0:
+            return self.editable_items
+        return self.generation_items
 
-    def _get_value(self, attr: str) -> str:
+    # Keep legacy `.items` property so external code/tests that reference it
+    # still work (returns the union of both lists in the old 4-tuple format).
+    @property
+    def items(self):
+        combined = []
+        for attr, label, choices, secret in self.editable_items:
+            combined.append((attr, label, False, choices))
+        for attr, label in self.generation_items:
+            combined.append((attr, label, True, None))
+        return combined
+
+    # ── Value helpers ────────────────────────────────────────────────────────
+    def _get_value(self, attr: str, secret: bool = False) -> str:
+        if secret:
+            return os.environ.get(attr, "")
         return str(getattr(cfg, attr, ""))
 
-    def _set_value(self, attr: str, value: str):
-        """Write a new value back to the config module (runtime only)."""
+    def _get_display_value(self, attr: str, secret: bool = False) -> str:
+        raw = self._get_value(attr, secret)
+        if secret:
+            return _mask_secret(raw)
+        return raw
+
+    def _set_value(self, attr: str, value: str, secret: bool = False):
+        if secret:
+            os.environ[attr] = value
+            _update_dotenv(attr, value)
+            return
         old = getattr(cfg, attr, None)
         if isinstance(old, int):
             try:
@@ -92,9 +164,9 @@ class ConfigView:
         else:
             setattr(cfg, attr, value)
 
+    # ── Drawing ──────────────────────────────────────────────────────────────
     def draw(self):
         self.screen.fill(BLACK)
-        line_h = self.font.get_linesize() + 4
         margin_left = 40
         value_x = SCREEN_WIDTH // 2 + 40
 
@@ -102,65 +174,90 @@ class ConfigView:
         title = self.title_font.render("Configuration", True, TITLE_COLOR)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 20))
 
-        y = 75
+        # Tab bar
+        tab_y = 65
+        tab_x = margin_left
+        for i, name in enumerate(TAB_NAMES):
+            if i == self.active_tab:
+                label = f"[ {name} ]"
+                color = TAB_ACTIVE_COLOR
+            else:
+                label = f"  {name}  "
+                color = TAB_INACTIVE_COLOR
+            surf = self.font.render(label, True, color)
+            self.screen.blit(surf, (tab_x, tab_y))
+            tab_x += surf.get_width() + 20
 
-        # Section: Read-Only
-        ro_header = self.small_font.render("— Generation (read-only) —", True, SECTION_COLOR)
-        self.screen.blit(ro_header, (margin_left, y))
-        y += 24
+        # Separator
+        sep_y = tab_y + self.font.get_linesize() + 4
+        pygame.draw.line(self.screen, TAB_INACTIVE_COLOR,
+                         (margin_left, sep_y), (SCREEN_WIDTH - margin_left, sep_y))
 
-        visible_start = self.scroll_offset
-        visible_end = self.scroll_offset + self.SCROLL_VISIBLE
+        # Items
+        line_h = self.font.get_linesize() + 4
+        y = sep_y + 8
+        items = self._current_items
+        vis_start = self.scroll_offset
+        vis_end = self.scroll_offset + self.SCROLL_VISIBLE
 
-        for draw_i, (attr, label, readonly, choices) in enumerate(self.items):
-            if draw_i < visible_start or draw_i >= visible_end:
+        for draw_i, item in enumerate(items):
+            if draw_i < vis_start or draw_i >= vis_end:
                 continue
 
-            # Insert editable section header
-            if draw_i == self._readonly_count and visible_start <= draw_i:
-                ed_header = self.small_font.render("— Runtime (editable) —", True, SECTION_COLOR)
-                self.screen.blit(ed_header, (margin_left, y))
-                y += 24
-
             is_selected = draw_i == self.selected_index
-            value = self._get_value(attr)
+
+            if self.active_tab == 0:
+                attr, label_text, choices, secret = item
+                readonly = False
+            else:
+                attr, label_text = item
+                secret, readonly = False, True
 
             # Label
-            label_color = SELECTED_COLOR if is_selected else LABEL_COLOR
             if readonly:
                 label_color = SELECTED_COLOR if is_selected else READONLY_COLOR
-            label_surf = self.font.render(label, True, label_color)
+            else:
+                label_color = SELECTED_COLOR if is_selected else LABEL_COLOR
+            label_surf = self.font.render(label_text, True, label_color)
             self.screen.blit(label_surf, (margin_left, y))
 
             # Value
             if self.editing and is_selected:
-                val_text = self.edit_buffer + "_"
+                if secret:
+                    val_text = self.edit_buffer + "_"
+                else:
+                    val_text = self.edit_buffer + "_"
                 val_color = EDITING_COLOR
             elif readonly:
+                val_text = str(getattr(cfg, attr, ""))
                 val_color = READONLY_COLOR
-                val_text = value
             else:
-                val_color = EDITABLE_VALUE_COLOR if is_selected else VALUE_COLOR
-                val_text = value
+                val_text = self._get_display_value(attr, secret)
+                val_color = (SECRET_COLOR if secret
+                             else EDITABLE_VALUE_COLOR if is_selected
+                             else VALUE_COLOR)
+
             val_surf = self.font.render(val_text, True, val_color)
             self.screen.blit(val_surf, (value_x, y))
-
             y += line_h
 
         # Footer
         if self.editing:
             hint = "Type value, Enter to confirm, Esc to cancel"
+        elif self.active_tab == 1:
+            hint = "Left/Right: switch tab  |  Esc: back"
         else:
-            item = self.items[self.selected_index]
-            if item[2]:  # readonly
-                hint = "Read-only setting (set before generation)"
-            elif item[3]:  # has choices
-                hint = f"Enter to cycle: {', '.join(item[3])}  |  Esc = back"
+            item = items[self.selected_index] if items else None
+            if item and len(item) >= 4 and item[2]:
+                hint = f"Enter to cycle: {', '.join(item[2])}  |  Left/Right: tab  |  Esc: back"
+            elif item and len(item) >= 4 and item[3]:
+                hint = "Enter to edit (saved to .env)  |  Left/Right: tab  |  Esc: back"
             else:
-                hint = "Enter to edit  |  Esc = back"
+                hint = "Enter to edit  |  Left/Right: tab  |  Esc: back"
         footer = self.small_font.render(hint, True, (120, 120, 120))
         self.screen.blit(footer, ((SCREEN_WIDTH - footer.get_width()) // 2, SCREEN_HEIGHT - 35))
 
+    # ── Input handling ───────────────────────────────────────────────────────
     def handle_input(self, event) -> str | None:
         """Process a keydown event. Returns 'back' to return to start, or None."""
         if self.editing:
@@ -169,35 +266,49 @@ class ConfigView:
         if event.key == pygame.K_ESCAPE:
             return "back"
 
+        if event.key == pygame.K_LEFT:
+            self._switch_tab(0)
+            return None
+        if event.key == pygame.K_RIGHT:
+            self._switch_tab(1)
+            return None
+
+        items = self._current_items
+        if not items:
+            return None
+
         if event.key == pygame.K_UP:
             self.selected_index = max(0, self.selected_index - 1)
             self._adjust_scroll()
         elif event.key == pygame.K_DOWN:
-            self.selected_index = min(len(self.items) - 1, self.selected_index + 1)
+            self.selected_index = min(len(items) - 1, self.selected_index + 1)
             self._adjust_scroll()
         elif event.key == pygame.K_RETURN:
-            attr, label, readonly, choices = self.items[self.selected_index]
-            if readonly:
+            if self.active_tab == 1:
                 return None
+            attr, label, choices, secret = items[self.selected_index]
             if choices:
-                # Cycle through choices
-                current = self._get_value(attr)
+                current = self._get_value(attr, secret)
                 try:
                     idx = choices.index(current)
                     next_val = choices[(idx + 1) % len(choices)]
                 except ValueError:
                     next_val = choices[0]
-                self._set_value(attr, next_val)
+                self._set_value(attr, next_val, secret)
             else:
-                # Enter free-text editing mode
                 self.editing = True
-                self.edit_buffer = self._get_value(attr)
+                if secret:
+                    self.edit_buffer = ""
+                else:
+                    self.edit_buffer = self._get_value(attr, secret)
         return None
 
     def _handle_editing(self, event) -> str | None:
         if event.key == pygame.K_RETURN:
-            attr = self.items[self.selected_index][0]
-            self._set_value(attr, self.edit_buffer)
+            items = self._current_items
+            attr = items[self.selected_index][0]
+            secret = items[self.selected_index][3]
+            self._set_value(attr, self.edit_buffer, secret)
             self.editing = False
         elif event.key == pygame.K_ESCAPE:
             self.editing = False
@@ -207,6 +318,13 @@ class ConfigView:
             if event.unicode and event.unicode.isprintable():
                 self.edit_buffer += event.unicode
         return None
+
+    def _switch_tab(self, tab: int):
+        if tab != self.active_tab:
+            self.active_tab = tab
+            self.selected_index = 0
+            self.scroll_offset = 0
+            self.editing = False
 
     def _adjust_scroll(self):
         if self.selected_index < self.scroll_offset:
