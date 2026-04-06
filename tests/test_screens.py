@@ -197,14 +197,14 @@ def test_config_view_escape_returns_back(screen, font):
 def test_config_view_cycle_editable(screen, font):
     view = ConfigView(screen, font)
     assert view.active_tab == 0
-    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "GAME_MODE")
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "LLM_BACKEND")
     view.selected_index = idx
-    original = cfg.GAME_MODE
+    original = cfg.LLM_BACKEND
     event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
     view.handle_input(event)
-    new_val = cfg.GAME_MODE
+    new_val = cfg.LLM_BACKEND
     assert new_val != original or len(view.editable_items[idx][2]) == 1
-    cfg.GAME_MODE = original
+    cfg.LLM_BACKEND = original
 
 
 def test_config_view_freetext_edit(screen, font):
@@ -361,3 +361,308 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
     content = dotenv_file.read_text()
     assert "EXISTING=yes" in content
     assert 'NEW_KEY="new_val"' in content
+
+
+# --- New config settings ---
+
+def test_config_new_settings_exist():
+    """All Phase 1 gap settings exist in config module."""
+    assert hasattr(cfg, "NUM_ROOMS")
+    assert hasattr(cfg, "QUEST_DENSITY")
+    assert hasattr(cfg, "MAP_COLORS")
+    assert hasattr(cfg, "MASTER_VOLUME")
+    assert hasattr(cfg, "MUSIC_VOLUME")
+    assert hasattr(cfg, "MUSIC_BACKEND")
+
+
+def test_config_num_rooms_default():
+    assert cfg.NUM_ROOMS == 1
+    assert isinstance(cfg.NUM_ROOMS, int)
+
+
+def test_config_quest_density_default():
+    assert cfg.QUEST_DENSITY == 0.1
+    assert isinstance(cfg.QUEST_DENSITY, float)
+
+
+def test_config_map_colors_default():
+    assert isinstance(cfg.MAP_COLORS, dict)
+    assert "wall" in cfg.MAP_COLORS
+    assert "path" in cfg.MAP_COLORS
+    assert "player" in cfg.MAP_COLORS
+
+
+def test_config_volume_defaults():
+    assert 0 <= cfg.MASTER_VOLUME <= 100
+    assert 0 <= cfg.MUSIC_VOLUME <= 100
+
+
+def test_config_music_backend_default():
+    assert cfg.MUSIC_BACKEND in ("none", "local", "api")
+
+
+# --- GAME_MODE is read-only (generation tab) ---
+
+def test_game_mode_in_generation_tab():
+    """GAME_MODE must be in the read-only generation tab, not editable."""
+    gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
+    assert "GAME_MODE" in gen_attrs
+    edit_attrs = [attr for attr, _, _, _ in EDITABLE_SETTINGS]
+    assert "GAME_MODE" not in edit_attrs
+
+
+def test_new_settings_in_generation_tab():
+    """NUM_ROOMS, QUEST_DENSITY, MAP_COLORS are in generation (read-only) tab."""
+    gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
+    assert "NUM_ROOMS" in gen_attrs
+    assert "QUEST_DENSITY" in gen_attrs
+    assert "MAP_COLORS" in gen_attrs
+
+
+def test_new_settings_in_editable_tab():
+    """MASTER_VOLUME, MUSIC_VOLUME, MUSIC_BACKEND are in editable (runtime) tab."""
+    edit_attrs = [attr for attr, _, _, _ in EDITABLE_SETTINGS]
+    assert "MASTER_VOLUME" in edit_attrs
+    assert "MUSIC_VOLUME" in edit_attrs
+    assert "MUSIC_BACKEND" in edit_attrs
+
+
+def test_config_view_cycle_music_backend(screen, font):
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MUSIC_BACKEND")
+    view.selected_index = idx
+    original = cfg.MUSIC_BACKEND
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    assert cfg.MUSIC_BACKEND != original or len(view.editable_items[idx][2]) == 1
+    cfg.MUSIC_BACKEND = original
+
+
+def test_config_view_edit_volume(screen, font):
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MASTER_VOLUME")
+    view.selected_index = idx
+    original = cfg.MASTER_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    assert view.editing is True
+
+    view.edit_buffer = "50"
+    view.handle_input(enter)
+    assert view.editing is False
+    assert cfg.MASTER_VOLUME == 50
+
+    cfg.MASTER_VOLUME = original
+
+
+def test_config_view_volume_clamped_above(screen, font):
+    """Volume values above 100 are clamped to 100."""
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MASTER_VOLUME")
+    view.selected_index = idx
+    original = cfg.MASTER_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    view.edit_buffer = "150"
+    view.handle_input(enter)
+    assert cfg.MASTER_VOLUME == 100
+
+    cfg.MASTER_VOLUME = original
+
+
+def test_config_view_volume_clamped_below(screen, font):
+    """Negative volume values are clamped to 0."""
+    view = ConfigView(screen, font)
+    idx = next(i for i, item in enumerate(view.editable_items) if item[0] == "MUSIC_VOLUME")
+    view.selected_index = idx
+    original = cfg.MUSIC_VOLUME
+
+    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    view.handle_input(enter)
+    view.edit_buffer = "-10"
+    view.handle_input(enter)
+    assert cfg.MUSIC_VOLUME == 0
+
+    cfg.MUSIC_VOLUME = original
+
+
+# --- Manifest schema ---
+
+def test_manifest_schema():
+    """build_manifest() output matches PDR spec structure and computes counts."""
+    from src.generate.pipeline import build_manifest
+
+    event_list = [
+        {"id": "e1", "event_type": "combat", "monsters": [{"name": "goblin"}, {"name": "orc"}]},
+        {"id": "e2", "event_type": "puzzle"},
+        {"id": "e3", "event_type": "combat", "monsters": [{"name": "dragon"}]},
+    ]
+    npc_pool = [
+        {"id": "n1", "portrait": "img/n1.png"},
+        {"id": "n2"},
+    ]
+
+    manifest = build_manifest(
+        seed=1234,
+        story_seed="test",
+        game_mode="online",
+        num_rooms=2,
+        environments=["forest"],
+        generated_at="2026-04-06T00:00:00+00:00",
+        validation={"status": "passed"},
+        active_npc_count=5,
+        item_count=10,
+        quest_count=3,
+        event_list=event_list,
+        npc_pool=npc_pool,
+        player_portrait_path="img/player.png",
+        env_portrait_path="img/env.png",
+        environment="forest",
+        env_name="Dark Forest",
+        maze_width=40,
+        maze_height=25,
+        class_count=4,
+        portraits_generated=True,
+        story_title="Rise of Shadows",
+        faction_name="Shadow Cult",
+    )
+
+    # PDR-required top-level keys
+    for key in ("seed", "story_seed", "game_mode", "num_rooms",
+                "environments", "generated_at", "validation", "content_index"):
+        assert key in manifest, f"Missing manifest key: {key}"
+
+    # content_index sub-keys
+    ci = manifest["content_index"]
+    for key in ("rooms", "npcs", "items", "quests", "encounters",
+                "monsters", "images", "music_tracks"):
+        assert key in ci, f"Missing content_index key: {key}"
+
+    # Counts are computed from inputs, not hardcoded
+    assert ci["monsters"] == 3  # 2 from e1 + 1 from e3
+    assert ci["encounters"] == 3
+    assert ci["images"] == 3  # player + env + 1 npc with portrait
+    assert ci["rooms"] == 2
+    assert ci["npcs"] == 5
+    assert ci["items"] == 10
+    assert ci["quests"] == 3
+
+    # Extended fields present
+    assert manifest["environment"] == "forest"
+    assert manifest["maze_width"] == 40
+    assert manifest["story_title"] == "Rise of Shadows"
+
+
+def test_manifest_schema_with_validation_report():
+    """build_manifest() preserves full ValidationReport structure."""
+    from src.generate.pipeline import build_manifest
+    from src.generate.validator import ValidationReport
+
+    report = ValidationReport(rooms_validated=1)
+    report.add_warning("test warning", entity_id="e1", phase="events")
+
+    manifest = build_manifest(
+        seed=1, story_seed="s", game_mode="online", num_rooms=1,
+        environments=["forest"], generated_at="2026-01-01T00:00:00+00:00",
+        validation=report.to_dict(),
+        active_npc_count=0, item_count=0, quest_count=0,
+        event_list=[], npc_pool=[],
+        player_portrait_path=None, env_portrait_path=None,
+        environment="forest", env_name="Test", maze_width=40, maze_height=25,
+        class_count=0, portraits_generated=False, story_title="", faction_name="",
+    )
+
+    v = manifest["validation"]
+    for key in ("status", "rooms_validated", "critical_failures",
+                "major_retries", "minor_warnings", "details"):
+        assert key in v, f"Missing validation key: {key}"
+
+    assert v["status"] == "passed_with_warnings"
+    assert v["minor_warnings"] == 1
+    assert len(v["details"]) == 1
+    assert v["details"][0]["severity"] == "minor"
+
+
+# --- ValidationReport unit tests ---
+
+def test_validation_report_empty_is_passed():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport(rooms_validated=1)
+    assert r.status == "passed"
+    assert r.to_dict()["status"] == "passed"
+    assert r.to_dict()["details"] == []
+
+
+def test_validation_report_warning_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_warning("minor issue", entity_id="x", phase="quests")
+    assert r.status == "passed_with_warnings"
+    assert r.minor_warnings == 1
+    assert len(r.details) == 1
+    assert r.details[0]["severity"] == "minor"
+    assert r.details[0]["message"] == "minor issue"
+
+
+def test_validation_report_major_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_major("retry happened", phase="story")
+    assert r.status == "passed_with_warnings"
+    assert r.major_retries == 1
+    assert r.details[0]["severity"] == "major"
+
+
+def test_validation_report_critical_status():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport()
+    r.add_warning("a warning")
+    r.add_critical("fatal problem", entity_id="q1", phase="quests")
+    assert r.status == "failed"
+    assert r.critical_failures == 1
+    assert r.minor_warnings == 1
+    assert len(r.details) == 2
+
+
+def test_validation_report_to_dict_shape():
+    from src.generate.validator import ValidationReport
+    r = ValidationReport(rooms_validated=3)
+    r.add_warning("w1")
+    r.add_major("m1")
+    r.add_critical("c1")
+    d = r.to_dict()
+    assert d == {
+        "status": "failed",
+        "rooms_validated": 3,
+        "critical_failures": 1,
+        "major_retries": 1,
+        "minor_warnings": 1,
+        "details": [
+            {"severity": "minor", "message": "w1", "entity_id": "", "phase": ""},
+            {"severity": "major", "message": "m1", "entity_id": "", "phase": ""},
+            {"severity": "critical", "message": "c1", "entity_id": "", "phase": ""},
+        ],
+    }
+
+
+def test_registry_manifest_seed_compat():
+    """Registry handles both old 'world_seed' and new 'seed' key."""
+    import warnings
+    from src.registry import GameRegistry
+
+    reg = GameRegistry()
+
+    # New key — no warning
+    reg.manifest = {"seed": 42}
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        assert reg.manifest_matches_seed(42)
+        assert not reg.manifest_matches_seed(99)
+        assert len(w) == 0
+
+    # Old key — emits DeprecationWarning
+    reg.manifest = {"world_seed": 42}
+    with pytest.warns(DeprecationWarning, match="world_seed"):
+        assert reg.manifest_matches_seed(42)
