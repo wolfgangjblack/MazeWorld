@@ -1,7 +1,7 @@
 """Shop screen view — two-column buy/sell layout for MerchantNPC interaction."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from config import SCREEN_WIDTH, SCREEN_HEIGHT
 from src.registry import registry
 
 

@@ -3,7 +3,7 @@
 from src.systems.inventory import InventoryManager
 from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import (
-    Item, Food, Drink, Tool, Weapon, SpellScroll, EscortItem, ItemStats,
+    Food, Weapon, SpellScroll, EscortItem, ItemStats,
 )
 
 
@@ -161,7 +161,7 @@ class TestInventoryManagerUseGive:
             item_stats=ItemStats(), npc_id=1, target_zone=(5, 5),
         )
         mgr.add(escort)
-        msg = mgr.use_selected(0)
+        mgr.use_selected(0)
         assert "Bob (escort)" in player.inventory  # Not consumed
 
     def test_give_item(self):
@@ -191,7 +191,7 @@ class TestInventoryManagerSpellScroll:
         mgr = InventoryManager(player.inventory, player)
         scroll = _make_scroll()
         mgr.add(scroll)
-        msg = mgr.use_spell_scroll("scroll of fire")
+        mgr.use_spell_scroll("scroll of fire")
         assert "scroll of fire" not in player.inventory
 
     def test_jester_learns_spell(self):
@@ -238,19 +238,19 @@ class TestPlayerDelegation:
     def test_use_item(self):
         player = _make_player(hunger=50)
         player.add_to_inventory(_make_food(nutrition=20))
-        msg = player.use_item()
+        player.use_item()
         assert player.hunger == 70
 
     def test_give_item(self):
         player = _make_player()
         player.add_to_inventory(_make_food())
-        msg = player.give_item()
+        player.give_item()
         assert "bread" not in player.inventory
 
     def test_equip_weapon(self):
         player = _make_player()
         player.add_to_inventory(_make_weapon())
-        msg = player.equip_weapon("sword")
+        player.equip_weapon("sword")
         assert player.equipped_weapon == "sword"
 
     def test_get_equipped_weapon(self):

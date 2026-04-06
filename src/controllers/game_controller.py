@@ -852,7 +852,7 @@ class GameController:
 
     def draw(self, current_time):
         """Draw the current game state."""
-        if self.shop_active and hasattr(self, 'shop_view') and self.shop_view:
+        if self.shop_active and self.shop_view:
             self.screen.fill((0, 0, 0))
             self.shop_view.draw()
             # Draw item messages on top of shop
@@ -872,10 +872,6 @@ class GameController:
             player_at_item=self.player_at_item,
             quests=self.quests,
             debug_reveal=self.debug_reveal,
-            shop_active=False,
-            shop_npc=None,
-            shop_mode="buy",
-            shop_selected_index=0,
             quest_log_active=self.quest_log_active,
             quest_log=self.get_quest_log() if self.quest_log_active else None,
             followers=self.player.followers,

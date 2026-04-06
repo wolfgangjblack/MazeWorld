@@ -2,12 +2,11 @@
 
 import pytest
 import pygame
-from unittest.mock import MagicMock
 
 from src.views.shop_view import ShopView
 from src.models.npc import MerchantNPC
 from src.models.player import PlayerCharacter
-from src.models.items import Food, Weapon, ItemStats
+from src.models.items import Food, ItemStats
 
 
 @pytest.fixture(autouse=True)
