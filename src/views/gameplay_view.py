@@ -4,6 +4,7 @@ from src.views.npc_view import NPCView
 from src.views.maze_view import MazeView
 from src.views.player_view import PlayerView
 from src.views.dialogue_view import DialogueBoxView
+from src.views.encounter_view import EncounterView
 from src.registry import registry
 
 
@@ -16,6 +17,7 @@ class GameView:
         self.npc_view = NPCView()
         self.player_view = PlayerView()
         self.dialogue_view = DialogueBoxView(screen, font)
+        self.encounter_view = EncounterView(screen, font)
         self.small_font = pygame.font.Font(None, 22)
         self.title_font = pygame.font.Font(None, 36)
         self.quest_font = pygame.font.Font(None, 24)
@@ -303,7 +305,16 @@ class GameView:
 
     def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
         if self.dialogue_box.event_active:
-            self.dialogue_view.draw(self.dialogue_box)
+            event = self.dialogue_box.current_event
+            # Use full-screen encounter view for puzzle/event types,
+            # and for combat initiative (trigger screen before combat starts).
+            # Once multi-turn combat is underway, use the dialogue view's combat renderer.
+            if event and (event.type in ("puzzle", "event")
+                         or (event.type == "combat"
+                             and self.dialogue_box.combat_phase == "initiative")):
+                self.encounter_view.draw(self.dialogue_box)
+            else:
+                self.dialogue_view.draw(self.dialogue_box)
         elif item_message_active or self.dialogue_box.dialogue_active:
             self.dialogue_view.draw(self.dialogue_box)
         elif player_at_item:
