@@ -265,7 +265,7 @@ class GameController:
             if event and not event.resolved:
                 # Time-gated events: only trigger at correct time
                 if is_event_active_at_time(event, self.day_night.current_period):
-                    if event.type == "combat" and hasattr(event, 'monsters') and event.monsters:
+                    if event.type == "combat":
                         self._start_full_combat(event)
                     else:
                         self.dialogue_box.start_event(event)
@@ -294,6 +294,13 @@ class GameController:
         from src.models.weapon import STARTER_WEAPONS
         if self.player.weapon is None and self.player.player_class:
             self.player.weapon = STARTER_WEAPONS.get(self.player.player_class.archetype)
+
+        # Ensure monsters exist — generate fallback if empty
+        if not combat_event.monsters:
+            from src.models.monster import generate_encounter_monsters
+            env = getattr(self.maze, 'environment', 'dungeon')
+            room_level = getattr(combat_event, 'room_level', 1)
+            combat_event.monsters = generate_encounter_monsters(env, room_level)
 
         self.combat_event = combat_event
         self.combat_controller = CombatController(self.player, list(combat_event.monsters))
@@ -717,6 +724,19 @@ class GameController:
 
             # Clear tile
             self.maze.grid[self.player.y][self.player.x] = 0
+
+            # Stats tracking
+            self.stats["monsters_killed"] += sum(
+                1 for m in combat_event.monsters if not m.is_alive)
+
+            # Quest and encounter tracking
+            is_gate = getattr(combat_event, 'is_gate', False)
+            if not is_gate:
+                self.resolved_encounters += 1
+                self._check_door_reveal()
+            else:
+                self.gate_cleared = True
+            self.quest_manager.on_event_resolved(combat_event.id, self.player)
 
             # Check quest completion
             for qid, quest in self.quests.items():
