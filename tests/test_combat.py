@@ -607,7 +607,7 @@ class TestBuffDuration:
             random.seed(seed)
             healer.active_buffs = []
             healer.thirst = 100
-            m = Monster(id="m", name="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
+            m = Monster(id="m", species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
             cc = CombatController(healer, [m])
             cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
             cc.turn_index = 0
