@@ -167,97 +167,100 @@ def main():
     selected_class = None
     player_name = "Adventurer"
 
+    def _handle_start() -> str | None:
+        nonlocal class_select_view
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = start_view.handle_input(event)
+                if action == "new_game":
+                    class_options = registry.get_class_options()
+                    if class_options:
+                        class_select_view = ClassSelectView(screen, font, class_options)
+                        screen_ctrl.replace(ScreenState.CLASS_SELECT)
+                    else:
+                        screen_ctrl.replace(ScreenState.GAMEPLAY)
+                    return None
+                if action == "quit":
+                    return "quit"
+        start_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_class_select() -> str | None:
+        nonlocal player_name, selected_class, room_intro_view
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                result = class_select_view.handle_input(event)
+                if result:
+                    if result["action"] == "selected":
+                        class_idx = result["class_index"]
+                        player_name = result["player_name"]
+                        selected_class = registry.get_class_options()[class_idx]
+                        env_name = ""
+                        env_type = ""
+                        if registry.manifest:
+                            env_name = registry.manifest.get("environment_name", "Unknown Land")
+                            env_type = registry.manifest.get("environment", "unknown")
+                        story_text = (
+                            f"{player_name} the {selected_class.name} "
+                            f"steps into {env_name}, a {env_type} shrouded in mystery. "
+                            "The air hums with untold stories, and the path ahead "
+                            "promises both peril and wonder."
+                        )
+                        env_portrait = registry.manifest.get("environment_portrait") if registry.manifest else None
+                        room_intro_view = RoomIntroView(
+                            screen, font, env_name, env_type, story_text,
+                            portrait_path=env_portrait,
+                        )
+                        screen_ctrl.replace(ScreenState.ROOM_INTRO)
+                    elif result["action"] == "back":
+                        screen_ctrl.replace(ScreenState.START)
+                    return None
+        if class_select_view:
+            class_select_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_room_intro() -> str | None:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                if room_intro_view and room_intro_view.handle_input(event):
+                    screen_ctrl.replace(ScreenState.GAMEPLAY)
+                    return None
+        if room_intro_view:
+            room_intro_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_gameplay() -> str | None:
+        game_controller = setup_game(screen, font, player_name, selected_class)
+        game_controller.run()
+        return "quit"
+
+    screen_handlers: dict[ScreenState, callable] = {
+        ScreenState.START: _handle_start,
+        ScreenState.CLASS_SELECT: _handle_class_select,
+        ScreenState.ROOM_INTRO: _handle_room_intro,
+        ScreenState.GAMEPLAY: _handle_gameplay,
+    }
+
     running = True
     while running:
-        if screen_ctrl.state == ScreenState.START:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    action = start_view.handle_input(event)
-                    if action == "new_game":
-                        # Transition to class selection
-                        class_options = registry.get_class_options()
-                        if class_options:
-                            class_select_view = ClassSelectView(screen, font, class_options)
-                            screen_ctrl.replace(ScreenState.CLASS_SELECT)
-                        else:
-                            # No classes generated — skip to gameplay
-                            screen_ctrl.replace(ScreenState.GAMEPLAY)
-                    elif action == "quit":
-                        running = False
-
-            if not running:
-                break
-
-            start_view.draw()
-            pygame.display.flip()
-            clock.tick(60)
-
-        elif screen_ctrl.state == ScreenState.CLASS_SELECT:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    result = class_select_view.handle_input(event)
-                    if result:
-                        if result["action"] == "selected":
-                            class_idx = result["class_index"]
-                            player_name = result["player_name"]
-                            selected_class = registry.get_class_options()[class_idx]
-                            # Transition to room intro
-                            env_name = ""
-                            env_type = ""
-                            if registry.manifest:
-                                env_name = registry.manifest.get("environment_name", "Unknown Land")
-                                env_type = registry.manifest.get("environment", "unknown")
-                            story_text = (
-                                f"{player_name} the {selected_class.name} "
-                                f"steps into {env_name}, a {env_type} shrouded in mystery. "
-                                "The air hums with untold stories, and the path ahead "
-                                "promises both peril and wonder."
-                            )
-                            env_portrait = registry.manifest.get("environment_portrait") if registry.manifest else None
-                            room_intro_view = RoomIntroView(
-                                screen, font, env_name, env_type, story_text,
-                                portrait_path=env_portrait,
-                            )
-                            screen_ctrl.replace(ScreenState.ROOM_INTRO)
-                        elif result["action"] == "back":
-                            screen_ctrl.replace(ScreenState.START)
-
-            if not running:
-                break
-
-            if class_select_view:
-                class_select_view.draw()
-            pygame.display.flip()
-            clock.tick(60)
-
-        elif screen_ctrl.state == ScreenState.ROOM_INTRO:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    if room_intro_view and room_intro_view.handle_input(event):
-                        screen_ctrl.replace(ScreenState.GAMEPLAY)
-
-            if not running:
-                break
-
-            if room_intro_view:
-                room_intro_view.draw()
-            pygame.display.flip()
-            clock.tick(60)
-
-        elif screen_ctrl.state == ScreenState.GAMEPLAY:
-            # Hand off to GameController (it runs its own loop)
-            game_controller = setup_game(screen, font, player_name, selected_class)
-            game_controller.run()
-            running = False  # GameController.run() quitting means we exit
+        handler = screen_handlers.get(screen_ctrl.state)
+        if handler is None:
+            break
+        result = handler()
+        if result == "quit":
+            running = False
 
     pygame.quit()
 

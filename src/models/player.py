@@ -1,9 +1,10 @@
 import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
 
-STAT_NAMES = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
+StatName = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
+STAT_NAMES: list[StatName] = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
 STAT_BUDGET = 72
 
 # Archetype stat role assignments: primary stats get 14-18, secondary 11-14, dump 6-10
@@ -37,7 +38,7 @@ class Stats(BaseModel):
     CHA: int = 10
     LUCK: int = 10
 
-    def modifier(self, stat: str) -> int:
+    def modifier(self, stat: StatName) -> int:
         return (getattr(self, stat) - 10) // 2
 
     def total(self) -> int:
@@ -70,7 +71,7 @@ class Stats(BaseModel):
 class Ability(BaseModel):
     name: str
     description: str
-    stat: str = "STR"
+    stat: StatName = "STR"
     cost_hunger: int = 0
     cost_thirst: int = 0
 
