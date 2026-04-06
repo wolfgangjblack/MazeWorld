@@ -1,4 +1,3 @@
-import pytest
 from src.models.encounter import CombatEvent, LootEntry
 from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import Weapon, ItemStats

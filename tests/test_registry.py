@@ -1,5 +1,5 @@
 from src.registry import GameRegistry
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, Item
+from src.models.items import Food, Drink, Tool, Weapon, SpellScroll
 
 
 def test_singleton():

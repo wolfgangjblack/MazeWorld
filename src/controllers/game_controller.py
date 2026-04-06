@@ -2,7 +2,7 @@ import random
 import pygame
 from src.views.gameplay_view import GameView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
-from src.models.items import EscortItem, Weapon
+from src.models.items import EscortItem
 from src.registry import registry
 
 

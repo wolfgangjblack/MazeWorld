@@ -1,6 +1,5 @@
-import pytest
 from src.models.items import (
-    Weapon, SpellScroll, Food, Drink, Tool, ItemStats,
+    Weapon, SpellScroll, Food, Tool, ItemStats,
 )
 from src.models.player import PlayerCharacter, PlayerClass
 
@@ -284,7 +283,7 @@ def test_validate_puzzle_tools():
     """Test that _validate_puzzle_tools fixes invalid tool_attribute references."""
     from unittest.mock import MagicMock
     from src.generate.pipeline import _validate_puzzle_tools
-    from src.models.items import Tool, ItemStats
+    from src.models.items import ItemStats
 
     mock_reg = MagicMock()
     tool = Tool(category="tool", name="hatchet", desc="A hatchet",
