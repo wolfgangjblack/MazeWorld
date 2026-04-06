@@ -5,12 +5,14 @@ from src.utils.display_utils import game_to_screen
 from src.registry import registry
 
 
-EVENT_COLOR = (128, 0, 128)    # Purple for event tiles
+EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
+DEBUG_EVENT_COLOR = (128, 0, 128)  # Purple — shown when debug reveal is active
+DOOR_COLOR = (255, 215, 0)    # TODO(Phase 7): Gold for door tiles — use when multi-room portals implemented
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
 
 class MazeView:
-    def draw_maze(self, screen, maze, escort_zones=None):
+    def draw_maze(self, screen, maze, escort_zones=None, debug_reveal=False):
 
         for y, row in enumerate(maze.grid):
             for x, cell in enumerate(row):
@@ -20,13 +22,14 @@ class MazeView:
                     pygame.draw.rect(screen, WHITE, rect)
                 elif cell == maze.event_tile_id:
                     pygame.draw.rect(screen, BLACK, rect)
-                    event_rect = pygame.Rect(
-                        screen_x + GRID_SIZE // 4,
-                        screen_y + GRID_SIZE // 4,
-                        GRID_SIZE // 2,
-                        GRID_SIZE // 2,
-                    )
-                    pygame.draw.rect(screen, EVENT_COLOR, event_rect)
+                    if debug_reveal:
+                        event_rect = pygame.Rect(
+                            screen_x + GRID_SIZE // 4,
+                            screen_y + GRID_SIZE // 4,
+                            GRID_SIZE // 2,
+                            GRID_SIZE // 2,
+                        )
+                        pygame.draw.rect(screen, DEBUG_EVENT_COLOR, event_rect)
                 elif cell == 0:
                     pygame.draw.rect(screen, BLACK, rect)
                 elif registry.is_item(cell):

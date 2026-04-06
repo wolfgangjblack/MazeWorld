@@ -71,7 +71,7 @@ def test_monster_creation():
         damage_dice=8, damage_type="physical",
     )
     assert m.species == "Dire Wolf"
-    assert m.name is None
+    assert m.name == "Dire Wolf"  # auto-populated from species by model_post_init
     assert m.display_name == "Dire Wolf"
     assert m.level == 2
     assert m.loot_table == []

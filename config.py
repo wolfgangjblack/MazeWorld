@@ -17,6 +17,7 @@ MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
 WORLD_SEED = 1234 # Set to -1 for random seed
+STORY_SEED = ""  # 1-liner story prompt; empty = LLM generates freely
 EVENT_PERCENT = 0.1
 EVENT_DENSITY = EVENT_PERCENT  # Alias: configurable encounter density
 
@@ -39,6 +40,9 @@ GAME_MODE = os.getenv("GAME_MODE", "online")  # "online" | "offline_local" | "of
 NUM_FOOD = 2
 NUM_DRINKS = 2
 NUM_TOOLS = 1
+NUM_WEAPONS = 2
+NUM_SPELL_SCROLLS = 1
+STARTING_MONEY = 50
 
 ##GenAI Backend
 # ------------------------------------

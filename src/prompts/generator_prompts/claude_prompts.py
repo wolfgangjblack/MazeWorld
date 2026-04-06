@@ -189,6 +189,62 @@ class ClaudePromptSet(PromptSet):
             max_tokens=400,
         )
 
+    def item_generation(self, env: str, env_name: str, room_level: int) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You generate items for a fantasy video game. Given an environment type, "
+                "environment name, and room level, generate a JSON object with item pools. "
+                "Items MUST be thematic to the environment.\n\n"
+                "Return ONLY a JSON object with these keys:\n"
+                "- food: array of 4 items, each {name, desc, nutrition_value (10-30), health_value (0-15)}\n"
+                "- drink: array of 4 items, each {name, desc, hydration_value (10-30), health_value (0-15)}\n"
+                "- tools: array of 3 items, each {name, desc, attribute (bludgeon|cutting|digging|climbing)}\n"
+                "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}\n"
+                "- spell_scrolls: array of 2 items, each {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}\n\n"
+                "Environment theming examples:\n"
+                "- forest: berries, spring water, hatchet, wooden bow\n"
+                "- desert: dried meat, cactus juice, sandstone chisel, scimitar\n"
+                "- cave: mushroom stew, underground spring, pickaxe, stone mace\n"
+                "- city: pastries, ale, lockpick, rapier\n"
+                "- castle: roast pheasant, fine wine, grappling hook, halberd"
+            ),
+            examples=[
+                (
+                    "environment: 'forest', name: 'Whisperwood', room_level: 1",
+                    json.dumps({
+                        "food": [
+                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", "nutrition_value": 20, "health_value": 0},
+                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries.", "nutrition_value": 10, "health_value": 5},
+                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire.", "nutrition_value": 25, "health_value": 10},
+                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey.", "nutrition_value": 15, "health_value": 5},
+                        ],
+                        "drink": [
+                            {"name": "spring water", "desc": "Cool, clear water from a forest spring.", "hydration_value": 15, "health_value": 0},
+                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs.", "hydration_value": 20, "health_value": 10},
+                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries.", "hydration_value": 10, "health_value": 5},
+                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves.", "hydration_value": 10, "health_value": 0},
+                        ],
+                        "tools": [
+                            {"name": "woodcutter's hatchet", "desc": "A small hatchet for chopping branches.", "attribute": "cutting"},
+                            {"name": "climbing vines", "desc": "Strong vines woven into a makeshift rope.", "attribute": "climbing"},
+                            {"name": "root digger", "desc": "A curved tool for digging up roots.", "attribute": "digging"},
+                        ],
+                        "weapons": [
+                            {"name": "wooden bow", "desc": "A short bow carved from yew wood.", "weapon_type": "light", "stat_modifier": "DEX"},
+                            {"name": "oak club", "desc": "A heavy club hewn from solid oak.", "weapon_type": "heavy", "stat_modifier": "STR"},
+                            {"name": "thorn staff", "desc": "A staff wrapped in enchanted thorns.", "weapon_type": "simple", "stat_modifier": "INT"},
+                        ],
+                        "spell_scrolls": [
+                            {"name": "scroll of entangle", "desc": "Vines erupt from the ground to ensnare.", "spell_effect": "shield"},
+                            {"name": "scroll of regrowth", "desc": "Nature's magic mends your wounds.", "spell_effect": "heal"},
+                        ],
+                    }),
+                ),
+            ],
+            user_message=f"environment: '{env}', name: '{env_name}', room_level: {room_level}",
+            max_tokens=800,
+        )
+
     def item_image_description(self, item_data: dict) -> LLMRequest:
         return LLMRequest(
             system=(

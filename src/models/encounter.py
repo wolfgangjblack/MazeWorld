@@ -30,6 +30,11 @@ class Event(BaseModel):
         arbitrary_types_allowed = True
 
 
+class LootEntry(BaseModel):
+    """A single entry in a loot table."""
+    item_id: int
+    drop_chance: float = 0.5  # 0.0 to 1.0
+
 class CombatEvent(Event):
     """Multi-turn combat encounter with 1-N monsters."""
     type: str = "combat"
@@ -40,6 +45,8 @@ class CombatEvent(Event):
     damage_type: str = "health"
     damage_range: List[int] = Field(default_factory=lambda: [5, 15])
     reward_item_id: Optional[int] = None
+    loot_table: List[LootEntry] = Field(default_factory=list)
+    money_drop: List[int] = Field(default_factory=lambda: [0, 0])  # [min, max]
 
     # Combat state
     turn_order: List[dict] = Field(default_factory=list)  # [{"type":"player"|"monster","index":int,"initiative":int}]
@@ -55,7 +62,8 @@ class CombatEvent(Event):
 
         entries = []
         # Player initiative
-        player_init = random.randint(1, 20) + (player.health // 20)  # DEX proxy
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        player_init = random.randint(1, 20) + dex_mod
         entries.append({"type": "player", "index": -1, "initiative": player_init})
         self.combat_log.append(f"You roll initiative: {player_init}")
 
@@ -81,16 +89,17 @@ class CombatEvent(Event):
         """Return current combatant entry, or None if combat is over."""
         if not self.turn_order:
             return None
-        # Skip dead monsters
-        while self.current_turn_index < len(self.turn_order):
+        checked = 0
+        while checked < len(self.turn_order):
             entry = self.turn_order[self.current_turn_index]
             if entry["type"] == "monster":
                 monster = self.monsters[entry["index"]]
                 if not monster.is_alive:
                     self.current_turn_index = (self.current_turn_index + 1) % len(self.turn_order)
+                    checked += 1
                     continue
             return entry
-        return self.turn_order[self.current_turn_index % len(self.turn_order)]
+        return None
 
     def advance_turn(self):
         """Move to the next combatant."""
@@ -105,13 +114,12 @@ class CombatEvent(Event):
         if not monster.is_alive:
             return {"success": False, "message": f"{monster.name} is already defeated."}
 
-        # Roll: 1d20 + level proxy (health//20) vs DC: 10 + monster AC + monster dex_mod
-        attack_roll = random.randint(1, 20) + (player.health // 20)
+        str_mod = player.get_stat_mod("STR") if hasattr(player, 'get_stat_mod') else 0
+        attack_roll = random.randint(1, 20) + str_mod
         defense_dc = 10 + monster.ac + monster.dex_mod
 
         if attack_roll >= defense_dc:
-            # Hit: base damage 1d6 + modifier
-            damage = max(1, random.randint(1, 6) + (player.health // 25))
+            damage = max(1, random.randint(1, 6) + str_mod)
             # Check for tool bonus
             for item in player.inventory.values():
                 stats = getattr(item, 'item_stats', None)
@@ -141,10 +149,8 @@ class CombatEvent(Event):
                 return {"success": False, "message": msg, "stunned": True}
             return {"success": False, "message": ""}
 
-        # Tick status effects (poison damage, etc.)
-        poison_msg = ""
+        # Tick status effects (poison on monsters is tracked but not damaging here)
         if "poison" in monster.status_effects:
-            # Poison damages the player on the monster's turn? No — poison on monsters.
             pass
 
         # Choose action
@@ -172,7 +178,8 @@ class CombatEvent(Event):
 
         # Basic attack
         attack_roll = monster.roll_attack()
-        defense_dc = 10 + (player.health // 20)  # AC proxy for player
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        defense_dc = 10 + dex_mod
 
         if attack_roll >= defense_dc:
             damage = monster.roll_damage()
@@ -189,7 +196,8 @@ class CombatEvent(Event):
         """Player attempts to flee. 1d20 + DEX vs DC 12 + avg monster level."""
         avg_level = sum(m.level for m in self.monsters if m.is_alive) / max(1, sum(1 for m in self.monsters if m.is_alive))
         flee_dc = int(12 + avg_level)
-        roll = random.randint(1, 20) + (player.health // 20)
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        roll = random.randint(1, 20) + dex_mod
 
         if roll >= flee_dc:
             self.player_fled = True
@@ -218,18 +226,43 @@ class CombatEvent(Event):
         return all_loot
 
     def resolve(self, dice_roll: int, player) -> dict:
-        """Legacy single-roll resolution for backwards compatibility."""
+        """Roll vs difficulty. Win -> reward + loot. Lose -> take damage.
+        If player has an equipped weapon, add its damage roll as a modifier.
+        For multi-turn combat (monsters populated), callers should use the
+        combat system instead of this legacy path.
+        """
         if self.monsters:
-            # Use new multi-turn system — this shouldn't be called directly
             return {"success": False, "message": "Use combat system for multi-turn fights."}
 
         threshold = self.difficulty * 3
-        if dice_roll >= threshold:
+        weapon_bonus = 0
+        weapon = player.get_equipped_weapon() if hasattr(player, 'get_equipped_weapon') else None
+        if weapon and weapon.item_stats.stat_modifier:
+            weapon_bonus = player.get_stat_mod(weapon.item_stats.stat_modifier) if hasattr(player, 'get_stat_mod') else 0
+
+        total = dice_roll + weapon_bonus
+        if total >= threshold:
             self.resolved = True
+            # Roll loot drops
+            dropped_item_ids = []
+            for entry in self.loot_table:
+                if random.random() <= entry.drop_chance:
+                    dropped_item_ids.append(entry.item_id)
+            # Money drop
+            money = 0
+            if self.money_drop[1] > 0:
+                money = random.randint(self.money_drop[0], self.money_drop[1])
+            if money > 0:
+                player.add_money(money)
+            msg = f"You defeated the {self.name}!"
+            if money > 0:
+                msg += f" Found {money} gold."
             return {
                 "success": True,
-                "message": f"You defeated the {self.name}!",
+                "message": msg,
                 "reward_item_id": self.reward_item_id,
+                "loot_item_ids": dropped_item_ids,
+                "money_dropped": money,
             }
         else:
             damage = random.randint(self.damage_range[0], self.damage_range[1])
@@ -411,6 +444,11 @@ def create_event_from_data(data: dict) -> Event:
         data["monsters"] = [
             Monster.from_dict(m) if isinstance(m, dict) else m
             for m in data["monsters"]
+        ]
+    if event_type == "combat" and "loot_table" in data:
+        data["loot_table"] = [
+            LootEntry(**e) if isinstance(e, dict) else e
+            for e in data["loot_table"]
         ]
 
     return cls(**data)

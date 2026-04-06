@@ -1,7 +1,7 @@
 import json
 import math
 import random
-from src.models.items import Food, Drink, Tool
+from src.models.items import Food, Drink, Tool, Weapon, SpellScroll
 from src.registry import registry
 from src.data.world_data import ENVIRONMENT_TYPES
 from config import MAZE_HEIGHT, MAZE_WIDTH, WORLD_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE, EVENT_PERCENT
@@ -125,10 +125,11 @@ class Maze:
             self.grid[y][x] = self.event_tile_id
             open_spaces.remove((x, y))
         
-    def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1):
+    def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1,
+                    num_weapons: int = 0, num_spell_scrolls: int = 0):
         open_spaces = self.find_open_spaces()
         random.shuffle(open_spaces)
-        
+
         item_ids = registry.item_ids()
 
         def generate_items_by_class(cls, num_gens):
@@ -150,6 +151,8 @@ class Maze:
         generate_items_by_class(Food, num_food)
         generate_items_by_class(Drink, num_drink)
         generate_items_by_class(Tool, num_tools)
+        generate_items_by_class(Weapon, num_weapons)
+        generate_items_by_class(SpellScroll, num_spell_scrolls)
 
     def save_to_json(self, path: str, extra: dict | None = None):
         """Persist the maze grid and metadata to a JSON file."""

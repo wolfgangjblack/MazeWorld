@@ -1,11 +1,10 @@
 """Phase 6 tests: Quests, Story & Followers."""
 
-import pytest
 from unittest.mock import MagicMock
 
 from src.models.story import OverarchingStory, Faction, RoomStoryBeat
 from src.models.quest import (
-    Quest, FetchQuest, EscortQuest, DeliveryQuest, DialogueQuest,
+    Quest, FetchQuest, DialogueQuest,
     CombatQuest, MultiStepQuest, QuestReward, QuestFailurePenalty,
     create_quest_from_data, QUEST_TYPE_MAP,
 )

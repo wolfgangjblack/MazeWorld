@@ -202,6 +202,53 @@ class LlamaPromptSet(PromptSet):
             max_tokens=400,
         )
 
+    def item_generation(self, env: str, env_name: str, room_level: int) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You generate environment-themed items for a fantasy game. "
+                "Output a JSON object with keys: food (4 items), drink (4 items), "
+                "tools (3 items), weapons (3 items), spell_scrolls (2 items). "
+                "Each food: {name, desc, nutrition_value, health_value}. "
+                "Each drink: {name, desc, hydration_value, health_value}. "
+                "Each tool: {name, desc, attribute (bludgeon|cutting|digging|climbing)}. "
+                "Each weapon: {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}. "
+                "Each spell_scroll: {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}. "
+                "Items must be thematic to the environment."
+            ),
+            examples=[
+                (
+                    "environment: 'forest', name: 'Whisperwood', room_level: 1",
+                    '{"food": [{"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", '
+                    '"nutrition_value": 20, "health_value": 0}, {"name": "wild berries", '
+                    '"desc": "Sweet ripe berries.", "nutrition_value": 10, "health_value": 5}, '
+                    '{"name": "roasted rabbit", "desc": "Campfire-roasted rabbit.", '
+                    '"nutrition_value": 25, "health_value": 10}, {"name": "honey cake", '
+                    '"desc": "Sticky-sweet cake with wild honey.", "nutrition_value": 15, "health_value": 5}], '
+                    '"drink": [{"name": "spring water", "desc": "Cool forest spring water.", '
+                    '"hydration_value": 15, "health_value": 0}, {"name": "herbal tea", '
+                    '"desc": "Soothing forest herb tea.", "hydration_value": 20, "health_value": 10}, '
+                    '{"name": "berry juice", "desc": "Fresh wild berry juice.", '
+                    '"hydration_value": 10, "health_value": 5}, {"name": "dew drops", '
+                    '"desc": "Morning dew from broad leaves.", "hydration_value": 10, "health_value": 0}], '
+                    '"tools": [{"name": "hatchet", "desc": "A small hatchet.", "attribute": "cutting"}, '
+                    '{"name": "climbing vines", "desc": "Strong woven vines.", "attribute": "climbing"}, '
+                    '{"name": "root digger", "desc": "Curved digging tool.", "attribute": "digging"}], '
+                    '"weapons": [{"name": "wooden bow", "desc": "A yew short bow.", '
+                    '"weapon_type": "light", "stat_modifier": "DEX"}, '
+                    '{"name": "oak club", "desc": "Heavy oak club.", '
+                    '"weapon_type": "heavy", "stat_modifier": "STR"}, '
+                    '{"name": "thorn staff", "desc": "Enchanted thorn staff.", '
+                    '"weapon_type": "simple", "stat_modifier": "INT"}], '
+                    '"spell_scrolls": [{"name": "scroll of entangle", '
+                    '"desc": "Vines ensnare your foes.", "spell_effect": "shield"}, '
+                    '{"name": "scroll of regrowth", "desc": "Nature mends wounds.", '
+                    '"spell_effect": "heal"}]}'
+                ),
+            ],
+            user_message=f"environment: '{env}', name: '{env_name}', room_level: {room_level}",
+            max_tokens=600,
+        )
+
     def item_image_description(self, item_data: dict) -> LLMRequest:
         return LLMRequest(
             system=(

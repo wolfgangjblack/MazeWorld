@@ -48,7 +48,7 @@ class CombatView:
     # ------------------------------------------------------------------
 
     def _draw_monsters(self, combat: CombatController):
-        alive = [m for m in combat.monsters if m.is_alive()]
+        alive = [m for m in combat.monsters if m.is_alive]
         if not alive:
             return
 
@@ -95,7 +95,7 @@ class CombatView:
 
         x = 160
         for c in combat.combatants:
-            if not c.is_alive():
+            if not c.is_alive:
                 continue
             is_current = c is combat.current_combatant()
             color = YELLOW if is_current else LIGHT_GRAY
@@ -164,7 +164,7 @@ class CombatView:
     def _draw_target_selector(self, combat: CombatController, y: int, selected_target: int):
         label = self.font.render("Select target:", True, WHITE)
         self.screen.blit(label, (20, y))
-        alive = [m for m in combat.monsters if m.is_alive()]
+        alive = [m for m in combat.monsters if m.is_alive]
         for i, m in enumerate(alive):
             color = YELLOW if i == selected_target else LIGHT_GRAY
             prefix = "> " if i == selected_target else "  "

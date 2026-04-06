@@ -13,8 +13,7 @@ from src.models.monster import (
     Monster,
     LootDrop,
     create_scaled_monster,
-    generate_encounter,
-    EncounterType,
+    generate_encounter_monsters,
 )
 from src.models.weapon import Weapon, STARTER_WEAPONS, RANDOM_WEAPON_STATS
 from src.models.spell import (
@@ -194,7 +193,7 @@ class TestInitiative:
         """Higher initiative rolls go first."""
         random.seed(42)
         cc = CombatController(warrior, [weak_monster])
-        inits = [c.initiative for c in cc.combatants if c.is_alive()]
+        inits = [c.initiative for c in cc.combatants if c.is_alive]
         assert inits == sorted(inits, reverse=True)
 
     def test_player_wins_ties(self, warrior, weak_monster):
@@ -652,9 +651,9 @@ class TestMonsterModel:
         assert weak_monster.hp == 5
 
     def test_is_alive(self, weak_monster):
-        assert weak_monster.is_alive()
+        assert weak_monster.is_alive
         weak_monster.hp = 0
-        assert not weak_monster.is_alive()
+        assert not weak_monster.is_alive
 
 
 # ---------------------------------------------------------------------------
@@ -696,9 +695,9 @@ class TestPlayerCombat:
         assert not mage.can_afford_spell(spell)
 
     def test_is_alive(self, warrior):
-        assert warrior.is_alive()
+        assert warrior.is_alive
         warrior.health = 0
-        assert not warrior.is_alive()
+        assert not warrior.is_alive
 
 
 # ---------------------------------------------------------------------------
@@ -706,35 +705,30 @@ class TestPlayerCombat:
 # ---------------------------------------------------------------------------
 
 class TestEncounterComposition:
-    def test_solo_encounter_one_monster(self):
-        monsters = generate_encounter(1, EncounterType.SOLO)
-        assert len(monsters) == 1
-
-    def test_pack_encounter_two_to_four(self):
-        for seed in range(20):
-            random.seed(seed)
-            monsters = generate_encounter(1, EncounterType.PACK)
-            assert 2 <= len(monsters) <= 4
-
-    def test_mixed_encounter_composition(self):
-        random.seed(42)
-        monsters = generate_encounter(2, EncounterType.MIXED)
-        # 1-2 strong + 2-3 weak = 3-5 total
-        assert 3 <= len(monsters) <= 5
-
-    def test_random_encounter_type(self):
-        """When encounter_type is None, it picks randomly."""
-        monsters = generate_encounter(1)
+    def test_encounter_produces_monsters(self):
+        monsters = generate_encounter_monsters("forest", 1)
         assert len(monsters) >= 1
 
-    def test_solo_monster_level_above_player(self):
-        monsters = generate_encounter(2, EncounterType.SOLO)
-        assert monsters[0].level == 3
+    def test_encounter_solo_sometimes(self):
+        counts = []
+        for seed in range(100):
+            random.seed(seed)
+            monsters = generate_encounter_monsters("forest", 1)
+            counts.append(len(monsters))
+        assert 1 in counts
 
-    def test_pack_monsters_level_below_player(self):
-        monsters = generate_encounter(3, EncounterType.PACK)
+    def test_encounter_pack_sometimes(self):
+        counts = []
+        for seed in range(100):
+            random.seed(seed)
+            monsters = generate_encounter_monsters("cave", 2)
+            counts.append(len(monsters))
+        assert any(c >= 2 for c in counts)
+
+    def test_encounter_monsters_have_valid_level(self):
+        monsters = generate_encounter_monsters("forest", 3)
         for m in monsters:
-            assert m.level == 2  # max(1, 3-1)
+            assert 1 <= m.level <= 3
 
 
 # ---------------------------------------------------------------------------

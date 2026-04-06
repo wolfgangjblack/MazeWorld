@@ -18,18 +18,23 @@ class GameView:
         self.dialogue_view = DialogueBoxView(screen, font)
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
-                  current_npc, player_at_item, quests=None,
+                  current_npc, player_at_item, quests=None, debug_reveal=False,
+                  shop_active=False, shop_npc=None, shop_mode="buy",
+                  shop_selected_index=0,
                   quest_log_active=False, quest_log=None, followers=None):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
 
-        if quest_log_active and quest_log:
+        if shop_active and shop_npc:
+            self.draw_shop(player, shop_npc, shop_mode, shop_selected_index)
+        elif quest_log_active and quest_log:
             self.draw_quest_log(quest_log)
         elif inventory_active:
             self.draw_inventory(player)
         else:
-            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones)
+            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
+                                     debug_reveal=debug_reveal)
 
             for npc in npcs:
                 self.npc_view.draw_npc(self.screen, npc)
@@ -44,10 +49,20 @@ class GameView:
                 self.screen.blit(ft, (10, SCREEN_HEIGHT - 70))
 
         if (current_npc and not item_message_active and
-            not inventory_active and not self.dialogue_box.dialogue_active
+            not inventory_active and not shop_active
+            and not self.dialogue_box.dialogue_active
             and not self.dialogue_box.event_active and not quest_log_active):
-            text_surface = self.font.render("Press Enter to talk", True, WHITE)
+            from src.models.npc import MerchantNPC
+            if isinstance(current_npc, MerchantNPC):
+                text_surface = self.font.render("Enter: Talk  |  S: Shop", True, WHITE)
+            else:
+                text_surface = self.font.render("Press Enter to talk", True, WHITE)
             self.screen.blit(text_surface, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
+
+        if debug_reveal:
+            debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
+            self.screen.blit(debug_surface,
+                             (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
         self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
 
@@ -65,18 +80,121 @@ class GameView:
         return zones
 
     def draw_inventory(self, player):
-        pygame.draw.rect(self.screen,
-                         (200, 200, 200),
-                         pygame.Rect(100, 100, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 200))
-        inventory = player.get_inventory()
-        for index, (item, quantity) in enumerate(inventory):
-            color = (255, 0, 0) if index == player.selected_item_index else (0, 0, 0)
-            item_text = f"{quantity}x {item}"
-            text_surface = self.font.render(item_text, True, color)
-            self.screen.blit(text_surface, (150, 150 + index * 40))
+        bg = pygame.Rect(100, 80, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 160)
+        pygame.draw.rect(self.screen, (200, 200, 200), bg)
+        pygame.draw.rect(self.screen, (80, 80, 80), bg, 2)
 
-        exit_text = self.font.render("Press 'Esc' to exit", True, (0, 0, 0))
-        self.screen.blit(exit_text, (150, SCREEN_HEIGHT - 150))
+        # Title and money
+        title = self.font.render("INVENTORY", True, (0, 0, 0))
+        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 90))
+        money_text = self.font.render(f"Gold: {player.money}", True, (180, 150, 0))
+        self.screen.blit(money_text, (SCREEN_WIDTH - 280, 90))
+
+        inventory = player.get_inventory()
+        y_start = 130
+        for index, (item_name, quantity) in enumerate(inventory):
+            selected = index == player.selected_item_index
+            color = (255, 0, 0) if selected else (0, 0, 0)
+
+            # Equipped indicator
+            prefix = ""
+            if player.equipped_weapon == item_name:
+                prefix = "[E] "
+
+            item_text = f"{prefix}{quantity}x {item_name}"
+            text_surface = self.font.render(item_text, True, color)
+            self.screen.blit(text_surface, (150, y_start + index * 30))
+
+            # Show item stats on selected
+            if selected and item_name in player.inventory:
+                item_obj = player.inventory[item_name]
+                stats = item_obj.item_stats
+                detail_parts = []
+                if stats.nutrition_value:
+                    detail_parts.append(f"Food:{stats.nutrition_value}")
+                if stats.hydration_value:
+                    detail_parts.append(f"Water:{stats.hydration_value}")
+                if stats.health_value:
+                    detail_parts.append(f"HP:{stats.health_value}")
+                if stats.attack_dice:
+                    detail_parts.append(f"Dmg:{stats.attack_dice}")
+                if stats.attribute:
+                    detail_parts.append(f"Attr:{stats.attribute}")
+                if stats.price:
+                    detail_parts.append(f"Val:{stats.price}g")
+                if stats.uses > 1:
+                    detail_parts.append(f"Uses:{stats.uses}")
+                if detail_parts:
+                    detail = "  ".join(detail_parts)
+                    detail_surface = self.font.render(detail, True, (80, 80, 80))
+                    self.screen.blit(detail_surface, (150, y_start + index * 30 + 16))
+
+        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  Esc: Close"
+        exit_text = self.font.render(controls, True, (0, 0, 0))
+        self.screen.blit(exit_text, (120, SCREEN_HEIGHT - 120))
+
+    def draw_shop(self, player, merchant_npc, mode, selected_index):
+        """Draw the shop interface with buy/sell columns."""
+        bg = pygame.Rect(50, 60, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 120)
+        pygame.draw.rect(self.screen, (220, 210, 180), bg)
+        pygame.draw.rect(self.screen, (100, 80, 40), bg, 3)
+
+        # Header
+        shop_title = self.font.render(f"{merchant_npc.name}'s Shop", True, (100, 60, 20))
+        self.screen.blit(shop_title, (SCREEN_WIDTH // 2 - shop_title.get_width() // 2, 70))
+        money_text = self.font.render(f"Your Gold: {player.money}", True, (180, 150, 0))
+        self.screen.blit(money_text, (SCREEN_WIDTH - 230, 70))
+
+        # Tab indicator
+        buy_color = (180, 0, 0) if mode == "buy" else (80, 80, 80)
+        sell_color = (180, 0, 0) if mode == "sell" else (80, 80, 80)
+        self.screen.blit(self.font.render("[B]uy", True, buy_color), (100, 100))
+        self.screen.blit(self.font.render("[S]ell", True, sell_color), (200, 100))
+
+        col_x = 80
+        y_start = 130
+        line_height = 28
+
+        if mode == "buy":
+            available = merchant_npc.get_shop_items()
+            for i, entry in enumerate(available):
+                item = registry.get_item(entry["item_id"])
+                if not item:
+                    continue
+                selected = i == selected_index
+                color = (200, 0, 0) if selected else (0, 0, 0)
+                name_text = f"{item.name}"
+                price_text = f"{entry['price']}g"
+                stock_text = f"x{entry['stock']}"
+
+                self.screen.blit(self.font.render(name_text, True, color),
+                                 (col_x, y_start + i * line_height))
+                self.screen.blit(self.font.render(price_text, True, color),
+                                 (col_x + 300, y_start + i * line_height))
+                self.screen.blit(self.font.render(stock_text, True, color),
+                                 (col_x + 400, y_start + i * line_height))
+
+                if selected and item:
+                    desc_surface = self.font.render(item.desc[:60], True, (80, 80, 80))
+                    self.screen.blit(desc_surface, (col_x, y_start + i * line_height + 14))
+        else:
+            # Sell mode - show player inventory
+            inventory = player.get_inventory()
+            for i, (item_name, quantity) in enumerate(inventory):
+                selected = i == selected_index
+                color = (200, 0, 0) if selected else (0, 0, 0)
+                item_obj = player.inventory.get(item_name)
+                sell_price = max(1, item_obj.item_stats.price // 2) if item_obj else 0
+
+                self.screen.blit(self.font.render(f"{quantity}x {item_name}", True, color),
+                                 (col_x, y_start + i * line_height))
+                if sell_price > 0:
+                    self.screen.blit(self.font.render(f"Sell: {sell_price}g", True, color),
+                                     (col_x + 350, y_start + i * line_height))
+
+        controls = "Up/Down: Select  |  Enter: Confirm  |  B/S: Switch Tab  |  Esc: Close"
+        self.screen.blit(self.font.render(controls, True, (60, 60, 60)),
+                         (80, SCREEN_HEIGHT - 90))
 
     def draw_quest_log(self, quest_log):
         """Draw the quest log overlay with active/completed/failed sections."""

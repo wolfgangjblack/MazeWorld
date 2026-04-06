@@ -4,7 +4,7 @@ Monsters are generated at world-build time with environment-themed names,
 stats that scale by room level, and optional abilities (poison/stun/elemental).
 
 Compatibility: the combat controller (Phase 3) uses ``species`` / ``display_name``
-and calls ``is_alive()`` as a method.  This module keeps those working while
+and calls ``is_alive`` as a property.  This module keeps those working while
 adding Phase 5 features (abilities, status effects, environment pools).
 """
 
@@ -65,7 +65,6 @@ class Monster(BaseModel):
 
     # Battle state (not persisted)
     status_effects: Dict[str, int] = Field(default_factory=dict)
-    _dead: bool = False
 
     class Config:
         arbitrary_types_allowed = True
@@ -105,6 +104,7 @@ class Monster(BaseModel):
             return _roll_dice(dice_expr)
         return random.randint(1, self.damage_dice) + max(self.str_mod, 0)
 
+    @property
     def is_alive(self) -> bool:
         return self.hp > 0
 
@@ -150,7 +150,6 @@ class Monster(BaseModel):
         """Serialize for world_gen JSON output."""
         data = self.model_dump()
         data.pop("status_effects", None)
-        data.pop("_dead", None)
         return data
 
     @classmethod

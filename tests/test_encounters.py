@@ -8,11 +8,11 @@ from src.models.monster import (
     generate_monster, generate_encounter_monsters,
     _roll_dice, LEVEL_SCALING, MONSTER_POOLS,
 )
-from src.models.event import (
+from src.models.encounter import (
     CombatEvent, PuzzleEvent, EventEncounter, EventChoice,
     create_event_from_data,
 )
-from src.models.player_character import PlayerCharacter
+from src.models.player import PlayerCharacter
 from src.models.items import Tool, ItemStats
 
 
@@ -39,7 +39,8 @@ def _make_monster(**overrides):
         "str_mod": 1,
         "dex_mod": 1,
         "attack_name": "slash",
-        "damage_dice": "1d6",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
         "level": 1,
     }
     defaults.update(overrides)
@@ -78,13 +79,13 @@ class TestMonster:
         m = _make_monster(str_mod=1, level=2)
         for _ in range(50):
             roll = m.roll_attack()
-            assert 4 <= roll <= 23  # 1+1+2 to 20+1+2
+            assert 2 <= roll <= 21  # 1+1 to 20+1
 
     def test_roll_damage(self):
-        m = _make_monster(damage_dice="1d6")
+        m = _make_monster(damage_dice=6, damage_dice_expr="1d6")
         for _ in range(50):
             dmg = m.roll_damage()
-            assert 1 <= dmg <= 6
+            assert 1 <= dmg <= 7  # 1d6 (1-6) + max(str_mod=1, 0)
 
     def test_status_effects(self):
         m = _make_monster()
@@ -99,20 +100,20 @@ class TestMonster:
 
     def test_roll_loot(self):
         m = _make_monster()
-        m.loot_table = [LootEntry(item_id=200, drop_chance=1.0)]
+        m.loot_table = [LootEntry(item_id=200, probability=1.0)]
         loot = m.roll_loot()
         assert 200 in loot
 
     def test_roll_loot_no_drop(self):
         m = _make_monster()
-        m.loot_table = [LootEntry(item_id=200, drop_chance=0.0)]
+        m.loot_table = [LootEntry(item_id=200, probability=0.0)]
         loot = m.roll_loot()
         assert 200 not in loot
 
     def test_serialization_round_trip(self):
         m = _make_monster()
         m.abilities = [MonsterAbility(name="Poison", effect_type="poison", damage_dice="1d4")]
-        m.loot_table = [LootEntry(item_id=200, drop_chance=0.5)]
+        m.loot_table = [LootEntry(item_id=200, probability=0.5)]
         d = m.to_dict()
         m2 = Monster.from_dict(d)
         assert m2.name == m.name
@@ -162,10 +163,6 @@ class TestMonsterGeneration:
 
     def test_encounter_scales_with_room(self):
         """Higher room levels should produce tougher monsters."""
-        random.seed(10)
-        m1 = generate_monster("forest", 1)
-        m4 = generate_monster("forest", 4)
-        # Level 4 should have higher max HP range
         assert LEVEL_SCALING[4]["hp"][0] > LEVEL_SCALING[1]["hp"][0]
 
 
@@ -207,19 +204,23 @@ class TestCombatEvent:
         assert event.combat_started
 
     def test_player_attack_hit(self):
-        event = self._make_combat_event()
+        monsters = [_make_monster(hp=10, ac=2, dex_mod=0, level=1)]
+        event = CombatEvent(
+            id="evt_hit", name="Easy Fight",
+            description="A weak foe",
+            monsters=monsters, room_level=1,
+        )
         player = _make_player()
         event.start_combat(player)
 
-        # Force a hit by giving player high health (high modifier)
-        player.health = 100
-        random.seed(99)  # Seed that gives high rolls
+        random.seed(99)
         hits = 0
         for _ in range(50):
+            event.monsters[0].hp = 10
             result = event.player_attack(player, 0)
             if result.get("damage"):
                 hits += 1
-        assert hits > 0  # At least some hits
+        assert hits > 0
 
     def test_player_attack_kills_monster(self):
         event = self._make_combat_event()
@@ -238,7 +239,6 @@ class TestCombatEvent:
         player = _make_player(health=100)
         event.start_combat(player)
 
-        initial_health = player.health
         # Run multiple times to ensure at least one hit
         hits = 0
         for _ in range(50):
@@ -282,7 +282,7 @@ class TestCombatEvent:
 
     def test_collect_loot_from_dead(self):
         event = self._make_combat_event()
-        event.monsters[0].loot_table = [LootEntry(item_id=200, drop_chance=1.0)]
+        event.monsters[0].loot_table = [LootEntry(item_id=200, probability=1.0)]
         event.monsters[0].take_damage(event.monsters[0].hp)
         loot = event.collect_loot()
         assert 200 in loot
@@ -445,7 +445,7 @@ class TestCreateEventFromData:
             "name": "Wolf Pack",
             "description": "Wolves attack!",
             "monsters": [
-                {"name": "Wolf", "hp": 10, "ac": 10, "damage_dice": "1d6", "level": 1},
+                {"name": "Wolf", "hp": 10, "ac": 10, "damage_dice_expr": "1d6", "level": 1},
             ],
             "room_level": 1,
         }

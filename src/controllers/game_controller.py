@@ -1,9 +1,9 @@
 import random
 import pygame
 from src.views.gameplay_view import GameView
-from src.models.npc import RandomNPC, AggressiveNPC
+from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
-from src.models.follower import Follower, MAX_FOLLOWERS
+from src.models.follower import Follower
 from src.registry import registry
 
 
@@ -34,6 +34,13 @@ class GameController:
         self.player_at_item = False
         self.current_npc = None
         self.running = True
+        self.debug_reveal = False
+
+        # Shop state
+        self.shop_active = False
+        self.shop_npc = None
+        self.shop_mode = "buy"  # "buy" or "sell"
+        self.shop_selected_index = 0
 
         # Combat target selection
         self.combat_target_index = 0
@@ -116,6 +123,11 @@ class GameController:
             self._handle_event_input(event)
             return
 
+        # 0.5. If shop is active
+        if self.shop_active:
+            self._handle_shop_input(event)
+            return
+
         # 1. If an item message is active
         if self.item_message_active:
             if event.key == pygame.K_RETURN:
@@ -186,6 +198,11 @@ class GameController:
                 self._handle_npc_interaction(self.current_npc)
                 return
 
+        if event.key == pygame.K_s:
+            if self.current_npc and isinstance(self.current_npc, MerchantNPC):
+                self._open_shop(self.current_npc)
+                return
+
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
             self.quest_log_active = False
@@ -200,6 +217,11 @@ class GameController:
             self._talk_to_follower()
             return
 
+        # Available in all builds (including packaged exe) for troubleshooting
+        if event.key == pygame.K_F1:
+            self.debug_reveal = not self.debug_reveal
+            return
+
         if event.key == pygame.K_ESCAPE:
             if self.quest_log_active:
                 self.quest_log_active = False
@@ -207,7 +229,17 @@ class GameController:
             return
 
     def _handle_event_input(self, event):
-        """Handle keyboard input during an active event."""
+        """Handle keyboard input during an active event.
+
+        TODO Phase 8: Check time_gate before triggering encounters.
+        Changes needed:
+          - DayNightCycle system must be instantiated and tracked in GameController
+          - In _handle_event_input: skip trigger if event.time_gate doesn't match current period
+          - In _handle_npc_interaction: skip quest offer if quest.time_gate doesn't match
+          - EventChoice.time_gate should gate individual choices within events
+          - Encounters with time_gate set should remain invisible when walked over at wrong time
+          - See PDR sections 4.3 (Encounters) and 4.11 (Day/Night) for full spec
+        """
         current_event = self.dialogue_box.current_event
         if not current_event:
             return
@@ -236,10 +268,16 @@ class GameController:
                 self.dialogue_box.event_context["dice_roll"] = dice_roll
                 self.dialogue_box.awaiting_roll = False
 
-                if result.get("success") and result.get("reward_item_id"):
-                    reward_item = registry.get_item(result["reward_item_id"])
-                    if reward_item:
-                        self.player.add_to_inventory(reward_item.clone())
+                if result.get("success"):
+                    if result.get("reward_item_id"):
+                        reward_item = registry.get_item(result["reward_item_id"])
+                        if reward_item:
+                            self.player.add_to_inventory(reward_item.clone())
+                    # Handle loot drops from combat
+                    for loot_id in result.get("loot_item_ids", []):
+                        loot_item = registry.get_item(loot_id)
+                        if loot_item:
+                            self.player.add_to_inventory(loot_item.clone())
 
                 # Walk-away for event encounters: don't resolve
                 if result.get("walked_away"):
@@ -530,10 +568,16 @@ class GameController:
         """Mark quest as completed and grant reward."""
         quest.status = "completed"
         self.player.complete_quest(quest.id)
-        if quest.reward and quest.reward.item_id:
-            reward = registry.get_item(quest.reward.item_id)
-            if reward:
-                self.player.add_to_inventory(reward.clone())
+        reward_msg = f"Quest completed: {quest.title}!"
+        if quest.reward:
+            if quest.reward.item_id:
+                reward = registry.get_item(quest.reward.item_id)
+                if reward:
+                    self.player.add_to_inventory(reward.clone())
+            money = getattr(quest.reward, 'money', 0)
+            if money > 0:
+                self.player.add_money(money)
+                reward_msg += f" +{money} gold!"
 
         # Remove follower if escort quest
         if quest.type == "escort":
@@ -542,12 +586,12 @@ class GameController:
                 farewell = follower.farewell_text
                 self.player.remove_follower(follower.npc_id)
                 self.dialogue_box.set_item_message(
-                    f"Quest completed: {quest.title}! {follower.name}: {farewell}")
+                    f"{reward_msg} {follower.name}: {farewell}")
                 self.item_message_active = True
                 self._check_multi_step_progress(quest.id)
                 return
 
-        self.dialogue_box.set_item_message(f"Quest completed: {quest.title}!")
+        self.dialogue_box.set_item_message(reward_msg)
         self.item_message_active = True
         self._check_multi_step_progress(quest.id)
 
@@ -602,11 +646,11 @@ class GameController:
             joined_in_room=1,
             destination_room=getattr(quest, 'destination_room', 1),
             personality=getattr(npc_to_escort, 'personality', ''),
-            farewell_text=f"Thank you for escorting me. Farewell!",
+            farewell_text="Thank you for escorting me. Farewell!",
             dialogue_hints=[
-                f"I think we need to keep moving...",
-                f"Be careful, I've heard rumors of danger ahead.",
-                f"I appreciate your help, adventurer.",
+                "I think we need to keep moving...",
+                "Be careful, I've heard rumors of danger ahead.",
+                "I appreciate your help, adventurer.",
             ],
         )
 
@@ -615,7 +659,6 @@ class GameController:
             self.dialogue_box.set_item_message(f"{follower.name} is now following you!")
             self.item_message_active = True
 
-            # Also add escort item for legacy spatial completion check
             from src.models.items import EscortItem, ItemStats
             escort_item = EscortItem(
                 category="escort",
@@ -641,7 +684,6 @@ class GameController:
         self.dialogue_box.set_item_message(msg)
         self.item_message_active = True
 
-        # Remove associated follower if escort quest
         if quest.type == "escort":
             follower = self.player.get_follower_by_quest(quest.id)
             if follower:
@@ -692,6 +734,55 @@ class GameController:
                 failed.append(entry)
         return {"active": active, "completed": completed, "failed": failed}
 
+    def _open_shop(self, merchant_npc):
+        """Open the shop interface for a MerchantNPC."""
+        self.shop_active = True
+        self.shop_npc = merchant_npc
+        self.shop_mode = "buy"
+        self.shop_selected_index = 0
+
+    def _handle_shop_input(self, event):
+        """Handle keyboard input while the shop is open."""
+        if event.key == pygame.K_ESCAPE:
+            self.shop_active = False
+            self.shop_npc = None
+            return
+
+        if event.key == pygame.K_b:
+            self.shop_mode = "buy"
+            self.shop_selected_index = 0
+            return
+        if event.key == pygame.K_s:
+            self.shop_mode = "sell"
+            self.shop_selected_index = 0
+            return
+
+        if self.shop_mode == "buy":
+            available = self.shop_npc.get_shop_items()
+            max_idx = len(available) - 1
+        else:
+            max_idx = len(self.player.get_inventory()) - 1
+
+        if max_idx < 0:
+            return
+
+        if event.key == pygame.K_UP:
+            self.shop_selected_index = max(0, self.shop_selected_index - 1)
+        elif event.key == pygame.K_DOWN:
+            self.shop_selected_index = min(max_idx, self.shop_selected_index + 1)
+        elif event.key == pygame.K_RETURN:
+            if self.shop_mode == "buy":
+                msg = self.shop_npc.buy_from(self.shop_selected_index, self.player)
+            else:
+                inventory = self.player.get_inventory()
+                if self.shop_selected_index < len(inventory):
+                    item_name = inventory[self.shop_selected_index][0]
+                    msg = self.shop_npc.sell_to(item_name, self.player)
+                else:
+                    msg = "Nothing to sell."
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(msg)
+
     def handle_inventory_input(self, event):
         inventory = self.player.get_inventory()
         if not inventory:
@@ -708,6 +799,12 @@ class GameController:
             self.dialogue_box.set_item_message(message)
         elif event.key == pygame.K_u:
             message = self.player.use_item()
+            self.item_message_active = True
+            self.dialogue_box.set_item_message(message)
+        elif event.key == pygame.K_e:
+            # Equip weapon
+            item_name = inventory[self.player.selected_item_index][0]
+            message = self.player.equip_weapon(item_name)
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
 
@@ -738,6 +835,11 @@ class GameController:
             current_npc=self.current_npc,
             player_at_item=self.player_at_item,
             quests=self.quests,
+            debug_reveal=self.debug_reveal,
+            shop_active=self.shop_active,
+            shop_npc=self.shop_npc,
+            shop_mode=self.shop_mode,
+            shop_selected_index=self.shop_selected_index,
             quest_log_active=self.quest_log_active,
             quest_log=self.get_quest_log() if self.quest_log_active else None,
             followers=self.player.followers,
