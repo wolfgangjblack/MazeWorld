@@ -213,7 +213,8 @@ class TestClassValidator:
         pc = PlayerClass(
             name="Druid", archetype="mage", stats=stats,
             spells=[
-                Spell(name=f"S{i}", description="x") for i in range(4)
+                Spell(name=f"S{i}", description="x", spell_type="damage_single",
+                      element="fire", stat="INT") for i in range(4)
             ],
         )
         result = v.validate(pc)
