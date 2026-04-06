@@ -1,6 +1,5 @@
 """Tests for new Pydantic data models added in Phase 1."""
 
-import pytest
 from src.models.player import Stats, PlayerClass, Ability, Spell
 from src.models.monster import Monster, LootDrop
 from src.models.story import OverarchingStory, Faction, RoomStoryBeat

@@ -717,7 +717,6 @@ class TestDefaultLoot:
 class TestJesterRandomWeapon:
     def test_random_weapon_uses_varying_stats(self, jester):
         """Jester's roll_attack should sometimes use different stats."""
-        stats_used = set()
         for seed in range(50):
             random.seed(seed)
             jester._resolve_weapon_stat()

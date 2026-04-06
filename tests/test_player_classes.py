@@ -2,12 +2,12 @@
 
 import pytest
 from src.models.player import (
-    Stats, Ability, Spell, PlayerClass, PlayerCharacter,
-    STAT_NAMES, STAT_BUDGET, ARCHETYPE_STAT_ROLES,
+    Stats, Ability, PlayerClass, PlayerCharacter,
+    STAT_NAMES, STAT_BUDGET,
 )
 from src.generate.class_gen import (
-    generate_classes, _fix_stats, _check_classes, _validate_classes,
-    _fallback_class, _pad_abilities, _pad_spells,
+    _fix_stats, _check_classes, _validate_classes,
+    _fallback_class,
 )
 
 
