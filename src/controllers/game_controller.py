@@ -39,6 +39,7 @@ class GameController:
 
         # Managers
         self.quest_manager = QuestManager(self.quests, self.events)
+        self.quest_manager.door_reveal_callback = self.reveal_door_from_quest
         self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
 
         # Build a lookup from grid position to event id
@@ -916,7 +917,9 @@ class GameController:
         if hasattr(combat_event, 'monsters'):
             self.stats["monsters_killed"] += sum(
                 1 for m in combat_event.monsters if not m.is_alive)
-        if not getattr(combat_event, 'is_gate', False):
+        if getattr(combat_event, 'is_climax_boss', False):
+            self.pending_action = "victory"
+        elif not getattr(combat_event, 'is_gate', False):
             self.resolved_encounters += 1
             self._check_door_reveal()
         else:

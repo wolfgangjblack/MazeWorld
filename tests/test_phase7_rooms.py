@@ -494,6 +494,137 @@ class TestDoorPlacement:
 # Config defaults
 # ---------------------------------------------------------------------------
 
+class TestClimaxBossVictory:
+    """Defeating the climax boss triggers the victory screen."""
+
+    def test_climax_boss_defeat_sets_victory(self):
+        from src.controllers.game_controller import GameController
+
+        combat_event = MagicMock()
+        combat_event.id = "climax_boss_001"
+        combat_event.resolved = False
+        combat_event.is_climax_boss = True
+        combat_event.is_gate = False
+        combat_event.monsters = []
+        combat_event.collect_loot = MagicMock(return_value=[])
+
+        gc = GameController.__new__(GameController)
+        gc.maze = MagicMock()
+        gc.player = PlayerCharacter(x=1, y=1)
+        gc.events = {"climax_boss_001": combat_event}
+        gc.dialogue_box = MagicMock()
+        gc.pending_action = None
+        gc.resolved_encounters = 0
+        gc.total_encounters = 1
+        gc.total_rooms = 3
+        gc.current_room = 2
+        gc.stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
+        gc.quest_manager = MagicMock()
+
+        gc._handle_combat_victory(combat_event)
+
+        assert gc.pending_action == "victory"
+
+    def test_regular_combat_does_not_set_victory(self):
+        from src.controllers.game_controller import GameController
+
+        combat_event = MagicMock()
+        combat_event.id = "evt_001"
+        combat_event.resolved = False
+        combat_event.is_climax_boss = False
+        combat_event.is_gate = False
+        combat_event.monsters = []
+        combat_event.collect_loot = MagicMock(return_value=[])
+
+        gc = GameController.__new__(GameController)
+        gc.maze = MagicMock()
+        gc.maze.door_position = None
+        gc.maze.door_revealed = False
+        gc.player = PlayerCharacter(x=1, y=1)
+        gc.events = {"evt_001": combat_event}
+        gc.dialogue_box = MagicMock()
+        gc.pending_action = None
+        gc.resolved_encounters = 0
+        gc.total_encounters = 5
+        gc.total_rooms = 3
+        gc.current_room = 2
+        gc.item_message_active = False
+        gc.stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
+        gc.quest_manager = MagicMock()
+
+        gc._handle_combat_victory(combat_event)
+
+        assert gc.pending_action is None
+
+
+class TestQuestDoorReveal:
+    """Quest with door_reveal=True calls reveal_door_from_quest."""
+
+    def test_quest_door_reveal_triggers_callback(self):
+        from src.systems.quest_manager import QuestManager
+        from src.models.quest import Quest, QuestReward
+
+        quest = Quest(
+            id="q_dr",
+            type="combat",
+            title="Clear the Path",
+            description="Defeat the monster",
+            giver_npc_id=100,
+            reward=QuestReward(door_reveal=True, story_info="Path revealed!"),
+        )
+        player = PlayerCharacter(x=1, y=1)
+        player.active_quests.append("q_dr")
+
+        qm = QuestManager({"q_dr": quest}, {})
+        callback = MagicMock()
+        qm.door_reveal_callback = callback
+
+        qm.complete_quest(quest, player)
+
+        callback.assert_called_once()
+        assert quest.status == "completed"
+
+    def test_quest_without_door_reveal_no_callback(self):
+        from src.systems.quest_manager import QuestManager
+        from src.models.quest import Quest, QuestReward
+
+        quest = Quest(
+            id="q_no_dr",
+            type="combat",
+            title="Just Kill",
+            description="Defeat the monster",
+            giver_npc_id=100,
+            reward=QuestReward(door_reveal=False),
+        )
+        player = PlayerCharacter(x=1, y=1)
+        player.active_quests.append("q_no_dr")
+
+        qm = QuestManager({"q_no_dr": quest}, {})
+        callback = MagicMock()
+        qm.door_reveal_callback = callback
+
+        qm.complete_quest(quest, player)
+
+        callback.assert_not_called()
+
+    def test_door_reveal_wired_in_game_controller(self):
+        """QuestManager gets the callback when GameController sets it up."""
+        from src.systems.quest_manager import QuestManager
+        from src.controllers.game_controller import GameController
+
+        gc = GameController.__new__(GameController)
+        gc.maze = MagicMock()
+        gc.player = PlayerCharacter(x=1, y=1)
+        gc.events = {}
+        gc.quests = {}
+        gc.dialogue_box = MagicMock()
+        gc.quest_manager = QuestManager(gc.quests, gc.events)
+        gc.quest_manager.door_reveal_callback = gc.reveal_door_from_quest
+
+        assert gc.quest_manager.door_reveal_callback is not None
+        assert gc.quest_manager.door_reveal_callback == gc.reveal_door_from_quest
+
+
 class TestConfig:
     def test_num_rooms_default(self):
         from config import NUM_ROOMS
