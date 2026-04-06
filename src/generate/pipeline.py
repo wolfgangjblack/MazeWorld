@@ -617,79 +617,71 @@ def _generate_loot_table(item_ids: list[int], difficulty: int) -> list[dict]:
     return loot
 
 
-def generate_world():
-    """Main generation pipeline. Writes all data to data/."""
-    logger.info("=== MazeWorld World Generator ===")
-    logger.info("Seed: %s, Mode: %s", WORLD_SEED, GAME_MODE)
+def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
+                    all_class_options: list | None = None):
+    """Generate all content for a single room. Returns room metadata dict."""
+    from src.data.world_data import ENVIRONMENT_TYPES
 
-    report = ValidationReport(rooms_validated=NUM_ROOMS)
+    room_level = room_idx + 1
+    room_id = f"room_{room_idx}"
+    id_offset = room_idx * 1000  # Offset IDs to avoid collisions across rooms
 
-    if WORLD_SEED != -1:
-        random.seed(WORLD_SEED)
-
-    registry.load()
-
-    phase_bar = tqdm(PHASES, desc="Overall progress", unit="phase",
-                     bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} phases [{elapsed}<{remaining}]")
-
-    # --- 1. Generate maze ---
-    phase_bar.set_postfix_str("Maze layout")
+    # --- Maze ---
     maze = Maze()
     maze.generate()
     env_name = _llm_generate_env_name(maze.environment)
     maze.environment_name = env_name
-    logger.info("Environment: %s (%s)", maze.environment, env_name)
-    phase_bar.update(1)
+    logger.info("Room %d: %s (%s)", room_idx, maze.environment, env_name)
 
-    # --- 2. Place event tiles ---
-    phase_bar.set_postfix_str("Event tiles")
+    # --- Event tiles ---
     maze.place_event_tiles()
     event_positions = []
     for y, row in enumerate(maze.grid):
         for x, cell in enumerate(row):
             if cell == maze.event_tile_id:
                 event_positions.append((x, y))
-    phase_bar.update(1)
 
-    # --- 3. Generate & place items ---
-    phase_bar.set_postfix_str("Item generation")
-    generated_items = _llm_generate_items(maze.environment, env_name, room_level=1)
+    # --- Items ---
+    item_id_base = 200 + id_offset
+    generated_items = _llm_generate_items(maze.environment, env_name, room_level=room_level)
     if generated_items:
-        os.makedirs(os.path.dirname(ITEM_ITEMS_PATH), exist_ok=True)
-        with open(ITEM_ITEMS_PATH, "w") as f:
-            json.dump(generated_items, f, indent=2)
-        registry._loaded = False
-        registry._load_items()
-        registry._loaded = True
-        logger.info("LLM-generated %d environment-themed items.", len(generated_items))
-    else:
-        logger.info("Using static items from items.json (LLM generation skipped or failed).")
+        # Re-key items with room-specific offset
+        rekeyed = {}
+        for i, (_, item_data) in enumerate(sorted(generated_items.items())):
+            rekeyed[str(item_id_base + i)] = item_data
+        generated_items = rekeyed
 
-    phase_bar.set_postfix_str("Item placement")
+    items_path = os.path.join(room_dir, "items.json")
+    os.makedirs(room_dir, exist_ok=True)
+    if generated_items:
+        with open(items_path, "w") as f:
+            json.dump(generated_items, f, indent=2)
+        # Reload items so registry has this room's items for placement
+        registry._loaded = False
+        registry._load_items_from(items_path)
+        registry._loaded = True
+        logger.info("Room %d: LLM-generated %d items.", room_idx, len(generated_items))
+    else:
+        logger.info("Room %d: Using static items.", room_idx)
+
     maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS)
     item_placements = []
     for y, row in enumerate(maze.grid):
         for x, cell in enumerate(row):
             if registry.is_item(cell):
                 item_placements.append({"x": x, "y": y, "item_id": cell})
-    phase_bar.update(1)
 
-    # --- 4. Compute zones ---
-    phase_bar.set_postfix_str("Zone mapping")
+    # --- Zones ---
     npc_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 10)
     quest_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 20)
-    logger.info("NPC zones: %d, Quest zones: %d", len(npc_zones), len(quest_zones))
-    phase_bar.update(1)
 
-    # --- 5. Generate NPC pool ---
-    phase_bar.set_postfix_str("NPC pool")
-    total_npcs = len(npc_zones) * 3
+    # --- NPC pool ---
     npc_pool = []
-    npc_id_counter = 100
+    npc_id_counter = 100 + id_offset
     open_spaces = maze.find_open_spaces()
 
-    npc_bar = tqdm(total=total_npcs, desc="  NPCs (personality+greeting+portrait)",
-                   unit="npc", leave=True)
+    npc_bar = tqdm(total=len(npc_zones) * 3,
+                   desc=f"  Room {room_idx} NPCs", unit="npc", leave=True)
     for zone_x, zone_y in npc_zones:
         zone_npcs = []
         is_merchant_zone = random.random() < MERCHANT_CHANCE
@@ -720,7 +712,6 @@ def generate_world():
                 "zone": [zone_x, zone_y],
                 "selected": False,
             }
-            # Generate shop inventory for merchants
             if npc_type == "MerchantNPC":
                 shop_items = _generate_shop_inventory(registry)
                 npc_data["shop_inventory"] = shop_items
@@ -729,7 +720,6 @@ def generate_world():
             npc_id_counter += 1
             npc_bar.update(1)
 
-        # Prefer selecting the merchant if this is a merchant zone
         if is_merchant_zone:
             selected = zone_npcs[0]
         else:
@@ -753,93 +743,19 @@ def generate_world():
 
     npc_bar.close()
     active_npcs = [n for n in npc_pool if n.get("selected")]
-    logger.info("Total NPCs: %d, Active: %d", len(npc_pool), len(active_npcs))
-    phase_bar.update(1)
+    logger.info("Room %d: NPCs %d pool / %d active", room_idx, len(npc_pool), len(active_npcs))
 
-    # --- 6. Player start ---
-    phase_bar.set_postfix_str("Player start")
+    # --- Player start ---
     if open_spaces:
         player_start = random.choice(open_spaces)
         open_spaces.remove(player_start)
     else:
         player_start = (1, 1)
-    phase_bar.update(1)
 
-    # --- 7. Generate overarching story ---
-    phase_bar.set_postfix_str("Story generation")
-    story_seed = STORY_SEED or _FALLBACK_STORY_SEED
-    story_data = _llm_generate_story(
-        story_seed, 1, [maze.environment],
-    )
-    if story_data:
-        from src.models.story import OverarchingStory, Faction, RoomStoryBeat
-        faction_data = story_data.get("faction", {})
-        faction = Faction(
-            name=faction_data.get("name", "The Shadow Cult"),
-            description=faction_data.get("description", "A mysterious faction."),
-            leader=faction_data.get("leader", "Unknown"),
-        ) if faction_data else None
-        beats = []
-        for bd in story_data.get("beats", []):
-            beats.append(RoomStoryBeat(
-                room_id=bd.get("room_id", "room_0"),
-                summary=bd.get("summary", ""),
-                faction_presence=bd.get("faction_presence"),
-                escalation=bd.get("escalation", 1),
-            ))
-        story = OverarchingStory(
-            seed=story_seed,
-            title=story_data.get("title", "The Dark Convergence"),
-            synopsis=story_data.get("synopsis", "A dark force threatens the land."),
-            faction=faction,
-            escalation_arc=story_data.get("escalation_arc", []),
-            climax=story_data.get("climax", "The final confrontation awaits."),
-            final_boss_name=story_data.get("final_boss_name", "The Dark Lord"),
-            key_npc_names=story_data.get("key_npc_names", []),
-            beats=beats,
-        )
-    else:
-        report.add_major(
-            "LLM story generation failed; using template fallback",
-            phase="story",
-        )
-        from src.models.story import OverarchingStory, Faction, RoomStoryBeat
-        story = OverarchingStory(
-            seed=story_seed,
-            title="The Shadow's Grasp",
-            synopsis="A dark cult spreads corruption through the land. Only a brave adventurer can stop them.",
-            faction=Faction(
-                name="The Shadow Cult",
-                description="A secretive order seeking to plunge the world into darkness.",
-                leader="The Faceless One",
-            ),
-            escalation_arc=["Whispers of darkness", "The cult reveals itself"],
-            climax="Face the cult leader in a final showdown.",
-            final_boss_name="The Faceless One",
-            key_npc_names=["The Faceless One"],
-            beats=[RoomStoryBeat(
-                room_id="room_0",
-                summary="Signs of cult activity are everywhere.",
-                faction_presence="Cult symbols etched into walls, nervous townsfolk.",
-                escalation=3,
-            )],
-        )
-    logger.info("Story: %s (faction: %s)", story.title,
-                story.faction.name if story.faction else "none")
-    phase_bar.update(1)
-
-    # --- 8. Generate events (combat with monsters, puzzle, event encounters) ---
-    phase_bar.set_postfix_str("Events")
+    # --- Events ---
     event_list = []
+    event_id_prefix = f"r{room_idx}_"
 
-    # Compute room levels based on distance from player start
-    def _room_level_for_pos(x, y):
-        dist = abs(x - player_start[0]) + abs(y - player_start[1])
-        max_dist = MAZE_WIDTH + MAZE_HEIGHT
-        fraction = dist / max(1, max_dist)
-        return min(4, max(1, int(fraction * 4) + 1))
-
-    # Collect available tool attributes for puzzle solvability checks
     available_tool_attrs = set()
     for p in item_placements:
         item_obj = registry.get_item(p["item_id"])
@@ -849,10 +765,9 @@ def generate_world():
                 available_tool_attrs.add(stats.attribute)
 
     all_item_ids = registry.item_ids()
-    event_bar = tqdm(event_positions, desc="  Events (data+image+monsters)",
+    event_bar = tqdm(event_positions, desc=f"  Room {room_idx} Events",
                      unit="evt", leave=True)
     for idx, (ex, ey) in enumerate(event_bar):
-        # Weight encounter types: 50% combat, 25% puzzle, 25% event
         roll = random.random()
         if roll < 0.50:
             event_type = "combat"
@@ -862,14 +777,12 @@ def generate_world():
             event_type = "event"
 
         event_data = _llm_generate_event(maze.environment, env_name, event_type)
-        event_data["id"] = f"evt_{idx:03d}"
+        event_data["id"] = f"{event_id_prefix}evt_{idx:03d}"
         event_data["type"] = event_type
         if "name" not in event_data:
             event_data["name"] = f"Event {idx}"
         if "description" not in event_data:
             event_data["description"] = "Something happens!"
-
-        room_level = _room_level_for_pos(ex, ey)
 
         if event_type == "combat":
             monsters = generate_encounter_monsters(maze.environment, room_level)
@@ -880,7 +793,6 @@ def generate_world():
             if not event_data.get("description") or event_data["description"] == "Something happens!":
                 names = ", ".join(m.name for m in monsters)
                 event_data["description"] = f"You are ambushed by {names}!"
-            # Loot tables and money drops
             if all_item_ids:
                 difficulty = event_data.get("difficulty", 3)
                 event_data["loot_table"] = _generate_loot_table(all_item_ids, difficulty)
@@ -888,8 +800,7 @@ def generate_world():
 
         elif event_type == "event":
             choices = event_data.get("choices", [])
-            has_walk = any(c.get("auto_success") for c in choices)
-            if not has_walk:
+            if not any(c.get("auto_success") for c in choices):
                 choices.append({"text": "Walk away", "auto_success": True})
             event_data["choices"] = choices
             event_data["failure_damage_type"] = random.choice(["health", "hunger", "thirst"])
@@ -897,13 +808,10 @@ def generate_world():
 
         elif event_type == "puzzle":
             choices = event_data.get("choices", [])
-            solvable = False
-            for c in choices:
-                if c.get("auto_success"):
-                    continue
-                if c.get("tool_attribute") in available_tool_attrs:
-                    solvable = True
-                    break
+            solvable = any(
+                c.get("tool_attribute") in available_tool_attrs
+                for c in choices if not c.get("auto_success")
+            )
             if not solvable and available_tool_attrs and choices:
                 attr = random.choice(list(available_tool_attrs))
                 choices.insert(0, {
@@ -920,42 +828,79 @@ def generate_world():
         event_data["profile_image"] = None
         event_list.append(event_data)
 
-    # Validate puzzle events reference tools that actually exist
-    _validate_puzzle_tools(event_list, registry, report)
+    _validate_puzzle_tools(event_list, registry)
 
     event_position_map = []
     for idx, (ex, ey) in enumerate(event_positions):
         event_position_map.append({"x": ex, "y": ey, "event_id": event_list[idx]["id"]})
-    phase_bar.update(1)
 
-    # --- 9. Generate quests (3x density pool with minimums) ---
-    phase_bar.set_postfix_str("Quests")
+    # --- Gate encounter (for non-final rooms) ---
+    gate_encounter_id = None
+    if room_idx < num_rooms - 1:
+        gate_id = f"{event_id_prefix}gate"
+        gate_level = room_level + 1  # Stronger than normal encounters
+        gate_monsters = generate_encounter_monsters(maze.environment, gate_level)
+        # Make gate monsters tougher
+        for m in gate_monsters:
+            m.hp = int(m.hp * 1.5)
+            m.max_hp = m.hp
+        gate_event = {
+            "id": gate_id,
+            "type": "combat",
+            "name": f"Gate Guardian of {env_name}",
+            "description": f"A powerful guardian blocks the exit from {env_name}!",
+            "difficulty": min(5, room_level + 2),
+            "monsters": [m.to_dict() for m in gate_monsters],
+            "room_level": gate_level,
+            "is_gate": True,
+            "portrait_prompt": _llm_generate_event_image({
+                "name": f"Gate Guardian of {env_name}",
+                "description": "A powerful boss monster guarding a door",
+            }),
+            "profile_image": None,
+        }
+        if all_item_ids:
+            gate_event["loot_table"] = _generate_loot_table(all_item_ids, gate_level)
+            gate_event["money_drop"] = [gate_level * 5, gate_level * 15]
+        event_list.append(gate_event)
+        gate_encounter_id = gate_id
+        maze.gate_encounter_id = gate_id
+
+    # --- Door placement (for non-final rooms) ---
+    if room_idx < num_rooms - 1:
+        maze.place_door(player_start)
+
+    # --- Quests ---
     quest_list = []
-    quest_id_counter = 0
+    quest_id_counter = id_offset
 
     items_for_quest = [{"id": p["item_id"], "name": registry.get_item_name(p["item_id"])}
                        for p in item_placements]
-    events_for_quest = [{"id": e["id"], "name": e["name"]} for e in event_list]
+    events_for_quest = [{"id": e["id"], "name": e["name"]} for e in event_list
+                        if not e.get("is_gate")]
     combat_events_for_quest = [{"id": e["id"], "name": e["name"]}
-                               for e in event_list if e.get("type") == "combat"]
+                               for e in event_list
+                               if e.get("type") == "combat" and not e.get("is_gate")]
     npcs_for_quest = [{"id": n["id"], "name": n["name"]} for n in active_npcs]
 
-    # Story context
     faction_name = story.faction.name if story.faction else ""
-    story_beat_text = story.beats[0].summary if story.beats else ""
+    # Find story beat for this room
+    room_beat = next((b for b in story.beats if b.room_id == room_id), None)
+    story_beat_text = room_beat.summary if room_beat else (
+        story.beats[0].summary if story.beats else "")
 
-    def _build_quest_data(quest_type, llm_quest, is_story=False):
+    def _build_quest_data_room(quest_type, llm_quest, is_story=False):
         nonlocal quest_id_counter
         quest_data = {
-            "id": f"q_{quest_id_counter:03d}",
+            "id": f"{event_id_prefix}q_{quest_id_counter:03d}",
             "type": quest_type,
             "title": llm_quest.get("title", f"Quest {quest_id_counter}") if llm_quest else f"Quest {quest_id_counter}",
             "description": llm_quest.get("description", f"A {quest_type} quest.") if llm_quest else f"A {quest_type} quest.",
             "giver_npc_id": (llm_quest.get("giver_npc_id") if llm_quest and llm_quest.get("giver_npc_id")
-                             else (random.choice(npcs_for_quest)["id"] if npcs_for_quest else 100)),
-            "room_id": "room_0",
+                             else (random.choice(npcs_for_quest)["id"] if npcs_for_quest else 100 + id_offset)),
+            "room_id": room_id,
             "is_story_quest": is_story,
-            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200},
+            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200 + id_offset},
             "failure_penalty": {"hp_damage": random.choice([0, 5, 10]),
                                 "hunger_damage": random.choice([0, 5]),
                                 "thirst_damage": random.choice([0, 5])},
@@ -965,15 +910,13 @@ def generate_world():
         }
         return quest_data
 
-    def _populate_quest_fields(quest_data, quest_type, zone_x, zone_y):
-        """Fill in type-specific fields. Returns False if quest should be skipped."""
+    def _populate_quest_fields_room(quest_data, quest_type, zone_x, zone_y):
         if quest_type == "fetch" and items_for_quest:
             target = random.choice(items_for_quest)
             quest_data["target_items"] = [{"item_id": target["id"], "count": 1}]
             if not quest_data.get("is_story_quest"):
                 quest_data["title"] = f"Gather {target['name']}"
                 quest_data["description"] = f"Find and bring back a {target['name']}."
-
         elif quest_type == "escort" and len(active_npcs) >= 2:
             escort_npc = random.choice([n for n in active_npcs
                                         if n["id"] != quest_data["giver_npc_id"]])
@@ -990,7 +933,6 @@ def generate_world():
                     quest_data["description"] = f"Take {escort_npc['name']} to safety."
             else:
                 return False
-
         elif quest_type == "delivery" and items_for_quest and len(active_npcs) >= 2:
             delivery_item = random.choice(items_for_quest)
             target_npc = random.choice([n for n in active_npcs
@@ -1000,14 +942,12 @@ def generate_world():
             if not quest_data.get("is_story_quest"):
                 quest_data["title"] = f"Deliver {delivery_item['name']}"
                 quest_data["description"] = f"Bring a {delivery_item['name']} to {target_npc['name']}."
-
         elif quest_type == "combat" and combat_events_for_quest:
             target_event = random.choice(combat_events_for_quest)
             quest_data["target_event_id"] = target_event["id"]
             if not quest_data.get("is_story_quest"):
                 quest_data["title"] = f"Defeat the {target_event['name']}"
                 quest_data["description"] = f"Find and defeat the {target_event['name']}."
-
         elif quest_type == "dialogue":
             giver = next((n for n in active_npcs
                           if n["id"] == quest_data["giver_npc_id"]), None)
@@ -1024,14 +964,12 @@ def generate_world():
             if not quest_data.get("is_story_quest"):
                 quest_data["title"] = f"Convince {giver['name'] if giver else 'the NPC'}"
                 quest_data["description"] = "Use your words carefully."
-
         else:
             return False
         return True
 
-    quest_bar = tqdm(quest_zones, desc="  Quests (3x pool + minimums)", unit="zone", leave=True)
+    quest_bar = tqdm(quest_zones, desc=f"  Room {room_idx} Quests", unit="zone", leave=True)
     for zone_x, zone_y in quest_bar:
-        # --- Generate 3x density pool ---
         pool = []
         target_count = QUEST_DENSITY_MULTIPLIER
         attempts = 0
@@ -1042,35 +980,26 @@ def generate_world():
                 maze.environment, env_name,
                 npcs_for_quest, items_for_quest, events_for_quest, quest_type,
             )
-            quest_data = _build_quest_data(quest_type, llm_quest, is_story=False)
-            if _populate_quest_fields(quest_data, quest_type, zone_x, zone_y):
+            quest_data = _build_quest_data_room(quest_type, llm_quest, is_story=False)
+            if _populate_quest_fields_room(quest_data, quest_type, zone_x, zone_y):
                 if _validate_quest(quest_data, npc_pool, item_placements, event_list, quest_list + pool):
                     pool.append(quest_data)
 
-        if len(pool) < target_count:
-            report.add_warning(
-                f"Quest pool for zone ({zone_x},{zone_y}) filled {len(pool)}/{target_count} "
-                f"after {attempts} attempts",
-                phase="quests",
-            )
-
-        # --- Ensure minimums: 1 story quest ---
-        has_story = any(q.get("is_story_quest") for q in pool)
-        if not has_story and faction_name:
+        has_story_q = any(q.get("is_story_quest") for q in pool)
+        if not has_story_q and faction_name:
             story_type = random.choice(STORY_QUEST_TYPES)
             story_llm = _llm_generate_story_quest(
                 maze.environment, env_name, story_beat_text, faction_name,
                 npcs_for_quest, items_for_quest, events_for_quest, story_type,
             )
-            story_qdata = _build_quest_data(story_type, story_llm, is_story=True)
-            if _populate_quest_fields(story_qdata, story_type, zone_x, zone_y):
+            story_qdata = _build_quest_data_room(story_type, story_llm, is_story=True)
+            if _populate_quest_fields_room(story_qdata, story_type, zone_x, zone_y):
                 if _validate_quest(story_qdata, npc_pool, item_placements, event_list, quest_list + pool):
                     pool.append(story_qdata)
 
-        # --- Ensure minimum: 1 faction combat quest if combat events exist ---
         has_combat = any(q.get("type") == "combat" for q in pool)
         if not has_combat and combat_events_for_quest:
-            combat_qdata = _build_quest_data("combat", None, is_story=True)
+            combat_qdata = _build_quest_data_room("combat", None, is_story=True)
             target_evt = random.choice(combat_events_for_quest)
             combat_qdata["target_event_id"] = target_evt["id"]
             combat_qdata["title"] = f"Purge the {faction_name}: {target_evt['name']}"
@@ -1078,36 +1007,27 @@ def generate_world():
             if _validate_quest(combat_qdata, npc_pool, item_placements, event_list, quest_list + pool):
                 pool.append(combat_qdata)
 
-        # --- Select from pool: pick 1 per zone (random from pool) ---
         if pool:
-            selected = random.choice(pool)
-            selected["id"] = f"q_{quest_id_counter:03d}"
+            sel = random.choice(pool)
+            sel["id"] = f"{event_id_prefix}q_{quest_id_counter:03d}"
             giver_npc = next((n for n in npc_pool
-                              if n["id"] == selected["giver_npc_id"]), None)
+                              if n["id"] == sel["giver_npc_id"]), None)
             if giver_npc:
-                giver_npc["quest_id"] = selected["id"]
-            quest_list.append(selected)
+                giver_npc["quest_id"] = sel["id"]
+            quest_list.append(sel)
             quest_id_counter += 1
 
-    # --- Generate multi-step quest chains (1 per world, linking 2-3 sub-quests) ---
-    # TODO: Multi-step quests should be generated as a cohesive chain during
-    # the generation phase — not assembled by picking the first N quests.
-    # The LLM should generate the multi-step quest as a special type with
-    # sub-quests that form a logical narrative arc (e.g., dialogue -> fetch -> combat).
-    # This requires a dedicated story_quest_generation call that produces the
-    # parent + sub-quests together, ensuring type diversity and narrative coherence.
-    # Current approach is a placeholder that links arbitrary quests.
     if len(quest_list) >= 3:
         sub_ids = [q["id"] for q in quest_list[:3]]
         multi_quest = {
-            "id": f"q_{quest_id_counter:03d}",
+            "id": f"{event_id_prefix}q_{quest_id_counter:03d}",
             "type": "multi_step",
             "title": f"The {faction_name} Conspiracy" if faction_name else "A Grand Adventure",
             "description": f"Unravel the {faction_name}'s plot through a series of connected tasks." if faction_name else "Complete a chain of connected quests.",
             "giver_npc_id": quest_list[0]["giver_npc_id"],
-            "room_id": "room_0",
+            "room_id": room_id,
             "is_story_quest": True,
-            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200,
+            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200 + id_offset,
                        "xp": 50, "story_info": "A crucial revelation about the faction's plans."},
             "failure_penalty": {"hp_damage": 10, "hunger_damage": 5, "thirst_damage": 5},
             "sub_quest_ids": sub_ids,
@@ -1120,38 +1040,208 @@ def generate_world():
         quest_id_counter += 1
 
     quest_bar.close()
-    logger.info("Generated %d quests (%d story quests).",
-                len(quest_list),
+    logger.info("Room %d: %d quests (%d story).", room_idx, len(quest_list),
                 sum(1 for q in quest_list if q.get("is_story_quest")))
-    phase_bar.update(1)
 
-    # --- 10. Offline static dialogue trees ---
-    phase_bar.set_postfix_str("Dialogue trees")
+    # --- Dialogue trees ---
     if GAME_MODE == "offline_static":
-        dialogue_bar = tqdm(active_npcs, desc="  Dialogue trees", unit="npc", leave=True)
-        for npc in dialogue_bar:
-            dialogue_bar.set_postfix_str(npc.get("name", ""))
+        for npc in active_npcs:
             quest_ctx = next((q for q in quest_list if q["id"] == npc.get("quest_id")), None)
             npc["dialogue_tree"] = _llm_generate_dialogue_tree(npc, quest_ctx)
-        dialogue_bar.close()
-    phase_bar.update(1)
 
-    # --- 11. Player classes ---
-    phase_bar.set_postfix_str("Player classes")
+    # --- NPC positions ---
+    npc_positions = {}
+    for npc in active_npcs:
+        npc_positions[str(npc["id"])] = [npc.get("x", 0), npc.get("y", 0)]
+
+    # --- Write per-room files ---
+    maze_path = os.path.join(room_dir, "maze.json")
+    maze.save_to_json(maze_path, extra={
+        "npc_positions": npc_positions,
+        "player_start": list(player_start),
+        "item_placements": item_placements,
+        "event_positions": event_position_map,
+    })
+
+    npc_path = os.path.join(room_dir, "npcs.json")
+    with open(npc_path, "w") as f:
+        json.dump(npc_pool, f, indent=2)
+
+    event_path = os.path.join(room_dir, "events.json")
+    with open(event_path, "w") as f:
+        json.dump(event_list, f, indent=2)
+
+    quest_path = os.path.join(room_dir, "quests.json")
+    with open(quest_path, "w") as f:
+        json.dump(quest_list, f, indent=2)
+
+    return {
+        "room_id": room_id,
+        "room_idx": room_idx,
+        "room_level": room_level,
+        "environment": maze.environment,
+        "environment_name": env_name,
+        "npc_pool": npc_pool,
+        "active_npcs": active_npcs,
+        "event_list": event_list,
+        "quest_list": quest_list,
+        "item_placements": item_placements,
+        "gate_encounter_id": gate_encounter_id,
+        "player_start": player_start,
+        "maze": maze,
+        "generated_items": generated_items,
+    }
+
+
+def generate_world():
+    """Main generation pipeline. Writes all data to data/."""
+    logger.info("=== MazeWorld World Generator ===")
+    logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
+
+    if WORLD_SEED != -1:
+        random.seed(WORLD_SEED)
+
+    registry.load()
+
+    num_rooms = NUM_ROOMS
+    room_results = []
+
+    # --- Generate first room's maze briefly to get environment for story/classes ---
+    # (We'll re-seed before actual generation so this peek doesn't consume randomness)
+    rng_state = random.getstate()
+
+    # --- Generate overarching story ---
+    from src.data.world_data import ENVIRONMENT_TYPES
+    story_seed = STORY_SEED or _FALLBACK_STORY_SEED
+    environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
+    story_data = _llm_generate_story(story_seed, num_rooms, environments)
+
+    from src.models.story import OverarchingStory, Faction, RoomStoryBeat
+    if story_data:
+        faction_data = story_data.get("faction", {})
+        faction = Faction(
+            name=faction_data.get("name", "The Shadow Cult"),
+            description=faction_data.get("description", "A mysterious faction."),
+            leader=faction_data.get("leader", "Unknown"),
+        ) if faction_data else None
+        beats = []
+        for bd in story_data.get("beats", []):
+            beats.append(RoomStoryBeat(
+                room_id=bd.get("room_id", "room_0"),
+                summary=bd.get("summary", ""),
+                faction_presence=bd.get("faction_presence"),
+                escalation=bd.get("escalation", 1),
+            ))
+        # Ensure we have a beat per room
+        for ri in range(num_rooms):
+            rid = f"room_{ri}"
+            if not any(b.room_id == rid for b in beats):
+                beats.append(RoomStoryBeat(
+                    room_id=rid,
+                    summary=f"The story continues in room {ri + 1}.",
+                    escalation=min(5, ri + 1),
+                ))
+        story = OverarchingStory(
+            seed=story_seed,
+            title=story_data.get("title", "The Dark Convergence"),
+            synopsis=story_data.get("synopsis", "A dark force threatens the land."),
+            faction=faction,
+            escalation_arc=story_data.get("escalation_arc", []),
+            climax=story_data.get("climax", "The final confrontation awaits."),
+            final_boss_name=story_data.get("final_boss_name", "The Dark Lord"),
+            key_npc_names=story_data.get("key_npc_names", []),
+            beats=beats,
+        )
+    else:
+        beats = [RoomStoryBeat(
+            room_id=f"room_{ri}",
+            summary=f"Signs of darkness deepen in room {ri + 1}.",
+            faction_presence="The cult's presence grows stronger.",
+            escalation=min(5, ri + 1),
+        ) for ri in range(num_rooms)]
+        story = OverarchingStory(
+            seed=story_seed,
+            title="The Shadow's Grasp",
+            synopsis="A dark cult spreads corruption through the land.",
+            faction=Faction(
+                name="The Shadow Cult",
+                description="A secretive order seeking to plunge the world into darkness.",
+                leader="The Faceless One",
+            ),
+            escalation_arc=["Whispers of darkness", "The cult reveals itself"],
+            climax="Face the cult leader in a final showdown.",
+            final_boss_name="The Faceless One",
+            key_npc_names=["The Faceless One"],
+            beats=beats,
+        )
+    logger.info("Story: %s (faction: %s, %d beats)",
+                story.title, story.faction.name if story.faction else "none",
+                len(story.beats))
+
+    # --- Generate player classes (global, based on first room environment) ---
     from src.generate.class_gen import generate_classes
-    player_classes = generate_classes(maze.environment, env_name)
-    class_data_list = []
-    for pc in player_classes:
-        cd = pc.model_dump()
-        class_data_list.append(cd)
+    first_env = environments[0] if environments else "forest"
+    first_env_name = _llm_generate_env_name(first_env)
+    player_classes = generate_classes(first_env, first_env_name)
+    class_data_list = [pc.model_dump() for pc in player_classes]
     logger.info("Generated %d player classes.", len(player_classes))
-    phase_bar.update(1)
 
-    # --- 12. Portrait generation (try, skip on failure) ---
-    phase_bar.set_postfix_str("Portraits")
-    portrait_steps = ["NPC portraits", "Event illustrations",
-                      "Item descriptions", "Item portraits", "Player portrait",
-                      "Class portraits"]
+    # Restore RNG state and generate rooms
+    random.setstate(rng_state)
+
+    # --- Generate each room ---
+    for room_idx in range(num_rooms):
+        room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_idx}")
+        os.makedirs(room_dir, exist_ok=True)
+        result = _generate_room(room_idx, num_rooms, story, room_dir)
+        room_results.append(result)
+
+    # --- Backward-compatible writes (room 0 data to legacy paths) ---
+    r0 = room_results[0]
+    os.makedirs(os.path.dirname(MAZE_PATH), exist_ok=True)
+    r0["maze"].save_to_json(MAZE_PATH, extra={
+        "npc_positions": {str(n["id"]): [n.get("x", 0), n.get("y", 0)]
+                          for n in r0["active_npcs"]},
+        "player_start": list(r0["player_start"]),
+        "item_placements": r0["item_placements"],
+        "event_positions": [{"x": ep["x"], "y": ep["y"], "event_id": ep["event_id"]}
+                            for ep in r0["maze"].__dict__.get("_event_pos_map", [])],
+    })
+    # Load event_positions from the room's maze file for legacy compat
+    r0_maze_path = os.path.join(DATA_DIR, "rooms", "room_0", "maze.json")
+    if os.path.exists(r0_maze_path):
+        import shutil
+        # Copy room 0 files to legacy paths
+        for fname, legacy in [("maze.json", MAZE_PATH), ("npcs.json", NPC_PATH),
+                               ("events.json", EVENT_PATH), ("quests.json", QUEST_PATH)]:
+            src = os.path.join(DATA_DIR, "rooms", "room_0", fname)
+            if os.path.exists(src):
+                os.makedirs(os.path.dirname(legacy), exist_ok=True)
+                shutil.copy2(src, legacy)
+
+    # --- Combined items across all rooms ---
+    all_items = {}
+    for rr in room_results:
+        if rr.get("generated_items"):
+            all_items.update(rr["generated_items"])
+    if all_items:
+        os.makedirs(os.path.dirname(ITEM_ITEMS_PATH), exist_ok=True)
+        with open(ITEM_ITEMS_PATH, "w") as f:
+            json.dump(all_items, f, indent=2)
+
+    # --- Write global data ---
+    os.makedirs(os.path.dirname(STORY_PATH), exist_ok=True)
+    with open(STORY_PATH, "w") as f:
+        json.dump(story.model_dump(), f, indent=2)
+
+    os.makedirs(os.path.dirname(CLASS_PATH), exist_ok=True)
+    with open(CLASS_PATH, "w") as f:
+        json.dump(class_data_list, f, indent=2)
+
+    # --- Portraits (all rooms) ---
+    portraits_generated = False
+    player_portrait_path = None
+    env_portrait_path = None
     try:
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,
@@ -1162,50 +1252,37 @@ def generate_world():
             generate_player_image_description, generate_item_image_description,
         )
 
-        portrait_bar = tqdm(total=len(portrait_steps), desc="  Portraits",
-                            unit="step", leave=True)
+        for rr in room_results:
+            npc_db = {str(n["id"]): n for n in rr["npc_pool"] if n.get("selected")}
+            generate_npc_portraits(npc_db)
+            event_db = {e["id"]: e for e in rr["event_list"]}
+            generate_event_illustrations(event_db)
 
-        portrait_bar.set_postfix_str(f"NPC portraits ({len(active_npcs)})")
-        npc_db = {str(n["id"]): n for n in npc_pool if n.get("selected")}
-        generate_npc_portraits(npc_db)
-        portrait_bar.update(1)
-
-        portrait_bar.set_postfix_str(f"Event illustrations ({len(event_list)})")
-        event_db = {e["id"]: e for e in event_list}
-        generate_event_illustrations(event_db)
-        portrait_bar.update(1)
-
+        # Item portraits from combined registry
+        registry._loaded = False
+        registry._load_items()
+        registry._loaded = True
         item_db = {}
-        unique_items = set()
-        for placement in item_placements:
-            unique_items.add(placement["item_id"])
-        portrait_bar.set_postfix_str(f"Item descriptions ({len(unique_items)})")
-        for placement in item_placements:
-            iid = placement["item_id"]
-            if str(iid) not in item_db:
-                item_obj = registry.get_item(iid)
-                if item_obj:
-                    item_dict = {"id": iid, "name": item_obj.name, "desc": item_obj.desc}
-                    try:
-                        item_dict["portrait_prompt"] = generate_item_image_description(item_dict)
-                    except Exception:
-                        item_dict["portrait_prompt"] = f"a fantasy game item: {item_obj.name}, pixel art"
-                    item_db[str(iid)] = item_dict
-        portrait_bar.update(1)
-
-        portrait_bar.set_postfix_str(f"Item portraits ({len(item_db)})")
+        for rr in room_results:
+            for p in rr["item_placements"]:
+                iid = p["item_id"]
+                if str(iid) not in item_db:
+                    item_obj = registry.get_item(iid)
+                    if item_obj:
+                        item_dict = {"id": iid, "name": item_obj.name, "desc": item_obj.desc}
+                        try:
+                            item_dict["portrait_prompt"] = generate_item_image_description(item_dict)
+                        except Exception:
+                            item_dict["portrait_prompt"] = f"a fantasy game item: {item_obj.name}, pixel art"
+                        item_db[str(iid)] = item_dict
         generate_item_portraits(item_db)
-        portrait_bar.update(1)
 
-        portrait_bar.set_postfix_str("Player portrait")
         try:
             player_prompt = generate_player_image_description()
         except Exception:
             player_prompt = "a young adventurer, pixel art, fantasy portrait"
         player_portrait_path = generate_player_portrait(player_prompt)
-        portrait_bar.update(1)
 
-        portrait_bar.set_postfix_str(f"Class portraits ({len(class_data_list)})")
         from src.generate.image_client import generate_class_portraits
         class_portrait_db = {}
         for i, cd in enumerate(class_data_list):
@@ -1214,120 +1291,78 @@ def generate_world():
         generate_class_portraits(class_portrait_db)
         for i, cd in enumerate(class_data_list):
             cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
-        portrait_bar.update(1)
 
-        portrait_bar.set_postfix_str("Environment portrait")
-        env_portrait_prompt = f"a {maze.environment} landscape, fantasy pixel art, wide angle, atmospheric"
+        # Per-room environment portraits
+        for rr in room_results:
+            env = rr["environment"]
+            ename = rr["environment_name"]
+            portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
+            _generate_and_save(
+                f"a {env} landscape, fantasy pixel art, wide angle, atmospheric",
+                portrait_path,
+            )
+            rr["environment_portrait"] = portrait_path
+
+        # Legacy environment portrait (room 0)
         env_portrait_path = os.path.join("data/portraits", "environment.png")
-        if not generate_and_save_image(env_portrait_prompt, env_portrait_path):
-            env_portrait_path = None
-        portrait_bar.update(1)
+        r0_env_portrait = room_results[0].get("environment_portrait")
+        if r0_env_portrait and os.path.exists(r0_env_portrait):
+            import shutil
+            shutil.copy2(r0_env_portrait, env_portrait_path)
 
-        portrait_bar.close()
         portraits_generated = True
         logger.info("Portraits generated successfully.")
     except Exception as e:
         logger.warning("Portrait generation skipped: %s", e)
-        report.add_warning(
-            f"Portrait generation skipped: {e}", phase="portraits",
-        )
-        portraits_generated = False
-        player_portrait_path = None
-        env_portrait_path = None
-    phase_bar.update(1)
 
-    # --- 13. NPC positions for home coords ---
-    phase_bar.set_postfix_str("NPC positions")
-    npc_positions = {}
-    for npc in active_npcs:
-        npc_positions[str(npc["id"])] = [npc.get("x", 0), npc.get("y", 0)]
-    phase_bar.update(1)
-
-    # --- 14. Write data files ---
-    phase_bar.set_postfix_str("Write files")
-
-    os.makedirs(os.path.dirname(MAZE_PATH), exist_ok=True)
-    maze.save_to_json(MAZE_PATH, extra={
-        "npc_positions": npc_positions,
-        "player_start": list(player_start),
-        "item_placements": item_placements,
-        "event_positions": event_position_map,
-    })
-
-    os.makedirs(os.path.dirname(NPC_PATH), exist_ok=True)
-    with open(NPC_PATH, "w") as f:
-        json.dump(npc_pool, f, indent=2)
-
-    os.makedirs(os.path.dirname(EVENT_PATH), exist_ok=True)
-    with open(EVENT_PATH, "w") as f:
-        json.dump(event_list, f, indent=2)
-
-    os.makedirs(os.path.dirname(QUEST_PATH), exist_ok=True)
-    with open(QUEST_PATH, "w") as f:
-        json.dump(quest_list, f, indent=2)
-
-    os.makedirs(os.path.dirname(STORY_PATH), exist_ok=True)
-    with open(STORY_PATH, "w") as f:
-        json.dump(story.model_dump(), f, indent=2)
-
-    os.makedirs(os.path.dirname(CLASS_PATH), exist_ok=True)
+    # --- Re-write classes with portrait paths ---
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
-    # --- Build and write WorldBible ---
-    from src.generate.world_editor import build_world_bible, cross_validate, write_world_bible
-    bible = build_world_bible(
-        story=story,
-        npc_pool=npc_pool,
-        event_list=event_list,
-        quest_list=quest_list,
-        item_placements=item_placements,
-        event_position_map=event_position_map,
-        maze_environment=maze.environment,
-    )
-    xval_issues = cross_validate(bible, npc_pool, event_list, quest_list, item_placements)
-    if xval_issues:
-        logger.warning("WorldBible cross-validation issues: %s", xval_issues)
-    world_bible_path = write_world_bible(bible)
+    # --- Manifest ---
+    room_manifest = []
+    for rr in room_results:
+        room_manifest.append({
+            "room_id": rr["room_id"],
+            "environment": rr["environment"],
+            "environment_name": rr["environment_name"],
+            "npc_count": len(rr["active_npcs"]),
+            "event_count": len(rr["event_list"]),
+            "quest_count": len(rr["quest_list"]),
+            "gate_encounter_id": rr["gate_encounter_id"],
+            "environment_portrait": rr.get("environment_portrait"),
+        })
 
-    manifest = build_manifest(
-        seed=WORLD_SEED,
-        story_seed=story.seed,
-        game_mode=GAME_MODE,
-        num_rooms=NUM_ROOMS,
-        environments=[maze.environment],
-        generated_at=datetime.now(timezone.utc).isoformat(),
-        validation=report.to_dict(),
-        active_npc_count=len(active_npcs),
-        item_count=len(item_placements),
-        quest_count=len(quest_list),
-        event_list=event_list,
-        npc_pool=npc_pool,
-        player_portrait_path=player_portrait_path,
-        env_portrait_path=env_portrait_path,
-        environment=maze.environment,
-        env_name=env_name,
-        maze_width=MAZE_WIDTH,
-        maze_height=MAZE_HEIGHT,
-        class_count=len(class_data_list),
-        portraits_generated=portraits_generated,
-        story_title=story.title,
-        faction_name=story.faction.name if story.faction else "",
-    )
-    manifest["world_bible"] = world_bible_path
-    manifest["world_bible_entities"] = len(bible.entity_index)
-    manifest["cross_validation_issues"] = len(xval_issues)
+    manifest = {
+        "world_seed": WORLD_SEED,
+        "num_rooms": num_rooms,
+        "environment": room_results[0]["environment"],
+        "environment_name": room_results[0]["environment_name"],
+        "maze_width": MAZE_WIDTH,
+        "maze_height": MAZE_HEIGHT,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "npc_pool_size": sum(len(rr["npc_pool"]) for rr in room_results),
+        "active_npc_count": sum(len(rr["active_npcs"]) for rr in room_results),
+        "quest_count": sum(len(rr["quest_list"]) for rr in room_results),
+        "event_count": sum(len(rr["event_list"]) for rr in room_results),
+        "class_count": len(class_data_list),
+        "portraits_generated": portraits_generated,
+        "player_portrait": player_portrait_path,
+        "environment_portrait": env_portrait_path,
+        "game_mode": GAME_MODE,
+        "story_title": story.title,
+        "faction_name": story.faction.name if story.faction else "",
+        "story_seed": story.seed,
+        "rooms": room_manifest,
+    }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
 
-    phase_bar.update(1)
-    phase_bar.close()
-
-    logger.info("=== Generation Complete ===")
-    logger.info("  Environment: %s (%s)", maze.environment, env_name)
-    logger.info("  NPCs: %d pool / %d active", len(npc_pool), len(active_npcs))
-    logger.info("  Events: %d", len(event_list))
-    logger.info("  Quests: %d", len(quest_list))
-    logger.info("  WorldBible: %d entities indexed", len(bible.entity_index))
-    logger.info("  Portraits: %s", "yes" if portraits_generated else "no (prompts saved)")
+    logger.info("=== Generation Complete (%d rooms) ===", num_rooms)
+    for rr in room_results:
+        logger.info("  Room %d: %s (%s) — %d NPCs, %d events, %d quests",
+                     rr["room_idx"], rr["environment"], rr["environment_name"],
+                     len(rr["active_npcs"]), len(rr["event_list"]),
+                     len(rr["quest_list"]))
+    logger.info("  Portraits: %s", "yes" if portraits_generated else "no")
     logger.info("  Manifest: %s", MANIFEST_PATH)

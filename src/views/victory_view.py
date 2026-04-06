@@ -1,118 +1,86 @@
-"""Victory screen — story conclusion, full stats summary, and replay options."""
+"""Victory screen — end-of-game stats summary and final message."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
 
-TITLE_COLOR = (220, 200, 60)
-TEXT_COLOR = (200, 200, 200)
-HIGHLIGHT_COLOR = (255, 255, 150)
-SELECTED_COLOR = (255, 255, 100)
-UNSELECTED_COLOR = (180, 180, 180)
 
-MENU_ITEMS = ["Start New Game", "Quit"]
+GOLD = (220, 180, 60)
+DIM = (150, 150, 150)
+STAT_COLOR = (180, 220, 255)
+PANEL_BG = (20, 20, 40)
 
 
 class VictoryView:
-    """Victory screen with full stats summary and replay options."""
+    """Displays victory screen with game stats summary."""
 
-    def __init__(self, screen, font, player, time_played: float = 0.0,
-                 monsters_killed: int = 0, damage_dealt: int = 0,
-                 damage_taken: int = 0, items_used: int = 0,
-                 money_earned: int = 0, rooms_cleared: int = 1):
+    def __init__(self, screen, font, player, stats: dict, total_rooms: int):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 56)
-        self.small_font = pygame.font.Font(None, 22)
+        self.big_font = pygame.font.Font(None, 40)
+        self.small_font = pygame.font.Font(None, 24)
         self.player = player
-        self.time_played = time_played
-        self.monsters_killed = monsters_killed
-        self.damage_dealt = damage_dealt
-        self.damage_taken = damage_taken
-        self.items_used = items_used
-        self.money_earned = money_earned
-        self.rooms_cleared = rooms_cleared
-        self.selected_index = 0
-        self.scroll_offset = 0
+        self.stats = stats
+        self.total_rooms = total_rooms
 
-    def _format_time(self, seconds: float) -> str:
-        m, s = divmod(int(seconds), 60)
-        h, m = divmod(m, 60)
-        if h > 0:
-            return f"{h}h {m}m {s}s"
-        return f"{m}m {s}s"
+    def handle_input(self, event) -> str | None:
+        """Returns 'quit' or 'menu'."""
+        if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+            return "quit"
+        if event.key == pygame.K_RETURN:
+            return "menu"
+        return None
 
     def draw(self):
         self.screen.fill(BLACK)
 
         # Title
-        title = self.title_font.render("VICTORY", True, TITLE_COLOR)
+        title = self.title_font.render("VICTORY!", True, GOLD)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 30))
 
-        # Story conclusion
-        name = self.player.name
-        cls_name = self.player.player_class.name if self.player.player_class else "Adventurer"
-        env = self.player.player_class.environment if self.player.player_class else "the unknown"
-        conclusion = f"{name} the {cls_name} has conquered {env}!"
-        conc_surf = self.font.render(conclusion, True, HIGHLIGHT_COLOR)
-        self.screen.blit(conc_surf, ((SCREEN_WIDTH - conc_surf.get_width()) // 2, 80))
+        # Subtitle
+        p = self.player
+        class_name = p.player_class.name if p.player_class else "Adventurer"
+        archetype = p.player_class.archetype if p.player_class else ""
+        subtitle = self.big_font.render(
+            f"{p.name} the {class_name}", True, WHITE)
+        self.screen.blit(subtitle, ((SCREEN_WIDTH - subtitle.get_width()) // 2, 90))
 
-        # Stats summary
+        # Stats panel
+        panel_x, panel_y = 60, 150
+        panel_w, panel_h = SCREEN_WIDTH - 120, 400
+        pygame.draw.rect(self.screen, PANEL_BG, (panel_x, panel_y, panel_w, panel_h))
+        pygame.draw.rect(self.screen, GOLD, (panel_x, panel_y, panel_w, panel_h), 2)
+
+        # Stat lines
         stats_lines = [
-            ("Class", cls_name),
-            ("Level", str(self.player.level)),
-            ("Environment", env),
-            ("Rooms Cleared", str(self.rooms_cleared)),
-            ("", ""),
-            ("Quests Completed", str(len(self.player.completed_quests))),
-            ("Quests Failed", str(len(self.player.failed_quests))),
-            ("Active Quests", str(len(self.player.active_quests))),
-            ("", ""),
-            ("Monsters Killed", str(self.monsters_killed)),
-            ("Damage Dealt", str(self.damage_dealt)),
-            ("Damage Taken", str(self.damage_taken)),
-            ("", ""),
-            ("Items Used", str(self.items_used)),
-            ("Gold Earned", str(self.money_earned)),
-            ("Followers Escorted", str(len(self.player.followers))),
-            ("", ""),
-            ("Time Played", self._format_time(self.time_played)),
+            ("Class", f"{class_name} ({archetype})" if archetype else class_name),
+            ("Level", str(p.level)),
+            ("Rooms Cleared", f"{self.stats.get('rooms_cleared', 0)}/{self.total_rooms}"),
+            ("Monsters Killed", str(self.stats.get("monsters_killed", 0))),
+            ("Quests Completed", str(len(p.completed_quests))),
+            ("Quests Failed", str(len(p.failed_quests))),
+            ("Followers Escorted", str(len(p.followers))),
+            ("Items in Inventory", str(len(p.inventory))),
+            ("Health", f"{p.health}/{p.max_health}"),
+            ("Gold", str(p.money)),
         ]
 
-        y = 120 - self.scroll_offset
-        col_label_x = SCREEN_WIDTH // 2 - 160
-        col_value_x = SCREEN_WIDTH // 2 + 80
+        # Abilities/spells
+        if p.abilities:
+            stats_lines.append(("Abilities", ", ".join(a.name for a in p.abilities)))
+        if p.spells:
+            stats_lines.append(("Spells", ", ".join(s.name for s in p.spells)))
+
+        y = panel_y + 20
         for label, value in stats_lines:
-            if y < 110 or y > SCREEN_HEIGHT - 130:
-                y += 24
-                continue
-            if not label:
-                y += 12
-                continue
-            label_surf = self.small_font.render(label, True, TEXT_COLOR)
-            value_surf = self.small_font.render(value, True, HIGHLIGHT_COLOR)
-            self.screen.blit(label_surf, (col_label_x, y))
-            self.screen.blit(value_surf, (col_value_x, y))
-            y += 24
+            label_surf = self.font.render(f"{label}:", True, DIM)
+            value_surf = self.font.render(value[:50], True, STAT_COLOR)
+            self.screen.blit(label_surf, (panel_x + 20, y))
+            self.screen.blit(value_surf, (panel_x + 230, y))
+            y += 32
 
-        # Menu options
-        y = SCREEN_HEIGHT - 100
-        for i, item in enumerate(MENU_ITEMS):
-            color = SELECTED_COLOR if i == self.selected_index else UNSELECTED_COLOR
-            prefix = "> " if i == self.selected_index else "  "
-            surf = self.font.render(f"{prefix}{item}", True, color)
-            self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y))
-            y += 36
-
-    def handle_input(self, event) -> str | None:
-        """Returns 'new_game' or 'quit', or None."""
-        if event.key == pygame.K_UP:
-            self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
-        elif event.key == pygame.K_DOWN:
-            self.selected_index = (self.selected_index + 1) % len(MENU_ITEMS)
-        elif event.key == pygame.K_RETURN:
-            selected = MENU_ITEMS[self.selected_index]
-            if selected == "Start New Game":
-                return "new_game"
-            if selected == "Quit":
-                return "quit"
-        return None
+        # Hint
+        hint = self.small_font.render(
+            "Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
+        self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))

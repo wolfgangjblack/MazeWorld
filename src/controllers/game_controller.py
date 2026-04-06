@@ -21,7 +21,8 @@ from src.systems.follower_manager import FollowerManager
 
 class GameController:
     def __init__(self, screen, font, maze, player, npcs, dialogue_box,
-                 events=None, quests=None, fog=None, day_night=None):
+                 events=None, quests=None, fog=None, day_night=None,
+                 current_room=0, total_rooms=1):
         self.screen = screen
         self.font = font
         self.maze = maze
@@ -93,6 +94,19 @@ class GameController:
         self.player_menu_active = False
         self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
 
+        # Room progression state
+        self.current_room = current_room
+        self.total_rooms = total_rooms
+        self.gate_cleared = False
+        self._count_total_encounters()
+
+        # Stats tracking for victory screen
+        self.stats = {
+            "monsters_killed": 0,
+            "items_used": 0,
+            "rooms_cleared": 0,
+        }
+
         self.game_view = GameView(screen, font, dialogue_box)
 
     @staticmethod
@@ -118,6 +132,44 @@ class GameController:
             if last_beat.summary:
                 parts.append(f"Recent events: {last_beat.summary}")
         return " ".join(parts)
+
+    def _count_total_encounters(self):
+        """Count total and resolved encounters for door reveal tracking."""
+        self.total_encounters = sum(
+            1 for e in self.events.values()
+            if not getattr(e, 'is_gate', False)
+        )
+        self.resolved_encounters = sum(
+            1 for e in self.events.values()
+            if e.resolved and not getattr(e, 'is_gate', False)
+        )
+
+    @property
+    def encounter_clear_fraction(self) -> float:
+        if self.total_encounters == 0:
+            return 1.0
+        return self.resolved_encounters / self.total_encounters
+
+    def _check_door_reveal(self):
+        """Reveal the exit door if encounter clear threshold met."""
+        from config import DOOR_REVEAL_THRESHOLD
+        if (self.maze.door_position
+                and not self.maze.door_revealed
+                and self.total_rooms > 1
+                and self.current_room < self.total_rooms - 1
+                and self.encounter_clear_fraction >= DOOR_REVEAL_THRESHOLD):
+            self.maze.reveal_door()
+            self.dialogue_box.set_item_message(
+                "An exit door has appeared! A gate guardian blocks the way.")
+            self.item_message_active = True
+
+    def reveal_door_from_quest(self):
+        """Called when a quest reward reveals the door."""
+        if self.maze.door_position and not self.maze.door_revealed:
+            self.maze.reveal_door()
+            self.dialogue_box.set_item_message(
+                "A quest has revealed the exit door!")
+            self.item_message_active = True
 
     def _build_event_position_map(self):
         """Map event tile positions to event IDs using maze data."""
@@ -216,6 +268,8 @@ class GameController:
                 # Wrong time: silently pass over (event stays)
             else:
                 self.maze.grid[self.player.y][self.player.x] = 0
+        elif self._is_on_door_tile():
+            self._handle_door_interaction()
         else:
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
             self.current_npc = self.player.get_nearby_npc(self.npcs)
@@ -248,6 +302,46 @@ class GameController:
     @property
     def _in_full_combat(self) -> bool:
         return self.combat_controller is not None
+
+    def _is_on_door_tile(self) -> bool:
+        """Check if the player is standing on the revealed door tile."""
+        return (self.maze.door_position is not None
+                and self.maze.door_revealed
+                and (self.player.x, self.player.y) == self.maze.door_position)
+
+    def _handle_door_interaction(self):
+        """Handle player stepping on the exit door."""
+        gate_id = self.maze.gate_encounter_id
+        if gate_id and not self.gate_cleared:
+            gate_event = self.events.get(gate_id)
+            if gate_event and not gate_event.resolved:
+                # Trigger gate encounter
+                self.dialogue_box.start_event(gate_event)
+                return
+            else:
+                self.gate_cleared = True
+
+        # Gate cleared or no gate — check for undone quests and transition
+        self._signal_room_transition()
+
+    def _signal_room_transition(self):
+        """Signal the main loop to transition to the next room."""
+        # Check for incomplete story quests
+        undone = [q for q in self.quests.values()
+                  if getattr(q, 'is_story_quest', False)
+                  and q.status in ("not_started", "active")]
+        if undone:
+            titles = ", ".join(q.title for q in undone[:3])
+            self.dialogue_box.set_item_message(
+                f"Things left undone: {titles}. "
+                "Press Enter at the door again to continue anyway.")
+            self.item_message_active = True
+            # Mark that we've warned — next door step will proceed
+            if not hasattr(self, '_undone_warned'):
+                self._undone_warned = True
+                return
+        self.stats["rooms_cleared"] += 1
+        self.pending_action = "room_transition"
 
     def handle_keydown(self, event):
         # 0. Full combat system active
@@ -616,6 +710,8 @@ class GameController:
                 elif current_event.resolved:
                     self.maze.grid[self.player.y][self.player.x] = 0
                     self.quest_manager.on_event_resolved(current_event.id, self.player)
+                    self.resolved_encounters += 1
+                    self._check_door_reveal()
                 return
 
             if event.key == pygame.K_ESCAPE:
@@ -816,6 +912,16 @@ class GameController:
         combat_event.resolved = True
         self.dialogue_box.add_combat_log("Victory!")
 
+        # Track stats
+        if hasattr(combat_event, 'monsters'):
+            self.stats["monsters_killed"] += sum(
+                1 for m in combat_event.monsters if not m.is_alive)
+        if not getattr(combat_event, 'is_gate', False):
+            self.resolved_encounters += 1
+            self._check_door_reveal()
+        else:
+            self.gate_cleared = True
+
         # Collect loot
         loot_ids = combat_event.collect_loot()
         for item_id in loot_ids:
@@ -826,9 +932,25 @@ class GameController:
 
     def _finalize_combat(self, combat_event):
         """Clean up after combat ends."""
+        is_gate = getattr(combat_event, 'is_gate', False)
+
         if combat_event.resolved:
             self.maze.grid[self.player.y][self.player.x] = 0
             self.quest_manager.on_event_resolved(combat_event.id, self.player)
+        elif is_gate and getattr(combat_event, 'player_fled', False):
+            # Gate failure: player flees — pass through with heavy survival penalty
+            penalty_hp = 20 + self.current_room * 10
+            penalty_hunger = 25
+            penalty_thirst = 25
+            self.player.health = max(1, self.player.health - penalty_hp)
+            self.player.hunger = max(0, self.player.hunger - penalty_hunger)
+            self.player.thirst = max(0, self.player.thirst - penalty_thirst)
+            self.gate_cleared = True
+            self.dialogue_box.set_item_message(
+                f"You flee the gate guardian! Penalty: -{penalty_hp} HP, "
+                f"-{penalty_hunger} hunger, -{penalty_thirst} thirst. "
+                "The door is now open.")
+            self.item_message_active = True
 
         self.dialogue_box.end_event()
 

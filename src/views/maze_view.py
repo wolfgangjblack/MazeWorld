@@ -7,7 +7,7 @@ from src.registry import registry
 
 EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
 DEBUG_EVENT_COLOR = (128, 0, 128)  # Purple — shown when debug reveal is active
-DOOR_COLOR = (255, 215, 0)    # TODO(Phase 7): Gold for door tiles — use when multi-room portals implemented
+DOOR_COLOR = (255, 215, 0)    # Gold for revealed exit doors
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
 # Fog of war colors
@@ -49,6 +49,14 @@ class MazeView:
                             GRID_SIZE // 2,
                         )
                         pygame.draw.rect(screen, DEBUG_EVENT_COLOR, event_rect)
+                elif cell == maze.door_tile_id:
+                    # Revealed exit door — gold tile
+                    pygame.draw.rect(screen, BLACK, rect)
+                    door_rect = pygame.Rect(
+                        screen_x + 2, screen_y + 2,
+                        GRID_SIZE - 4, GRID_SIZE - 4,
+                    )
+                    pygame.draw.rect(screen, DOOR_COLOR, door_rect)
                 elif cell == 0:
                     pygame.draw.rect(screen, BLACK, rect)
                 elif registry.is_item(cell):
