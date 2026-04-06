@@ -79,8 +79,8 @@ class GameController:
                     self.player.complete_quest(qid)
 
     @property
-    def is_in_combat(self) -> bool:
-        """True if player is in an active combat encounter."""
+    def has_active_overlay(self) -> bool:
+        """True if any modal UI is open (dialogue, event, or shop)."""
         return (
             self.dialogue_box.event_active
             or self.dialogue_box.dialogue_active
@@ -88,7 +88,7 @@ class GameController:
         )
 
     def run(self) -> str | None:
-        """Main game loop. Returns action: 'menu_save', 'menu_load', or None."""
+        """Main game loop. Returns 'open_menu' when the player opens the menu, or None on window close."""
         clock = pygame.time.Clock()
 
         while self.running:
@@ -192,11 +192,13 @@ class GameController:
                     current_id = tree.get("_current", "start")
                     node = nodes.get(current_id, nodes.get("start", {}))
                     choices = node.get("choices", [])
-                    for i in range(len(choices)):
+                    # Keys 1-9 only; pygame has no K_10+ constants
+                    for i in range(min(len(choices), 9)):
                         if event.key == getattr(pygame, f'K_{i+1}', None):
                             self.dialogue_box.update_dialogue(str(i + 1))
                             return
-                    return
+                    if event.key != pygame.K_ESCAPE:
+                        return
                 if event.key == pygame.K_BACKSPACE:
                     self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
                 else:

@@ -7,8 +7,11 @@ Usage:
 """
 
 import argparse
+import logging
 import os
 import time
+
+logger = logging.getLogger(__name__)
 
 import pygame
 
@@ -181,27 +184,33 @@ def setup_game_from_save(screen, font, save_state):
             npc.prepare(maze_environment=maze.environment)
             npcs.append(npc)
 
-    # --- Restore events ---
-    events = registry.event_registry
-    for eid, saved_evt in save_state.event_states.items():
-        if eid in events:
-            events[eid].resolved = saved_evt.get("resolved", False)
-            # Restore monster HP for combat events
-            if hasattr(events[eid], 'monsters') and "monster_states" in saved_evt:
-                for i, ms in enumerate(saved_evt["monster_states"]):
-                    if i < len(events[eid].monsters):
-                        events[eid].monsters[i].hp = ms.get("hp", events[eid].monsters[i].hp)
-                        events[eid].monsters[i].status_effects = ms.get("status_effects", {})
-                events[eid].combat_started = saved_evt.get("combat_started", False)
-                events[eid].player_fled = saved_evt.get("player_fled", False)
+    # --- Restore events and quests (only if registry matches save seed) ---
+    events = {}
+    quests = {}
+    if has_pregen:
+        events = registry.event_registry
+        for eid, saved_evt in save_state.event_states.items():
+            if eid in events:
+                events[eid].resolved = saved_evt.get("resolved", False)
+                if hasattr(events[eid], 'monsters') and "monster_states" in saved_evt:
+                    for i, ms in enumerate(saved_evt["monster_states"]):
+                        if i < len(events[eid].monsters):
+                            events[eid].monsters[i].hp = ms.get("hp", events[eid].monsters[i].hp)
+                            events[eid].monsters[i].status_effects = ms.get("status_effects", {})
+                    events[eid].combat_started = saved_evt.get("combat_started", False)
+                    events[eid].player_fled = saved_evt.get("player_fled", False)
 
-    # --- Restore quests ---
-    quests = registry.quest_registry
-    for qid, saved_q in save_state.quest_states.items():
-        if qid in quests:
-            quests[qid].status = saved_q.get("status", "not_started")
-            if hasattr(quests[qid], 'current_step') and "current_step" in saved_q:
-                quests[qid].current_step = saved_q["current_step"]
+        quests = registry.quest_registry
+        for qid, saved_q in save_state.quest_states.items():
+            if qid in quests:
+                quests[qid].status = saved_q.get("status", "not_started")
+                if hasattr(quests[qid], 'current_step') and "current_step" in saved_q:
+                    quests[qid].current_step = saved_q["current_step"]
+    else:
+        logger.warning(
+            "Registry does not match save seed %d; events and quests will be empty.",
+            save_state.seed,
+        )
 
     # --- Build controller ---
     gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests)
@@ -250,7 +259,8 @@ def main():
 
     # --- Screen state machine ---
     screen_ctrl = ScreenController(ScreenState.START)
-    start_view = StartView(screen, font, has_saves=save_manager.has_saves())
+    _cached_has_saves = save_manager.has_saves()
+    start_view = StartView(screen, font, has_saves=_cached_has_saves)
     class_select_view = None
     room_intro_view = None
     load_game_view = None
@@ -265,7 +275,7 @@ def main():
 
     def _handle_start() -> str | None:
         nonlocal class_select_view, load_game_view, load_source
-        start_view.has_saves = save_manager.has_saves()
+        start_view.has_saves = _cached_has_saves
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
@@ -355,12 +365,11 @@ def main():
         result = game_controller.run()
 
         if result == "open_menu":
-            # Open player menu overlay
-            can_save = not game_controller.is_in_combat
+            can_save = not game_controller.has_active_overlay
             player_menu_view = PlayerMenuView(
                 screen, font,
                 can_save=can_save,
-                has_saves=save_manager.has_saves(),
+                has_saves=_cached_has_saves,
             )
             screen_ctrl.push(ScreenState.PLAYER_MENU)
             return None
@@ -382,12 +391,14 @@ def main():
                     screen_ctrl.pop()
                     return None
                 if action == "save":
+                    nonlocal _cached_has_saves
                     elapsed = time.time() - gameplay_start_time
                     total_time = accumulated_play_time + elapsed
                     try:
                         filepath = save_manager.save_game(
                             game_controller, WORLD_SEED, total_time,
                         )
+                        _cached_has_saves = True
                         player_menu_view.set_status("Game saved!")
                     except Exception as e:
                         player_menu_view.set_status(f"Save failed: {e}", is_error=True)
@@ -440,8 +451,7 @@ def main():
                         )
                         accumulated_play_time = save_state.time_played_seconds
                         gameplay_start_time = time.time()
-                        # Clear the screen stack and go to gameplay
-                        screen_ctrl._stack = [ScreenState.GAMEPLAY]
+                        screen_ctrl.reset_to(ScreenState.GAMEPLAY)
                     except Exception as e:
                         load_game_view.error_message = f"Load failed: {e}"
                         return None

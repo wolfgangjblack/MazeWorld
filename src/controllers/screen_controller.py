@@ -51,6 +51,10 @@ class ScreenController:
         else:
             self._stack.append(state)
 
+    def reset_to(self, state: ScreenState):
+        """Clear the stack and set a single screen."""
+        self._stack = [state]
+
     @property
     def depth(self) -> int:
         return len(self._stack)

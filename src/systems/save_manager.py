@@ -12,7 +12,7 @@ from typing import Optional
 
 from src.models.save import SaveState, SaveMetadata
 
-SAVE_DIR = "saves"
+SAVE_DIR = os.path.join("data", "saves")
 
 
 def _ensure_save_dir():
@@ -251,7 +251,7 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
     metadata = SaveMetadata(
         character_name=char_name,
         character_class=char_class,
-        room_level=1,
+        room_level=getattr(game_controller, 'current_room_level', 1),
         time_played_seconds=time_played_seconds,
         last_save_date=datetime.now().strftime("%Y-%m-%d %H:%M"),
         seed=seed,
@@ -294,6 +294,10 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
 
 def load_game(filepath: str) -> Optional[SaveState]:
     """Load a save file. Returns SaveState or None if invalid."""
+    real_path = os.path.realpath(filepath)
+    real_save_dir = os.path.realpath(SAVE_DIR)
+    if not real_path.startswith(real_save_dir + os.sep):
+        return None
     try:
         with open(filepath, 'r') as f:
             data = json.load(f)
@@ -354,5 +358,6 @@ def delete_save(filepath: str) -> bool:
 
 
 def has_saves() -> bool:
-    """Check if any valid save files exist."""
-    return len(list_saves()) > 0
+    """Check if any save files exist (fast check, no JSON parsing)."""
+    _ensure_save_dir()
+    return any(f.endswith(".json") for f in os.listdir(SAVE_DIR))
