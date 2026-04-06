@@ -5,6 +5,7 @@ from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.models.follower import Follower
 from src.registry import registry
+from src.utils.conversation_utils import has_dialogue_choices
 
 
 class GameController:
@@ -45,6 +46,10 @@ class GameController:
         # Combat target selection
         self.combat_target_index = 0
 
+        # Player menu / save-load state
+        self.player_menu_active = False
+        self.pending_action = None  # Set to "save", "load", "quit" to signal main loop
+
         self.game_view = GameView(screen, font, dialogue_box)
 
     def _build_event_position_map(self):
@@ -73,8 +78,17 @@ class GameController:
                     quest.status = "completed"
                     self.player.complete_quest(qid)
 
-    def run(self):
-        """Main game loop."""
+    @property
+    def has_active_overlay(self) -> bool:
+        """True if any modal UI is open (dialogue, event, or shop)."""
+        return (
+            self.dialogue_box.event_active
+            or self.dialogue_box.dialogue_active
+            or self.shop_active
+        )
+
+    def run(self) -> str | None:
+        """Main game loop. Returns 'open_menu' when the player opens the menu, or None on window close."""
         clock = pygame.time.Clock()
 
         while self.running:
@@ -85,7 +99,13 @@ class GameController:
             pygame.display.flip()
             clock.tick(60)
 
-        pygame.quit()
+            # Check if game controller wants to hand control back
+            if self.pending_action:
+                action = self.pending_action
+                self.pending_action = None
+                return action
+
+        return None
 
     def handle_events(self):
         """Handle all pygame events."""
@@ -165,6 +185,20 @@ class GameController:
                 self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
                 return
             if self.dialogue_box.input_active:
+                # Numeric selection for offline_static dialogue choices
+                if has_dialogue_choices(self.current_npc):
+                    tree = self.current_npc.dialogue_tree
+                    nodes = tree.get("nodes", {})
+                    current_id = tree.get("_current", "start")
+                    node = nodes.get(current_id, nodes.get("start", {}))
+                    choices = node.get("choices", [])
+                    # Keys 1-9 only; pygame has no K_10+ constants
+                    for i in range(min(len(choices), 9)):
+                        if event.key == getattr(pygame, f'K_{i+1}', None):
+                            self.dialogue_box.update_dialogue(str(i + 1))
+                            return
+                    if event.key != pygame.K_ESCAPE:
+                        return
                 if event.key == pygame.K_BACKSPACE:
                     self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
                 else:
@@ -217,6 +251,11 @@ class GameController:
             self._talk_to_follower()
             return
 
+        # Player menu (save/load)
+        if event.key == pygame.K_TAB:
+            self.pending_action = "open_menu"
+            return
+
         # Available in all builds (including packaged exe) for troubleshooting
         if event.key == pygame.K_F1:
             self.debug_reveal = not self.debug_reveal
@@ -226,6 +265,8 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
+            # Esc also opens menu in normal gameplay
+            self.pending_action = "open_menu"
             return
 
     def _handle_event_input(self, event):

@@ -54,6 +54,7 @@ def test_config_back_to_start():
 
 def test_start_view_menu_items():
     assert "Start New Game" in MENU_ITEMS
+    assert "Load Game" in MENU_ITEMS
     assert "Config" in MENU_ITEMS
     assert "Quit" in MENU_ITEMS
 
@@ -71,6 +72,20 @@ def test_start_view_config(screen, font):
     view.selected_index = MENU_ITEMS.index("Config")
     event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
     assert view.handle_input(event) == "config"
+
+
+def test_start_view_load_game(screen, font):
+    view = StartView(screen, font, has_saves=True)
+    view.selected_index = MENU_ITEMS.index("Load Game")
+    event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    assert view.handle_input(event) == "load_game"
+
+
+def test_start_view_load_game_disabled(screen, font):
+    view = StartView(screen, font, has_saves=False)
+    view.selected_index = MENU_ITEMS.index("Load Game")
+    event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+    assert view.handle_input(event) is None
 
 
 def test_start_view_quit(screen, font):
