@@ -5,6 +5,7 @@ from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.items import EscortItem
 from src.models.follower import Follower
 from src.registry import registry
+from src.utils.conversation_utils import has_dialogue_choices
 
 
 class GameController:
@@ -184,6 +185,18 @@ class GameController:
                 self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
                 return
             if self.dialogue_box.input_active:
+                # Numeric selection for offline_static dialogue choices
+                if has_dialogue_choices(self.current_npc):
+                    tree = self.current_npc.dialogue_tree
+                    nodes = tree.get("nodes", {})
+                    current_id = tree.get("_current", "start")
+                    node = nodes.get(current_id, nodes.get("start", {}))
+                    choices = node.get("choices", [])
+                    for i in range(len(choices)):
+                        if event.key == getattr(pygame, f'K_{i+1}', None):
+                            self.dialogue_box.update_dialogue(str(i + 1))
+                            return
+                    return
                 if event.key == pygame.K_BACKSPACE:
                     self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
                 else:
