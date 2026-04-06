@@ -35,11 +35,6 @@ class NPC(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def __init__(self, **data):
-        super().__init__(**data)
-        if not self.name:
-            self.generate_personality_document()
-
     def generate_personality_document(self, maze_environment: str | None = None):
         """Generate personality attributes for the NPC.
 
@@ -146,8 +141,8 @@ class MerchantNPC(NPC):
     shop_inventory: List[dict] = Field(default_factory=list)
     # Each entry: {"item_id": int, "price": int, "stock": int}
 
-    def prepare(self):
-        self.generate_personality_document()
+    def prepare(self, maze_environment: str | None = None):
+        self.generate_personality_document(maze_environment)
         self.build_identity()
 
     def get_shop_items(self) -> list[dict]:

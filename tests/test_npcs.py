@@ -1,6 +1,6 @@
 import random
 import pytest
-from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC
+from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.maze import Maze
 
 
@@ -9,11 +9,10 @@ def test_npc_construction_from_template():
     assert npc.x == 5
     assert npc.y == 5
     assert npc.id == 100
-    assert npc.name is not None
-    assert npc.personality is not None
-    assert npc.environment is not None
-    assert npc.job is not None
-    assert npc.hobby is not None
+    # Attributes are NOT auto-generated at construction time;
+    # prepare() must be called with a maze environment.
+    assert npc.name is None
+    assert npc.environment is None
 
 
 def test_random_npc_construction():
@@ -31,7 +30,7 @@ def test_aggressive_npc_construction():
 def test_prepare_sets_identity():
     npc = StaticNPC(x=0, y=0, id=100)
     assert npc.identity is None
-    npc.prepare()
+    npc.prepare(maze_environment="forest")
     assert npc.identity is not None
     assert isinstance(npc.identity, str)
     assert npc.name in npc.identity
@@ -195,6 +194,49 @@ def test_aggressive_npc_random_when_no_los():
             break
 
     assert moved, "NPC should eventually move randomly when player is not in line of sight"
+
+
+@pytest.mark.parametrize("cls,extra_kwargs", [
+    (StaticNPC, {}),
+    (RandomNPC, {"home_x": 0, "home_y": 0}),
+    (AggressiveNPC, {}),
+    (MerchantNPC, {}),
+])
+def test_npc_inherits_maze_environment(cls, extra_kwargs):
+    """All NPC types must inherit environment from the maze via prepare()."""
+    maze_env = "cave"
+    npc = cls(x=0, y=0, id=500, **extra_kwargs)
+    npc.prepare(maze_environment=maze_env)
+    assert npc.environment == maze_env
+
+
+@pytest.mark.parametrize("cls,extra_kwargs", [
+    (StaticNPC, {}),
+    (RandomNPC, {"home_x": 0, "home_y": 0}),
+    (AggressiveNPC, {}),
+    (MerchantNPC, {}),
+])
+def test_npc_environment_overrides_default(cls, extra_kwargs):
+    """Even if NPC already has an environment, prepare() with maze_environment overrides it."""
+    npc = cls(x=0, y=0, id=501, environment="forest", **extra_kwargs)
+    npc.prepare(maze_environment="dungeon")
+    assert npc.environment == "dungeon"
+
+
+@pytest.mark.parametrize("cls,extra_kwargs", [
+    (StaticNPC, {}),
+    (RandomNPC, {"home_x": 0, "home_y": 0}),
+    (AggressiveNPC, {}),
+    (MerchantNPC, {}),
+])
+def test_npc_job_hobby_match_maze_environment(cls, extra_kwargs):
+    """Job and hobby must come from the maze's environment, not a random one."""
+    from src.data.world_data import JOBS, HOBBIES
+    maze_env = "cave"
+    npc = cls(x=0, y=0, id=502, **extra_kwargs)
+    npc.prepare(maze_environment=maze_env)
+    assert npc.job in JOBS[maze_env] or npc.job == "merchant"
+    assert npc.hobby in HOBBIES[maze_env]
 
 
 def test_random_npc_stays_in_range():
