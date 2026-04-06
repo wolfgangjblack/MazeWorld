@@ -2,6 +2,8 @@
 
 import random
 import pytest
+import pygame
+from unittest.mock import MagicMock
 
 from src.models.monster import (
     Monster, MonsterAbility, LootEntry,
@@ -161,9 +163,29 @@ class TestMonsterGeneration:
             counts.append(len(monsters))
         assert any(c >= 2 for c in counts)  # At least one pack
 
+    def test_encounter_composition_mixed(self):
+        random.seed(7)
+        found_mixed = False
+        for _ in range(200):
+            monsters = generate_encounter_monsters("dungeon", 3)
+            levels = [m.level for m in monsters]
+            if len(monsters) >= 3 and max(levels) > min(levels):
+                found_mixed = True
+                break
+        assert found_mixed, "Mixed composition (strong + weak) should appear"
+
     def test_encounter_scales_with_room(self):
         """Higher room levels should produce tougher monsters."""
         assert LEVEL_SCALING[4]["hp"][0] > LEVEL_SCALING[1]["hp"][0]
+
+    def test_monster_abilities_battle_scoped(self):
+        """Monster status effects should not carry between separate encounters."""
+        m = generate_monster("forest", 2)
+        m.apply_status("stun", 2)
+        assert m.is_stunned()
+        # Simulate end of combat: create fresh monster from dict (as world_gen does)
+        m2 = Monster.from_dict(m.to_dict())
+        assert not m2.is_stunned(), "Status effects should not persist through serialization"
 
 
 # ─── Dice Roller Tests ────────────────────────────────────────────────
@@ -350,6 +372,17 @@ class TestPuzzleEvent:
         # The cutting tool isn't consumed because the choice checks bludgeon
         assert not result["success"]
 
+    def test_matching_tool_consumed_on_failure(self):
+        """When a matching tool is used and the roll fails, the tool is consumed."""
+        event = self._make_puzzle_event()
+        player = _make_player()
+        player.inventory = {"hammer": _make_tool(name="hammer", attribute="bludgeon")}
+        # Bludgeon choice (index 1), very low roll to guarantee failure
+        result = event.resolve(1, 1, player)  # roll 1 + 5 (tool) = 6 < dc 8
+        assert not result["success"]
+        assert result.get("consumed_tool") == "hammer"
+        assert "hammer" not in player.inventory
+
     def test_solvability_at_least_one_option(self):
         """Puzzle must have at least one completable solution."""
         event = self._make_puzzle_event()
@@ -485,3 +518,114 @@ class TestCreateEventFromData:
         event = create_event_from_data(data)
         assert isinstance(event, EventEncounter)
         assert event.failure_damage_type == "hunger"
+
+
+# ─── EncounterView Render Tests ──────────────────────────────────────
+
+class TestEncounterViewRender:
+    """Smoke tests: EncounterView.draw() should not raise for any event type."""
+
+    @pytest.fixture(autouse=True)
+    def _init_pygame(self):
+        pygame.init()
+        yield
+        pygame.quit()
+
+    def _make_dialogue_box(self, event):
+        db = MagicMock()
+        db.current_event = event
+        db.event_active = True
+        db.awaiting_roll = False
+        db.event_context = {}
+        db.combat_active = False
+        db.combat_phase = None
+        db.combat_log = []
+        db.player_stunned_turns = 0
+        db.player_poison_turns = 0
+        return db
+
+    def test_render_combat_trigger(self):
+        from src.views.encounter_view import EncounterView
+        screen = pygame.Surface((800, 700))
+        font = pygame.font.SysFont(None, 24)
+        view = EncounterView(screen, font)
+
+        monsters = [_make_monster()]
+        event = CombatEvent(
+            id="evt_c", name="Wolf Pack", description="Wolves attack!",
+            monsters=monsters, room_level=1,
+        )
+        db = self._make_dialogue_box(event)
+        db.combat_active = True
+        db.combat_phase = "initiative"
+        view.draw(db)  # Should not raise
+
+    def test_render_puzzle(self):
+        from src.views.encounter_view import EncounterView
+        screen = pygame.Surface((800, 700))
+        font = pygame.font.SysFont(None, 24)
+        view = EncounterView(screen, font)
+
+        event = PuzzleEvent(
+            id="evt_p", name="Locked Chest",
+            description="A locked chest blocks your path.",
+            choices=[
+                EventChoice(text="Force it", stat_check="health", dc=12),
+                EventChoice(text="Walk away", auto_success=True),
+            ],
+        )
+        db = self._make_dialogue_box(event)
+        view.draw(db)
+
+    def test_render_event(self):
+        from src.views.encounter_view import EncounterView
+        screen = pygame.Surface((800, 700))
+        font = pygame.font.SysFont(None, 24)
+        view = EncounterView(screen, font)
+
+        event = EventEncounter(
+            id="evt_e", name="Strange Shrine",
+            description="A shrine glows.",
+            choices=[
+                EventChoice(text="Pray", stat_check="health", dc=10),
+                EventChoice(text="Leave", auto_success=True),
+            ],
+        )
+        db = self._make_dialogue_box(event)
+        view.draw(db)
+
+    def test_render_puzzle_with_result(self):
+        from src.views.encounter_view import EncounterView
+        screen = pygame.Surface((800, 700))
+        font = pygame.font.SysFont(None, 24)
+        view = EncounterView(screen, font)
+
+        event = PuzzleEvent(
+            id="evt_pr", name="Lock",
+            description="A lock.",
+            choices=[EventChoice(text="Pick", dc=10)],
+        )
+        db = self._make_dialogue_box(event)
+        db.event_context = {
+            "result": {"success": True, "message": "Unlocked!"},
+            "dice_roll": 18,
+        }
+        view.draw(db)
+
+    def test_render_event_with_failure(self):
+        from src.views.encounter_view import EncounterView
+        screen = pygame.Surface((800, 700))
+        font = pygame.font.SysFont(None, 24)
+        view = EncounterView(screen, font)
+
+        event = EventEncounter(
+            id="evt_ef", name="Trap",
+            description="A trap!",
+            choices=[EventChoice(text="Jump", dc=15)],
+        )
+        db = self._make_dialogue_box(event)
+        db.event_context = {
+            "result": {"success": False, "message": "You fell!", "damage": 5, "damage_type": "health"},
+            "dice_roll": 3,
+        }
+        view.draw(db)
