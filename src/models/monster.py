@@ -1,5 +1,7 @@
 """Monster data models."""
 
+import uuid as _uuid
+
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -10,8 +12,9 @@ class LootDrop(BaseModel):
 
 
 class Monster(BaseModel):
-    id: str
-    name: str
+    id: str = Field(default_factory=lambda: str(_uuid.uuid4()))
+    species: str
+    name: Optional[str] = None
     environment: str
     level: int = 1
     hp: int = 10

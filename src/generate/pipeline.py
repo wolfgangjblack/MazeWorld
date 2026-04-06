@@ -51,6 +51,7 @@ MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
 
 
 def _compute_zones(width: int, height: int, zone_size: int) -> list[tuple[int, int]]:
+    """Return a list of (zone_x, zone_y) top-left corners for the given zone grid."""
     zones = []
     for zy in range(0, height, zone_size):
         for zx in range(0, width, zone_size):
@@ -59,6 +60,7 @@ def _compute_zones(width: int, height: int, zone_size: int) -> list[tuple[int, i
 
 
 def _llm_generate_personality(env_type: str, env_name: str) -> dict:
+    """Call LLM to generate a personality dict. Returns dict or fallback."""
     try:
         from src.generate.generators.llm_primitives import generate_personality_primative
         result = generate_personality_primative({
@@ -81,6 +83,7 @@ def _llm_generate_personality(env_type: str, env_name: str) -> dict:
 
 
 def _llm_generate_greeting(personality: dict) -> str:
+    """Call LLM to generate an opening greeting. Returns string or fallback."""
     try:
         from src.generate.generators.llm_primitives import generate_npc_convo
         return generate_npc_convo(personality)
@@ -90,6 +93,7 @@ def _llm_generate_greeting(personality: dict) -> str:
 
 
 def _llm_generate_image_desc(personality: dict) -> str:
+    """Call LLM to get a portrait prompt for an NPC."""
     try:
         from src.generate.generators.llm_primitives import generate_image_description
         return generate_image_description(personality)
@@ -99,6 +103,7 @@ def _llm_generate_image_desc(personality: dict) -> str:
 
 
 def _llm_generate_env_name(env_type: str) -> str:
+    """Call LLM to generate a thematic environment name."""
     try:
         from src.generate.generators.llm_primitives import generate_environment_name
         name = generate_environment_name(env_type)
@@ -114,6 +119,7 @@ def _llm_generate_env_name(env_type: str) -> str:
 
 
 def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
+    """Call LLM to generate an event. Returns dict or fallback."""
     try:
         from src.generate.generators.llm_primitives import generate_event_primative
         result = generate_event_primative(
@@ -146,6 +152,7 @@ def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
 
 
 def _llm_generate_event_image(event_data: dict) -> str:
+    """Call LLM to get a portrait prompt for an event."""
     try:
         from src.generate.generators.llm_primitives import generate_event_image_description
         return generate_event_image_description(event_data)
@@ -155,6 +162,7 @@ def _llm_generate_event_image(event_data: dict) -> str:
 
 
 def _llm_generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = None) -> dict:
+    """Call LLM to generate a dialogue tree for offline-static mode."""
     try:
         from src.generate.generators.llm_primitives import generate_dialogue_tree
         result = generate_dialogue_tree(npc_personality, quest_context)
@@ -189,6 +197,7 @@ def _llm_generate_dialogue_tree(npc_personality: dict, quest_context: dict | Non
 
 def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
                         events: list, quest_type: str) -> dict | None:
+    """Call LLM to generate quest title/description. Returns dict or None on failure."""
     try:
         from src.generate.generators.llm_primitives import generate_quest_primative
         result = generate_quest_primative(
@@ -203,6 +212,7 @@ def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
 
 
 def _build_identity(personality: dict) -> str:
+    """Build the identity string the same way NPC.build_identity does."""
     from src.prompts import get_prompt_set
     prompts = get_prompt_set()
     return prompts.conversation_identity(
@@ -217,6 +227,7 @@ def _build_identity(personality: dict) -> str:
 
 def _validate_quest(quest: dict, npc_pool: list, item_placements: list,
                      event_list: list, existing_quests: list) -> bool:
+    """Check that a quest is completable given the world state."""
     qtype = quest.get("type", "")
     npc_ids = {n["id"] for n in npc_pool if n.get("selected")}
     item_ids_on_map = {p["item_id"] for p in item_placements}

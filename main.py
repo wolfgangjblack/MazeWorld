@@ -156,33 +156,42 @@ def main():
     screen_ctrl = ScreenController(ScreenState.START)
     start_view = StartView(screen, font)
 
+    def _handle_start() -> str | None:
+        """Process one frame of the start screen. Returns 'quit' to exit."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = start_view.handle_input(event)
+                if action == "new_game":
+                    screen_ctrl.replace(ScreenState.GAMEPLAY)
+                    return None
+                if action == "quit":
+                    return "quit"
+        start_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_gameplay() -> str | None:
+        """Hand off to GameController (runs its own loop)."""
+        game_controller = setup_game(screen, font)
+        game_controller.run()
+        return "quit"
+
+    screen_handlers: dict[ScreenState, callable] = {
+        ScreenState.START: _handle_start,
+        ScreenState.GAMEPLAY: _handle_gameplay,
+    }
+
     running = True
     while running:
-        if screen_ctrl.state == ScreenState.START:
-            # Start screen loop
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    break
-                if event.type == pygame.KEYDOWN:
-                    action = start_view.handle_input(event)
-                    if action == "new_game":
-                        screen_ctrl.replace(ScreenState.GAMEPLAY)
-                    elif action == "quit":
-                        running = False
-
-            if not running:
-                break
-
-            start_view.draw()
-            pygame.display.flip()
-            clock.tick(60)
-
-        elif screen_ctrl.state == ScreenState.GAMEPLAY:
-            # Hand off to GameController (it runs its own loop)
-            game_controller = setup_game(screen, font)
-            game_controller.run()
-            running = False  # GameController.run() quitting means we exit
+        handler = screen_handlers.get(screen_ctrl.state)
+        if handler is None:
+            break
+        result = handler()
+        if result == "quit":
+            running = False
 
     pygame.quit()
 

@@ -1,6 +1,8 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from pydantic import BaseModel, Field
 from src.registry import registry
+
+StatName = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
 
 
 class Stats(BaseModel):
@@ -13,14 +15,14 @@ class Stats(BaseModel):
     CHA: int = 10
     LUCK: int = 10
 
-    def modifier(self, stat: str) -> int:
+    def modifier(self, stat: StatName) -> int:
         return (getattr(self, stat) - 10) // 2
 
 
 class Ability(BaseModel):
     name: str
     description: str
-    stat: str = "STR"
+    stat: StatName = "STR"
     cost_hunger: int = 0
     cost_thirst: int = 0
 
