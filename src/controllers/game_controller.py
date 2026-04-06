@@ -29,6 +29,7 @@ class GameController:
         self.player_at_item = False
         self.current_npc = None
         self.running = True
+        self.debug_reveal = False
 
         # Shop state
         self.shop_active = False
@@ -184,6 +185,11 @@ class GameController:
 
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
+            return
+
+        # Available in all builds (including packaged exe) for troubleshooting
+        if event.key == pygame.K_F1:
+            self.debug_reveal = not self.debug_reveal
             return
 
         if event.key == pygame.K_ESCAPE:
@@ -466,6 +472,7 @@ class GameController:
             current_npc=self.current_npc,
             player_at_item=self.player_at_item,
             quests=self.quests,
+            debug_reveal=self.debug_reveal,
             shop_active=self.shop_active,
             shop_npc=self.shop_npc,
             shop_mode=self.shop_mode,

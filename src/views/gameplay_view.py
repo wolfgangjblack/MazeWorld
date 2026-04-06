@@ -18,8 +18,9 @@ class GameView:
         self.dialogue_view = DialogueBoxView(screen, font)
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
-                  current_npc, player_at_item, quests=None, shop_active=False,
-                  shop_npc=None, shop_mode="buy", shop_selected_index=0):
+                  current_npc, player_at_item, quests=None, debug_reveal=False,
+                  shop_active=False, shop_npc=None, shop_mode="buy",
+                  shop_selected_index=0):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -29,7 +30,8 @@ class GameView:
         elif inventory_active:
             self.draw_inventory(player)
         else:
-            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones)
+            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
+                                     debug_reveal=debug_reveal)
 
             for npc in npcs:
                 self.npc_view.draw_npc(self.screen, npc)
@@ -47,6 +49,11 @@ class GameView:
             else:
                 text_surface = self.font.render("Press Enter to talk", True, WHITE)
             self.screen.blit(text_surface, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
+
+        if debug_reveal:
+            debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
+            self.screen.blit(debug_surface,
+                             (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
         self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
 
