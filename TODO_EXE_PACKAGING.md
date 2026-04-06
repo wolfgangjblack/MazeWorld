@@ -115,7 +115,7 @@ Bundle `game.py` + `data/` into a distributable exe labeled by world seed.
 
 - [ ] The exe filename includes the seed: `MazeWorld_seed1234` (from `config.WORLD_SEED`)
 - [ ] Optionally embed seed in the window title: `pygame.display.set_caption(f"MazeWorld - Seed {WORLD_SEED}")`
-- [ ] The `data/manifest.json` inside the bundle already records `world_seed` — this is the canonical reference
+- [ ] The `data/manifest.json` inside the bundle already records `seed` — this is the canonical reference
 
 ### 2.6 Test the packaged exe
 
