@@ -21,7 +21,6 @@ class ApiImageBackend(ImageBackend):
                 f"'{FAL_KEY_ENV}' env var is not set. "
                 "Provide a fal API key or set IMAGE_BACKEND='local'."
             )
-        os.environ["FAL_KEY"] = fal_key
 
         result = fal_client.subscribe(
             FAL_MODEL,

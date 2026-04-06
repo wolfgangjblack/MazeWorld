@@ -336,7 +336,7 @@ def test_update_dotenv_creates_file(tmp_path, monkeypatch):
 
     _update_dotenv("MY_KEY", "my_value")
     content = dotenv_file.read_text()
-    assert "MY_KEY=my_value" in content
+    assert 'MY_KEY="my_value"' in content
 
 
 def test_update_dotenv_replaces_existing(tmp_path, monkeypatch):
@@ -346,7 +346,7 @@ def test_update_dotenv_replaces_existing(tmp_path, monkeypatch):
 
     _update_dotenv("MY_KEY", "new_value")
     content = dotenv_file.read_text()
-    assert "MY_KEY=new_value" in content
+    assert 'MY_KEY="new_value"' in content
     assert "old_value" not in content
     assert "OTHER=foo" in content
     assert "ANOTHER=bar" in content
@@ -360,4 +360,4 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
     _update_dotenv("NEW_KEY", "new_val")
     content = dotenv_file.read_text()
     assert "EXISTING=yes" in content
-    assert "NEW_KEY=new_val" in content
+    assert 'NEW_KEY="new_val"' in content

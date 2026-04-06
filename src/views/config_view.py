@@ -81,14 +81,14 @@ def _update_dotenv(key: str, value: str) -> None:
     new_lines: list[str] = []
     for line in lines:
         if pattern.match(line):
-            new_lines.append(f"{key}={value}\n")
+            new_lines.append(f'{key}="{value}"\n')
             found = True
         else:
             new_lines.append(line)
     if not found:
         if new_lines and not new_lines[-1].endswith("\n"):
             new_lines.append("\n")
-        new_lines.append(f"{key}={value}\n")
+        new_lines.append(f'{key}="{value}"\n')
     with open(path, "w") as fh:
         fh.writelines(new_lines)
 
@@ -223,10 +223,7 @@ class ConfigView:
 
             # Value
             if self.editing and is_selected:
-                if secret:
-                    val_text = self.edit_buffer + "_"
-                else:
-                    val_text = self.edit_buffer + "_"
+                val_text = self.edit_buffer + "_"
                 val_color = EDITING_COLOR
             elif readonly:
                 val_text = str(getattr(cfg, attr, ""))

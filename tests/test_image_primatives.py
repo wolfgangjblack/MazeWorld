@@ -3,7 +3,6 @@ import pytest
 from unittest.mock import patch, MagicMock
 from src.generate import image_client as img_mod
 from src.generate.backends.image_api import ApiImageBackend
-from src.generate.backends.image_local import LocalImageBackend
 
 
 # -- ApiImageBackend --------------------------------------------------------
