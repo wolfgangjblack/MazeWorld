@@ -134,7 +134,7 @@ class CombatView:
     # Action menu
     # ------------------------------------------------------------------
 
-    ACTIONS = ["Attack", "Multi-Attack", "Cast Spell", "Use Item", "Flee", "Rest", "Gamble"]
+    ACTIONS = ["Attack", "Multi-Attack", "Cast Spell", "Use Item", "Flee", "Gamble"]
 
     def _draw_action_menu(self, combat: CombatController, selected: int,
                           selected_target: int, selecting_target: bool):
