@@ -18,7 +18,7 @@ class GameView:
         self.dialogue_view = DialogueBoxView(screen, font)
 
     def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
-                  current_npc, player_at_item, quests=None):
+                  current_npc, player_at_item, quests=None, debug_reveal=False):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -26,7 +26,8 @@ class GameView:
         if inventory_active:
             self.draw_inventory(player)
         else:
-            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones)
+            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
+                                     debug_reveal=debug_reveal)
 
             for npc in npcs:
                 self.npc_view.draw_npc(self.screen, npc)

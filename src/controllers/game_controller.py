@@ -29,6 +29,7 @@ class GameController:
         self.player_at_item = False
         self.current_npc = None
         self.running = True
+        self.debug_reveal = False
 
         self.game_view = GameView(screen, font, dialogue_box)
 
@@ -168,6 +169,10 @@ class GameController:
 
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
+            return
+
+        if event.key == pygame.K_F1:
+            self.debug_reveal = not self.debug_reveal
             return
 
         if event.key == pygame.K_ESCAPE:
@@ -383,4 +388,5 @@ class GameController:
             current_npc=self.current_npc,
             player_at_item=self.player_at_item,
             quests=self.quests,
+            debug_reveal=self.debug_reveal,
         )
