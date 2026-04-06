@@ -2,7 +2,6 @@
 
 import sys
 import os
-import random
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -11,9 +10,6 @@ from unittest.mock import MagicMock, patch
 
 from src.models.maze import Maze, DOOR_TILE_ID
 from src.models.player import PlayerCharacter, PlayerClass, Stats, Ability, Spell
-from src.models.encounter import CombatEvent
-from src.models.monster import Monster
-from config import MAZE_WIDTH, MAZE_HEIGHT, DOOR_REVEAL_THRESHOLD
 
 
 # ---------------------------------------------------------------------------
@@ -57,11 +53,11 @@ def mage_class():
         stats=Stats(STR=8, DEX=12, CON=10, INT=16, WIS=14, CHA=10, LUCK=10),
         starting_weapon="Staff",
         abilities=[],
-        spells=[Spell(name="Fireball", description="Hurl fire", element="fire", damage_dice="2d6")],
+        spells=[Spell(name="Fireball", description="Hurl fire", element="fire", spell_type="damage_single", stat="INT", damage_dice=6)],
         ability_pool=[],
         spell_pool=[
-            Spell(name="Ice Shard", description="Frost attack", element="ice"),
-            Spell(name="Lightning", description="Zap!", element="lightning"),
+            Spell(name="Ice Shard", description="Frost attack", element="ice", spell_type="damage_single", stat="INT", damage_dice=4),
+            Spell(name="Lightning", description="Zap!", element="lightning", spell_type="damage_single", stat="INT", damage_dice=8),
         ],
     )
 
@@ -80,7 +76,7 @@ def jester_class():
         ],
         spell_pool=[
             Spell(name="Heal", description="From healer pool", element="light",
-                  spell_type="healing"),
+                  spell_type="heal", stat="WIS"),
         ],
     )
 

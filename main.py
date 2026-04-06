@@ -34,7 +34,6 @@ from src.views.player_menu_view import PlayerMenuView
 from src.views.load_game_view import LoadGameView
 from src.views.pause_view import PauseView
 from src.views.gameover_view import GameOverView
-from src.views.victory_view import VictoryView
 from src.views.menu_view import MenuView
 from src.systems import save_manager
 from src.systems.fog_of_war import FogOfWar

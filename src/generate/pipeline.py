@@ -620,8 +620,6 @@ def _generate_loot_table(item_ids: list[int], difficulty: int) -> list[dict]:
 def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
                     all_class_options: list | None = None):
     """Generate all content for a single room. Returns room metadata dict."""
-    from src.data.world_data import ENVIRONMENT_TYPES
-
     room_level = room_idx + 1
     room_id = f"room_{room_idx}"
     id_offset = room_idx * 1000  # Offset IDs to avoid collisions across rooms
@@ -1295,9 +1293,8 @@ def generate_world():
         # Per-room environment portraits
         for rr in room_results:
             env = rr["environment"]
-            ename = rr["environment_name"]
             portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
-            _generate_and_save(
+            generate_and_save_image(
                 f"a {env} landscape, fantasy pixel art, wide angle, atmospheric",
                 portrait_path,
             )
