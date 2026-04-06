@@ -309,7 +309,6 @@ def _fallback_class(archetype: str, env_type: str, env_name: str) -> dict:
     }
 
     name = fallback_names.get(archetype, {}).get(env_type, archetype.title())
-    element = random.choice(ELEMENTS)
 
     # Build raw stat targets, then use _fix_stats for budget enforcement
     if archetype == "jester":

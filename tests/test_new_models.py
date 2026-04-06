@@ -1,6 +1,5 @@
 """Tests for new Pydantic data models added in Phase 1."""
 
-import pytest
 from src.models.player import Stats, PlayerClass, Ability, Spell
 from src.models.monster import Monster, LootDrop
 from src.models.story import OverarchingStory, Faction, RoomStoryBeat
@@ -67,18 +66,31 @@ def test_player_class_with_abilities():
 
 def test_monster_creation():
     m = Monster(
-        id="wolf_01", name="Dire Wolf",
+        species="Dire Wolf",
         level=2, hp=15, max_hp=15, ac=12, str_mod=2, dex_mod=1,
         damage_dice=8, damage_type="physical",
     )
-    assert m.name == "Dire Wolf"
+    assert m.species == "Dire Wolf"
+    assert m.name is None
+    assert m.display_name == "Dire Wolf"
     assert m.level == 2
     assert m.loot_table == []
+    assert len(m.id) == 36  # UUID format
+
+
+def test_monster_named_boss():
+    m = Monster(
+        species="Dragon", name="Smaug",
+        level=4, hp=30, max_hp=30, ac=16,
+    )
+    assert m.species == "Dragon"
+    assert m.name == "Smaug"
+    assert m.display_name == "Smaug"
 
 
 def test_monster_with_loot():
     m = Monster(
-        id="goblin_01", name="Goblin",
+        species="Goblin",
         loot_table=[LootDrop(item_id=201, probability=0.6)],
     )
     assert len(m.loot_table) == 1
@@ -143,17 +155,18 @@ def test_day_night_defaults():
 
 def test_day_night_advance():
     dnc = DayNightCycle(ticks_per_period=10)
-    # 10 ticks / 10 per period = index 1 = DAY
-    dnc.advance(10)
-    assert dnc.current_period == TimePeriod.DAY
-
-    # 20 ticks / 10 per period = index 2 = DUSK
+    # Cycle order: DAY(0) -> DUSK(1) -> NIGHT(2) -> DAWN(3)
+    # 10 ticks / 10 per period = index 1 = DUSK
     dnc.advance(10)
     assert dnc.current_period == TimePeriod.DUSK
 
-    # 30 ticks / 10 per period = index 3 = NIGHT
+    # 20 ticks / 10 per period = index 2 = NIGHT
     dnc.advance(10)
     assert dnc.current_period == TimePeriod.NIGHT
+
+    # 30 ticks / 10 per period = index 3 = DAWN
+    dnc.advance(10)
+    assert dnc.current_period == TimePeriod.DAWN
 
 
 def test_day_night_full_cycle():

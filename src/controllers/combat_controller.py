@@ -443,18 +443,18 @@ class CombatController:
         monster: Monster = combatant.entity
         if not monster.is_alive():
             self.advance_turn()
-            return {"success": True, "message": f"{monster.name} is dead, skipping."}
+            return {"success": True, "message": f"{monster.display_name} is dead, skipping."}
 
         damage = self._monster_attack_player(monster)
         combatant.tick_debuffs()
 
         if damage > 0:
-            msg = f"{monster.name} attacks you for {damage} damage!"
+            msg = f"{monster.display_name} attacks you for {damage} damage!"
             if not self.player.is_alive():
                 msg += " You have been slain!"
                 self.state = CombatState.DEFEAT
         else:
-            msg = f"{monster.name} misses!"
+            msg = f"{monster.display_name} misses!"
 
         self.log.append(msg)
         self.advance_turn()

@@ -68,7 +68,7 @@ class CombatView:
             pygame.draw.rect(self.screen, WHITE, (x, area_y, 50, 50), 1)
 
             # Name
-            name_surf = self.small_font.render(monster.name, True, WHITE)
+            name_surf = self.small_font.render(monster.display_name, True, WHITE)
             self.screen.blit(name_surf, (x, area_y + 55))
 
             # HP bar
@@ -168,7 +168,7 @@ class CombatView:
         for i, m in enumerate(alive):
             color = YELLOW if i == selected_target else LIGHT_GRAY
             prefix = "> " if i == selected_target else "  "
-            text = self.font.render(f"{prefix}{m.name} (HP: {m.hp}/{m.max_hp})", True, color)
+            text = self.font.render(f"{prefix}{m.display_name} (HP: {m.hp}/{m.max_hp})", True, color)
             self.screen.blit(text, (30, y + 28 + i * 24))
 
     # ------------------------------------------------------------------

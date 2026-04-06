@@ -123,7 +123,7 @@ def jester():
 @pytest.fixture
 def weak_monster():
     return Monster(
-        id="m1", name="Goblin", level=1,
+        id="m1", species="Goblin", level=1,
         hp=10, max_hp=10, ac=10,
         str_mod=0, dex_mod=0,
         damage_dice=4, damage_type="physical",
@@ -133,7 +133,7 @@ def weak_monster():
 @pytest.fixture
 def fire_monster():
     return Monster(
-        id="m2", name="Fire Imp", level=1,
+        id="m2", species="Fire Imp", level=1,
         hp=12, max_hp=12, ac=11,
         str_mod=1, dex_mod=1,
         damage_dice=6, damage_type="fire",
@@ -145,7 +145,7 @@ def fire_monster():
 @pytest.fixture
 def forest_monster():
     return Monster(
-        id="m3", name="Treant", level=2,
+        id="m3", species="Treant", level=2,
         hp=18, max_hp=18, ac=13,
         str_mod=2, dex_mod=0,
         damage_dice=8, damage_type="physical",
@@ -157,7 +157,7 @@ def forest_monster():
 def make_pack(count=3):
     return [
         Monster(
-            id=f"wolf-{i}", name=f"Wolf {i}", level=1,
+            id=f"wolf-{i}", species="Wolf", level=1,
             hp=8, max_hp=8, ac=10,
             str_mod=0, dex_mod=1,
             damage_dice=4, damage_type="physical",
@@ -409,7 +409,7 @@ class TestFlee:
         warrior.player_class.stats.DEX = 2  # -4 mod → max roll 20 - 4 = 16 vs DC 13 could succeed
         # Use a strong monster to make DC higher
         strong = Monster(
-            id="boss", name="Boss", level=10,
+            id="boss", species="Boss", level=10,
             hp=50, max_hp=50, ac=18,
             str_mod=5, dex_mod=3,
             damage_dice=10,
@@ -457,7 +457,7 @@ class TestJesterGamble:
         jester.player_class.stats.LUCK = 30  # +10 mod
         outcomes = {"damage_self": 0, "nothing": 0, "good": 0}
         for seed in range(200):
-            m = Monster(id="m", name="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
+            m = Monster(id="m", species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
             cc = CombatController(jester, [m])
             cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
             cc.turn_index = 0
@@ -494,7 +494,7 @@ class TestCombatEndConditions:
         warrior.player_class.stats.DEX = 2
         # Strong monster that always hits
         boss = Monster(
-            id="boss", name="Boss", level=5,
+            id="boss", species="Boss", level=5,
             hp=50, max_hp=50, ac=20,
             str_mod=10, dex_mod=5,
             damage_dice=20,
@@ -580,13 +580,14 @@ class TestBuffs:
 
 class TestMonsterModel:
     def test_create_scaled_monster(self):
-        m = create_scaled_monster("s1", "Slime", level=1)
+        m = create_scaled_monster(species="Slime", level=1)
         assert 8 <= m.hp <= 12
         assert 10 <= m.ac <= 12
+        assert m.species == "Slime"
 
     def test_loot_roll(self):
         m = Monster(
-            id="m", name="Rat", hp=5, max_hp=5, ac=10,
+            species="Rat", hp=5, max_hp=5, ac=10,
             damage_dice=4,
             loot_table=[LootDrop(item_id=200, probability=1.0)],
         )
@@ -595,7 +596,7 @@ class TestMonsterModel:
 
     def test_loot_roll_zero_probability(self):
         m = Monster(
-            id="m", name="Rat", hp=5, max_hp=5, ac=10,
+            species="Rat", hp=5, max_hp=5, ac=10,
             damage_dice=4,
             loot_table=[LootDrop(item_id=200, probability=0.0)],
         )
@@ -698,13 +699,13 @@ class TestEncounterComposition:
 
 class TestDefaultLoot:
     def test_scaled_monster_has_default_loot(self):
-        m = create_scaled_monster("l1", "Rat", level=1)
+        m = create_scaled_monster(species="Rat", level=1)
         assert len(m.loot_table) == 1
         assert 0.4 <= m.loot_table[0].probability <= 0.6
 
     def test_explicit_loot_overrides_default(self):
         custom = [LootDrop(item_id=999, probability=1.0)]
-        m = create_scaled_monster("l2", "Rat", level=1, loot_table=custom)
+        m = create_scaled_monster(species="Rat", level=1, loot_table=custom)
         assert m.loot_table[0].item_id == 999
         assert m.loot_table[0].probability == 1.0
 
@@ -716,7 +717,6 @@ class TestDefaultLoot:
 class TestJesterRandomWeapon:
     def test_random_weapon_uses_varying_stats(self, jester):
         """Jester's roll_attack should sometimes use different stats."""
-        stats_used = set()
         for seed in range(50):
             random.seed(seed)
             jester._resolve_weapon_stat()
