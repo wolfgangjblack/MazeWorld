@@ -131,6 +131,16 @@ class PlayerCharacter(BaseModel):
     equipped_weapon: Optional[str] = None
     learned_spells: List[str] = Field(default_factory=list)
 
+    # --- Combat record ---
+    combat_record: Dict[str, int] = Field(default_factory=lambda: {
+        "monsters_killed": 0,
+        "damage_dealt": 0,
+        "damage_taken": 0,
+        "combats_won": 0,
+        "combats_fled": 0,
+    })
+    title: str = ""
+
     class Config:
         arbitrary_types_allowed = True
 

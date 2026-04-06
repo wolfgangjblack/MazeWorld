@@ -58,6 +58,8 @@ def serialize_player(player) -> dict:
         "failed_quests": list(player.failed_quests),
         "learned_spells": list(player.learned_spells),
         "profile_image": player.profile_image,
+        "combat_record": dict(player.combat_record),
+        "title": player.title,
     }
 
     # Player class
@@ -139,6 +141,11 @@ def deserialize_player(data: dict):
         failed_quests=data.get("failed_quests", []),
         learned_spells=data.get("learned_spells", []),
         profile_image=data.get("profile_image"),
+        combat_record=data.get("combat_record", {
+            "monsters_killed": 0, "damage_dealt": 0, "damage_taken": 0,
+            "combats_won": 0, "combats_fled": 0,
+        }),
+        title=data.get("title", ""),
         inventory=inventory,
         abilities=abilities,
         spells=spells,

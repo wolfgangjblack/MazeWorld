@@ -1,4 +1,4 @@
-"""Start screen — New Game, Load Game, Tutorial (stub), Config, Quit."""
+"""Start screen — New Game, Load Game, Tutorial, Config, Quit."""
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
@@ -58,6 +58,7 @@ class StartView:
             hint_text = {
                 "Start New Game": "Press Enter to begin",
                 "Load Game": "Continue a saved game",
+                "Tutorial": "View controls and mechanics",
                 "Config": "View and edit settings",
                 "Quit": "Exit the game",
             }.get(selected_item, "")
@@ -71,14 +72,12 @@ class StartView:
         item = MENU_ITEMS[index]
         if item == "Load Game" and not self.has_saves:
             return True
-        if item == "Tutorial":
-            return True
         return False
 
     def handle_input(self, event) -> str | None:
         """Process a keydown event. Returns an action string or None.
 
-        Actions: "new_game", "load_game", "config", "quit", or None.
+        Actions: "new_game", "load_game", "tutorial", "config", "quit", or None.
         """
         if event.key == pygame.K_UP:
             self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
@@ -92,6 +91,8 @@ class StartView:
                 return "new_game"
             elif selected == "Load Game":
                 return "load_game"
+            elif selected == "Tutorial":
+                return "tutorial"
             elif selected == "Config":
                 return "config"
             elif selected == "Quit":

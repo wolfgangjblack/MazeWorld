@@ -506,6 +506,11 @@ class GameController:
             self.pending_action = "open_full_menu"
             return
 
+        # B key opens story recap
+        if event.key == pygame.K_b:
+            self.pending_action = "open_story"
+            return
+
     # ------------------------------------------------------------------
     # Full Combat System (CombatController + CombatView)
     # ------------------------------------------------------------------
@@ -816,6 +821,7 @@ class GameController:
                 self.dialogue_box.combat_log = list(combat_event.combat_log)
 
                 if result["success"]:
+                    self.player.combat_record["combats_fled"] += 1
                     self.dialogue_box.set_combat_phase("fled")
                     return
 
@@ -914,8 +920,10 @@ class GameController:
 
         # Track stats
         if hasattr(combat_event, 'monsters'):
-            self.stats["monsters_killed"] += sum(
-                1 for m in combat_event.monsters if not m.is_alive)
+            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
+            self.stats["monsters_killed"] += killed
+            self.player.combat_record["monsters_killed"] += killed
+        self.player.combat_record["combats_won"] += 1
         if not getattr(combat_event, 'is_gate', False):
             self.resolved_encounters += 1
             self._check_door_reveal()
