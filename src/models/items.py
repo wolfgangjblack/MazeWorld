@@ -1,3 +1,4 @@
+import random
 from typing import Optional, Tuple
 from pydantic import BaseModel
 
@@ -91,7 +92,6 @@ class Weapon(Item):
 
     def roll_damage(self) -> int:
         """Roll attack dice and return damage value."""
-        import random
         dice_str = self.item_stats.attack_dice or "1d4"
         try:
             num, sides = dice_str.split("d")
@@ -110,6 +110,8 @@ class SpellScroll(Item):
     def use(self, player):
         """Use the spell scroll. Consumed on use."""
         player.health = min(player.health + self.item_stats.health_value, player.max_health)
+        player.hunger = min(player.hunger + self.item_stats.nutrition_value, player.max_hunger)
+        player.thirst = min(player.thirst + self.item_stats.hydration_value, player.max_thirst)
         return f"You cast {self.name}! The scroll crumbles to dust."
 
 

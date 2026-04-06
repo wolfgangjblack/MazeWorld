@@ -1,13 +1,6 @@
 import json
 from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, Item, ItemStats
 
-ITEM_CLASS_MAP = {
-    "food": Food,
-    "drink": Drink,
-    "tool": Tool,
-    "weapon": Weapon,
-    "spell_scroll": Weapon,  # placeholder, overridden below
-}
 
 def create_item_from_data(item_id: int, data: dict):
     item_type = data["category"].strip().lower()

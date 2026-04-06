@@ -1,11 +1,11 @@
 import pytest
 from src.models.encounter import CombatEvent, LootEntry
-from src.models.player import PlayerCharacter
+from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import Weapon, ItemStats
 
 
-def _make_player():
-    return PlayerCharacter(x=0, y=0, money=0)
+def _make_player(**kwargs):
+    return PlayerCharacter(x=0, y=0, money=0, **kwargs)
 
 
 def _make_combat_event(loot_table=None, money_drop=None, difficulty=2):
@@ -63,31 +63,42 @@ class TestLootTable:
         assert result["success"] is True
         assert 200 not in result.get("loot_item_ids", [])
 
-    def test_weapon_bonus_in_combat(self):
-        """Equipped weapon adds damage roll as combat modifier."""
+    def test_weapon_stat_modifier_in_combat(self):
+        """Equipped weapon's stat modifier adds to the combat check."""
         event = _make_combat_event(difficulty=3)  # threshold = 9
         player = _make_player()
+        # Give the player a class with STR 18 -> modifier +4
+        player.player_class = PlayerClass(
+            name="Fighter", archetype="warrior",
+            stats=Stats(STR=18, DEX=10, CON=10, INT=10, WIS=10, CHA=10, LUCK=10),
+        )
         weapon = Weapon(
             category="weapon", name="big sword", desc="test",
             weapon_type="heavy",
-            item_stats=ItemStats(attack_dice="1d12"),  # adds 1-12
+            item_stats=ItemStats(attack_dice="1d12", stat_modifier="STR"),
         )
         player.inventory = {"big sword": weapon}
         player.equipped_weapon = "big sword"
 
-        # With dice_roll=5 alone we'd often fail (threshold=9),
-        # but weapon bonus (1-12) should help.
-        # Run multiple times to confirm weapon is being used
-        successes = 0
-        for _ in range(100):
-            event.resolved = False
-            player.health = 100
-            result = event.resolve(5, player)
-            if result["success"]:
-                successes += 1
-        # With weapon bonus of 1d12 + base roll of 5, total is 6-17 vs threshold 9
-        # Should succeed reasonably often
-        assert successes > 10
+        # dice_roll=5 + STR mod +4 = 9, exactly meets threshold=9
+        result = event.resolve(5, player)
+        assert result["success"] is True
+
+    def test_weapon_no_stat_modifier_no_bonus(self):
+        """Weapon without stat_modifier gives no bonus."""
+        event = _make_combat_event(difficulty=3)  # threshold = 9
+        player = _make_player()
+        weapon = Weapon(
+            category="weapon", name="plain stick", desc="test",
+            weapon_type="simple",
+            item_stats=ItemStats(attack_dice="1d4"),
+        )
+        player.inventory = {"plain stick": weapon}
+        player.equipped_weapon = "plain stick"
+
+        # dice_roll=8 < threshold=9, no stat_modifier so no bonus
+        result = event.resolve(8, player)
+        assert result["success"] is False
 
     def test_no_weapon_no_bonus(self):
         event = _make_combat_event(difficulty=4)  # threshold = 12

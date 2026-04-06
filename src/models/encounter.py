@@ -47,8 +47,8 @@ class CombatEvent(Event):
         threshold = self.difficulty * 3
         weapon_bonus = 0
         weapon = player.get_equipped_weapon() if hasattr(player, 'get_equipped_weapon') else None
-        if weapon:
-            weapon_bonus = weapon.roll_damage()
+        if weapon and weapon.item_stats.stat_modifier:
+            weapon_bonus = player.get_stat_mod(weapon.item_stats.stat_modifier) if hasattr(player, 'get_stat_mod') else 0
 
         total = dice_roll + weapon_bonus
         if total >= threshold:
