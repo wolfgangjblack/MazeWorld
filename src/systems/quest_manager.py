@@ -16,6 +16,7 @@ class QuestManager:
     def __init__(self, quests: dict[str, Quest], events: dict | None = None):
         self.quests = quests
         self.events = events or {}
+        self.door_reveal_callback = None
 
     # ------------------------------------------------------------------
     # Startup checks
@@ -161,6 +162,8 @@ class QuestManager:
                 msg += f" +{money} gold!"
             if quest.reward.story_info:
                 msg += f" {quest.reward.story_info}"
+            if quest.reward.door_reveal and self.door_reveal_callback:
+                self.door_reveal_callback()
 
         self._advance_multi_step(quest.id, player)
         return msg
