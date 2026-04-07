@@ -1,5 +1,6 @@
 """Game over screen — displays death message, brief stats, and options."""
 
+import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
@@ -14,7 +15,7 @@ MENU_ITEMS = ["Load Game", "Quit to Start"]
 class GameOverView:
     """Game Over screen with brief stats summary and load/quit options."""
 
-    def __init__(self, screen, font, player, has_saves=False):
+    def __init__(self, screen, font, player, has_saves=False, portrait_path=None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
@@ -22,9 +23,23 @@ class GameOverView:
         self.player = player
         self.has_saves = has_saves
         self.selected_index = 0
+        self.bg_image = None
+
+        if portrait_path and os.path.exists(portrait_path):
+            try:
+                img = pygame.image.load(portrait_path)
+                self.bg_image = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+            except Exception:
+                pass
 
     def draw(self):
-        self.screen.fill(BLACK)
+        if self.bg_image:
+            self.screen.blit(self.bg_image, (0, 0))
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 160))
+            self.screen.blit(overlay, (0, 0))
+        else:
+            self.screen.fill(BLACK)
 
         # Title
         title = self.title_font.render("GAME OVER", True, TITLE_COLOR)

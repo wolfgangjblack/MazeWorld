@@ -36,6 +36,8 @@ from src.views.load_game_view import LoadGameView
 from src.views.pause_view import PauseView
 from src.views.gameover_view import GameOverView
 from src.views.menu_view import MenuView
+from src.views.tutorial_view import TutorialView
+from src.views.story_view import StoryView
 from src.systems import save_manager
 from src.systems.fog_of_war import FogOfWar
 from src.models.time import DayNightCycle
@@ -310,9 +312,11 @@ def main():
     gameover_view = None
     victory_view = None
     menu_view = None
+    tutorial_view = None
+    story_view = None
 
     def _handle_start() -> str | None:
-        nonlocal class_select_view, load_game_view, load_source
+        nonlocal class_select_view, load_game_view, load_source, tutorial_view
         start_view.has_saves = _cached_has_saves
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -332,6 +336,10 @@ def main():
                     load_game_view = LoadGameView(screen, font, saves)
                     load_source = "start"
                     screen_ctrl.replace(ScreenState.LOAD_GAME)
+                    return None
+                if action == "tutorial":
+                    tutorial_view = TutorialView(screen, font)
+                    screen_ctrl.push(ScreenState.TUTORIAL)
                     return None
                 if action == "config":
                     screen_ctrl.replace(ScreenState.CONFIG)
@@ -426,7 +434,7 @@ def main():
         nonlocal game_controller, gameplay_start_time, player_menu_view
         nonlocal load_game_view, load_source, current_room_index
         nonlocal pause_view, gameover_view, menu_view
-        nonlocal room_intro_view, level_up_view, game_stats, victory_view
+        nonlocal room_intro_view, level_up_view, game_stats, victory_view, story_view
 
         if game_controller is None:
             game_controller = setup_game(screen, font, player_name, selected_class,
@@ -458,10 +466,35 @@ def main():
             screen_ctrl.push(ScreenState.PLAYER_MENU)
             return None
 
+        if result == "open_story":
+            story = registry.get_story()
+            room_beat = ""
+            room_name = ""
+            if story:
+                beat = next(
+                    (b for b in story.beats
+                     if b.room_id == f"room_{current_room_index}"), None)
+                if beat:
+                    room_beat = beat.summary
+            if game_controller:
+                room_name = game_controller.maze.environment_name or ""
+            story_view = StoryView(
+                screen, font, story=story,
+                room_story_beat=room_beat, room_name=room_name,
+            )
+            screen_ctrl.push(ScreenState.STORY)
+            return None
+
         if result == "game_over":
+            go_portrait = None
+            if registry.manifest:
+                go_portrait = registry.manifest.get("gameover_portrait")
+            if not go_portrait:
+                go_portrait = game_controller.player.profile_image
             gameover_view = GameOverView(
                 screen, font, game_controller.player,
                 has_saves=_cached_has_saves,
+                portrait_path=go_portrait,
             )
             screen_ctrl.push(ScreenState.GAME_OVER)
             return None
@@ -813,8 +846,42 @@ def main():
         clock.tick(60)
         return None
 
+    def _handle_tutorial() -> str | None:
+        nonlocal tutorial_view
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = tutorial_view.handle_input(event)
+                if action == "back":
+                    screen_ctrl.pop()
+                    return None
+        tutorial_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
+    def _handle_story() -> str | None:
+        nonlocal story_view
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = story_view.handle_input(event)
+                if action == "back":
+                    screen_ctrl.pop()
+                    return None
+        if game_controller:
+            current_time = pygame.time.get_ticks()
+            game_controller.draw(current_time)
+        story_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
     screen_handlers: dict[ScreenState, callable] = {
         ScreenState.START: _handle_start,
+        ScreenState.TUTORIAL: _handle_tutorial,
         ScreenState.CONFIG: _handle_config,
         ScreenState.CLASS_SELECT: _handle_class_select,
         ScreenState.ROOM_INTRO: _handle_room_intro,
@@ -825,6 +892,7 @@ def main():
         ScreenState.GAME_OVER: _handle_game_over,
         ScreenState.LEVEL_UP: _handle_level_up,
         ScreenState.VICTORY: _handle_victory,
+        ScreenState.STORY: _handle_story,
     }
 
     running = True

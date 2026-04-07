@@ -5,6 +5,7 @@ from enum import Enum
 
 class ScreenState(Enum):
     START = "start"
+    TUTORIAL = "tutorial"
     CONFIG = "config"
     CLASS_SELECT = "class_select"
     ROOM_INTRO = "room_intro"
@@ -19,6 +20,7 @@ class ScreenState(Enum):
     LEVEL_UP = "level_up"
     GAME_OVER = "game_over"
     VICTORY = "victory"
+    STORY = "story"
 
 
 class ScreenController:

@@ -44,6 +44,7 @@ class GameController:
 
         # Managers
         self.quest_manager = QuestManager(self.quests, self.events)
+        self.quest_manager.door_reveal_callback = self.reveal_door_from_quest
         self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
 
         # Build a lookup from grid position to event id
@@ -101,7 +102,7 @@ class GameController:
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
+        self.pending_action = None  # Signals main loop: "save", "load", "quit", "open_pause", "open_full_menu", "open_story", "game_over", "victory", "room_transition"
 
         # Room progression state
         self.current_room = current_room
@@ -147,10 +148,13 @@ class GameController:
         self.total_encounters = sum(
             1 for e in self.events.values()
             if not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
         self.resolved_encounters = sum(
             1 for e in self.events.values()
-            if e.resolved and not getattr(e, 'is_gate', False)
+            if e.resolved
+            and not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
 
     @property
@@ -356,6 +360,9 @@ class GameController:
 
     def _signal_room_transition(self):
         """Signal the main loop to transition to the next room."""
+        if self.current_room >= self.total_rooms - 1:
+            self.pending_action = "victory"
+            return
         # Check for incomplete story quests
         undone = [q for q in self.quests.values()
                   if getattr(q, 'is_story_quest', False)
@@ -534,6 +541,11 @@ class GameController:
         # M key opens full tabbed menu
         if event.key == pygame.K_m:
             self.pending_action = "open_full_menu"
+            return
+
+        # B key opens story recap
+        if event.key == pygame.K_b:
+            self.pending_action = "open_story"
             return
 
     # ------------------------------------------------------------------
@@ -922,6 +934,7 @@ class GameController:
                 self.dialogue_box.combat_log = list(combat_event.combat_log)
 
                 if result["success"]:
+                    self.player.combat_record["combats_fled"] += 1
                     self.dialogue_box.set_combat_phase("fled")
                     return
 
@@ -1020,9 +1033,15 @@ class GameController:
 
         # Track stats
         if hasattr(combat_event, 'monsters'):
-            self.stats["monsters_killed"] += sum(
-                1 for m in combat_event.monsters if not m.is_alive)
-        if not getattr(combat_event, 'is_gate', False):
+            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
+            self.stats["monsters_killed"] += killed
+            self.player.combat_record["monsters_killed"] += killed
+        self.player.combat_record["combats_won"] += 1
+        if getattr(combat_event, 'is_climax_boss', False):
+            self.resolved_encounters += 1
+            self.gate_cleared = True
+            self.pending_action = "victory"
+        elif not getattr(combat_event, 'is_gate', False):
             self.resolved_encounters += 1
             self._check_door_reveal()
         else:
