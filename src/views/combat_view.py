@@ -34,13 +34,17 @@ class CombatView:
 
     def draw(self, combat: CombatController, selected_action: int = 0,
              selected_target: int = 0, selecting_target: bool = False,
+             selecting_spell: bool = False, selected_spell: int = 0,
+             selecting_item: bool = False, selected_item: int = 0,
              game_over_selection: int = 0):
         """Draw the full combat screen."""
         self.screen.fill(DARK_GRAY)
         self._draw_monsters(combat)
         self._draw_turn_order(combat)
         self._draw_player_stats(combat.player)
-        self._draw_action_menu(combat, selected_action, selected_target, selecting_target)
+        self._draw_action_menu(combat, selected_action, selected_target,
+                               selecting_target, selecting_spell, selected_spell,
+                               selecting_item, selected_item)
         self._draw_combat_log(combat)
         self._draw_state_banner(combat, game_over_selection)
 
@@ -138,11 +142,21 @@ class CombatView:
     ACTIONS = ["Attack", "Multi-Attack", "Cast Spell", "Use Item", "Flee", "Swap Weapon", "Gamble"]
 
     def _draw_action_menu(self, combat: CombatController, selected: int,
-                          selected_target: int, selecting_target: bool):
+                          selected_target: int, selecting_target: bool,
+                          selecting_spell: bool = False, selected_spell: int = 0,
+                          selecting_item: bool = False, selected_item: int = 0):
         y = 220
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
             hint = self.font.render("Enemy turn..." if combat.state == CombatState.ONGOING else "", True, LIGHT_GRAY)
             self.screen.blit(hint, (20, y))
+            return
+
+        if selecting_spell:
+            self._draw_spell_selector(combat, y, selected_spell)
+            return
+
+        if selecting_item:
+            self._draw_item_selector(combat, y, selected_item)
             return
 
         if selecting_target:
@@ -170,6 +184,37 @@ class CombatView:
             color = YELLOW if i == selected_target else LIGHT_GRAY
             prefix = "> " if i == selected_target else "  "
             text = self.font.render(f"{prefix}{m.display_name} (HP: {m.hp}/{m.max_hp})", True, color)
+            self.screen.blit(text, (30, y + 28 + i * 24))
+
+    def _draw_spell_selector(self, combat: CombatController, y: int, selected_spell: int):
+        label = self.font.render("Select spell:  (Esc to cancel)", True, WHITE)
+        self.screen.blit(label, (20, y))
+        spells = combat.player.spells
+        for i, spell in enumerate(spells):
+            color = YELLOW if i == selected_spell else LIGHT_GRAY
+            prefix = "> " if i == selected_spell else "  "
+            cost_parts = []
+            if spell.hunger_cost:
+                cost_parts.append(f"{spell.hunger_cost} hunger")
+            if spell.thirst_cost:
+                cost_parts.append(f"{spell.thirst_cost} thirst")
+            cost_str = ", ".join(cost_parts) if cost_parts else "free"
+            text = self.font.render(
+                f"{prefix}{spell.name}  [{spell.element}]  ({cost_str})", True, color)
+            self.screen.blit(text, (30, y + 28 + i * 24))
+
+    def _draw_item_selector(self, combat: CombatController, y: int, selected_item: int):
+        from src.models.items import Food, Drink
+        label = self.font.render("Select item:  (Esc to cancel)", True, WHITE)
+        self.screen.blit(label, (20, y))
+        consumables = [
+            (name, item) for name, item in combat.player.inventory.items()
+            if isinstance(item, (Food, Drink))
+        ]
+        for i, (name, item) in enumerate(consumables):
+            color = YELLOW if i == selected_item else LIGHT_GRAY
+            prefix = "> " if i == selected_item else "  "
+            text = self.font.render(f"{prefix}{name}  — {item.desc}", True, color)
             self.screen.blit(text, (30, y + 28 + i * 24))
 
     # ------------------------------------------------------------------

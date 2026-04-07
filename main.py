@@ -9,6 +9,7 @@ Usage:
 import argparse
 import logging
 import os
+import sys
 import time
 
 import pygame
@@ -629,6 +630,9 @@ def main():
                     game_controller = None
                     screen_ctrl.reset_to(ScreenState.START)
                     return None
+                if action == "exit_game":
+                    pygame.quit()
+                    sys.exit()
 
         # Draw the game underneath, then the pause overlay
         if game_controller:

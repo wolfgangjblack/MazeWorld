@@ -8,20 +8,23 @@ TEXT_COLOR = (200, 200, 200)
 SECTION_COLOR = (180, 160, 80)
 HINT_COLOR = (120, 120, 120)
 
+SCROLL_STEP = 20
+
 
 class StoryView:
     """Overlay showing the overarching story synopsis and current room context."""
 
     def __init__(self, screen, font, story=None, room_story_beat="",
-                 room_name="", faction_name=""):
+                 room_name=""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
         self.small_font = pygame.font.Font(None, 24)
+        self.scroll_offset = 0
 
         self.title = story.title if story else "The Story So Far"
         self.synopsis = story.synopsis if story else "No story data available."
-        self.faction_name = faction_name or (
+        self.faction_name = (
             story.faction.name if story and story.faction else ""
         )
         self.faction_desc = (
@@ -38,7 +41,7 @@ class StoryView:
         overlay.set_alpha(210)
         self.screen.blit(overlay, (0, 0))
 
-        y = 30
+        y = 30 - self.scroll_offset
 
         # Title
         title_surf = self.title_font.render(self.title, True, TITLE_COLOR)
@@ -73,8 +76,9 @@ class StoryView:
             y += 24
             self._draw_wrapped(self.room_story_beat, 60, y, SCREEN_WIDTH - 120)
 
-        # Footer
-        hint = self.small_font.render("Press Esc or Enter to return", True, HINT_COLOR)
+        # Footer (fixed at bottom, unaffected by scroll)
+        hint = self.small_font.render(
+            "Up/Down: Scroll  |  Esc/Enter: Return", True, HINT_COLOR)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
     def _draw_section(self, text: str, y: int):
@@ -102,7 +106,11 @@ class StoryView:
         return y
 
     def handle_input(self, event) -> str | None:
-        """Returns 'back' on Esc or Enter."""
+        """Returns 'back' on Esc or Enter. Up/Down scrolls."""
         if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
             return "back"
+        if event.key == pygame.K_UP:
+            self.scroll_offset = max(0, self.scroll_offset - SCROLL_STEP)
+        elif event.key == pygame.K_DOWN:
+            self.scroll_offset += SCROLL_STEP
         return None

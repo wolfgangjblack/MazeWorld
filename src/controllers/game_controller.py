@@ -39,6 +39,7 @@ class GameController:
 
         # Managers
         self.quest_manager = QuestManager(self.quests, self.events)
+        self.quest_manager.door_reveal_callback = self.reveal_door_from_quest
         self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
 
         # Build a lookup from grid position to event id
@@ -88,11 +89,15 @@ class GameController:
         self.combat_selected_action = 0
         self.combat_selected_target = 0
         self.combat_selecting_target = False
+        self.combat_selecting_spell = False
+        self.combat_selected_spell = 0
+        self.combat_selecting_item = False
+        self.combat_selected_item = 0
         self.combat_game_over_selection = 0
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
+        self.pending_action = None  # Signals main loop: "save", "load", "quit", "open_pause", "open_full_menu", "open_story", "game_over", "victory", "room_transition"
 
         # Room progression state
         self.current_room = current_room
@@ -138,10 +143,13 @@ class GameController:
         self.total_encounters = sum(
             1 for e in self.events.values()
             if not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
         self.resolved_encounters = sum(
             1 for e in self.events.values()
-            if e.resolved and not getattr(e, 'is_gate', False)
+            if e.resolved
+            and not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
 
     @property
@@ -261,7 +269,7 @@ class GameController:
             if event and not event.resolved:
                 # Time-gated events: only trigger at correct time
                 if is_event_active_at_time(event, self.day_night.current_period):
-                    if event.type == "combat" and hasattr(event, 'monsters') and event.monsters:
+                    if event.type == "combat":
                         self._start_full_combat(event)
                     else:
                         self.dialogue_box.start_event(event)
@@ -291,12 +299,23 @@ class GameController:
         if self.player.weapon is None and self.player.player_class:
             self.player.weapon = STARTER_WEAPONS.get(self.player.player_class.archetype)
 
+        # Ensure monsters exist — generate fallback if empty
+        if not combat_event.monsters:
+            from src.models.monster import generate_encounter_monsters
+            env = getattr(self.maze, 'environment', 'dungeon')
+            room_level = getattr(combat_event, 'room_level', 1)
+            combat_event.monsters = generate_encounter_monsters(env, room_level)
+
         self.combat_event = combat_event
         self.combat_controller = CombatController(self.player, list(combat_event.monsters))
         self.combat_view = CombatView(self.screen, self.font)
         self.combat_selected_action = 0
         self.combat_selected_target = 0
         self.combat_selecting_target = False
+        self.combat_selecting_spell = False
+        self.combat_selected_spell = 0
+        self.combat_selecting_item = False
+        self.combat_selected_item = 0
         self.combat_game_over_selection = 0
 
     @property
@@ -326,6 +345,9 @@ class GameController:
 
     def _signal_room_transition(self):
         """Signal the main loop to transition to the next room."""
+        if self.current_room >= self.total_rooms - 1:
+            self.pending_action = "victory"
+            return
         # Check for incomplete story quests
         undone = [q for q in self.quests.values()
                   if getattr(q, 'is_story_quest', False)
@@ -534,7 +556,52 @@ class GameController:
                 while cc.state == CombatState.ONGOING and not cc.is_player_turn():
                     cc.execute_monster_turn()
                 self.combat_selecting_target = False
+                self.combat_selecting_spell = False
+                self.combat_selecting_item = False
                 self.combat_selected_action = 0
+            return
+
+        # Player turn — spell selection sub-menu
+        if self.combat_selecting_spell:
+            spells = cc.player.spells
+            if event.key == pygame.K_UP:
+                self.combat_selected_spell = (self.combat_selected_spell - 1) % max(len(spells), 1)
+            elif event.key == pygame.K_DOWN:
+                self.combat_selected_spell = (self.combat_selected_spell + 1) % max(len(spells), 1)
+            elif event.key == pygame.K_RETURN:
+                if spells:
+                    spell = spells[self.combat_selected_spell]
+                    if spell.targets == "self" or spell.spell_type in ("heal", "buff_stat", "buff_sustain"):
+                        cc.player_cast_spell(self.combat_selected_spell, 0)
+                        while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+                            cc.execute_monster_turn()
+                        self.combat_selecting_spell = False
+                        self.combat_selected_action = 0
+                    else:
+                        self.combat_selecting_spell = False
+                        self.combat_selecting_target = True
+                        self.combat_selected_target = 0
+            elif event.key == pygame.K_ESCAPE:
+                self.combat_selecting_spell = False
+            return
+
+        # Player turn — item selection sub-menu
+        if self.combat_selecting_item:
+            consumables = self._get_combat_consumables()
+            if event.key == pygame.K_UP:
+                self.combat_selected_item = (self.combat_selected_item - 1) % max(len(consumables), 1)
+            elif event.key == pygame.K_DOWN:
+                self.combat_selected_item = (self.combat_selected_item + 1) % max(len(consumables), 1)
+            elif event.key == pygame.K_RETURN:
+                if consumables:
+                    item_name = consumables[self.combat_selected_item]
+                    cc.player_use_item(item_name)
+                    while cc.state == CombatState.ONGOING and not cc.is_player_turn():
+                        cc.execute_monster_turn()
+                    self.combat_selecting_item = False
+                    self.combat_selected_action = 0
+            elif event.key == pygame.K_ESCAPE:
+                self.combat_selecting_item = False
             return
 
         # Player turn — target selection mode
@@ -561,8 +628,16 @@ class GameController:
             self.combat_selected_action = (self.combat_selected_action + 1) % len(actions)
         elif event.key == pygame.K_RETURN:
             action_name = actions[self.combat_selected_action]
-            # Actions that need a target
-            if action_name in ("Attack", "Cast Spell"):
+            if action_name == "Cast Spell":
+                if cc.player.spells:
+                    self.combat_selecting_spell = True
+                    self.combat_selected_spell = 0
+            elif action_name == "Use Item":
+                consumables = self._get_combat_consumables()
+                if consumables:
+                    self.combat_selecting_item = True
+                    self.combat_selected_item = 0
+            elif action_name == "Attack":
                 self.combat_selecting_target = True
                 self.combat_selected_target = 0
             else:
@@ -575,6 +650,17 @@ class GameController:
         if not cc or not cc.player.player_class or cc.player.player_class.archetype != "jester":
             actions = [a for a in actions if a != "Gamble"]
         return actions
+
+    def _get_combat_consumables(self) -> list[str]:
+        """Return names of consumable items usable in combat."""
+        from src.models.items import Food, Drink
+        cc = self.combat_controller
+        if cc is None:
+            return []
+        return [
+            name for name, item in cc.player.inventory.items()
+            if isinstance(item, (Food, Drink))
+        ]
 
     def _execute_player_combat_action(self, action_index: int, target_index: int):
         """Execute the selected player action through CombatController."""
@@ -590,13 +676,12 @@ class GameController:
         elif action_name == "Multi-Attack":
             cc.player_multi_attack()
         elif action_name == "Cast Spell":
-            # Use first available spell for now; target_index is monster target
             if cc.player.spells:
-                cc.player_cast_spell(0, target_index)
+                cc.player_cast_spell(self.combat_selected_spell, target_index)
         elif action_name == "Use Item":
-            items = list(cc.player.inventory.keys())
-            if items:
-                cc.player_use_item(items[0])
+            consumables = self._get_combat_consumables()
+            if consumables:
+                cc.player_use_item(consumables[self.combat_selected_item])
         elif action_name == "Flee":
             cc.player_flee()
         elif action_name == "Gamble":
@@ -651,6 +736,19 @@ class GameController:
 
             # Clear tile
             self.maze.grid[self.player.y][self.player.x] = 0
+
+            # Stats tracking
+            self.stats["monsters_killed"] += sum(
+                1 for m in combat_event.monsters if not m.is_alive)
+
+            # Quest and encounter tracking
+            is_gate = getattr(combat_event, 'is_gate', False)
+            if not is_gate:
+                self.resolved_encounters += 1
+                self._check_door_reveal()
+            else:
+                self.gate_cleared = True
+            self.quest_manager.on_event_resolved(combat_event.id, self.player)
 
             # Check quest completion
             for qid, quest in self.quests.items():
@@ -924,7 +1022,11 @@ class GameController:
             self.stats["monsters_killed"] += killed
             self.player.combat_record["monsters_killed"] += killed
         self.player.combat_record["combats_won"] += 1
-        if not getattr(combat_event, 'is_gate', False):
+        if getattr(combat_event, 'is_climax_boss', False):
+            self.resolved_encounters += 1
+            self.gate_cleared = True
+            self.pending_action = "victory"
+        elif not getattr(combat_event, 'is_gate', False):
             self.resolved_encounters += 1
             self._check_door_reveal()
         else:
@@ -1107,6 +1209,10 @@ class GameController:
                 selected_action=self.combat_selected_action,
                 selected_target=self.combat_selected_target,
                 selecting_target=self.combat_selecting_target,
+                selecting_spell=self.combat_selecting_spell,
+                selected_spell=self.combat_selected_spell,
+                selecting_item=self.combat_selecting_item,
+                selected_item=self.combat_selected_item,
                 game_over_selection=self.combat_game_over_selection,
             )
             return

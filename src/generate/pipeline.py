@@ -449,6 +449,19 @@ WEAPON_PRICE_BY_DICE = {
     "1d10": (40, 55), "2d4": (25, 35), "1d12": (55, 70),
 }
 
+# Consumable stat & price multipliers by room level
+CONSUMABLE_SCALING = {
+    1: 1.0,
+    2: 1.3,
+    3: 1.6,
+    4: 2.0,
+}
+
+
+def _consumable_mult(room_level: int) -> float:
+    """Return the consumable scaling multiplier for a given room level."""
+    return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
+
 
 def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1) -> dict | None:
     """Call LLM to generate environment-themed items. Returns items dict keyed by ID, or None."""
@@ -471,6 +484,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
     """Convert LLM-generated item pools into the items.json format keyed by ID."""
     items = {}
     item_id = 200
+    mult = _consumable_mult(room_level)
 
     for raw in llm_result.get("food", [])[:4]:
         items[str(item_id)] = {
@@ -479,11 +493,11 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "desc": raw.get("desc", ""),
             "room_level": room_level,
             "item_stats": {
-                "nutrition_value": raw.get("nutrition_value", 15),
+                "nutrition_value": int(raw.get("nutrition_value", 15) * mult),
                 "hydration_value": 0,
-                "health_value": raw.get("health_value", 0),
+                "health_value": int(raw.get("health_value", 0) * mult),
                 "uses": 1,
-                "price": random.randint(5, 15),
+                "price": int(random.randint(5, 15) * mult),
             },
         }
         item_id += 1
@@ -497,10 +511,10 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "room_level": room_level,
             "item_stats": {
                 "nutrition_value": 0,
-                "hydration_value": raw.get("hydration_value", 15),
-                "health_value": raw.get("health_value", 0),
+                "hydration_value": int(raw.get("hydration_value", 15) * mult),
+                "health_value": int(raw.get("health_value", 0) * mult),
                 "uses": 1,
-                "price": random.randint(5, 15),
+                "price": int(random.randint(5, 15) * mult),
             },
         }
         item_id += 1
@@ -518,7 +532,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "hydration_value": -5,
                 "health_value": 0,
                 "uses": 3,
-                "price": random.randint(10, 25),
+                "price": int(random.randint(10, 25) * mult),
             },
         }
         item_id += 1
@@ -542,6 +556,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
         item_id += 1
 
     item_id = 600
+    scroll_mult = 1.0 + (mult - 1.0) * 0.5  # scrolls scale at half rate
     for raw in llm_result.get("spell_scrolls", [])[:2]:
         items[str(item_id)] = {
             "category": "spell_scroll",
@@ -550,10 +565,10 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "spell_effect": raw.get("spell_effect", "generic"),
             "room_level": room_level,
             "item_stats": {
-                "health_value": 25 if raw.get("spell_effect") == "heal" else 0,
-                "nutrition_value": 30 if raw.get("spell_effect") == "sustain" else 0,
-                "hydration_value": 30 if raw.get("spell_effect") == "sustain" else 0,
-                "price": random.randint(20, 40),
+                "health_value": int((25 if raw.get("spell_effect") == "heal" else 0) * scroll_mult),
+                "nutrition_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
+                "hydration_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
+                "price": int(random.randint(20, 40) * mult),
             },
         }
         item_id += 1
@@ -864,8 +879,38 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
         gate_encounter_id = gate_id
         maze.gate_encounter_id = gate_id
 
-    # --- Door placement (for non-final rooms) ---
-    if room_idx < num_rooms - 1:
+    # --- Climax boss encounter (final room only) ---
+    if room_idx == num_rooms - 1 and num_rooms > 1:
+        boss_id = f"{event_id_prefix}climax_boss"
+        boss_level = room_level + 2
+        boss_name = story.final_boss_name or "The Dark Lord"
+        boss_monsters = generate_encounter_monsters(maze.environment, boss_level)
+        for m in boss_monsters:
+            m.hp = int(m.hp * 2.5)
+            m.max_hp = m.hp
+        climax_event = {
+            "id": boss_id,
+            "type": "combat",
+            "name": boss_name,
+            "description": f"{boss_name} stands before you — the final confrontation! {story.climax}",
+            "difficulty": 5,
+            "monsters": [m.to_dict() for m in boss_monsters],
+            "room_level": boss_level,
+            "is_climax_boss": True,
+            "portrait_prompt": _llm_generate_event_image({
+                "name": boss_name,
+                "description": f"The final boss: {boss_name}. {story.climax}",
+            }),
+            "profile_image": None,
+        }
+        if all_item_ids:
+            climax_event["loot_table"] = _generate_loot_table(all_item_ids, boss_level)
+            climax_event["money_drop"] = [boss_level * 10, boss_level * 30]
+        event_list.append(climax_event)
+        maze.gate_encounter_id = boss_id
+
+    # --- Door placement (rooms with a next room OR a climax boss) ---
+    if room_idx < num_rooms - 1 or (room_idx == num_rooms - 1 and num_rooms > 1):
         maze.place_door(player_start)
 
     # --- Quests ---
@@ -1035,6 +1080,36 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
             "profile_image": None,
         }
         quest_list.append(multi_quest)
+        quest_id_counter += 1
+
+    # --- Door-reveal quest (one per room that has a door) ---
+    climax_boss_id = maze.gate_encounter_id if room_idx == num_rooms - 1 else None
+    dr_candidates = [e for e in combat_events_for_quest if e["id"] != climax_boss_id]
+    if maze.door_position and npcs_for_quest and dr_candidates:
+        dr_target = random.choice(dr_candidates)
+        dr_giver_id = random.choice(npcs_for_quest)["id"]
+        door_reveal_quest = {
+            "id": f"{event_id_prefix}q_{quest_id_counter:03d}",
+            "type": "combat",
+            "title": f"Clear the Path: {dr_target['name']}",
+            "description": f"Defeat {dr_target['name']} and the exit will reveal itself.",
+            "giver_npc_id": dr_giver_id,
+            "target_event_id": dr_target["id"],
+            "room_id": room_id,
+            "is_story_quest": True,
+            "reward": {
+                "door_reveal": True,
+                "story_info": "The path forward reveals itself!",
+            },
+            "failure_penalty": {"hp_damage": 0, "hunger_damage": 0, "thirst_damage": 0},
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+        giver_npc = next((n for n in npc_pool if n["id"] == dr_giver_id), None)
+        if giver_npc and not giver_npc.get("quest_id"):
+            giver_npc["quest_id"] = door_reveal_quest["id"]
+        quest_list.append(door_reveal_quest)
         quest_id_counter += 1
 
     quest_bar.close()
@@ -1240,6 +1315,7 @@ def generate_world():
     portraits_generated = False
     player_portrait_path = None
     env_portrait_path = None
+    gameover_portrait_path = None
     try:
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,

@@ -9,7 +9,7 @@ UNSELECTED_COLOR = (180, 180, 180)
 DISABLED_COLOR = (80, 80, 80)
 TEXT_COLOR = (200, 200, 200)
 
-MENU_ITEMS = ["Resume", "Save Game", "Controls", "Quit to Start"]
+MENU_ITEMS = ["Resume", "Save Game", "Controls", "Quit to Start", "Exit Game"]
 
 CONTROLS_TEXT = [
     "Arrow Keys  -  Move",
@@ -20,6 +20,9 @@ CONTROLS_TEXT = [
     "Q           -  Quest Log",
     "S           -  Shop (near merchant)",
     "T           -  Talk to follower",
+    "M           -  Full Menu (stats/spells)",
+    "B           -  Story Recap",
+    "R           -  Rest",
     "F1          -  Toggle debug view",
     "",
     "Combat:",
@@ -108,7 +111,7 @@ class PauseView:
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 40))
 
     def handle_input(self, event) -> str | None:
-        """Returns 'resume', 'save', 'controls', 'quit_to_start', or None."""
+        """Returns 'resume', 'save', 'controls', 'quit_to_start', 'exit_game', or None."""
         if self.showing_controls:
             if event.key == pygame.K_ESCAPE:
                 self.showing_controls = False
@@ -134,4 +137,6 @@ class PauseView:
                 return None
             if selected == "Quit to Start":
                 return "quit_to_start"
+            if selected == "Exit Game":
+                return "exit_game"
         return None
