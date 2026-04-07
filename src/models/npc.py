@@ -28,6 +28,9 @@ class NPC(BaseModel):
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
+    finished_dialogue: str = "I have nothing more to say."
+    dialogue_exhausted: bool = False
+    max_dialogue_turns: int = 10
     color: Tuple[int, int, int] = (0, 255, 0)
     move_interval: int = 5000
     last_move_time: int = 0
