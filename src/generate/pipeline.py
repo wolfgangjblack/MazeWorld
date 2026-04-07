@@ -265,7 +265,8 @@ def _event_fallback(event_type: str) -> dict:
     }
 
 
-def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
+def _llm_generate_event(env_type: str, env_name: str, event_type: str,
+                        story_context: str = "") -> dict:
     """Call LLM to generate an event with retry-on-failure. Returns dict or fallback."""
     from src.generate.checker import EventChecker
     checker = EventChecker()
@@ -275,7 +276,7 @@ def _llm_generate_event(env_type: str, env_name: str, event_type: str) -> dict:
         ctx = {"environment": {"type": env_type, "name": env_name}}
         if feedback:
             ctx["retry_feedback"] = "; ".join(feedback)
-        result = generate_event_primitive(ctx, event_type)
+        result = generate_event_primitive(ctx, event_type, story_context=story_context)
         if "error" in result:
             raise ValueError(result["error"])
         result.setdefault("type", event_type)
@@ -350,13 +351,15 @@ def _llm_generate_story(story_seed: str, room_count: int,
 
 def _llm_generate_story_quest(env_type: str, env_name: str, story_beat: str,
                                faction_name: str, npcs: list, items: list,
-                               events: list, quest_type: str) -> dict | None:
+                               events: list, quest_type: str,
+                               story_context: str = "") -> dict | None:
     """Call LLM to generate a story-connected quest."""
     try:
         from src.generate.generators.llm_primitives import generate_story_quest_primitive
         result = generate_story_quest_primitive(
             {"environment": {"type": env_type, "name": env_name}},
             story_beat, faction_name, npcs, items, events, quest_type,
+            story_context=story_context,
         )
         if "error" not in result:
             return result
@@ -366,7 +369,8 @@ def _llm_generate_story_quest(env_type: str, env_name: str, story_beat: str,
 
 
 def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
-                        events: list, quest_type: str) -> dict | None:
+                        events: list, quest_type: str,
+                        story_context: str = "") -> dict | None:
     """Call LLM to generate quest title/description with retry. Returns dict or None."""
 
     def _generate(feedback: list[str] | None = None):
@@ -374,7 +378,8 @@ def _llm_generate_quest(env_type: str, env_name: str, npcs: list, items: list,
         ctx = {"environment": {"type": env_type, "name": env_name}}
         if feedback:
             ctx["retry_feedback"] = "; ".join(feedback)
-        result = generate_quest_primitive(ctx, npcs, items, events, quest_type)
+        result = generate_quest_primitive(ctx, npcs, items, events, quest_type,
+                                          story_context=story_context)
         if "error" in result:
             raise ValueError(result["error"])
         return result
@@ -473,13 +478,14 @@ def _consumable_mult(room_level: int) -> float:
     return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
 
 
-def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1) -> dict | None:
+def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1,
+                        story_context: str = "") -> dict | None:
     """Call LLM to generate environment-themed items. Returns items dict keyed by ID, or None."""
     try:
         from src.generate.generators.llm_primitives import generate_item_primitive
         result = generate_item_primitive(
             {"environment": {"type": env_type, "name": env_name}},
-            room_level,
+            room_level, story_context=story_context,
         )
         if "error" in result:
             logger.warning("LLM item generation returned error: %s", result["error"])
@@ -696,11 +702,13 @@ def _generate_room_layout(room_idx: int, room_dir: str):
 
 def _generate_room_content(layout: dict, num_rooms: int, story,
                            npc_pool: list, generated_items: dict | None,
+                           bible: WorldBible | None = None,
                            report: ValidationReport | None = None):
     """Generate events, quests, dialogue, and write files for a room.
 
     This is Phase B — runs AFTER async entity generation has produced
-    items and NPCs for this room.
+    items and NPCs for this room. When *bible* is provided, event and quest
+    generators receive cumulative story context.
     """
     room_idx = layout["room_idx"]
     room_level = layout["room_level"]
@@ -712,6 +720,9 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
     quest_zones = layout["quest_zones"]
     player_start = layout["player_start"]
     room_dir = layout["room_dir"]
+
+    # Bible context for this room (includes all previous rooms' content)
+    room_story_context = bible.get_cumulative_context(room_id) if bible else ""
 
     # --- Register items and place on maze ---
     item_id_base = 200 + id_offset
@@ -766,7 +777,8 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
         else:
             event_type = "event"
 
-        event_data = _llm_generate_event(maze.environment, env_name, event_type)
+        event_data = _llm_generate_event(maze.environment, env_name, event_type,
+                                         story_context=room_story_context)
         event_data["id"] = f"{event_id_prefix}evt_{idx:03d}"
         event_data["type"] = event_type
         if "name" not in event_data:
@@ -1016,6 +1028,7 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
             llm_quest = _llm_generate_quest(
                 maze.environment, env_name,
                 npcs_for_quest, items_for_quest, events_for_quest, quest_type,
+                story_context=room_story_context,
             )
             quest_data = _build_quest_data_room(quest_type, llm_quest, is_story=False)
             if _populate_quest_fields_room(quest_data, quest_type, zone_x, zone_y):
@@ -1028,6 +1041,7 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
             story_llm = _llm_generate_story_quest(
                 maze.environment, env_name, story_beat_text, faction_name,
                 npcs_for_quest, items_for_quest, events_for_quest, story_type,
+                story_context=room_story_context,
             )
             story_qdata = _build_quest_data_room(story_type, story_llm, is_story=True)
             if _populate_quest_fields_room(story_qdata, story_type, zone_x, zone_y):
@@ -1191,7 +1205,78 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
         "player_start": player_start,
         "maze": maze,
         "generated_items": generated_items,
+        "room_dir": room_dir,
     }
+
+
+def _link_cross_room_quests(room_results: list[dict], bible: WorldBible,
+                           story: OverarchingStory) -> None:
+    """Link multi-step quests across rooms using the full Bible.
+
+    After all rooms are generated, this function creates cross-room quest
+    chains: story quests from earlier rooms can serve as prerequisites for
+    later rooms, creating a narrative thread through the whole world.
+    """
+    faction_name = story.faction.name if story.faction else ""
+    story_quests_by_room: list[list[dict]] = []
+    for rr in room_results:
+        sq = [q for q in rr["quest_list"] if q.get("is_story_quest") and q.get("type") != "multi_step"]
+        story_quests_by_room.append(sq)
+
+    # Chain: last story quest of room N becomes prerequisite for first story quest of room N+1
+    for room_idx in range(1, len(room_results)):
+        prev_sq = story_quests_by_room[room_idx - 1]
+        curr_sq = story_quests_by_room[room_idx]
+        if prev_sq and curr_sq:
+            curr_sq[0]["prerequisite_quest_id"] = prev_sq[-1]["id"]
+            logger.info("Cross-room link: %s → %s", prev_sq[-1]["id"], curr_sq[0]["id"])
+
+    # Build a global multi-step quest if enough rooms have story quests
+    cross_room_sub_ids = []
+    for sq_list in story_quests_by_room:
+        if sq_list:
+            cross_room_sub_ids.append(sq_list[0]["id"])
+
+    if len(cross_room_sub_ids) >= 2:
+        last_room = room_results[-1]
+        last_quest_list = last_room["quest_list"]
+        last_id_offset = last_room["room_idx"] * 1000
+        global_multi = {
+            "id": f"r{last_room['room_idx']}_q_global_multi",
+            "type": "multi_step",
+            "title": f"The {faction_name} Unraveled" if faction_name else "The Grand Quest",
+            "description": (
+                f"Follow the trail of the {faction_name} across all regions "
+                "to uncover their ultimate plan."
+            ) if faction_name else "A quest spanning all regions of the world.",
+            "giver_npc_id": last_quest_list[0]["giver_npc_id"] if last_quest_list else 100 + last_id_offset,
+            "room_id": last_room["room_id"],
+            "is_story_quest": True,
+            "reward": {
+                "xp": 100,
+                "story_info": f"The {faction_name}'s plan is laid bare." if faction_name else "A grand revelation.",
+            },
+            "failure_penalty": {"hp_damage": 0, "hunger_damage": 0, "thirst_damage": 0},
+            "sub_quest_ids": cross_room_sub_ids,
+            "current_step": 0,
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+        last_quest_list.append(global_multi)
+        logger.info("Cross-room multi-step quest created: %s (%d sub-quests)",
+                     global_multi["title"], len(cross_room_sub_ids))
+
+        # Re-write the last room's quest file
+        quest_path = os.path.join(last_room.get("room_dir",
+                                  os.path.join(DATA_DIR, "rooms", last_room["room_id"])),
+                                  "quests.json")
+        if os.path.exists(os.path.dirname(quest_path)):
+            try:
+                with open(quest_path, "w") as f:
+                    json.dump(last_quest_list, f, indent=2)
+            except (TypeError, ValueError) as e:
+                logger.error("Failed to rewrite quests.json for cross-room linking: %s", e)
 
 
 def _step1_generate_story(story_seed: str, num_rooms: int,
@@ -1372,8 +1457,10 @@ async def _async_generate_items(bible: WorldBible, room_id: str,
                                 env_type: str, env_name: str,
                                 room_level: int) -> dict | None:
     """Async wrapper for item generation that writes to Bible."""
+    story_context = bible.get_cumulative_context(room_id)
     generated = await asyncio.to_thread(
         _llm_generate_items, env_type, env_name, room_level=room_level,
+        story_context=story_context,
     )
     if generated:
         for item_id, item_data in generated.items():
@@ -1395,7 +1482,7 @@ async def _async_generate_npcs(bible: WorldBible, room_id: str,
     """Async wrapper for NPC generation that writes backstories to Bible."""
     npc_pool = []
     npc_id_counter = 100 + id_offset
-    story_context = bible.get_story_context(room_id)
+    story_context = bible.get_cumulative_context(room_id)
 
     for zone_x, zone_y in npc_zones:
         zone_npcs = []
@@ -1486,7 +1573,7 @@ async def _async_generate_monsters(bible: WorldBible, room_id: str,
                                    env_type: str, env_name: str,
                                    room_level: int) -> list[dict]:
     """Async wrapper for monster generation using Bible context."""
-    story_context = bible.get_story_context(room_id)
+    story_context = bible.get_cumulative_context(room_id)
     try:
         from src.generate.generators.llm_primitives import generate_monster_primitive
         monsters = await asyncio.to_thread(
@@ -1509,82 +1596,96 @@ async def _async_generate_monsters(bible: WorldBible, room_id: str,
     return []
 
 
-async def _step2_generate_entities(bible: WorldBible, layouts: list[dict]) -> dict:
-    """Step 2: Parallel async entity generation for all rooms.
+async def _step2_generate_room_entities(bible: WorldBible, layout: dict) -> dict:
+    """Generate entities for a SINGLE room in parallel via asyncio.
 
-    Runs items, NPCs, monsters per room AND player classes in parallel via
-    asyncio.gather. Each generator reads Bible context and writes back.
+    Items, NPCs, and monsters for this room run concurrently, each reading
+    the Bible (which already contains all previous rooms' content).
+    """
+    room_id = layout["room_id"]
+    env_type = layout["environment"]
+    env_name = layout["environment_name"]
+    room_level = layout["room_level"]
+    npc_zones = layout["npc_zones"]
+    open_spaces = list(layout["open_spaces"])
+    id_offset = layout["id_offset"]
+
+    tasks = [
+        _async_generate_items(bible, room_id, env_type, env_name, room_level),
+        _async_generate_npcs(bible, room_id, env_type, env_name,
+                             npc_zones, open_spaces, id_offset),
+        _async_generate_monsters(bible, room_id, env_type, env_name, room_level),
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    entities: dict = {}
+    labels = ["items", "npc_pool", "monsters"]
+    for label, result in zip(labels, results):
+        if isinstance(result, Exception):
+            logger.warning("Async %s gen failed (room=%s): %s", label, room_id, result)
+            entities[label] = [] if label != "items" else None
+        else:
+            entities[label] = result if result is not None else ([] if label != "items" else None)
+
+    return entities
+
+
+async def _step2_sequential_rooms(bible: WorldBible, layouts: list[dict]) -> dict:
+    """Step 2: Sequential room-by-room entity generation.
+
+    Rooms generate SEQUENTIALLY so that each room's Bible context includes
+    all previous rooms' generated content. Entities WITHIN each room still
+    run in parallel via asyncio.gather.
+
+    Also generates player classes (global) alongside the first room.
 
     Returns dict with:
       - "player_classes": list of PlayerClass objects
       - "room_entities": {room_id: {"items": ..., "npc_pool": ...}}
     """
-    logger.info("=== Step 2: Parallel Entity Generation ===")
+    logger.info("=== Step 2: Sequential Room-by-Room Entity Generation ===")
 
     first_layout = layouts[0] if layouts else {}
     first_env = first_layout.get("environment", "forest")
     first_env_name = first_layout.get("environment_name", "Unknown")
 
-    # Build all async tasks: classes + (items, NPCs, monsters) per room
-    task_keys = []  # Track what each task index corresponds to
-    tasks = []
+    room_entities: dict = {}
+    player_classes: list = []
 
-    # Global: player classes
-    tasks.append(_async_generate_classes(bible, first_env, first_env_name))
-    task_keys.append(("classes", None))
-
-    for layout in layouts:
+    for room_idx, layout in enumerate(layouts):
         room_id = layout["room_id"]
-        env_type = layout["environment"]
-        env_name = layout["environment_name"]
-        room_level = layout["room_level"]
-        npc_zones = layout["npc_zones"]
-        open_spaces = list(layout["open_spaces"])  # copy to avoid mutation issues
-        id_offset = layout["id_offset"]
+        logger.info("--- Room %d/%d: %s (%s) ---",
+                     room_idx + 1, len(layouts),
+                     layout["environment"], layout["environment_name"])
 
-        # Per-room items
-        tasks.append(_async_generate_items(
-            bible, room_id, env_type, env_name, room_level,
-        ))
-        task_keys.append(("items", room_id))
+        if room_idx == 0:
+            # First room: generate classes in parallel with room entities
+            class_task = _async_generate_classes(bible, first_env, first_env_name)
+            room_task = _step2_generate_room_entities(bible, layout)
+            class_result, room_result = await asyncio.gather(
+                class_task, room_task, return_exceptions=True,
+            )
+            if isinstance(class_result, Exception):
+                logger.warning("Class gen failed: %s", class_result)
+            else:
+                player_classes = class_result or []
+            if isinstance(room_result, Exception):
+                logger.warning("Room 0 entity gen failed: %s", room_result)
+                room_result = {"items": None, "npc_pool": [], "monsters": []}
+        else:
+            room_result = await _step2_generate_room_entities(bible, layout)
 
-        # Per-room NPCs
-        tasks.append(_async_generate_npcs(
-            bible, room_id, env_type, env_name,
-            npc_zones, open_spaces, id_offset,
-        ))
-        task_keys.append(("npcs", room_id))
+        room_entities[room_id] = room_result
 
-        # Per-room monsters
-        tasks.append(_async_generate_monsters(
-            bible, room_id, env_type, env_name, room_level,
-        ))
-        task_keys.append(("monsters", room_id))
+        # Persist Bible after each room so the next room sees updated content
+        bible.persist(BIBLE_PATH)
+        logger.info("Bible persisted after room %d (%d NPCs, %d items, %d monsters in Bible).",
+                     room_idx,
+                     len(bible.rooms.get(room_id, RoomBible(environment="")).npcs),
+                     len(bible.rooms.get(room_id, RoomBible(environment="")).items),
+                     len(bible.rooms.get(room_id, RoomBible(environment="")).monsters))
 
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Unpack results
-    player_classes = []
-    room_entities = {}
-
-    for i, result in enumerate(results):
-        key_type, room_id = task_keys[i]
-        if isinstance(result, Exception):
-            logger.warning("Async %s gen failed (room=%s): %s", key_type, room_id, result)
-            continue
-
-        if key_type == "classes":
-            player_classes = result or []
-        elif key_type == "items":
-            room_entities.setdefault(room_id, {})["items"] = result
-        elif key_type == "npcs":
-            room_entities.setdefault(room_id, {})["npc_pool"] = result or []
-        elif key_type == "monsters":
-            room_entities.setdefault(room_id, {})["monsters"] = result or []
-
-    # Persist Bible after Step 2
-    bible.persist(BIBLE_PATH)
-    logger.info("World Bible updated after entity generation (%d rooms, %d classes).",
+    logger.info("World Bible updated after sequential entity generation (%d rooms, %d classes).",
                 len(room_entities), len(player_classes))
 
     return {"player_classes": player_classes, "room_entities": room_entities}
@@ -1603,14 +1704,18 @@ def _llm_generate_npc_backstory(personality: dict, story_context: str) -> str:
 
 
 def generate_world():
-    """Main generation pipeline. Two-step Bible-driven architecture.
+    """Main generation pipeline. Bible-driven sequential room architecture.
 
     Flow:
       1. Step 1 (sequential): Generate story arc + story entities → World Bible
       2. Room layouts (sequential, fast): Maze structure, zones, positions
-      3. Step 2 (parallel via asyncio): Items, NPCs, monsters, player classes
-      4. Room content (sequential): Events, quests, dialogue, file writes
-      5. Portraits, manifest, legacy compat
+      3. For each room SEQUENTIALLY:
+         a. Generate entities in parallel (items, NPCs, monsters read Bible w/ prior rooms)
+         b. Generate room content (events, quests, dialogue — read Bible)
+         c. Write back to Bible, persist
+      4. Multi-step quest linking (reads full Bible with all rooms)
+      5. Editor agent pass (cross-room coherence check)
+      6. Summary agent + portraits
     """
     logger.info("=== MazeWorld World Generator ===")
     logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
@@ -1648,8 +1753,8 @@ def generate_world():
             bible.rooms[room_id].environment = layout["environment"]
         layouts.append(layout)
 
-    # === STEP 2: Parallel async entity generation ===
-    step2_result = asyncio.run(_step2_generate_entities(bible, layouts))
+    # === STEP 2 + ROOM CONTENT: Sequential room-by-room generation ===
+    step2_result = asyncio.run(_step2_sequential_rooms(bible, layouts))
     player_classes = step2_result["player_classes"]
     room_entities = step2_result["room_entities"]
 
@@ -1662,7 +1767,8 @@ def generate_world():
     class_data_list = [pc.model_dump() for pc in player_classes]
     logger.info("Generated %d player classes.", len(player_classes))
 
-    # === ROOM CONTENT (events, quests, files — depends on entities) ===
+    # Room content generation (events, quests, files) — sequential,
+    # each room reads Bible with all prior rooms' entities.
     report = ValidationReport()
     room_results = []
     for layout in layouts:
@@ -1673,12 +1779,22 @@ def generate_world():
 
         result = _generate_room_content(
             layout, num_rooms, story, npc_pool, generated_items,
-            report=report,
+            bible=bible, report=report,
         )
+
+        # Write room's encounters/quests back to Bible for subsequent rooms
+        if bible and room_id in bible.rooms:
+            for evt in result.get("event_list", []):
+                bible.rooms[room_id].encounters.append(evt["id"])
+            for qst in result.get("quest_list", []):
+                bible.rooms[room_id].quests.append(qst["id"])
+            bible.persist(BIBLE_PATH)
+
         room_results.append(result)
 
-    # === World Editor cross-validation (PDR Phase 2) ===
-    from src.generate.world_editor import cross_validate
+    # === Cross-room multi-step quest linking ===
+    # Now that the full Bible exists with all rooms, link quests across rooms
+    # so multi-step quests can reference entities from previous rooms.
     all_npc_pool = []
     all_event_list = []
     all_quest_list = []
@@ -1688,6 +1804,22 @@ def generate_world():
         all_event_list.extend(rr["event_list"])
         all_quest_list.extend(rr["quest_list"])
         all_item_placements.extend(rr["item_placements"])
+
+    if len(room_results) > 1:
+        _link_cross_room_quests(room_results, bible, story)
+
+    # === Editor agent pass — cross-room coherence check ===
+    from src.generate.world_editor import editor_coherence_check
+    editor_issues = editor_coherence_check(bible, room_results)
+    if editor_issues:
+        logger.warning("Editor agent found %d coherence issues:", len(editor_issues))
+        for issue in editor_issues:
+            logger.warning("  - %s", issue)
+    else:
+        logger.info("Editor agent coherence check passed.")
+
+    # === World Editor cross-validation (PDR Phase 2) ===
+    from src.generate.world_editor import cross_validate
     xval_issues = cross_validate(
         bible, all_npc_pool, all_event_list, all_quest_list, all_item_placements,
     )

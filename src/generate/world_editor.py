@@ -340,3 +340,58 @@ def gameplay_audit(
             })
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Editor Agent — light cross-room coherence check (Step 5)
+# ---------------------------------------------------------------------------
+
+
+def editor_coherence_check(
+    bible: WorldBible,
+    room_results: list[dict],
+) -> list[str]:
+    """Light editor agent pass that reads the full Bible and checks cross-room coherence.
+
+    Flags:
+    - Duplicate NPC names across rooms
+    - Rooms with no story quests
+    - Story escalation not increasing across rooms
+    - Empty rooms (no events or quests)
+    """
+    issues: list[str] = []
+
+    # Check for duplicate NPC names across rooms
+    npc_names_seen: dict[str, str] = {}  # name → first room_id
+    for rid, room in bible.rooms.items():
+        for npc in room.npcs:
+            if npc.name and npc.name in npc_names_seen:
+                issues.append(
+                    f"Duplicate NPC name '{npc.name}' in {rid} "
+                    f"(first seen in {npc_names_seen[npc.name]})"
+                )
+            elif npc.name:
+                npc_names_seen[npc.name] = rid
+
+    # Check escalation across rooms
+    beats = bible.story.beats
+    if len(beats) >= 2:
+        for i in range(1, len(beats)):
+            if beats[i].escalation < beats[i - 1].escalation:
+                issues.append(
+                    f"Story escalation decreases from room {i - 1} "
+                    f"({beats[i - 1].escalation}) to room {i} ({beats[i].escalation})"
+                )
+
+    # Check for empty rooms
+    for rr in room_results:
+        rid = rr.get("room_id", "?")
+        if not rr.get("event_list"):
+            issues.append(f"Room {rid} has no events")
+        if not rr.get("quest_list"):
+            issues.append(f"Room {rid} has no quests")
+        story_quests = [q for q in rr.get("quest_list", []) if q.get("is_story_quest")]
+        if not story_quests:
+            issues.append(f"Room {rid} has no story quests — narrative continuity may suffer")
+
+    return issues

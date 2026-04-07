@@ -1,4 +1,5 @@
 import json
+from config import STORY_CONTEXT_LIMIT
 from src.prompts.base import PromptSet, LLMRequest
 
 
@@ -55,9 +56,10 @@ class ClaudePromptSet(PromptSet):
         system = identity
         if story_context:
             system += (
-                f"\n\nWorld context you are aware of:\n{story_context}\n"
-                "Weave this knowledge naturally into conversation when relevant — "
-                "gossip, warnings, rumors, or opinions about the faction and events."
+                f"\n\nWorld context you are aware of:\n{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Draw on this knowledge naturally — gossip, warnings, faction opinions, "
+                "rumors about events — but keep each response to 1-3 sentences. "
+                "Reference specifics (names, places, events) rather than vague allusions."
             )
         return LLMRequest(
             system=system,
@@ -105,14 +107,25 @@ class ClaudePromptSet(PromptSet):
             max_tokens=10,
         )
 
-    def event_generation(self, env: str, env_name: str, event_type: str) -> LLMRequest:
+    def event_generation(self, env: str, env_name: str, event_type: str,
+                         story_context: str = "") -> LLMRequest:
+        ctx_suffix = ""
+        if story_context:
+            ctx_suffix = (
+                f"\n\nWorld context (use to name and describe encounters using the world's "
+                f"lore — faction creatures, environmental hazards tied to the story):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Be information-dense: every name and description should reinforce "
+                "the world's lore and environment. Do not pad or ramble."
+            )
         if event_type == "combat":
             return LLMRequest(
                 system=(
                     "You generate combat encounter descriptions for a fantasy game. "
                     "Given an environment, respond with ONLY a JSON object with keys: "
                     "name, description, difficulty (1-5), damage_type (health|hunger|thirst), "
-                    "damage_range ([min, max]). Keep it thematic."
+                    "damage_range ([min, max]). Name and describe encounters using the "
+                    "world's lore when provided — faction creatures, story-relevant hazards."
                 ),
                 examples=[
                     (
@@ -121,7 +134,7 @@ class ClaudePromptSet(PromptSet):
                                     "difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}),
                     ),
                 ],
-                user_message=f"environment: '{env}', name: '{env_name}'",
+                user_message=f"environment: '{env}', name: '{env_name}'{ctx_suffix}",
                 max_tokens=100,
             )
         else:
@@ -132,7 +145,9 @@ class ClaudePromptSet(PromptSet):
                     "name, description, difficulty (1-5), choices (array of objects with: "
                     "text, stat_check (health|hunger|thirst|null), tool_attribute "
                     "(bludgeon|cutting|digging|climbing|null), dc (number), auto_success (bool)). "
-                    "Include 2-3 choices, one should be a safe 'walk away' option."
+                    "Include 2-3 choices, one should be a safe 'walk away' option. "
+                    "Name and describe puzzles using the world's lore when provided — "
+                    "faction mechanisms, story-relevant obstacles."
                 ),
                 examples=[
                     (
@@ -148,31 +163,39 @@ class ClaudePromptSet(PromptSet):
                         }),
                     ),
                 ],
-                user_message=f"environment: '{env}', name: '{env_name}'",
+                user_message=f"environment: '{env}', name: '{env_name}'{ctx_suffix}",
                 max_tokens=250,
             )
 
     def quest_generation(self, env: str, env_name: str,
                          available_npcs: list[dict], available_items: list[dict],
-                         available_events: list[dict], quest_type: str) -> LLMRequest:
-        context = json.dumps({
+                         available_events: list[dict], quest_type: str,
+                         story_context: str = "") -> LLMRequest:
+        ctx_data: dict = {
             "environment": env, "environment_name": env_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
-        })
+        }
+        if story_context:
+            ctx_data["world_bible_context"] = story_context[:STORY_CONTEXT_LIMIT]
+        context = json.dumps(ctx_data)
         return LLMRequest(
             system=(
                 "You generate quests for a fantasy game. Given context about available NPCs, "
-                "items, and events, respond with ONLY a JSON object with keys: "
+                "items, events, and world lore, respond with ONLY a JSON object with keys: "
                 "title, description, giver_npc_id (int from available NPCs). "
                 "For fetch quests also include target_items: [{item_id, count}]. "
                 "For escort quests include escort_npc_id. "
                 "For delivery quests include delivery_item_id and target_npc_id. "
                 "For combat quests include target_event_id. "
                 "For dialogue_gated quests include a simple dialogue_tree with prompt and choices. "
-                "Use ONLY ids from the provided context."
+                "Use ONLY ids from the provided context.\n\n"
+                "Quest titles and descriptions MUST reference the world's faction, environment, "
+                "or story from world_bible_context. Make objectives feel like part of the living "
+                "world, not generic fetch/kill tasks. Be information-dense: every detail should "
+                "add gameplay or lore value. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -197,12 +220,22 @@ class ClaudePromptSet(PromptSet):
             max_tokens=400,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int) -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int,
+                        story_context: str = "") -> LLMRequest:
+        lore_suffix = ""
+        if story_context:
+            lore_suffix = (
+                f"\n\nWorld context (theme items to both the environment AND the world's "
+                f"faction/story — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Be information-dense: item names and descriptions should reinforce "
+                "the world's lore. Do not pad or ramble."
+            )
         return LLMRequest(
             system=(
                 "You generate items for a fantasy video game. Given an environment type, "
                 "environment name, and room level, generate a JSON object with item pools. "
-                "Items MUST be thematic to the environment.\n\n"
+                "Items MUST be thematic to the environment and world lore.\n\n"
                 "Return ONLY a JSON object with these keys:\n"
                 "- food: array of 4 items, each {name, desc, nutrition_value (10-30), health_value (0-15)}\n"
                 "- drink: array of 4 items, each {name, desc, hydration_value (10-30), health_value (0-15)}\n"
@@ -249,7 +282,10 @@ class ClaudePromptSet(PromptSet):
                     }),
                 ),
             ],
-            user_message=f"environment: '{env}', name: '{env_name}', room_level: {room_level}",
+            user_message=(
+                f"environment: '{env}', name: '{env_name}', room_level: {room_level}"
+                + lore_suffix
+            ),
             max_tokens=800,
         )
 
@@ -389,15 +425,19 @@ class ClaudePromptSet(PromptSet):
                                available_npcs: list[dict],
                                available_items: list[dict],
                                available_events: list[dict],
-                               quest_type: str) -> LLMRequest:
-        context = json.dumps({
+                               quest_type: str,
+                               story_context: str = "") -> LLMRequest:
+        ctx_data: dict = {
             "environment": env, "environment_name": env_name,
             "story_beat": story_beat, "faction_name": faction_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
-        })
+        }
+        if story_context:
+            ctx_data["world_bible_context"] = story_context[:STORY_CONTEXT_LIMIT]
+        context = json.dumps(ctx_data)
         return LLMRequest(
             system=(
                 "You generate story-connected quests for a fantasy game. The quest MUST reference "
@@ -409,8 +449,11 @@ class ClaudePromptSet(PromptSet):
                 "For combat quests: target_event_id, target_monster_name. "
                 "For dialogue quests: dc (10-18), dialogue_tree. "
                 "For multi_step: sub_quest_ids (leave empty, will be filled). "
-                "Use ONLY ids from the provided context. "
-                "Make the quest title and description reference the faction and story."
+                "Use ONLY ids from the provided context.\n\n"
+                "The quest title and description MUST reference the faction name, story beat, "
+                "and world_bible_context. Tie the objective directly to the story's conflict — "
+                "not a generic task. Be information-dense: every detail should advance the "
+                "narrative. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -467,7 +510,9 @@ class ClaudePromptSet(PromptSet):
             system=(
                 "You generate monsters for a fantasy dungeon-crawling game room. "
                 "Generate 4-6 monster types themed to the environment.\n\n"
-                f"World context:\n{story_context}\n\n"
+                "World context (use to ground monsters in the world's story, faction, "
+                "and environment — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n\n"
                 "Respond with ONLY a JSON array of monster objects:\n"
                 '[{"name": "...", "species": "...", "description": "...", "backstory": "full lore paragraph", '
                 '"level": N, "hp": N, "ac": N, "damage_type": "physical|fire|water|forest|light|dark", '
@@ -475,9 +520,12 @@ class ClaudePromptSet(PromptSet):
                 '"time_availability": "always|night_only|day_only", '
                 '"abilities": [{"name": "...", "effect_type": "damage|poison|stun", "damage_dice": "1d6", "chance": 0.3}], '
                 '"portrait_prompt": "visual description for pixel art"}]\n\n'
-                "Some monsters should be faction-related if the story context mentions a faction. "
-                "At least 1 monster should be night_only. "
-                "Scale stats to room_level (1=easy, 4=hard)."
+                "Each monster's description and backstory should tie to the faction or "
+                "environment. Scale lore depth to room_level. Some monsters should be "
+                "faction-related if the context mentions a faction. At least 1 monster "
+                "should be night_only. Scale stats to room_level (1=easy, 4=hard). "
+                "Be information-dense: every name, species, and backstory should reinforce "
+                "the world's lore. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -490,8 +538,13 @@ class ClaudePromptSet(PromptSet):
             system=(
                 "You write NPC backstories for a fantasy game. Given NPC details and world context, "
                 "generate a rich backstory paragraph (3-5 sentences) that references the world lore.\n\n"
-                f"World context:\n{story_context}\n\n"
-                "Respond with ONLY the backstory paragraph — no JSON, no labels."
+                "World context (use to ground the backstory in the world's story, faction, "
+                "and environment — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n\n"
+                "Respond with ONLY the backstory paragraph — no JSON, no labels. "
+                "Reference specific world events, faction names, or locations from the "
+                "context. Each sentence should add unique narrative detail — do not pad "
+                "or ramble."
             ),
             examples=[
                 (

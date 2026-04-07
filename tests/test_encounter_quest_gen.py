@@ -136,8 +136,9 @@ class TestDialogueExhaustion:
         result = generate_npc_response(npc, "hello")
         assert "Go away" in result
 
+    @patch("src.utils.conversation_utils.generate", side_effect=RuntimeError("no LLM"))
     @patch("src.utils.conversation_utils.GAME_MODE", "online")
-    def test_non_quest_npc_exhausts_after_6_turns(self):
+    def test_non_quest_npc_exhausts_after_6_turns(self, _mock_gen):
         npc = _make_npc()
         for i in range(6):
             npc.add_turn("user", f"msg {i}")
