@@ -138,14 +138,13 @@ class CombatController:
         if target is None:
             return {"success": False, "message": "No valid target."}
 
-        stat = self.player.resolve_attack_stat()
-        attack_roll = self.player.roll_attack(stat)
+        attack_roll = self.player.roll_attack()
         target_combatant = self._combatant_for(target)
         target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
         dc = target_ac + target.dex_mod
 
         if attack_roll >= dc:
-            damage = self.player.roll_weapon_damage(stat)
+            damage = self.player.roll_weapon_damage()
             target.take_damage(damage)
             self.player.combat_record["damage_dealt"] += damage
             msg = f"You hit {target.name} for {damage} damage! (roll {attack_roll} vs AC {dc})"
@@ -179,14 +178,13 @@ class CombatController:
 
         messages = []
         total_damage = 0
-        stat = self.player.resolve_attack_stat()
         for target in targets:
-            attack_roll = self.player.roll_attack(stat)
+            attack_roll = self.player.roll_attack()
             target_combatant = self._combatant_for(target)
             target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
             dc = target_ac + target.dex_mod
             if attack_roll >= dc:
-                damage = self.player.roll_weapon_damage(stat)
+                damage = self.player.roll_weapon_damage()
                 target.take_damage(damage)
                 total_damage += damage
                 hit_msg = f"Hit {target.name} for {damage}!"

@@ -184,4 +184,109 @@ class EventChecker(BaseChecker):
             if not has_walkaway:
                 issues.append("Puzzle has no walk-away option")
 
+        # Validate time_gate if present
+        time_gate = data.get("time_gate")
+        if time_gate is not None and time_gate not in ("day", "night"):
+            issues.append(f"Invalid time_gate value: {time_gate}")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class NPCChecker(BaseChecker):
+    """Checks NPC data for required fields and theme coherence."""
+
+    REQUIRED_FIELDS = {"id", "name"}
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        issues: list[str] = []
+        npc_id = data.get("id", "?")
+
+        missing = self.REQUIRED_FIELDS - set(data.keys())
+        if missing:
+            issues.append(f"NPC {npc_id}: missing fields: {', '.join(sorted(missing))}")
+
+        if not data.get("name"):
+            issues.append(f"NPC {npc_id}: empty name")
+
+        if data.get("selected") and not data.get("opening_greeting"):
+            issues.append(f"NPC {npc_id}: active NPC missing opening_greeting")
+
+        npc_type = data.get("type", "")
+        valid_types = {"StaticNPC", "RandomNPC", "AggressiveNPC", "MerchantNPC"}
+        if npc_type and npc_type not in valid_types:
+            issues.append(f"NPC {npc_id}: unknown type '{npc_type}'")
+
+        if npc_type == "MerchantNPC" and not data.get("shop_inventory"):
+            issues.append(f"NPC {npc_id}: MerchantNPC missing shop_inventory")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class MonsterChecker(BaseChecker):
+    """Checks monster data for required stats and level scaling."""
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        from src.models.monster import LEVEL_SCALING
+
+        issues: list[str] = []
+        name = data.get("name") or data.get("species") or "?"
+
+        if not data.get("name") and not data.get("species"):
+            issues.append("Monster missing name/species")
+
+        hp = data.get("hp", 0)
+        level = data.get("level", 1)
+        level_key = min(level, max(LEVEL_SCALING.keys()))
+        scaling = LEVEL_SCALING.get(level_key, LEVEL_SCALING[1])
+
+        if hp < scaling["hp"][0] or hp > scaling["hp"][1] * 3:
+            # Allow up to 3x for bosses
+            issues.append(
+                f"Monster {name}: HP {hp} outside expected range "
+                f"{scaling['hp'][0]}-{scaling['hp'][1] * 3} for level {level}"
+            )
+
+        ac = data.get("ac", 10)
+        if ac < scaling["ac"][0] or ac > scaling["ac"][1] + 5:
+            issues.append(
+                f"Monster {name}: AC {ac} outside expected range "
+                f"{scaling['ac'][0]}-{scaling['ac'][1] + 5} for level {level}"
+            )
+
+        if hp <= 0:
+            issues.append(f"Monster {name}: HP must be > 0")
+
+        return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
+
+
+class ItemChecker(BaseChecker):
+    """Checks item data for required fields and category consistency."""
+
+    VALID_CATEGORIES = {"food", "drink", "tool", "weapon", "spell_scroll"}
+
+    def check(self, data: dict, context: dict | None = None) -> CheckResult:
+        issues: list[str] = []
+        name = data.get("name", "?")
+
+        if not data.get("name"):
+            issues.append("Item missing name")
+
+        category = data.get("category", "")
+        if category not in self.VALID_CATEGORIES:
+            issues.append(f"Item {name}: invalid category '{category}'")
+
+        stats = data.get("item_stats", {})
+        if not stats:
+            issues.append(f"Item {name}: missing item_stats")
+
+        if category == "weapon":
+            if not stats.get("attack_dice"):
+                issues.append(f"Item {name}: weapon missing attack_dice")
+        elif category == "tool":
+            if not stats.get("attribute"):
+                issues.append(f"Item {name}: tool missing attribute")
+            uses = stats.get("uses", 0)
+            if uses <= 0:
+                issues.append(f"Item {name}: tool must have uses > 0")
+
         return CheckResult(passed=len(issues) == 0, issues=issues, data=data)

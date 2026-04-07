@@ -376,6 +376,68 @@ class LlamaPromptSet(PromptSet):
         )
 
 
+    def full_story_generation(self, story_seed: str, room_count: int,
+                              environments: list[str]) -> LLMRequest:
+        context = str({
+            "story_seed": story_seed,
+            "room_count": room_count,
+            "environments": environments,
+        })
+        return LLMRequest(
+            system=(
+                "You generate a complete world story for a fantasy game. "
+                "Output JSON: {title, synopsis, faction: {name, description, history, leader}, "
+                "escalation_arc, climax, final_boss_name, final_boss_lore, "
+                "beats: [{room_id, summary, faction_presence, escalation, boss_name, boss_lore}], "
+                "story_npcs: [{name, role, backstory, room_id, personality, job}], "
+                "story_items: [{name, description, lore, room_id}], "
+                "story_monsters: [{name, description, lore, room_id, is_boss, species}]}. "
+                "2-4 NPCs, 1-2 items, 1 boss per room. Full lore paragraphs."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=2000,
+        )
+
+    def monster_generation(self, env: str, env_name: str, room_level: int,
+                           story_context: str) -> LLMRequest:
+        context = str({
+            "environment": env,
+            "environment_name": env_name,
+            "room_level": room_level,
+        })
+        return LLMRequest(
+            system=(
+                "You generate monsters for a fantasy game. "
+                f"World context: {story_context[:300]}\n"
+                "Output a JSON array of 4-6 monster objects: "
+                "[{name, species, description, backstory, level, hp, ac, "
+                "damage_type, elemental_affinity, time_availability (always|night_only|day_only), "
+                "abilities: [{name, effect_type, damage_dice, chance}], portrait_prompt}]"
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=800,
+        )
+
+    def npc_backstory_generation(self, npc_data: dict,
+                                 story_context: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You write NPC backstories for a fantasy game. "
+                f"World context: {story_context[:300]}\n"
+                "Output ONLY a backstory paragraph (3-5 sentences) referencing world lore."
+            ),
+            examples=[
+                (str({"name": "Greta", "job": "blacksmith"}),
+                 "Greta has hammered iron in Gloomhollow for twenty years, ever since "
+                 "the cult drove her family from the surface."),
+            ],
+            user_message=str(npc_data),
+            max_tokens=150,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs for few-shot."""
     examples: list[tuple[str, str]] = []

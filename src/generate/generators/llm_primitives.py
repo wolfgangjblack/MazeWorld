@@ -250,6 +250,55 @@ def _parse_class_array(raw: str) -> list[dict]:
     return []
 
 
+def generate_full_story_primitive(story_seed: str, room_count: int,
+                                  environments: list[str]) -> dict:
+    """Generate the full story arc + story-important entities for the World Bible."""
+    prompts = get_prompt_set()
+    request = prompts.full_story_generation(story_seed, room_count, environments)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_monster_primitive(environment: dict, room_level: int,
+                               story_context: str) -> list[dict]:
+    """Generate environment-themed monsters with Bible context."""
+    prompts = get_prompt_set()
+    env = environment.get("environment", {}).get("type", "city")
+    env_name = environment.get("environment", {}).get("name", "city")
+    request = prompts.monster_generation(env, env_name, room_level, story_context)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_npc_backstory(npc_data: dict, story_context: str) -> str:
+    """Generate a rich backstory paragraph for an NPC using Bible context."""
+    prompts = get_prompt_set()
+    request = prompts.npc_backstory_generation(npc_data, story_context)
+    raw = generate(request)
+    return _extract_response(raw)
+
+
+def _parse_json_array(raw: str) -> list[dict]:
+    """Parse a JSON array from LLM output."""
+    for candidate in [raw]:
+        start = candidate.find("[")
+        end = candidate.rfind("]") + 1
+        if start != -1 and end > start:
+            snippet = candidate[start:end]
+            try:
+                result = json.loads(snippet)
+                if isinstance(result, list):
+                    return result
+            except (json.JSONDecodeError, ValueError):
+                try:
+                    result = ast.literal_eval(snippet)
+                    if isinstance(result, list):
+                        return result
+                except Exception:
+                    pass
+    return []
+
+
 def _extract_response(raw: str) -> str:
     """Extract the usable response from raw LLM output."""
     if "##Output:" in raw:

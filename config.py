@@ -64,6 +64,12 @@ FOG_DIM_EDGE = 1
 ## Day/Night Cycle settings
 # ------------------------------------
 DAY_NIGHT_CYCLE_LENGTH = 200  # total actions per full day cycle
+DAY_NIGHT_REAL_TIME = True  # enable real-time day cycle advancement
+DAY_NIGHT_REAL_TIME_SECONDS = 600  # seconds of wall-clock time per full day cycle (default 10 min)
+
+## Night encounter settings
+# ------------------------------------
+NIGHT_ENCOUNTER_CHANCE = 0.08  # probability of a random night encounter per move at night
 
 ## Audio settings
 # ------------------------------------

@@ -1,0 +1,51 @@
+{
+  "story": {
+    "seed": "",
+    "title": "Test",
+    "synopsis": "",
+    "faction": null,
+    "escalation_arc": [],
+    "climax": "",
+    "final_boss_name": "",
+    "final_boss_lore": "",
+    "key_npc_names": [],
+    "beats": [],
+    "story_npcs": [],
+    "story_items": [],
+    "story_monsters": []
+  },
+  "rooms": {
+    "room_0": {
+      "environment": "forest",
+      "environment_name": "",
+      "level": 1,
+      "story_beat": "",
+      "boss_name": "",
+      "boss_lore": "",
+      "maze_ref": "",
+      "npcs": [],
+      "items": [],
+      "monsters": [],
+      "encounters": [],
+      "quests": [],
+      "gate_encounter_id": ""
+    },
+    "room_1": {
+      "environment": "cave",
+      "environment_name": "",
+      "level": 2,
+      "story_beat": "",
+      "boss_name": "",
+      "boss_lore": "",
+      "maze_ref": "",
+      "npcs": [],
+      "items": [],
+      "monsters": [],
+      "encounters": [],
+      "quests": [],
+      "gate_encounter_id": ""
+    }
+  },
+  "player_classes": [],
+  "entity_index": {}
+}

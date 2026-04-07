@@ -18,6 +18,7 @@ class NPC(BaseModel):
     hobby: Optional[str] = None
     personality: Optional[str] = None
     description: Optional[str] = None
+    backstory: Optional[str] = None  # Full lore paragraph referencing Bible lore
     environment: Optional[str] = None
     environment_name: Optional[str] = None
     identity: Optional[str] = None
@@ -28,6 +29,10 @@ class NPC(BaseModel):
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
+    finished_dialogue: str = "I have nothing more to say."
+    dialogue_exhausted: bool = False
+    max_dialogue_turns: int = 10
+    availability: Optional[str] = None  # "day" | "night" | "always" | None
     color: Tuple[int, int, int] = (0, 255, 0)
     move_interval: int = 5000
     last_move_time: int = 0
