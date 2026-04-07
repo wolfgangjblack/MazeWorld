@@ -146,9 +146,10 @@ class TestWeaponSoftRestriction:
         expected = (luck_mod + str_mod) // 2
         assert bonus == expected
 
-    def test_no_weapon_returns_zero(self):
+    def test_no_weapon_returns_str_mod(self):
+        """Unarmed players should get STR modifier as bonus."""
         player = _make_player("warrior")
-        assert weapon_stat_bonus(player, None) == 0
+        assert weapon_stat_bonus(player, None) == player.get_stat_mod("STR")
 
     def test_rogue_with_light_weapon(self):
         player = _make_player("rogue")

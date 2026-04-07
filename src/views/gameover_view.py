@@ -3,6 +3,7 @@
 import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (200, 50, 50)
 TEXT_COLOR = (180, 180, 180)
@@ -68,7 +69,8 @@ class GameOverView:
         # Story paragraph (Bible-driven)
         if self.story_paragraph:
             y += 10
-            y = self._draw_wrapped(self.story_paragraph, 60, y, SCREEN_WIDTH - 120)
+            y = draw_wrapped_text(self.screen, self.story_paragraph, 60, y,
+                                  SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
 
         # Menu options
         y = SCREEN_HEIGHT // 2 + 60
@@ -84,26 +86,6 @@ class GameOverView:
             surf = self.font.render(f"{prefix}{item}", True, color)
             self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y))
             y += 40
-
-    def _draw_wrapped(self, text: str, x: int, y: int, max_w: int) -> int:
-        words = text.split()
-        lines: list[str] = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if self.small_font.size(test)[0] <= max_w:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        for line in lines:
-            surf = self.small_font.render(line, True, TEXT_COLOR)
-            self.screen.blit(surf, (x, y))
-            y += self.small_font.get_linesize()
-        return y
 
     def handle_input(self, event) -> str | None:
         """Returns 'load' or 'quit_to_start', or None."""

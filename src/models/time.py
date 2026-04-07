@@ -25,7 +25,6 @@ PERIOD_SEQUENCE = [
 
 # Real-time: full cycle duration in milliseconds (~16 minutes)
 FULL_CYCLE_MS = 16 * 60 * 1000  # 960_000 ms
-PHASE_DURATION_MS = 4 * 60 * 1000  # ~4 min per phase (approximate)
 
 
 class DayNightCycle(BaseModel):
@@ -40,9 +39,6 @@ class DayNightCycle(BaseModel):
     # Real-time tracking (ms). Set start_ms on first update().
     elapsed_ms: int = 0
     last_update_ms: int = 0  # last pygame.time.get_ticks value
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def update_realtime(self, current_ms: int) -> None:
         """Call each frame with pygame.time.get_ticks(). Advances elapsed_ms."""

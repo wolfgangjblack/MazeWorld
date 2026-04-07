@@ -79,24 +79,33 @@ WEAPON_CLASS_AFFINITY: dict[str, list[str]] = {
 }
 
 
-def weapon_stat_bonus(player, weapon: Weapon | None) -> int:
+def resolve_weapon_stat(weapon: Weapon | None) -> str:
+    """Return the stat governing a weapon. Random weapons pick once."""
+    if weapon is None:
+        return "STR"
+    if weapon.weapon_type == "random":
+        return random.choice(RANDOM_WEAPON_STATS)
+    return weapon.stat
+
+
+def weapon_stat_bonus(player, weapon: Weapon | None,
+                      resolved_stat: str | None = None) -> int:
     """Compute the stat bonus a player gets from their weapon.
 
     - Matching class: full stat modifier from weapon.stat
     - Jester: (stat_mod + LUCK mod) // 2 for any weapon
     - Mismatched class: 0 (can still use the weapon, just no stat bonus)
+
+    Pass *resolved_stat* to avoid re-rolling random weapons.
     """
     if weapon is None:
-        return 0
+        return player.get_stat_mod("STR")
 
     archetype = ""
     if player.player_class:
         archetype = player.player_class.archetype
 
-    stat_name = weapon.stat
-    if weapon.weapon_type == "random":
-        import random as _rng
-        stat_name = _rng.choice(RANDOM_WEAPON_STATS)
+    stat_name = resolved_stat or resolve_weapon_stat(weapon)
 
     if archetype == "jester":
         # Jester uses average of normal stat mod and LUCK mod

@@ -2,6 +2,7 @@
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from src.utils.text_utils import draw_wrapped_text
 
 
 GOLD = (220, 180, 60)
@@ -85,30 +86,12 @@ class VictoryView:
         # Victory narrative (Bible-driven)
         if self.story_paragraph:
             y += 10
-            self._draw_wrapped(self.story_paragraph, panel_x + 20, y,
-                               panel_w - 40)
+            draw_wrapped_text(self.screen, self.story_paragraph,
+                              panel_x + 20, y, panel_w - 40,
+                              self.small_font, STAT_COLOR)
 
         # Hint
         hint = self.small_font.render(
             "Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
-    def _draw_wrapped(self, text: str, x: int, y: int, max_w: int) -> int:
-        words = text.split()
-        lines: list[str] = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if self.small_font.size(test)[0] <= max_w:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        for line in lines:
-            surf = self.small_font.render(line, True, STAT_COLOR)
-            self.screen.blit(surf, (x, y))
-            y += self.small_font.get_linesize()
-        return y

@@ -2,6 +2,7 @@
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (220, 180, 60)
 TEXT_COLOR = (200, 200, 200)
@@ -51,7 +52,8 @@ class StoryView:
         # Synopsis
         self._draw_section("Synopsis", y)
         y += 24
-        y = self._draw_wrapped(self.synopsis, 60, y, SCREEN_WIDTH - 120)
+        y = draw_wrapped_text(self.screen, self.synopsis, 60, y,
+                              SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
         y += 16
 
         # Faction
@@ -59,14 +61,16 @@ class StoryView:
             self._draw_section(f"Faction: {self.faction_name}", y)
             y += 24
             if self.faction_desc:
-                y = self._draw_wrapped(self.faction_desc, 60, y, SCREEN_WIDTH - 120)
+                y = draw_wrapped_text(self.screen, self.faction_desc, 60, y,
+                                      SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
             y += 16
 
         # What lies ahead
         if self.climax:
             self._draw_section("What Lies Ahead", y)
             y += 24
-            y = self._draw_wrapped(self.climax, 60, y, SCREEN_WIDTH - 120)
+            y = draw_wrapped_text(self.screen, self.climax, 60, y,
+                                  SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
             y += 16
 
         # Current room
@@ -74,7 +78,8 @@ class StoryView:
             label = f"Current Area: {self.room_name}" if self.room_name else "Current Area"
             self._draw_section(label, y)
             y += 24
-            self._draw_wrapped(self.room_story_beat, 60, y, SCREEN_WIDTH - 120)
+            draw_wrapped_text(self.screen, self.room_story_beat, 60, y,
+                              SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
 
         # Footer (fixed at bottom, unaffected by scroll)
         hint = self.small_font.render(
@@ -84,26 +89,6 @@ class StoryView:
     def _draw_section(self, text: str, y: int):
         surf = self.small_font.render(text, True, SECTION_COLOR)
         self.screen.blit(surf, (40, y))
-
-    def _draw_wrapped(self, text: str, x: int, y: int, max_w: int) -> int:
-        words = text.split()
-        lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if self.small_font.size(test)[0] <= max_w:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        for line in lines:
-            surf = self.small_font.render(line, True, TEXT_COLOR)
-            self.screen.blit(surf, (x, y))
-            y += self.small_font.get_linesize()
-        return y
 
     def handle_input(self, event) -> str | None:
         """Returns 'back' on Esc or Enter. Up/Down scrolls."""

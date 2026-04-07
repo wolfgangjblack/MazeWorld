@@ -339,25 +339,21 @@ class PlayerCharacter(BaseModel):
     def roll_initiative(self) -> int:
         return random.randint(1, 20) + self.get_stat_mod("DEX")
 
-    def _resolve_weapon_stat(self) -> str:
-        """Return the stat governing the current weapon. Random weapons pick a random stat."""
-        if self.weapon is None:
-            return "STR"
-        if self.weapon.weapon_type == "random":
-            from src.models.weapon import RANDOM_WEAPON_STATS
-            return random.choice(RANDOM_WEAPON_STATS)
-        return self.weapon.stat
+    def resolve_attack_stat(self) -> str:
+        """Resolve the weapon stat once per attack action."""
+        from src.models.weapon import resolve_weapon_stat
+        return resolve_weapon_stat(self.weapon)
 
-    def roll_attack(self) -> int:
+    def roll_attack(self, resolved_stat: str | None = None) -> int:
         """1d20 + weapon stat bonus (class-restricted) + level mod."""
         from src.models.weapon import weapon_stat_bonus
-        bonus = weapon_stat_bonus(self, self.weapon)
+        bonus = weapon_stat_bonus(self, self.weapon, resolved_stat)
         return random.randint(1, 20) + bonus + (self.level - 1)
 
-    def roll_weapon_damage(self) -> int:
+    def roll_weapon_damage(self, resolved_stat: str | None = None) -> int:
         """Roll weapon damage dice + weapon stat bonus (class-restricted)."""
         from src.models.weapon import weapon_stat_bonus
-        bonus = weapon_stat_bonus(self, self.weapon)
+        bonus = weapon_stat_bonus(self, self.weapon, resolved_stat)
         if self.weapon is None:
             return max(1, random.randint(1, 4) + bonus)
         base = self.weapon.roll_damage()

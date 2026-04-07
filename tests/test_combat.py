@@ -754,18 +754,18 @@ class TestDefaultLoot:
 
 class TestJesterRandomWeapon:
     def test_random_weapon_uses_varying_stats(self, jester):
-        """Jester's roll_attack should sometimes use different stats."""
+        """Jester's resolve_attack_stat should sometimes use different stats."""
+        stats_seen = set()
         for seed in range(50):
             random.seed(seed)
-            jester._resolve_weapon_stat()
-            # Can't directly observe which stat was used, so test via RANDOM_WEAPON_STATS
-        assert set(RANDOM_WEAPON_STATS) == {"STR", "DEX", "INT"}
+            stats_seen.add(jester.resolve_attack_stat())
+        assert stats_seen == {"STR", "DEX", "INT"}
 
-    def test_resolve_weapon_stat_random_type(self, jester):
-        """_resolve_weapon_stat with a random weapon returns a stat from the pool."""
+    def test_resolve_attack_stat_random_type(self, jester):
+        """resolve_attack_stat with a random weapon returns a stat from the pool."""
         for seed in range(30):
             random.seed(seed)
-            stat = jester._resolve_weapon_stat()
+            stat = jester.resolve_attack_stat()
             assert stat in RANDOM_WEAPON_STATS
 
 
