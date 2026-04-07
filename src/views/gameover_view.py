@@ -3,6 +3,7 @@
 import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (200, 50, 50)
 TEXT_COLOR = (180, 180, 180)
@@ -15,7 +16,8 @@ MENU_ITEMS = ["Load Game", "Quit to Start"]
 class GameOverView:
     """Game Over screen with brief stats summary and load/quit options."""
 
-    def __init__(self, screen, font, player, has_saves=False, portrait_path=None):
+    def __init__(self, screen, font, player, has_saves=False, portrait_path=None,
+                 story_paragraph=""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
@@ -24,6 +26,7 @@ class GameOverView:
         self.has_saves = has_saves
         self.selected_index = 0
         self.bg_image = None
+        self.story_paragraph = story_paragraph
 
         if portrait_path and os.path.exists(portrait_path):
             try:
@@ -62,6 +65,12 @@ class GameOverView:
             surf = self.small_font.render(line, True, TEXT_COLOR)
             self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y))
             y += 28
+
+        # Story paragraph (Bible-driven)
+        if self.story_paragraph:
+            y += 10
+            y = draw_wrapped_text(self.screen, self.story_paragraph, 60, y,
+                                  SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
 
         # Menu options
         y = SCREEN_HEIGHT // 2 + 60

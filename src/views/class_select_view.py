@@ -3,6 +3,7 @@
 import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from src.utils.text_utils import draw_wrapped_text
 
 
 TITLE_COLOR = (220, 180, 60)
@@ -191,7 +192,7 @@ class ClassSelectView:
 
         # Flavor text
         flavor_y = portrait_y + 190
-        self._draw_wrapped_text(pc.flavor_text, pad, flavor_y, 180, self.small_font, UNSELECTED_COLOR)
+        draw_wrapped_text(self.screen, pc.flavor_text, pad, flavor_y, 180, self.small_font, UNSELECTED_COLOR)
 
         # Weapon
         weapon_y = flavor_y + 50
@@ -285,26 +286,6 @@ class ClassSelectView:
         no_text = self.font.render("[N] No, let me reconsider", True, UNSELECTED_COLOR)
         self.screen.blit(yes_text, ((SCREEN_WIDTH - yes_text.get_width()) // 2, SCREEN_HEIGHT // 2))
         self.screen.blit(no_text, ((SCREEN_WIDTH - no_text.get_width()) // 2, SCREEN_HEIGHT // 2 + 40))
-
-    def _draw_wrapped_text(self, text, x, y, max_w, font, color):
-        """Draw text wrapped to max_w pixels."""
-        words = text.split()
-        lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if font.size(test)[0] <= max_w:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-
-        for i, line in enumerate(lines):
-            surface = font.render(line, True, color)
-            self.screen.blit(surface, (x, y + i * font.get_linesize()))
 
     def handle_input(self, event) -> dict | None:
         """Process keydown event. Returns action dict or None.

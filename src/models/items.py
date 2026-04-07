@@ -2,6 +2,32 @@ import random
 from typing import Optional, Tuple
 from pydantic import BaseModel
 
+# Consumable stat scaling by room level (Phase 4)
+CONSUMABLE_SCALING: dict[int, float] = {
+    1: 1.0,
+    2: 1.3,
+    3: 1.6,
+}
+# Level 4+ gets 2.0x
+_DEFAULT_SCALING = 2.0
+
+
+def consumable_scale_factor(room_level: int) -> float:
+    """Return the scaling multiplier for a given room level."""
+    return CONSUMABLE_SCALING.get(room_level, _DEFAULT_SCALING)
+
+
+def scale_item_stats(stats: "ItemStats", room_level: int) -> "ItemStats":
+    """Return a copy of stats with nutrition/hydration/health/price scaled by room level."""
+    factor = consumable_scale_factor(room_level)
+    return stats.model_copy(update={
+        "nutrition_value": int(stats.nutrition_value * factor),
+        "hydration_value": int(stats.hydration_value * factor),
+        "health_value": int(stats.health_value * factor),
+        "price": int(stats.price * factor),
+    })
+
+
 class ItemStats(BaseModel):
     nutrition_value: int = 0
     hydration_value: int = 0
@@ -33,7 +59,14 @@ class Item(BaseModel):
         return f"You gave away the {self.name}."
     
     def clone(self):
-        return self.model_copy(deep = True)
+        return self.model_copy(deep=True)
+
+    def scaled_clone(self, room_level: int = 1):
+        """Clone this item with stats scaled to the given room level."""
+        copy = self.clone()
+        copy.item_stats = scale_item_stats(copy.item_stats, room_level)
+        copy.room_level = room_level
+        return copy
 
 
 class Food(Item):

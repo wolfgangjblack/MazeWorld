@@ -5,6 +5,8 @@ Supports two modes:
 - **Real-time**: ticks also advance continuously based on wall-clock time,
   controlled by ``real_time_seconds_per_cycle`` (default 600 = 10 minutes
   per full in-game day).  Action ticks still apply on top.
+  A pygame-driven real-time clock (``update_realtime``) also tracks elapsed
+  milliseconds for smooth rendering (full cycle ~16 minutes).
 """
 
 import time as _time
@@ -28,6 +30,9 @@ PERIOD_SEQUENCE = [
     (TimePeriod.NIGHT, 0.35),
 ]
 
+# Real-time: full cycle duration in milliseconds (~16 minutes)
+FULL_CYCLE_MS = 16 * 60 * 1000  # 960_000 ms
+
 
 class DayNightCycle(BaseModel):
     """Day/night cycle with optional real-time advancement.
@@ -37,10 +42,33 @@ class DayNightCycle(BaseModel):
 
     When ``real_time`` is True, ticks also advance continuously based on
     elapsed wall-clock seconds (``real_time_seconds_per_cycle`` seconds
-    = one full day cycle).
+    = one full day cycle).  A pygame-driven millisecond clock
+    (``update_realtime``) is also maintained for smooth rendering.
     """
     ticks: int = 0
-    cycle_length: int = 200
+    cycle_length: int = 200  # kept for action-based compat / serialization
+
+    # Real-time tracking (ms). Set start_ms on first update().
+    elapsed_ms: int = 0
+    last_update_ms: int = 0  # last pygame.time.get_ticks value
+
+    def update_realtime(self, current_ms: int) -> None:
+        """Call each frame with pygame.time.get_ticks(). Advances elapsed_ms."""
+        if self.last_update_ms <= 0:
+            # First call — record the baseline, no delta yet
+            self.last_update_ms = max(1, current_ms)
+            return
+        delta = current_ms - self.last_update_ms
+        if delta > 0:
+            self.elapsed_ms += delta
+        self.last_update_ms = current_ms
+
+    @property
+    def _effective_ms(self) -> int:
+        """Total effective time: real-time + action advances."""
+        # Actions map to ms: each tick = FULL_CYCLE_MS / cycle_length
+        action_ms = int(self.ticks * (FULL_CYCLE_MS / self.cycle_length))
+        return self.elapsed_ms + action_ms
 
     # Real-time mode
     real_time: bool = False
@@ -78,25 +106,25 @@ class DayNightCycle(BaseModel):
 
     @property
     def current_period(self) -> TimePeriod:
-        """Derive the current period from ticks."""
-        position = self.ticks % self.cycle_length
+        """Derive the current period from effective time."""
+        position = self._effective_ms % FULL_CYCLE_MS
         cumulative = 0.0
         for period, fraction in PERIOD_SEQUENCE:
-            cumulative += fraction * self.cycle_length
+            cumulative += fraction * FULL_CYCLE_MS
             if position < cumulative:
                 return period
-        return TimePeriod.NIGHT  # fallback
+        return TimePeriod.NIGHT
 
     @property
     def period_progress(self) -> float:
         """Progress within the current period (0.0 to 1.0)."""
-        position = self.ticks % self.cycle_length
+        position = self._effective_ms % FULL_CYCLE_MS
         cumulative = 0.0
         for period, fraction in PERIOD_SEQUENCE:
-            period_ticks = fraction * self.cycle_length
-            if position < cumulative + period_ticks:
-                return (position - cumulative) / period_ticks
-            cumulative += period_ticks
+            period_ms = fraction * FULL_CYCLE_MS
+            if position < cumulative + period_ms:
+                return (position - cumulative) / period_ms
+            cumulative += period_ms
         return 1.0
 
     @property
@@ -106,7 +134,7 @@ class DayNightCycle(BaseModel):
     @property
     def day_number(self) -> int:
         """Which day it is (starting from 1)."""
-        return self.ticks // self.cycle_length + 1
+        return self._effective_ms // FULL_CYCLE_MS + 1
 
     def advance(self, steps: int = 1) -> None:
         """Advance time by the given number of action steps."""
@@ -118,12 +146,9 @@ class DayNightCycle(BaseModel):
             self._rt_anchor_ticks = self.ticks
 
     def advance_hours(self, hours: int) -> None:
-        """Advance time by a number of in-game hours.
-
-        A full cycle = 24 hours, so 1 hour = cycle_length / 24 ticks.
-        """
-        ticks_per_hour = self.cycle_length / 24
-        self.advance(int(ticks_per_hour * hours))
+        """Advance time by in-game hours. A full cycle = 24 hours."""
+        ms_per_hour = FULL_CYCLE_MS / 24
+        self.elapsed_ms += int(ms_per_hour * hours)
 
     @property
     def previous_period(self) -> TimePeriod:
@@ -146,6 +171,7 @@ class DayNightCycle(BaseModel):
         return {
             "ticks": self.ticks,
             "cycle_length": self.cycle_length,
+            "elapsed_ms": self.elapsed_ms,
             "real_time": self.real_time,
             "real_time_seconds_per_cycle": self.real_time_seconds_per_cycle,
         }
@@ -155,6 +181,7 @@ class DayNightCycle(BaseModel):
         cycle = cls(
             ticks=data.get("ticks", 0),
             cycle_length=data.get("cycle_length", 200),
+            elapsed_ms=data.get("elapsed_ms", 0),
             real_time=data.get("real_time", False),
             real_time_seconds_per_cycle=data.get("real_time_seconds_per_cycle", 600.0),
         )

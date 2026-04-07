@@ -3,6 +3,7 @@
 import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from src.utils.text_utils import draw_wrapped_text
 
 
 TITLE_COLOR = (220, 180, 60)
@@ -63,10 +64,8 @@ class RoomIntroView:
         pygame.draw.rect(self.screen, (80, 80, 120), (box_x, box_y, box_w, box_h), 2)
 
         # Story text wrapped
-        self._draw_wrapped_text(
-            self.story_text, box_x + 15, box_y + 15,
-            box_w - 30, self.font, TEXT_COLOR
-        )
+        draw_wrapped_text(self.screen, self.story_text, box_x + 15, box_y + 15,
+                          box_w - 30, self.font, TEXT_COLOR)
 
         # Continue hint
         hint = self.small_font.render("Press Enter to continue...", True, (150, 150, 150))
@@ -78,21 +77,3 @@ class RoomIntroView:
             return True
         return False
 
-    def _draw_wrapped_text(self, text, x, y, max_w, font, color):
-        words = text.split()
-        lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if font.size(test)[0] <= max_w:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-
-        for i, line in enumerate(lines):
-            surface = font.render(line, True, color)
-            self.screen.blit(surface, (x, y + i * font.get_linesize()))

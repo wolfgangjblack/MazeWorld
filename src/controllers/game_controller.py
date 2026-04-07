@@ -1211,6 +1211,7 @@ class GameController:
     def update(self, current_time):
         """Update game logic (NPC movement, real-time day cycle, etc.)"""
         # Advance real-time day/night cycle
+        self.day_night.update_realtime(current_time)
         prev_period = self.day_night.current_period
         self.day_night.update()
 

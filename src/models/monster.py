@@ -218,6 +218,16 @@ NIGHT_ATTACK_NAMES = {
 
 ELEMENTAL_TYPES = ["fire", "water", "forest", "light", "dark"]
 
+# Night-only monster pools: harder, dark-elemental variants
+NIGHT_MONSTER_POOLS = {
+    "forest":  ["Shadow Wolf", "Night Treant", "Dark Stalker"],
+    "cave":    ["Shade Crawler", "Umbral Slime", "Void Bat"],
+    "dungeon": ["Phantom", "Revenant", "Night Wraith"],
+    "castle":  ["Dark Knight", "Specter", "Midnight Hound"],
+    "house":   ["Nightmare", "Shadow Fiend", "Dark Poltergeist"],
+    "city":    ["Night Stalker", "Shadow Thief", "Dark Prowler"],
+}
+
 # Loot item pools by category (item IDs from items.json)
 LOOT_POOLS = {
     "food":  [200, 201, 202, 203],

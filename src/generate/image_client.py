@@ -54,3 +54,28 @@ def generate_player_portrait(portrait_prompt: str, save_dir: str = "data/portrai
     if get_image_backend().generate_and_save(portrait_prompt, filepath):
         return filepath
     return None
+
+
+def generate_room_portrait(prompt: str, room_id: str,
+                           save_dir: str = "data/portraits/rooms") -> str | None:
+    """Generate a room/environment portrait. Returns filepath or None."""
+    os.makedirs(save_dir, exist_ok=True)
+    filepath = os.path.join(save_dir, f"{room_id}.png")
+    if get_image_backend().generate_and_save(prompt, filepath):
+        return filepath
+    return None
+
+
+def generate_game_over_portrait(prompt: str,
+                                save_dir: str = "data/portraits") -> str | None:
+    """Generate a game-over portrait. Returns filepath or None."""
+    os.makedirs(save_dir, exist_ok=True)
+    filepath = os.path.join(save_dir, "game_over.png")
+    if get_image_backend().generate_and_save(prompt, filepath):
+        return filepath
+    return None
+
+
+def generate_monster_portraits(monster_database: dict,
+                               save_dir: str = "data/portraits/monsters"):
+    generate_portraits(monster_database, save_dir, prefix="mon_")

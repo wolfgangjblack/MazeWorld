@@ -1206,10 +1206,6 @@ def _step1_generate_story(story_seed: str, num_rooms: int,
     # Try the full story primitive first (includes story entities)
     story_data = _llm_generate_full_story(story_seed, num_rooms, environments)
 
-    num_rooms = NUM_ROOMS
-    room_results = []
-    report = ValidationReport()
-
     if not story_data:
         # Fall back to the simpler story primitive
         story_data = _llm_generate_story(story_seed, num_rooms, environments)
@@ -1667,6 +1663,7 @@ def generate_world():
     logger.info("Generated %d player classes.", len(player_classes))
 
     # === ROOM CONTENT (events, quests, files — depends on entities) ===
+    report = ValidationReport()
     room_results = []
     for layout in layouts:
         room_id = layout["room_id"]
@@ -1743,6 +1740,45 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
+    # --- Summary agent: generate narrative text ---
+    from src.models.world_bible import WorldBible, RoomBible
+    from src.generate.summary_agent import (
+        generate_story_synopsis, generate_room_intro,
+        generate_game_over_text, generate_victory_text,
+        build_npc_portrait_prompt,
+        build_class_portrait_prompt, build_room_portrait_prompt,
+        build_game_over_portrait_prompt,
+    )
+    bible_rooms = {}
+    for rr in room_results:
+        rid = rr["room_id"]
+        beat = next((b for b in story.beats if b.room_id == rid), None)
+        bible_rooms[rid] = RoomBible(
+            environment=rr["environment"],
+            level=rr.get("room_idx", 0) + 1,
+            story_beat=beat.summary if beat else "",
+        )
+    bible = WorldBible(story=story, rooms=bible_rooms)
+
+    narrative_data = {}
+    try:
+        narrative_data["synopsis"] = generate_story_synopsis(bible)
+        narrative_data["game_over"] = generate_game_over_text(
+            bible, "the hero", "adventurer")
+        narrative_data["victory"] = generate_victory_text(
+            bible, "the hero", "adventurer")
+        for rr in room_results:
+            rid = rr["room_id"]
+            narrative_data[f"room_intro_{rid}"] = generate_room_intro(
+                bible, rid, rr["environment_name"], rr["environment"])
+        logger.info("Summary agent narrative generated.")
+    except Exception as e:
+        logger.warning("Summary agent narrative generation failed: %s", e)
+
+    narrative_path = os.path.join(DATA_DIR, "narrative.json")
+    with open(narrative_path, "w") as f:
+        json.dump(narrative_data, f, indent=2)
+
     # --- Portraits (all rooms) ---
     portraits_generated = False
     player_portrait_path = None
@@ -1759,7 +1795,13 @@ def generate_world():
         )
 
         for rr in room_results:
+            rid = rr["room_id"]
             npc_db = {str(n["id"]): n for n in rr["npc_pool"] if n.get("selected")}
+            # Enrich NPC portraits with Bible context
+            for npc_data in npc_db.values():
+                if not npc_data.get("portrait_prompt"):
+                    npc_data["portrait_prompt"] = build_npc_portrait_prompt(
+                        npc_data, bible, room_id=rid)
             generate_npc_portraits(npc_db)
             event_db = {e["id"]: e for e in rr["event_list"]}
             generate_event_illustrations(event_db)
@@ -1792,29 +1834,24 @@ def generate_world():
         from src.generate.image_client import generate_class_portraits
         class_portrait_db = {}
         for i, cd in enumerate(class_data_list):
-            prompt = cd.get("portrait_prompt") or f"a {cd['archetype']} character, fantasy pixel art"
+            prompt = cd.get("portrait_prompt") or build_class_portrait_prompt(cd, bible)
             class_portrait_db[str(i)] = {"portrait_prompt": prompt, "name": cd.get("name", "")}
         generate_class_portraits(class_portrait_db)
         for i, cd in enumerate(class_data_list):
             cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
 
-        # Per-room environment portraits
+        # Per-room environment portraits (Bible-enriched)
         for rr in room_results:
-            env = rr["environment"]
+            rid = rr["room_id"]
             portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
-            generate_and_save_image(
-                f"a {env} landscape, fantasy pixel art, wide angle, atmospheric",
-                portrait_path,
-            )
+            room_prompt = build_room_portrait_prompt(rid, bible)
+            generate_and_save_image(room_prompt, portrait_path)
             rr["environment_portrait"] = portrait_path
 
-        # Game over portrait (dark/somber theme)
+        # Game over portrait (Bible-enriched dark/somber theme)
         gameover_portrait_path = os.path.join("data/portraits", "game_over.png")
-        generate_and_save_image(
-            "a fallen hero in darkness, somber memorial scene, "
-            "dark fantasy pixel art, moody lighting, dramatic shadows",
-            gameover_portrait_path,
-        )
+        go_prompt = build_game_over_portrait_prompt(bible)
+        generate_and_save_image(go_prompt, gameover_portrait_path)
 
         # Legacy environment portrait (room 0)
         env_portrait_path = os.path.join("data/portraits", "environment.png")
@@ -1891,6 +1928,7 @@ def generate_world():
         "story_title": story.title,
         "faction_name": story.faction.name if story.faction else "",
         "story_seed": story.seed,
+        "narrative_path": narrative_path,
         "rooms": room_manifest,
         "validation_report": report.to_dict(),
         "gameplay_audit": audit_issues,

@@ -304,6 +304,17 @@ def main():
     game_controller = None
     selected_class = None
     player_name = "Adventurer"
+
+    # Load summary agent narrative data (if available)
+    narrative = {}
+    narrative_path = os.path.join("data", "narrative.json")
+    if os.path.exists(narrative_path):
+        try:
+            import json as _json
+            with open(narrative_path) as _nf:
+                narrative = _json.load(_nf)
+        except Exception:
+            pass
     gameplay_start_time = 0.0
     accumulated_play_time = 0.0
     # Track where load was opened from: "start" or "gameplay"
@@ -382,12 +393,14 @@ def main():
                         if registry.manifest:
                             env_name = registry.manifest.get("environment_name", "Unknown Land")
                             env_type = registry.manifest.get("environment", "unknown")
-                        story_text = (
-                            f"{player_name} the {selected_class.name} "
-                            f"steps into {env_name}, a {env_type} shrouded in mystery. "
-                            "The air hums with untold stories, and the path ahead "
-                            "promises both peril and wonder."
-                        )
+                        story_text = narrative.get("room_intro_room_0", "")
+                        if not story_text:
+                            story_text = (
+                                f"{player_name} the {selected_class.name} "
+                                f"steps into {env_name}, a {env_type} shrouded in mystery. "
+                                "The air hums with untold stories, and the path ahead "
+                                "promises both peril and wonder."
+                            )
                         env_portrait = registry.manifest.get("environment_portrait") if registry.manifest else None
                         room_intro_view = RoomIntroView(
                             screen, font, env_name, env_type, story_text,
@@ -495,6 +508,7 @@ def main():
                 screen, font, game_controller.player,
                 has_saves=_cached_has_saves,
                 portrait_path=go_portrait,
+                story_paragraph=narrative.get("game_over", ""),
             )
             screen_ctrl.push(ScreenState.GAME_OVER)
             return None
@@ -512,7 +526,8 @@ def main():
                 game_stats["rooms_cleared"] += 1
                 player = game_controller.player
                 victory_view = VictoryView(
-                    screen, font, player, game_stats, total_rooms)
+                    screen, font, player, game_stats, total_rooms,
+                    story_paragraph=narrative.get("victory", ""))
                 screen_ctrl.replace(ScreenState.VICTORY)
                 return None
 
@@ -529,7 +544,8 @@ def main():
             player = game_controller.player
             total_rooms = game_controller.total_rooms
             victory_view = VictoryView(
-                screen, font, player, game_stats, total_rooms)
+                screen, font, player, game_stats, total_rooms,
+                story_paragraph=narrative.get("victory", ""))
             screen_ctrl.replace(ScreenState.VICTORY)
             return None
 
@@ -781,14 +797,16 @@ def main():
                 mdata = json.load(f)
             env_name = mdata.get("environment_name", env_name)
             env_type = mdata.get("environment", env_type)
-        # Get story beat for this room
-        story_text = ""
-        story = registry.get_story()
-        if story:
-            beat = next((b for b in story.beats
-                         if b.room_id == f"room_{current_room_index}"), None)
-            if beat:
-                story_text = beat.summary
+        # Get story beat for this room (prefer summary agent narrative)
+        room_key = f"room_intro_room_{current_room_index}"
+        story_text = narrative.get(room_key, "")
+        if not story_text:
+            story = registry.get_story()
+            if story:
+                beat = next((b for b in story.beats
+                             if b.room_id == f"room_{current_room_index}"), None)
+                if beat:
+                    story_text = beat.summary
         if not story_text:
             story_text = f"You enter a new {env_type}, deeper into the dungeon."
 

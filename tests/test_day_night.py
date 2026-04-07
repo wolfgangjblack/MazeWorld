@@ -112,9 +112,12 @@ class TestDayNightCycleModel:
 
     def test_advance_hours(self):
         cycle = DayNightCycle(cycle_length=200)
-        # 1 hour = 200/24 ≈ 8.33 ticks, 6 hours = int(8.33 * 6) = 50
+        # advance_hours now adds to elapsed_ms (real-time model)
+        # 6 hours = 6/24 * FULL_CYCLE_MS = 0.25 * 960000 = 240000ms
+        from src.models.time import FULL_CYCLE_MS
         cycle.advance_hours(6)
-        assert cycle.ticks == 50
+        expected_ms = int((FULL_CYCLE_MS / 24) * 6)
+        assert cycle.elapsed_ms == expected_ms
 
     def test_period_progress(self):
         cycle = DayNightCycle(cycle_length=200)
@@ -145,9 +148,9 @@ class TestTimeAdvancesOnActions:
     def test_rest_advances_time(self):
         """Rest should advance time by hours."""
         cycle = DayNightCycle(cycle_length=200)
-        initial = cycle.ticks
+        initial_ms = cycle.elapsed_ms
         cycle.advance_hours(6)
-        assert cycle.ticks > initial
+        assert cycle.elapsed_ms > initial_ms
 
 
 class TestRestMechanic:
@@ -186,9 +189,9 @@ class TestRestMechanic:
     def test_rest_advances_time(self):
         player = _make_player()
         cycle = DayNightCycle(cycle_length=200)
-        initial_ticks = cycle.ticks
+        initial_ms = cycle.elapsed_ms
         apply_rest(player, 6, cycle)
-        assert cycle.ticks > initial_ticks
+        assert cycle.elapsed_ms > initial_ms
 
     def test_combat_rest(self):
         player = _make_player(health=50)
