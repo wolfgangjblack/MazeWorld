@@ -16,6 +16,16 @@ ARCHETYPE_STAT_ROLES = {
     "jester":  {"primary": ["LUCK"],       "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
 }
 
+# Weapon soft-restriction: only matching archetypes get the stat bonus.
+# Any class CAN equip any weapon, but mismatched classes get 0 stat bonus.
+# Jester uses avg(LUCK mod, weapon stat mod) for any weapon instead.
+ARCHETYPE_WEAPON_TYPES: dict[str, set[str]] = {
+    "warrior": {"heavy", "light"},
+    "mage":    {"simple"},
+    "healer":  {"simple"},
+    "jester":  set(),  # jester uses luck rule for all weapons
+}
+
 
 def stat_modifier(value: int) -> int:
     """D&D-style modifier: (stat - 10) // 2."""
@@ -348,18 +358,34 @@ class PlayerCharacter(BaseModel):
             return random.choice(RANDOM_WEAPON_STATS)
         return self.weapon.stat
 
+    def _weapon_stat_bonus(self, stat: str) -> int:
+        """Return the stat bonus for the current weapon, applying soft-restriction.
+
+        - Matching archetype → full stat modifier
+        - Jester → avg(LUCK mod, weapon stat mod)
+        - Mismatched archetype → 0 (no stat bonus, just base damage)
+        """
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        if archetype == "jester":
+            return self.get_jester_mod(stat)
+        weapon_type = self.weapon.weapon_type if self.weapon else "simple"
+        allowed = ARCHETYPE_WEAPON_TYPES.get(archetype, set())
+        if weapon_type in allowed:
+            return self.get_stat_mod(stat)
+        return 0
+
     def roll_attack(self) -> int:
-        """1d20 + weapon stat mod + level mod."""
+        """1d20 + weapon stat bonus + level mod. Soft-restricted by class."""
         stat = self._resolve_weapon_stat()
-        return random.randint(1, 20) + self.get_stat_mod(stat) + (self.level - 1)
+        return random.randint(1, 20) + self._weapon_stat_bonus(stat) + (self.level - 1)
 
     def roll_weapon_damage(self) -> int:
-        """Roll weapon damage dice + weapon stat modifier."""
+        """Roll weapon damage dice + weapon stat bonus. Soft-restricted by class."""
         stat = self._resolve_weapon_stat()
         if self.weapon is None:
-            return max(1, random.randint(1, 4) + self.get_stat_mod(stat))
+            return max(1, random.randint(1, 4) + self._weapon_stat_bonus(stat))
         base = self.weapon.roll_damage()
-        return max(1, base + self.get_stat_mod(stat))
+        return max(1, base + self._weapon_stat_bonus(stat))
 
     def roll_magic_attack(self) -> int:
         """1d20 + INT (mage) or WIS (healer) + level mod."""

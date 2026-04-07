@@ -18,6 +18,7 @@ class NPC(BaseModel):
     hobby: Optional[str] = None
     personality: Optional[str] = None
     description: Optional[str] = None
+    backstory: Optional[str] = None  # Full lore paragraph referencing Bible lore
     environment: Optional[str] = None
     environment_name: Optional[str] = None
     identity: Optional[str] = None

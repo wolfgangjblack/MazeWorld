@@ -418,6 +418,96 @@ class ClaudePromptSet(PromptSet):
         )
 
 
+    def full_story_generation(self, story_seed: str, room_count: int,
+                              environments: list[str]) -> LLMRequest:
+        context = json.dumps({
+            "story_seed": story_seed,
+            "room_count": room_count,
+            "environments": environments,
+        })
+        return LLMRequest(
+            system=(
+                "You generate a COMPLETE world story for a fantasy dungeon-crawling game. "
+                "This includes the overarching narrative AND all story-important entities.\n\n"
+                "Given a story seed, room count, and environment list, respond with ONLY a JSON object:\n"
+                "{\n"
+                '  "title": "story title",\n'
+                '  "synopsis": "2-3 sentence lore overview — this is the WORLD BIBLE synopsis",\n'
+                '  "faction": {"name": "...", "description": "full faction lore paragraph", "history": "how faction came to power", "leader": "leader name"},\n'
+                '  "escalation_arc": ["room 1 escalation description", ...],\n'
+                '  "climax": "full paragraph describing the final confrontation",\n'
+                '  "final_boss_name": "name",\n'
+                '  "final_boss_lore": "full paragraph: who they are, why they do this, their powers",\n'
+                '  "beats": [{"room_id": "room_0", "summary": "full paragraph story beat", "faction_presence": "...", "escalation": 1, "boss_name": "room boss name or empty", "boss_lore": "why this boss guards this room"}, ...],\n'
+                '  "story_npcs": [{"name": "...", "role": "ally|betrayer|quest_giver|faction_leader", "backstory": "full lore paragraph", "room_id": "room_0", "personality": "...", "job": "..."}, ...],\n'
+                '  "story_items": [{"name": "...", "description": "...", "lore": "full paragraph: why it matters to the story", "room_id": "room_0"}, ...],\n'
+                '  "story_monsters": [{"name": "...", "description": "...", "lore": "full paragraph: its history and role", "room_id": "room_0", "is_boss": true/false, "species": "..."}, ...]\n'
+                "}\n\n"
+                "REQUIREMENTS:\n"
+                "- Generate 2-4 story NPCs (named characters central to the narrative)\n"
+                "- Generate 1-2 story items (artifacts or key items)\n"
+                "- Generate 1 boss per room + the final boss (story_monsters with is_boss=true)\n"
+                "- Every entity needs a FULL LORE PARAGRAPH (3-5 sentences minimum), not just a label\n"
+                "- The story should feel like a living world: interconnected characters, motivations, betrayals\n"
+                "- Beats array: one entry per room, escalation 1-5 increasing"
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=2500,
+        )
+
+    def monster_generation(self, env: str, env_name: str, room_level: int,
+                           story_context: str) -> LLMRequest:
+        context = json.dumps({
+            "environment": env,
+            "environment_name": env_name,
+            "room_level": room_level,
+        })
+        return LLMRequest(
+            system=(
+                "You generate monsters for a fantasy dungeon-crawling game room. "
+                "Generate 4-6 monster types themed to the environment.\n\n"
+                f"World context:\n{story_context}\n\n"
+                "Respond with ONLY a JSON array of monster objects:\n"
+                '[{"name": "...", "species": "...", "description": "...", "backstory": "full lore paragraph", '
+                '"level": N, "hp": N, "ac": N, "damage_type": "physical|fire|water|forest|light|dark", '
+                '"elemental_affinity": "fire|water|forest|light|dark|null", '
+                '"time_availability": "always|night_only|day_only", '
+                '"abilities": [{"name": "...", "effect_type": "damage|poison|stun", "damage_dice": "1d6", "chance": 0.3}], '
+                '"portrait_prompt": "visual description for pixel art"}]\n\n'
+                "Some monsters should be faction-related if the story context mentions a faction. "
+                "At least 1 monster should be night_only. "
+                "Scale stats to room_level (1=easy, 4=hard)."
+            ),
+            examples=[],
+            user_message=context,
+            max_tokens=1200,
+        )
+
+    def npc_backstory_generation(self, npc_data: dict,
+                                 story_context: str) -> LLMRequest:
+        return LLMRequest(
+            system=(
+                "You write NPC backstories for a fantasy game. Given NPC details and world context, "
+                "generate a rich backstory paragraph (3-5 sentences) that references the world lore.\n\n"
+                f"World context:\n{story_context}\n\n"
+                "Respond with ONLY the backstory paragraph — no JSON, no labels."
+            ),
+            examples=[
+                (
+                    json.dumps({"name": "Greta", "job": "blacksmith", "environment": "cave"}),
+                    "Greta has hammered iron in the depths of Gloomhollow for twenty years, "
+                    "ever since the Shadow Cult drove her family from the surface. She forges "
+                    "weapons for the resistance, hiding them in false walls. Her masterwork — "
+                    "a silver-edged blade — was stolen by a cult spy, and she'll pay handsomely "
+                    "to get it back."
+                ),
+            ],
+            user_message=json.dumps(npc_data),
+            max_tokens=200,
+        )
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs."""
     examples: list[tuple[str, str]] = []
