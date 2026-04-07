@@ -1,9 +1,13 @@
 """Generation pipeline orchestrator.
 
-This module replaces world_gen.py as the entry point for content generation.
+Two-step Bible-driven architecture:
+  Step 1 (sequential): Generate full story arc + story entities → World Bible
+  Step 2 (parallel via asyncio): Generate per-room entities, each reading/writing the Bible
+
 The generate_world() function is imported and called from main.py.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -19,6 +23,11 @@ from config import (
 )
 from src.models.maze import Maze
 from src.models.monster import generate_encounter_monsters
+from src.models.world_bible import WorldBible, RoomBible, EntityLore
+from src.models.story import (
+    OverarchingStory, Faction, RoomStoryBeat,
+    StoryNPC, StoryItem, StoryMonster,
+)
 from src.generate.validator import ValidationReport
 from src.registry import registry
 
@@ -58,6 +67,7 @@ QUEST_PATH = os.path.join(DATA_DIR, "quests", "quests.json")
 STORY_PATH = os.path.join(DATA_DIR, "story", "story.json")
 CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
+BIBLE_PATH = os.path.join(DATA_DIR, "world_bible.json")
 
 _FALLBACK_STORY_SEED = "A dark cult is gathering power in the shadows, corrupting the land."
 
@@ -1166,37 +1176,31 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
     }
 
 
-def generate_world():
-    """Main generation pipeline. Writes all data to data/."""
-    logger.info("=== MazeWorld World Generator ===")
-    logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
+def _step1_generate_story(story_seed: str, num_rooms: int,
+                          environments: list[str]) -> tuple[OverarchingStory, WorldBible]:
+    """Step 1: Generate the full story arc + story entities, build the World Bible.
 
-    if WORLD_SEED != -1:
-        random.seed(WORLD_SEED)
+    This runs sequentially before any entity generation. The Bible is populated
+    with story beats, story NPCs, story items, and story monsters (bosses).
+    """
+    logger.info("=== Step 1: Story Generation ===")
 
-    registry.load()
+    # Try the full story primitive first (includes story entities)
+    story_data = _llm_generate_full_story(story_seed, num_rooms, environments)
 
-    num_rooms = NUM_ROOMS
-    room_results = []
+    if not story_data:
+        # Fall back to the simpler story primitive
+        story_data = _llm_generate_story(story_seed, num_rooms, environments)
 
-    # --- Generate first room's maze briefly to get environment for story/classes ---
-    # (We'll re-seed before actual generation so this peek doesn't consume randomness)
-    rng_state = random.getstate()
-
-    # --- Generate overarching story ---
-    from src.data.world_data import ENVIRONMENT_TYPES
-    story_seed = STORY_SEED or _FALLBACK_STORY_SEED
-    environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
-    story_data = _llm_generate_story(story_seed, num_rooms, environments)
-
-    from src.models.story import OverarchingStory, Faction, RoomStoryBeat
     if story_data:
         faction_data = story_data.get("faction", {})
         faction = Faction(
             name=faction_data.get("name", "The Shadow Cult"),
             description=faction_data.get("description", "A mysterious faction."),
+            history=faction_data.get("history", ""),
             leader=faction_data.get("leader", "Unknown"),
         ) if faction_data else None
+
         beats = []
         for bd in story_data.get("beats", []):
             beats.append(RoomStoryBeat(
@@ -1204,8 +1208,10 @@ def generate_world():
                 summary=bd.get("summary", ""),
                 faction_presence=bd.get("faction_presence"),
                 escalation=bd.get("escalation", 1),
+                boss_name=bd.get("boss_name", ""),
+                boss_lore=bd.get("boss_lore", ""),
             ))
-        # Ensure we have a beat per room
+        # Ensure a beat per room
         for ri in range(num_rooms):
             rid = f"room_{ri}"
             if not any(b.room_id == rid for b in beats):
@@ -1214,6 +1220,21 @@ def generate_world():
                     summary=f"The story continues in room {ri + 1}.",
                     escalation=min(5, ri + 1),
                 ))
+
+        # Parse story entities
+        story_npcs = [
+            StoryNPC(**npc) for npc in story_data.get("story_npcs", [])
+            if isinstance(npc, dict) and npc.get("name")
+        ]
+        story_items = [
+            StoryItem(**item) for item in story_data.get("story_items", [])
+            if isinstance(item, dict) and item.get("name")
+        ]
+        story_monsters = [
+            StoryMonster(**mon) for mon in story_data.get("story_monsters", [])
+            if isinstance(mon, dict) and mon.get("name")
+        ]
+
         story = OverarchingStory(
             seed=story_seed,
             title=story_data.get("title", "The Dark Convergence"),
@@ -1222,8 +1243,12 @@ def generate_world():
             escalation_arc=story_data.get("escalation_arc", []),
             climax=story_data.get("climax", "The final confrontation awaits."),
             final_boss_name=story_data.get("final_boss_name", "The Dark Lord"),
+            final_boss_lore=story_data.get("final_boss_lore", ""),
             key_npc_names=story_data.get("key_npc_names", []),
             beats=beats,
+            story_npcs=story_npcs,
+            story_items=story_items,
+            story_monsters=story_monsters,
         )
     else:
         beats = [RoomStoryBeat(
@@ -1239,35 +1264,331 @@ def generate_world():
             faction=Faction(
                 name="The Shadow Cult",
                 description="A secretive order seeking to plunge the world into darkness.",
+                history="Born from the despair of a fallen kingdom.",
                 leader="The Faceless One",
             ),
             escalation_arc=["Whispers of darkness", "The cult reveals itself"],
             climax="Face the cult leader in a final showdown.",
             final_boss_name="The Faceless One",
+            final_boss_lore="Once a revered priest, now consumed by shadow magic.",
             key_npc_names=["The Faceless One"],
             beats=beats,
         )
-    logger.info("Story: %s (faction: %s, %d beats)",
+
+    logger.info("Story: %s (faction: %s, %d beats, %d story NPCs, %d story monsters)",
                 story.title, story.faction.name if story.faction else "none",
-                len(story.beats))
+                len(story.beats), len(story.story_npcs), len(story.story_monsters))
 
-    # --- Generate player classes (global, based on first room environment) ---
+    # Build the World Bible from the story
+    bible = WorldBible(story=story)
+    for ri in range(num_rooms):
+        rid = f"room_{ri}"
+        beat = next((b for b in story.beats if b.room_id == rid), None)
+        env = environments[ri] if ri < len(environments) else "city"
+        bible.rooms[rid] = RoomBible(
+            environment=env,
+            level=ri + 1,
+            story_beat=beat.summary if beat else "",
+            boss_name=beat.boss_name if beat else "",
+            boss_lore=beat.boss_lore if beat else "",
+        )
+        # Populate room with story entities
+        for npc in story.story_npcs:
+            if npc.room_id == rid:
+                bible.add_npc(rid, EntityLore(
+                    entity_type="npc", name=npc.name, room_id=rid,
+                    lore=npc.backstory, tags=["story", npc.role],
+                ))
+        for item in story.story_items:
+            if item.room_id == rid:
+                bible.add_item(rid, EntityLore(
+                    entity_type="item", name=item.name, room_id=rid,
+                    lore=item.lore, tags=["story"],
+                ))
+        for mon in story.story_monsters:
+            if mon.room_id == rid:
+                tags = ["story"]
+                if mon.is_boss:
+                    tags.append("boss")
+                bible.add_monster(rid, EntityLore(
+                    entity_type="monster", name=mon.name, room_id=rid,
+                    lore=mon.lore, tags=tags,
+                ))
+
+    # Persist Bible after Step 1
+    bible.persist(BIBLE_PATH)
+    logger.info("World Bible written to %s", BIBLE_PATH)
+
+    return story, bible
+
+
+def _llm_generate_full_story(story_seed: str, room_count: int,
+                             environments: list[str]) -> dict | None:
+    """Call LLM to generate the full story + story entities. Returns dict or None."""
+    try:
+        from src.generate.generators.llm_primitives import generate_full_story_primitive
+        result = generate_full_story_primitive(story_seed, room_count, environments)
+        if "error" not in result:
+            return result
+    except Exception as e:
+        logger.warning("Full story generation failed: %s. Falling back.", e)
+    return None
+
+
+async def _async_generate_classes(bible: WorldBible, env_type: str,
+                                  env_name: str) -> list:
+    """Async wrapper for class generation that writes to Bible."""
     from src.generate.class_gen import generate_classes
+    player_classes = generate_classes(env_type, env_name)
+    for pc in player_classes:
+        bible.add_player_class(EntityLore(
+            entity_type="player_class",
+            name=pc.name,
+            lore=pc.flavor_text,
+            tags=[pc.archetype],
+        ))
+    return player_classes
+
+
+async def _async_generate_items(bible: WorldBible, room_id: str,
+                                env_type: str, env_name: str,
+                                room_level: int) -> dict | None:
+    """Async wrapper for item generation that writes to Bible."""
+    generated = _llm_generate_items(env_type, env_name, room_level=room_level)
+    if generated:
+        for item_id, item_data in generated.items():
+            bible.add_item(room_id, EntityLore(
+                entity_type="item",
+                entity_id=item_id,
+                name=item_data.get("name", ""),
+                room_id=room_id,
+                lore=item_data.get("desc", ""),
+                tags=[item_data.get("category", "misc")],
+            ))
+    return generated
+
+
+async def _async_generate_npcs(bible: WorldBible, room_id: str,
+                               env_type: str, env_name: str,
+                               npc_zones: list, open_spaces: list,
+                               id_offset: int) -> list[dict]:
+    """Async wrapper for NPC generation that writes backstories to Bible."""
+    npc_pool = []
+    npc_id_counter = 100 + id_offset
+    story_context = bible.get_story_context(room_id)
+
+    for zone_x, zone_y in npc_zones:
+        zone_npcs = []
+        is_merchant_zone = random.random() < MERCHANT_CHANCE
+        for i in range(3):
+            personality = _llm_generate_personality(env_type, env_name)
+            greeting = _llm_generate_greeting(personality)
+            portrait_prompt = _llm_generate_image_desc(personality)
+            identity = _build_identity(personality)
+
+            # Generate backstory using Bible context
+            backstory = _llm_generate_npc_backstory(personality, story_context)
+
+            npc_type = "MerchantNPC" if (is_merchant_zone and i == 0) else random.choice(NPC_TYPES)
+
+            npc_data = {
+                "id": npc_id_counter,
+                "type": npc_type,
+                "name": personality.get("name", f"NPC_{npc_id_counter}"),
+                "job": "merchant" if npc_type == "MerchantNPC" else personality.get("job", "peasant"),
+                "personality": personality.get("personality", "stoic"),
+                "hobby": personality.get("hobby", "walking"),
+                "backstory": backstory,
+                "environment": env_type,
+                "environment_name": env_name,
+                "identity": identity,
+                "description": personality.get("description", ""),
+                "opening_greeting": greeting,
+                "portrait_prompt": portrait_prompt,
+                "profile_image": None,
+                "dialogue_tree": None,
+                "quest_id": None,
+                "zone": [zone_x, zone_y],
+                "selected": False,
+            }
+            if npc_type == "MerchantNPC":
+                shop_items = _generate_shop_inventory(registry)
+                npc_data["shop_inventory"] = shop_items
+
+            zone_npcs.append(npc_data)
+            npc_id_counter += 1
+
+        if is_merchant_zone:
+            selected = zone_npcs[0]
+        else:
+            selected = random.choice(zone_npcs)
+        selected["selected"] = True
+
+        zone_open = [
+            (x, y) for (x, y) in open_spaces
+            if zone_x <= x < zone_x + 10 and zone_y <= y < zone_y + 10
+        ]
+        if zone_open:
+            sx, sy = random.choice(zone_open)
+            selected["x"] = sx
+            selected["y"] = sy
+            if (sx, sy) in open_spaces:
+                open_spaces.remove((sx, sy))
+        else:
+            selected["selected"] = False
+
+        npc_pool.extend(zone_npcs)
+
+    # Write to Bible
+    for npc in npc_pool:
+        if npc.get("selected"):
+            bible.add_npc(room_id, EntityLore(
+                entity_type="npc",
+                entity_id=str(npc["id"]),
+                name=npc["name"],
+                room_id=room_id,
+                lore=npc.get("backstory", ""),
+                tags=[npc["type"]],
+            ))
+
+    return npc_pool
+
+
+async def _async_generate_monsters(bible: WorldBible, room_id: str,
+                                   env_type: str, env_name: str,
+                                   room_level: int) -> list[dict]:
+    """Async wrapper for monster generation using Bible context."""
+    story_context = bible.get_story_context(room_id)
+    try:
+        from src.generate.generators.llm_primitives import generate_monster_primitive
+        monsters = generate_monster_primitive(
+            {"environment": {"type": env_type, "name": env_name}},
+            room_level, story_context,
+        )
+        if monsters:
+            for m in monsters:
+                bible.add_monster(room_id, EntityLore(
+                    entity_type="monster",
+                    name=m.get("name", ""),
+                    room_id=room_id,
+                    lore=m.get("backstory", m.get("description", "")),
+                    tags=["generated"],
+                ))
+            return monsters
+    except Exception as e:
+        logger.warning("Async monster generation failed for %s: %s", room_id, e)
+    return []
+
+
+async def _step2_generate_entities(bible: WorldBible, num_rooms: int,
+                                   environments: list[str],
+                                   room_results: list[dict]) -> list:
+    """Step 2: Parallel async entity generation per room.
+
+    Each generator reads the Bible for context and writes results back.
+    After all generators complete, the Bible is updated and persisted.
+    """
+    logger.info("=== Step 2: Parallel Entity Generation ===")
+
+    # Generate player classes (global, based on first room)
     first_env = environments[0] if environments else "forest"
-    first_env_name = _llm_generate_env_name(first_env)
-    player_classes = generate_classes(first_env, first_env_name)
-    class_data_list = [pc.model_dump() for pc in player_classes]
-    logger.info("Generated %d player classes.", len(player_classes))
+    first_env_name = room_results[0]["environment_name"] if room_results else "Unknown"
 
-    # Restore RNG state and generate rooms
+    # Run class gen + per-room entity gen in parallel
+    tasks = []
+    tasks.append(_async_generate_classes(bible, first_env, first_env_name))
+
+    for rr in room_results:
+        room_id = rr["room_id"]
+        env_type = rr["environment"]
+        env_name = rr["environment_name"]
+        room_level = rr["room_level"]
+        tasks.append(_async_generate_monsters(
+            bible, room_id, env_type, env_name, room_level,
+        ))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.warning("Async entity generation task %d failed: %s", i, result)
+
+    player_classes = results[0] if not isinstance(results[0], Exception) else []
+
+    # Persist Bible after Step 2
+    bible.persist(BIBLE_PATH)
+    logger.info("World Bible updated after entity generation.")
+
+    return player_classes
+
+
+def _llm_generate_npc_backstory(personality: dict, story_context: str) -> str:
+    """Call LLM to generate a backstory for an NPC using Bible context."""
+    try:
+        from src.generate.generators.llm_primitives import generate_npc_backstory
+        return generate_npc_backstory(personality, story_context)
+    except Exception as e:
+        logger.warning("NPC backstory generation failed: %s", e)
+    name = personality.get("name", "someone")
+    job = personality.get("job", "traveler")
+    return f"{name} is a {job} who has seen much of the world."
+
+
+def generate_world():
+    """Main generation pipeline. Two-step Bible-driven architecture."""
+    logger.info("=== MazeWorld World Generator ===")
+    logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
+
+    if WORLD_SEED != -1:
+        random.seed(WORLD_SEED)
+
+    registry.load()
+
+    num_rooms = NUM_ROOMS
+    room_results = []
+
+    # Save RNG state before story generation
+    rng_state = random.getstate()
+
+    # === STEP 1: Generate full story arc + World Bible ===
+    from src.data.world_data import ENVIRONMENT_TYPES
+    story_seed = STORY_SEED or _FALLBACK_STORY_SEED
+    environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
+
+    story, bible = _step1_generate_story(story_seed, num_rooms, environments)
+
+    # Restore RNG state for deterministic room generation
     random.setstate(rng_state)
+    # Re-pick environments with restored state so rooms get same envs
+    environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
 
-    # --- Generate each room ---
+    # --- Generate each room (maze layout, items, NPCs, events, quests) ---
     for room_idx in range(num_rooms):
         room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_idx}")
         os.makedirs(room_dir, exist_ok=True)
         result = _generate_room(room_idx, num_rooms, story, room_dir)
+        # Update Bible room with environment name from maze generation
+        room_id = f"room_{room_idx}"
+        if room_id in bible.rooms:
+            bible.rooms[room_id].environment_name = result["environment_name"]
+            bible.rooms[room_id].environment = result["environment"]
         room_results.append(result)
+
+    # === STEP 2: Parallel async entity generation ===
+    player_classes = asyncio.run(
+        _step2_generate_entities(bible, num_rooms, environments, room_results)
+    )
+    if player_classes:
+        class_data_list = [pc.model_dump() for pc in player_classes]
+    else:
+        # Fallback: generate classes synchronously
+        from src.generate.class_gen import generate_classes
+        first_env = environments[0] if environments else "forest"
+        first_env_name = _llm_generate_env_name(first_env)
+        player_classes = generate_classes(first_env, first_env_name)
+        class_data_list = [pc.model_dump() for pc in player_classes]
+
+    logger.info("Generated %d player classes.", len(player_classes))
 
     # --- Backward-compatible writes (room 0 data to legacy paths) ---
     r0 = room_results[0]
@@ -1448,3 +1769,4 @@ def generate_world():
                      len(rr["quest_list"]))
     logger.info("  Portraits: %s", "yes" if portraits_generated else "no")
     logger.info("  Manifest: %s", MANIFEST_PATH)
+    logger.info("  World Bible: %s", BIBLE_PATH)

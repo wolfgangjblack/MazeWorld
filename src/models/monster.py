@@ -60,6 +60,8 @@ class Monster(BaseModel):
     abilities: List[MonsterAbility] = Field(default_factory=list)
     loot_table: List[LootDrop] = Field(default_factory=list)
     description: str = ""
+    backstory: str = ""  # Full lore paragraph — why it guards this area
+    time_availability: str = "always"  # "always" | "night_only" | "day_only"
     profile_image: Optional[str] = None
     portrait_prompt: Optional[str] = None
 

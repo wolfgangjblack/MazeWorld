@@ -83,3 +83,15 @@ class PromptSet(ABC):
                                available_items: list[dict],
                                available_events: list[dict],
                                quest_type: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def full_story_generation(self, story_seed: str, room_count: int,
+                              environments: list[str]) -> LLMRequest: ...
+
+    @abstractmethod
+    def monster_generation(self, env: str, env_name: str, room_level: int,
+                           story_context: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def npc_backstory_generation(self, npc_data: dict,
+                                 story_context: str) -> LLMRequest: ...
