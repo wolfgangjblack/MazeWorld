@@ -1272,8 +1272,11 @@ def _link_cross_room_quests(room_results: list[dict], bible: WorldBible,
                                   os.path.join(DATA_DIR, "rooms", last_room["room_id"])),
                                   "quests.json")
         if os.path.exists(os.path.dirname(quest_path)):
-            with open(quest_path, "w") as f:
-                json.dump(last_quest_list, f, indent=2)
+            try:
+                with open(quest_path, "w") as f:
+                    json.dump(last_quest_list, f, indent=2)
+            except (TypeError, ValueError) as e:
+                logger.error("Failed to rewrite quests.json for cross-room linking: %s", e)
 
 
 def _step1_generate_story(story_seed: str, num_rooms: int,

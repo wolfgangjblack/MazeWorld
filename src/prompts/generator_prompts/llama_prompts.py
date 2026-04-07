@@ -1,3 +1,4 @@
+from config import STORY_CONTEXT_LIMIT
 from src.prompts.base import PromptSet, LLMRequest
 
 
@@ -65,8 +66,10 @@ class LlamaPromptSet(PromptSet):
         system = identity
         if story_context:
             system += (
-                f"\n\nWorld context you are aware of:\n{story_context}\n"
-                "Weave this knowledge naturally into conversation when relevant."
+                f"\n\nWorld context you are aware of:\n{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Draw on this knowledge naturally — gossip, warnings, faction opinions, "
+                "rumors about events — but keep each response to 1-3 sentences. "
+                "Reference specifics (names, places, events) rather than vague allusions."
             )
         return LLMRequest(
             system=system,
@@ -133,16 +136,22 @@ class LlamaPromptSet(PromptSet):
 
     def event_generation(self, env: str, env_name: str, event_type: str,
                          story_context: str = "") -> LLMRequest:
-        ctx_suffix = (
-            f"\nWorld lore:\n{story_context[:300]}" if story_context else ""
-        )
+        ctx_suffix = ""
+        if story_context:
+            ctx_suffix = (
+                f"\nWorld context (use to name and describe encounters using the world's "
+                f"lore — faction creatures, environmental hazards tied to the story):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Be information-dense. Do not pad or ramble."
+            )
         if event_type == "combat":
             return LLMRequest(
                 system=(
                     "You generate combat encounters for a fantasy game. "
                     "Output a JSON object with: name, description, difficulty (1-5), "
                     "damage_type (health|hunger|thirst), damage_range ([min,max]). "
-                    "Reference the world lore when provided."
+                    "Name and describe encounters using the world's lore when provided — "
+                    "faction creatures, story-relevant hazards."
                 ),
                 examples=[
                     ("environment: 'forest', env_name: 'Shadowleaf'",
@@ -162,7 +171,8 @@ class LlamaPromptSet(PromptSet):
                     "Output a JSON object with: name, description, difficulty (1-5), "
                     "choices (array with: text, stat_check, tool_attribute, dc, auto_success). "
                     "Include 2-3 choices. One should be a safe walk-away option. "
-                    "Reference the world lore when provided."
+                    "Name and describe puzzles using the world's lore when provided — "
+                    "faction mechanisms, story-relevant obstacles."
                 ),
                 examples=[
                     ("environment: 'cave', env_name: 'Gloomhollow'",
@@ -187,7 +197,7 @@ class LlamaPromptSet(PromptSet):
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
         }
         if story_context:
-            ctx_data["world_bible_context"] = story_context[:400]
+            ctx_data["world_bible_context"] = story_context[:STORY_CONTEXT_LIMIT]
         context = str(ctx_data)
         return LLMRequest(
             system=(
@@ -198,7 +208,11 @@ class LlamaPromptSet(PromptSet):
                 "For delivery: add delivery_item_id, target_npc_id. "
                 "For combat: add target_event_id. "
                 "For dialogue_gated: add dialogue_tree with prompt and choices. "
-                "Use ONLY ids from context. Reference the world lore."
+                "Use ONLY ids from context.\n\n"
+                "Quest titles and descriptions MUST reference the world's faction, environment, "
+                "or story from world_bible_context. Make objectives feel like part of the living "
+                "world, not generic fetch/kill tasks. Be information-dense: every detail should "
+                "add gameplay or lore value. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -221,6 +235,15 @@ class LlamaPromptSet(PromptSet):
 
     def item_generation(self, env: str, env_name: str, room_level: int,
                         story_context: str = "") -> LLMRequest:
+        lore_suffix = ""
+        if story_context:
+            lore_suffix = (
+                f"\nWorld context (theme items to both the environment AND the world's "
+                f"faction/story — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n"
+                "Be information-dense: item names and descriptions should reinforce "
+                "the world's lore. Do not pad or ramble."
+            )
         return LLMRequest(
             system=(
                 "You generate environment-themed items for a fantasy game. "
@@ -265,7 +288,7 @@ class LlamaPromptSet(PromptSet):
             ],
             user_message=(
                 f"environment: '{env}', name: '{env_name}', room_level: {room_level}"
-                + (f"\nWorld lore:\n{story_context[:300]}" if story_context else "")
+                + lore_suffix
             ),
             max_tokens=600,
         )
@@ -380,13 +403,17 @@ class LlamaPromptSet(PromptSet):
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
         }
         if story_context:
-            ctx_data["world_bible_context"] = story_context[:400]
+            ctx_data["world_bible_context"] = story_context[:STORY_CONTEXT_LIMIT]
         context = str(ctx_data)
         return LLMRequest(
             system=(
                 "You generate story quests for a fantasy game referencing a faction and story beat. "
                 "Output JSON: {title, description, giver_npc_id, is_story_quest: true}. "
-                "Add type-specific fields. Use ONLY ids from context."
+                "Add type-specific fields. Use ONLY ids from context.\n\n"
+                "The quest title and description MUST reference the faction name, story beat, "
+                "and world_bible_context. Tie the objective directly to the story's conflict — "
+                "not a generic task. Be information-dense: every detail should advance the "
+                "narrative. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -426,12 +453,19 @@ class LlamaPromptSet(PromptSet):
         })
         return LLMRequest(
             system=(
-                "You generate monsters for a fantasy game. "
-                f"World context: {story_context[:300]}\n"
+                "You generate monsters for a fantasy game.\n\n"
+                "World context (use to ground monsters in the world's story, faction, "
+                "and environment — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n\n"
                 "Output a JSON array of 4-6 monster objects: "
                 "[{name, species, description, backstory, level, hp, ac, "
                 "damage_type, elemental_affinity, time_availability (always|night_only|day_only), "
-                "abilities: [{name, effect_type, damage_dice, chance}], portrait_prompt}]"
+                "abilities: [{name, effect_type, damage_dice, chance}], portrait_prompt}]\n\n"
+                "Each monster's description and backstory should tie to the faction or "
+                "environment. Scale lore depth to room_level. At least 1 monster should be "
+                "night_only. Scale stats to room_level (1=easy, 4=hard). "
+                "Be information-dense: every name and backstory should reinforce the world's "
+                "lore. Do not pad or ramble."
             ),
             examples=[],
             user_message=context,
@@ -442,9 +476,13 @@ class LlamaPromptSet(PromptSet):
                                  story_context: str) -> LLMRequest:
         return LLMRequest(
             system=(
-                "You write NPC backstories for a fantasy game. "
-                f"World context: {story_context[:300]}\n"
-                "Output ONLY a backstory paragraph (3-5 sentences) referencing world lore."
+                "You write NPC backstories for a fantasy game.\n\n"
+                "World context (use to ground the backstory in the world's story, faction, "
+                "and environment — reference it, don't repeat it verbatim):\n"
+                f"{story_context[:STORY_CONTEXT_LIMIT]}\n\n"
+                "Output ONLY a backstory paragraph (3-5 sentences). Reference specific "
+                "world events, faction names, or locations from the context. Each sentence "
+                "should add unique narrative detail — do not pad or ramble."
             ),
             examples=[
                 (str({"name": "Greta", "job": "blacksmith"}),

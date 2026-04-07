@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from pydantic import BaseModel, Field
 
+from config import STORY_CONTEXT_LIMIT
 from src.models.story import OverarchingStory
 
 
@@ -53,6 +54,16 @@ class WorldBible(BaseModel):
 
     # --- Read helpers ---
 
+    @staticmethod
+    def room_index(room_id: str) -> int:
+        """Extract the numeric index from a room_id like 'room_0'."""
+        if "_" not in room_id:
+            return 0
+        try:
+            return int(room_id.rsplit("_", 1)[-1])
+        except ValueError:
+            return 0
+
     def get_room(self, room_id: str) -> RoomBible | None:
         return self.rooms.get(room_id)
 
@@ -90,11 +101,14 @@ class WorldBible(BaseModel):
         For room_0 this is the same as get_story_context(). For room_N it
         includes NPCs, items, and monsters generated in rooms 0..N-1 so that
         generators for room N can build on what came before.
+
+        The result is soft-capped at ``STORY_CONTEXT_LIMIT * 2`` characters to
+        avoid unbounded growth in large worlds.
         """
         parts = [self.get_story_context(room_id)]
 
-        room_idx = int(room_id.split("_")[1]) if "_" in room_id else 0
-        for prev_idx in range(room_idx):
+        current_idx = self.room_index(room_id)
+        for prev_idx in range(current_idx):
             prev_id = f"room_{prev_idx}"
             prev_room = self.rooms.get(prev_id)
             if not prev_room:
@@ -116,7 +130,11 @@ class WorldBible(BaseModel):
             if len(prev_parts) > 1:
                 parts.extend(prev_parts)
 
-        return "\n".join(parts)
+        result = "\n".join(parts)
+        max_len = STORY_CONTEXT_LIMIT * 2
+        if len(result) > max_len:
+            result = result[:max_len] + "\n[...earlier rooms truncated]"
+        return result
 
     def get_all_npc_names(self) -> list[str]:
         """Return all NPC names across all rooms."""
