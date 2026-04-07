@@ -157,3 +157,186 @@ def write_world_bible(bible: WorldBible, path: str = WORLD_BIBLE_PATH) -> str:
     logger.info("WorldBible written to %s (%d entities indexed).",
                 path, len(bible.entity_index))
     return path
+
+
+# ---------------------------------------------------------------------------
+# Gameplay Agent — coherence audit (Step 4b)
+# ---------------------------------------------------------------------------
+
+
+def gameplay_audit(
+    bible: WorldBible,
+    npc_pool: list[dict],
+    event_list: list[dict],
+    quest_list: list[dict],
+    item_placements: list[dict],
+) -> list[dict]:
+    """Read the full Bible + all generated content and confirm coherence.
+
+    Checks:
+    - Overarching story + entities are coherent
+    - Items, monsters, quests, multi-step quests make narrative sense
+    - Quest chains are completable and not circular
+    - Story quests exist and reference the faction
+    - Kill quests point to existing combat events
+    - Fetch quests reference items on the map
+    - Time-gated encounters are a reasonable fraction (~20%)
+
+    Returns a list of issue dicts for the manifest:
+    ``[{"severity": "warning"|"error", "message": "...", "entity_id": "..."}]``
+    """
+    issues: list[dict] = []
+
+    npc_ids = {n["id"] for n in npc_pool if n.get("selected")}
+    item_ids_on_map = {p["item_id"] for p in item_placements}
+    quest_ids = {q["id"] for q in quest_list}
+    combat_event_ids = {e["id"] for e in event_list if e.get("type") == "combat"}
+
+    # --- Story coherence ---
+    if not bible.story.title:
+        issues.append({
+            "severity": "warning",
+            "message": "Overarching story has no title",
+            "entity_id": "",
+        })
+
+    faction = bible.story.faction
+    if not faction:
+        issues.append({
+            "severity": "warning",
+            "message": "No faction defined in overarching story",
+            "entity_id": "",
+        })
+
+    story_quests = [q for q in quest_list if q.get("is_story_quest")]
+    if not story_quests:
+        issues.append({
+            "severity": "warning",
+            "message": "No story quests found — story progression may be broken",
+            "entity_id": "",
+        })
+
+    # --- Quest reference integrity ---
+    for quest in quest_list:
+        qid = quest.get("id", "?")
+        qtype = quest.get("type", "")
+
+        giver = quest.get("giver_npc_id")
+        if giver not in npc_ids:
+            issues.append({
+                "severity": "error",
+                "message": f"Quest giver NPC {giver} does not exist",
+                "entity_id": qid,
+            })
+
+        if qtype == "fetch":
+            for ti in quest.get("target_items", []):
+                if ti.get("item_id") not in item_ids_on_map:
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Fetch item {ti.get('item_id')} not on map",
+                        "entity_id": qid,
+                    })
+
+        elif qtype == "combat":
+            target = quest.get("target_event_id")
+            if target and target not in combat_event_ids:
+                issues.append({
+                    "severity": "error",
+                    "message": f"Combat quest target event {target} not found",
+                    "entity_id": qid,
+                })
+
+        elif qtype == "escort":
+            escort_npc = quest.get("escort_npc_id")
+            if escort_npc and escort_npc not in npc_ids:
+                issues.append({
+                    "severity": "error",
+                    "message": f"Escort NPC {escort_npc} does not exist",
+                    "entity_id": qid,
+                })
+
+        elif qtype == "delivery":
+            if quest.get("delivery_item_id") not in item_ids_on_map:
+                issues.append({
+                    "severity": "error",
+                    "message": f"Delivery item {quest.get('delivery_item_id')} not on map",
+                    "entity_id": qid,
+                })
+            if quest.get("target_npc_id") not in npc_ids:
+                issues.append({
+                    "severity": "error",
+                    "message": f"Delivery target NPC {quest.get('target_npc_id')} not found",
+                    "entity_id": qid,
+                })
+
+        # Multi-step chain integrity
+        if qtype == "multi_step":
+            sub_ids = quest.get("sub_quest_ids", [])
+            for sub_id in sub_ids:
+                if sub_id not in quest_ids:
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Multi-step sub-quest {sub_id} not found",
+                        "entity_id": qid,
+                    })
+
+        # Prerequisite chain depth
+        prereq = quest.get("prerequisite_quest_id")
+        if prereq:
+            depth = 0
+            visited = set()
+            check = prereq
+            while check and depth < 10:
+                if check in visited:
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Circular prerequisite chain detected at {check}",
+                        "entity_id": qid,
+                    })
+                    break
+                visited.add(check)
+                parent = next((q for q in quest_list if q["id"] == check), None)
+                if parent is None:
+                    issues.append({
+                        "severity": "error",
+                        "message": f"Prerequisite quest {check} not found",
+                        "entity_id": qid,
+                    })
+                    break
+                check = parent.get("prerequisite_quest_id")
+                depth += 1
+
+    # --- Time-gated encounter ratio ---
+    time_gated = [e for e in event_list if e.get("time_gate")]
+    total_events = len(event_list)
+    if total_events > 0:
+        ratio = len(time_gated) / total_events
+        if ratio > 0.4:
+            issues.append({
+                "severity": "warning",
+                "message": f"Too many time-gated encounters: {len(time_gated)}/{total_events} "
+                           f"({ratio:.0%}), target ~20%",
+                "entity_id": "",
+            })
+
+    # --- Monster presence in combat events ---
+    for event in event_list:
+        if event.get("type") == "combat" and not event.get("monsters"):
+            issues.append({
+                "severity": "error",
+                "message": f"Combat event {event.get('id')} has no monsters",
+                "entity_id": event.get("id", ""),
+            })
+
+    # --- NPC quest assignments ---
+    assigned_quests = {n.get("quest_id") for n in npc_pool if n.get("quest_id")}
+    for qid in assigned_quests:
+        if qid and qid not in quest_ids:
+            issues.append({
+                "severity": "warning",
+                "message": f"NPC assigned to non-existent quest {qid}",
+                "entity_id": qid,
+            })
+
+    return issues

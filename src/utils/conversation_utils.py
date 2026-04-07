@@ -1,16 +1,128 @@
+import logging
+
 from config import GAME_MODE
 from src.prompts import get_prompt_set
+from src.prompts.base import LLMRequest
 from src.generate.llm_client import generate
 
+logger = logging.getLogger(__name__)
 
-def generate_npc_response(npc, player_input: str, story_context: str = "") -> str:
+# LLM failure fallback
+_LLM_FAILURE_RESPONSE = "No... I can not talk about that..."
+
+# Minimum turns before the LLM exhaustion check kicks in
+_LLM_EXHAUSTION_MIN_TURNS = 3
+
+
+def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = None) -> bool:
+    """Use an LLM call to decide if the NPC's dialogue should end.
+
+    Returns True if the LLM judges the conversation should be exhausted.
+    Falls back to False (continue) on any error.
+    """
+    history_text = "\n".join(
+        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}"
+        for t in npc.interaction_history[-6:]
+    )
+
+    quest_info = ""
+    if quest_context:
+        quest_info = (
+            f"Active quest: \"{quest_context.get('title', 'unknown')}\" "
+            f"(type: {quest_context.get('type', '?')}, "
+            f"status: {quest_context.get('status', 'active')}). "
+        )
+
+    request = LLMRequest(
+        system=(
+            "You are a game-master adjudicating NPC dialogue in a fantasy RPG. "
+            "Given the conversation history, decide whether the NPC should end "
+            "the dialogue. Answer ONLY 'yes' or 'no'.\n\n"
+            "Answer 'yes' (exhaust dialogue) if ANY of these are true:\n"
+            "- The quest topic has been fully addressed\n"
+            "- The NPC has nothing more useful to say\n"
+            "- The player is being abusive, off-topic, or not engaging\n"
+            "- The conversation is going in circles\n\n"
+            "Answer 'no' (continue dialogue) if:\n"
+            "- The NPC still has quest-relevant information to share\n"
+            "- The player is actively engaging and making progress"
+        ),
+        user_message=(
+            f"NPC: {npc.name} ({getattr(npc, 'job', 'unknown')} — "
+            f"{getattr(npc, 'personality', 'unknown')})\n"
+            f"{quest_info}\n"
+            f"Recent conversation:\n{history_text}\n\n"
+            f"Player's latest input: \"{player_input}\"\n\n"
+            "Should the NPC end this conversation? (yes/no)"
+        ),
+        max_tokens=10,
+    )
+
+    try:
+        raw = generate(request)
+        answer = raw.strip().lower()
+        return answer.startswith("yes")
+    except Exception as e:
+        logger.warning("LLM exhaustion check failed, using heuristic fallback: %s", e)
+        # Heuristic fallback: non-quest NPCs exhaust after 6+ turns
+        turn_count = len(npc.interaction_history)
+        if turn_count >= 6 and not quest_context:
+            return True
+        return False
+
+
+def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None = None) -> bool:
+    """Check if an NPC's dialogue should be exhausted after a player reply.
+
+    - offline_static: heuristic (dialogue tree end node, turn count)
+    - online / offline_local: LLM call after minimum turns, with heuristic fallback
+    """
+    if getattr(npc, "dialogue_exhausted", False):
+        return True
+
+    turn_count = len(npc.interaction_history)
+    max_turns = getattr(npc, "max_dialogue_turns", 10)
+
+    # Hard limit: too many turns = exhausted
+    if turn_count >= max_turns:
+        return True
+
+    # If quest is completed, NPC has nothing more to say
+    if quest_context and quest_context.get("status") == "completed":
+        return True
+
+    # For offline_static, use simple heuristics (no LLM)
+    if GAME_MODE == "offline_static":
+        tree = getattr(npc, "dialogue_tree", None)
+        if tree and tree.get("_current") == "end":
+            return True
+        return False
+
+    # For online / offline_local: use LLM after a few turns
+    if turn_count >= _LLM_EXHAUSTION_MIN_TURNS:
+        return _llm_check_exhaustion(npc, player_input, quest_context)
+
+    return False
+
+
+def generate_npc_response(npc, player_input: str, story_context: str = "",
+                          quest_context: dict | None = None) -> str:
     """Generate an NPC response.
 
     - First meeting: uses pre-generated opening_greeting if available.
     - Online / offline_local: live LLM for ongoing conversation.
     - Offline_static: returns choices from npc.dialogue_tree (no LLM call).
     - *story_context*: optional story summary (faction, beats) injected into prompts.
+    - *quest_context*: optional quest dict for quest-related NPCs.
+
+    Dialogue exhaustion: after the NPC is done or annoyed, falls back to
+    finished_dialogue text FOREVER (prevents token burn).
     """
+    # If dialogue is already exhausted, always return finished text
+    if getattr(npc, "dialogue_exhausted", False):
+        finished = getattr(npc, "finished_dialogue", "I have nothing more to say.")
+        return f"{npc.name}: {finished}"
+
     is_greeting = not player_input
 
     if not npc.has_met_player:
@@ -24,6 +136,8 @@ def generate_npc_response(npc, player_input: str, story_context: str = "") -> st
             request = prompts.npc_greeting(name=npc.name, identity=npc.identity)
             raw = generate(request)
             response = _extract_response(raw)
+            if not response:
+                response = _LLM_FAILURE_RESPONSE
             npc.add_turn("npc", response)
             npc.has_met_player = True
             if npc.is_appropriate(response):
@@ -31,7 +145,11 @@ def generate_npc_response(npc, player_input: str, story_context: str = "") -> st
             return npc.get_fallback_response()
 
     elif GAME_MODE == "offline_static" and npc.dialogue_tree:
-        return _static_dialogue_response(npc, player_input)
+        result = _static_dialogue_response(npc, player_input)
+        # Check exhaustion after static dialogue
+        if check_dialogue_exhaustion(npc, player_input, quest_context):
+            npc.dialogue_exhausted = True
+        return result
 
     elif is_greeting:
         npc.add_turn("user", f"The player returns to speak with {npc.name}.")
@@ -43,8 +161,13 @@ def generate_npc_response(npc, player_input: str, story_context: str = "") -> st
             player_input="The player returns to speak with you.",
             story_context=story_context,
         )
-        raw = generate(request)
-        response = _extract_response(raw)
+        try:
+            raw = generate(request)
+            response = _extract_response(raw)
+        except Exception:
+            response = _LLM_FAILURE_RESPONSE
+        if not response:
+            response = _LLM_FAILURE_RESPONSE
         npc.add_turn("npc", response)
     else:
         npc.add_turn("user", player_input)
@@ -56,9 +179,18 @@ def generate_npc_response(npc, player_input: str, story_context: str = "") -> st
             player_input=player_input,
             story_context=story_context,
         )
-        raw = generate(request)
-        response = _extract_response(raw)
+        try:
+            raw = generate(request)
+            response = _extract_response(raw)
+        except Exception:
+            response = _LLM_FAILURE_RESPONSE
+        if not response:
+            response = _LLM_FAILURE_RESPONSE
         npc.add_turn("npc", response)
+
+    # Check exhaustion after LLM response
+    if check_dialogue_exhaustion(npc, player_input, quest_context):
+        npc.dialogue_exhausted = True
 
     if npc.is_appropriate(response):
         return f"{npc.name}: {response}"

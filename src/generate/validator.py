@@ -230,4 +230,130 @@ class EventValidator(BaseValidator):
             if not solvable and tool_attrs:
                 reasons.append("Puzzle has no solvable path with available tools")
 
+        # Validate time_gate
+        time_gate = data.get("time_gate")
+        if time_gate is not None and time_gate not in ("day", "night"):
+            reasons.append(f"Invalid time_gate value: {time_gate}")
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class NPCValidator(BaseValidator):
+    """Validates NPC data for completeness and environment coherence."""
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+        npc_id = data.get("id", "?")
+
+        if not data.get("name"):
+            reasons.append(f"NPC {npc_id}: missing name")
+
+        if data.get("selected"):
+            if not data.get("identity"):
+                reasons.append(f"NPC {npc_id}: active NPC missing identity")
+            if not data.get("opening_greeting"):
+                reasons.append(f"NPC {npc_id}: active NPC missing opening_greeting")
+
+        npc_type = data.get("type", "")
+        if npc_type == "MerchantNPC":
+            shop = data.get("shop_inventory", [])
+            if not shop:
+                reasons.append(f"NPC {npc_id}: MerchantNPC has empty shop_inventory")
+            for i, entry in enumerate(shop):
+                if not isinstance(entry, dict):
+                    reasons.append(f"NPC {npc_id}: shop_inventory[{i}] is not a dict")
+                    continue
+                if "item_id" not in entry:
+                    reasons.append(f"NPC {npc_id}: shop_inventory[{i}] missing item_id")
+                if entry.get("price", 0) <= 0:
+                    reasons.append(f"NPC {npc_id}: shop_inventory[{i}] invalid price")
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class MonsterValidator(BaseValidator):
+    """Validates monster data for stat correctness and level scaling."""
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+        name = data.get("name") or data.get("species") or "?"
+
+        if not data.get("name") and not data.get("species"):
+            reasons.append("Monster missing name/species")
+
+        hp = data.get("hp", 0)
+        if hp <= 0:
+            reasons.append(f"Monster {name}: HP must be > 0")
+
+        ac = data.get("ac", 0)
+        if ac < 5:
+            reasons.append(f"Monster {name}: AC {ac} is unreasonably low")
+
+        level = data.get("level", 1)
+        if level < 1:
+            reasons.append(f"Monster {name}: level must be >= 1")
+
+        # Validate abilities
+        for i, ability in enumerate(data.get("abilities", [])):
+            if isinstance(ability, dict):
+                if not ability.get("name"):
+                    reasons.append(f"Monster {name}: ability[{i}] missing name")
+                effect = ability.get("effect_type", "")
+                if effect not in ("damage", "poison", "stun"):
+                    reasons.append(
+                        f"Monster {name}: ability[{i}] unknown effect_type '{effect}'"
+                    )
+
+        return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
+
+
+class ItemValidator(BaseValidator):
+    """Validates item data for category correctness and stat integrity."""
+
+    VALID_CATEGORIES = {"food", "drink", "tool", "weapon", "spell_scroll"}
+
+    def validate(self, data: dict, context: dict | None = None) -> ValidationResult:
+        reasons: list[str] = []
+        name = data.get("name", "?")
+
+        if not data.get("name"):
+            reasons.append("Item missing name")
+
+        category = data.get("category", "")
+        if category not in self.VALID_CATEGORIES:
+            reasons.append(f"Item {name}: invalid category '{category}'")
+
+        stats = data.get("item_stats", {})
+        if not stats:
+            reasons.append(f"Item {name}: missing item_stats")
+            return ValidationResult(passed=False, reasons=reasons, data=data)
+
+        if category == "weapon":
+            dice = stats.get("attack_dice", "")
+            if not dice:
+                reasons.append(f"Item {name}: weapon missing attack_dice")
+            elif "d" not in str(dice):
+                reasons.append(f"Item {name}: weapon attack_dice '{dice}' invalid format")
+            modifier = stats.get("stat_modifier", "")
+            valid_mods = {"STR", "DEX", "INT", "WIS", ""}
+            if modifier and modifier not in valid_mods:
+                reasons.append(f"Item {name}: weapon stat_modifier '{modifier}' invalid")
+
+        elif category == "tool":
+            if not stats.get("attribute"):
+                reasons.append(f"Item {name}: tool missing attribute")
+            uses = stats.get("uses", 0)
+            if uses <= 0:
+                reasons.append(f"Item {name}: tool must have uses > 0")
+
+        elif category in ("food", "drink"):
+            nutrition = stats.get("nutrition_value", 0)
+            hydration = stats.get("hydration_value", 0)
+            health = stats.get("health_value", 0)
+            if nutrition == 0 and hydration == 0 and health == 0:
+                reasons.append(
+                    f"Item {name}: {category} restores nothing "
+                    "(nutrition, hydration, health all 0)"
+                )
+
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)

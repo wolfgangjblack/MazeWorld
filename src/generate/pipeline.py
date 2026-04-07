@@ -695,7 +695,8 @@ def _generate_room_layout(room_idx: int, room_dir: str):
 
 
 def _generate_room_content(layout: dict, num_rooms: int, story,
-                           npc_pool: list, generated_items: dict | None):
+                           npc_pool: list, generated_items: dict | None,
+                           report: ValidationReport | None = None):
     """Generate events, quests, dialogue, and write files for a room.
 
     This is Phase B — runs AFTER async entity generation has produced
@@ -817,7 +818,7 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
         event_data["profile_image"] = None
         event_list.append(event_data)
 
-    _validate_puzzle_tools(event_list, registry)
+    _validate_puzzle_tools(event_list, registry, report=report)
 
     # --- Checker → Validator chain for events ---
     from src.generate.checker import EventChecker
@@ -1053,28 +1054,6 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
             quest_list.append(sel)
             quest_id_counter += 1
 
-    if len(quest_list) >= 3:
-        sub_ids = [q["id"] for q in quest_list[:3]]
-        multi_quest = {
-            "id": f"{event_id_prefix}q_{quest_id_counter:03d}",
-            "type": "multi_step",
-            "title": f"The {faction_name} Conspiracy" if faction_name else "A Grand Adventure",
-            "description": f"Unravel the {faction_name}'s plot through a series of connected tasks." if faction_name else "Complete a chain of connected quests.",
-            "giver_npc_id": quest_list[0]["giver_npc_id"],
-            "room_id": room_id,
-            "is_story_quest": True,
-            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200 + id_offset,
-                       "xp": 50, "story_info": "A crucial revelation about the faction's plans."},
-            "failure_penalty": {"hp_damage": 10, "hunger_damage": 5, "thirst_damage": 5},
-            "sub_quest_ids": sub_ids,
-            "current_step": 0,
-            "prerequisite_quest_id": None,
-            "portrait_prompt": None,
-            "profile_image": None,
-        }
-        quest_list.append(multi_quest)
-        quest_id_counter += 1
-
     # --- Door-reveal quest (one per room that has a door) ---
     climax_boss_id = maze.gate_encounter_id if room_idx == num_rooms - 1 else None
     dr_candidates = [e for e in combat_events_for_quest if e["id"] != climax_boss_id]
@@ -1103,6 +1082,29 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
         if giver_npc and not giver_npc.get("quest_id"):
             giver_npc["quest_id"] = door_reveal_quest["id"]
         quest_list.append(door_reveal_quest)
+        quest_id_counter += 1
+
+    # --- Multi-step quest (assembled after all other quests including door-reveal) ---
+    if len(quest_list) >= 3:
+        sub_ids = [q["id"] for q in quest_list[:3]]
+        multi_quest = {
+            "id": f"{event_id_prefix}q_{quest_id_counter:03d}",
+            "type": "multi_step",
+            "title": f"The {faction_name} Conspiracy" if faction_name else "A Grand Adventure",
+            "description": f"Unravel the {faction_name}'s plot through a series of connected tasks." if faction_name else "Complete a chain of connected quests.",
+            "giver_npc_id": quest_list[0]["giver_npc_id"],
+            "room_id": room_id,
+            "is_story_quest": True,
+            "reward": {"item_id": random.choice(items_for_quest)["id"] if items_for_quest else 200 + id_offset,
+                       "xp": 50, "story_info": "A crucial revelation about the faction's plans."},
+            "failure_penalty": {"hp_damage": 10, "hunger_damage": 5, "thirst_damage": 5},
+            "sub_quest_ids": sub_ids,
+            "current_step": 0,
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+        quest_list.append(multi_quest)
         quest_id_counter += 1
 
     quest_bar.close()
@@ -1171,6 +1173,9 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
     with open(quest_path, "w") as f:
         json.dump(quest_list, f, indent=2)
 
+    if report:
+        report.rooms_validated += 1
+
     return {
         "room_id": room_id,
         "room_idx": room_idx,
@@ -1200,6 +1205,10 @@ def _step1_generate_story(story_seed: str, num_rooms: int,
 
     # Try the full story primitive first (includes story entities)
     story_data = _llm_generate_full_story(story_seed, num_rooms, environments)
+
+    num_rooms = NUM_ROOMS
+    room_results = []
+    report = ValidationReport()
 
     if not story_data:
         # Fall back to the simpler story primitive
@@ -1667,6 +1676,7 @@ def generate_world():
 
         result = _generate_room_content(
             layout, num_rooms, story, npc_pool, generated_items,
+            report=report,
         )
         room_results.append(result)
 
@@ -1822,6 +1832,30 @@ def generate_world():
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
 
+    # --- Gameplay audit (coherence check across all rooms) ---
+    from src.generate.world_editor import gameplay_audit
+    from src.models.world_bible import WorldBible
+    audit_bible = WorldBible(story=story)
+    all_npcs = [n for rr in room_results for n in rr["npc_pool"]]
+    all_events = [e for rr in room_results for e in rr["event_list"]]
+    all_quests = [q for rr in room_results for q in rr["quest_list"]]
+    all_placements = [p for rr in room_results for p in rr["item_placements"]]
+    audit_issues = gameplay_audit(
+        audit_bible, all_npcs, all_events, all_quests, all_placements,
+    )
+    if audit_issues:
+        logger.info("Gameplay audit: %d issues found.", len(audit_issues))
+        for issue in audit_issues:
+            severity = issue.get("severity", "warning")
+            if severity == "error":
+                report.add_major(issue["message"], entity_id=issue.get("entity_id", ""),
+                                 phase="gameplay_audit")
+            else:
+                report.add_warning(issue["message"], entity_id=issue.get("entity_id", ""),
+                                   phase="gameplay_audit")
+    else:
+        logger.info("Gameplay audit: all checks passed.")
+
     # --- Manifest ---
     room_manifest = []
     for rr in room_results:
@@ -1858,6 +1892,8 @@ def generate_world():
         "faction_name": story.faction.name if story.faction else "",
         "story_seed": story.seed,
         "rooms": room_manifest,
+        "validation_report": report.to_dict(),
+        "gameplay_audit": audit_issues,
     }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
