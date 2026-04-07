@@ -758,14 +758,14 @@ class TestJesterRandomWeapon:
         stats_seen = set()
         for seed in range(50):
             random.seed(seed)
-            stats_seen.add(jester.resolve_attack_stat())
+            stats_seen.add(jester._resolve_weapon_stat())
         assert stats_seen == {"STR", "DEX", "INT"}
 
     def test_resolve_attack_stat_random_type(self, jester):
         """resolve_attack_stat with a random weapon returns a stat from the pool."""
         for seed in range(30):
             random.seed(seed)
-            stat = jester.resolve_attack_stat()
+            stat = jester._resolve_weapon_stat()
             assert stat in RANDOM_WEAPON_STATS
 
 

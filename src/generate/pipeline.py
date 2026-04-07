@@ -1206,10 +1206,6 @@ def _step1_generate_story(story_seed: str, num_rooms: int,
     # Try the full story primitive first (includes story entities)
     story_data = _llm_generate_full_story(story_seed, num_rooms, environments)
 
-    num_rooms = NUM_ROOMS
-    room_results = []
-    report = ValidationReport()
-
     if not story_data:
         # Fall back to the simpler story primitive
         story_data = _llm_generate_story(story_seed, num_rooms, environments)
@@ -1667,6 +1663,7 @@ def generate_world():
     logger.info("Generated %d player classes.", len(player_classes))
 
     # === ROOM CONTENT (events, quests, files — depends on entities) ===
+    report = ValidationReport()
     room_results = []
     for layout in layouts:
         room_id = layout["room_id"]

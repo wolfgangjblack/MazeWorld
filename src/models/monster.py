@@ -363,19 +363,6 @@ def generate_encounter_monsters(environment: str, room_level: int) -> List[Monst
         return strong + weak
 
 
-def generate_night_monster(environment: str, room_level: int) -> Monster:
-    """Generate a night-only monster variant: dark elemental, harder stats."""
-    pool = NIGHT_MONSTER_POOLS.get(environment, NIGHT_MONSTER_POOLS["dungeon"])
-    name = random.choice(pool)
-    # Night monsters are +1 effective level (harder stats)
-    effective_level = min(room_level + 1, max(LEVEL_SCALING.keys()))
-    monster = generate_monster(environment, effective_level, name_override=name)
-    # Force dark elemental affinity
-    monster.elemental_affinity = "dark"
-    monster.damage_type = "dark"
-    return monster
-
-
 # ---------------------------------------------------------------------------
 # Backward-compat helpers used by Phase 3 encounter composition
 # ---------------------------------------------------------------------------
