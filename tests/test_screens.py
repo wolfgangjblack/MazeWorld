@@ -90,11 +90,11 @@ def test_start_view_load_game_disabled(screen, font):
     assert view.handle_input(event) is None
 
 
-def test_start_view_tutorial_disabled(screen, font):
+def test_start_view_tutorial_enabled(screen, font):
     view = StartView(screen, font)
     view.selected_index = MENU_ITEMS.index("Tutorial")
     event = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
-    assert view.handle_input(event) is None
+    assert view.handle_input(event) == "tutorial"
 
 
 def test_start_view_quit(screen, font):

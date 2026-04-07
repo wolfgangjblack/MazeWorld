@@ -146,6 +146,7 @@ class CombatController:
         if attack_roll >= dc:
             damage = self.player.roll_weapon_damage()
             target.take_damage(damage)
+            self.player.combat_record["damage_dealt"] += damage
             msg = f"You hit {target.name} for {damage} damage! (roll {attack_roll} vs AC {dc})"
             if not target.is_alive:
                 msg += f" {target.name} is slain!"
@@ -195,6 +196,7 @@ class CombatController:
 
         msg = "Multi-Attack: " + " ".join(messages)
         self.log.append(msg)
+        self.player.combat_record["damage_dealt"] += total_damage
         self.player.tick_buffs()
         self.advance_turn()
         return {"success": True, "message": msg, "total_damage": total_damage}
@@ -292,6 +294,7 @@ class CombatController:
 
         msg = " ".join(messages)
         self.log.append(msg)
+        self.player.combat_record["damage_dealt"] += total_damage
         self.player.tick_buffs()
         self.advance_turn()
         return {"success": True, "message": msg, "total_damage": total_damage}
@@ -511,5 +514,6 @@ class CombatController:
         if attack_roll >= player_ac:
             damage = monster.roll_damage()
             self.player.health = max(0, self.player.health - damage)
+            self.player.combat_record["damage_taken"] += damage
             return damage
         return 0

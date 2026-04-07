@@ -1315,6 +1315,7 @@ def generate_world():
     portraits_generated = False
     player_portrait_path = None
     env_portrait_path = None
+    gameover_portrait_path = None
     try:
         from src.generate.image_client import (
             generate_npc_portraits, generate_event_illustrations,
@@ -1375,6 +1376,14 @@ def generate_world():
             )
             rr["environment_portrait"] = portrait_path
 
+        # Game over portrait (dark/somber theme)
+        gameover_portrait_path = os.path.join("data/portraits", "game_over.png")
+        generate_and_save_image(
+            "a fallen hero in darkness, somber memorial scene, "
+            "dark fantasy pixel art, moody lighting, dramatic shadows",
+            gameover_portrait_path,
+        )
+
         # Legacy environment portrait (room 0)
         env_portrait_path = os.path.join("data/portraits", "environment.png")
         r0_env_portrait = room_results[0].get("environment_portrait")
@@ -1421,6 +1430,7 @@ def generate_world():
         "portraits_generated": portraits_generated,
         "player_portrait": player_portrait_path,
         "environment_portrait": env_portrait_path,
+        "gameover_portrait": gameover_portrait_path,
         "game_mode": GAME_MODE,
         "story_title": story.title,
         "faction_name": story.faction.name if story.faction else "",

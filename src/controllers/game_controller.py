@@ -97,7 +97,7 @@ class GameController:
 
         # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Set to "save", "load", "quit", "open_pause", "open_full_menu", "game_over", "victory" to signal main loop
+        self.pending_action = None  # Signals main loop: "save", "load", "quit", "open_pause", "open_full_menu", "open_story", "game_over", "victory", "room_transition"
 
         # Room progression state
         self.current_room = current_room
@@ -528,6 +528,11 @@ class GameController:
             self.pending_action = "open_full_menu"
             return
 
+        # B key opens story recap
+        if event.key == pygame.K_b:
+            self.pending_action = "open_story"
+            return
+
     # ------------------------------------------------------------------
     # Full Combat System (CombatController + CombatView)
     # ------------------------------------------------------------------
@@ -914,6 +919,7 @@ class GameController:
                 self.dialogue_box.combat_log = list(combat_event.combat_log)
 
                 if result["success"]:
+                    self.player.combat_record["combats_fled"] += 1
                     self.dialogue_box.set_combat_phase("fled")
                     return
 
@@ -1012,8 +1018,10 @@ class GameController:
 
         # Track stats
         if hasattr(combat_event, 'monsters'):
-            self.stats["monsters_killed"] += sum(
-                1 for m in combat_event.monsters if not m.is_alive)
+            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
+            self.stats["monsters_killed"] += killed
+            self.player.combat_record["monsters_killed"] += killed
+        self.player.combat_record["combats_won"] += 1
         if getattr(combat_event, 'is_climax_boss', False):
             self.resolved_encounters += 1
             self.gate_cleared = True

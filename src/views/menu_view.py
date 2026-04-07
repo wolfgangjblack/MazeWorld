@@ -243,6 +243,26 @@ class MenuView:
         self._stat_pair("Weapon", weapon_name, col2, y2)
         y2 += 22
         self._stat_pair("Gold", str(p.money), col2, y2)
+        y2 += 36
+
+        # Combat record
+        cr = p.combat_record
+        self._stat_line("-- Combat Record --", HEADER_COLOR, col2, y2)
+        y2 += 24
+        self._stat_pair("Monsters Killed", str(cr.get("monsters_killed", 0)), col2, y2)
+        y2 += 22
+        self._stat_pair("Combats Won", str(cr.get("combats_won", 0)), col2, y2)
+        y2 += 22
+        self._stat_pair("Combats Fled", str(cr.get("combats_fled", 0)), col2, y2)
+        y2 += 22
+        self._stat_pair("Damage Dealt", str(cr.get("damage_dealt", 0)), col2, y2)
+        y2 += 22
+        self._stat_pair("Damage Taken", str(cr.get("damage_taken", 0)), col2, y2)
+
+        # Player title (if earned)
+        if p.title:
+            y += 10
+            self._stat_line(f'Title: "{p.title}"', HIGHLIGHT_COLOR, col1, y)
 
     def _stat_line(self, text: str, color, x: int, y: int):
         surf = self.small_font.render(text, True, color)
