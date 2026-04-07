@@ -18,6 +18,13 @@ from src.systems.survival import SurvivalSystem
 from src.systems.quest_manager import QuestManager
 from src.systems.follower_manager import FollowerManager
 
+PERIOD_TRANSITION_MESSAGES = {
+    "dawn": "The sun begins to rise. Dawn breaks.",
+    "day": "Daylight fills the area.",
+    "dusk": "The light fades. Dusk approaches.",
+    "night": "Night falls. Beware of creatures in the dark.",
+}
+
 
 class GameController:
     def __init__(self, screen, font, maze, player, npcs, dialogue_box,
@@ -295,6 +302,7 @@ class GameController:
             night_event = spawn_night_encounter(
                 self.maze, self.player, self.day_night, self.current_room + 1)
             if night_event:
+                self.total_encounters += 1
                 self._start_full_combat(night_event)
 
         # Check escort zone completion
@@ -1211,13 +1219,7 @@ class GameController:
             new_period = self.day_night.current_period
             self._update_fog()
             if not self.has_active_overlay and not self.item_message_active:
-                period_messages = {
-                    "dawn": "The sun begins to rise. Dawn breaks.",
-                    "day": "Daylight fills the area.",
-                    "dusk": "The light fades. Dusk approaches.",
-                    "night": "Night falls. Beware of creatures in the dark.",
-                }
-                msg = period_messages.get(new_period.value, "")
+                msg = PERIOD_TRANSITION_MESSAGES.get(new_period.value, "")
                 if msg:
                     self.dialogue_box.set_item_message(msg)
                     self.item_message_active = True

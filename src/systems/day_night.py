@@ -123,6 +123,14 @@ def get_night_overlay_alpha(period: TimePeriod, progress: float) -> int:
     return 0
 
 
+_NIGHT_ENCOUNTER_FLAVOR = [
+    ("Night Ambush", "Creatures of the night emerge from the shadows!"),
+    ("Shadow Attack", "Dark forms materialize around you!"),
+    ("Nightfall Assault", "The darkness itself seems to strike!"),
+    ("Dusk Predators", "Something stalks you through the gloom..."),
+]
+
+
 def spawn_night_encounter(maze, player, cycle: DayNightCycle,
                           room_level: int = 1) -> Optional[object]:
     """Roll for a random night encounter when the player moves at night.
@@ -147,11 +155,12 @@ def spawn_night_encounter(maze, player, cycle: DayNightCycle,
 
     env = getattr(maze, 'environment', 'dungeon')
     monsters = generate_night_encounter_monsters(env, room_level)
+    name, description = random.choice(_NIGHT_ENCOUNTER_FLAVOR)
 
     return CombatEvent(
         id=f"night_{uuid.uuid4().hex[:8]}",
-        name="Night Ambush",
-        description="Creatures of the night emerge from the shadows!",
+        name=name,
+        description=description,
         monsters=monsters,
         room_level=room_level,
         time_gate="night",

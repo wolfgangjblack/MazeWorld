@@ -3,7 +3,6 @@
 import sys
 import os
 import time
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -12,8 +11,8 @@ from src.models.monster import (
     generate_night_monster, generate_night_encounter_monsters,
     NIGHT_MONSTER_POOLS, NIGHT_ATTACK_NAMES,
 )
-from src.models.encounter import Event, CombatEvent
-from src.models.npc import NPC, StaticNPC
+from src.models.encounter import CombatEvent
+from src.models.npc import StaticNPC
 from src.systems.day_night import (
     is_event_active_at_time, is_npc_available, spawn_night_encounter,
 )

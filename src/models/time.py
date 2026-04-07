@@ -9,7 +9,7 @@ Supports two modes:
 
 import time as _time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from enum import Enum
 
 
@@ -45,11 +45,8 @@ class DayNightCycle(BaseModel):
     # Real-time mode
     real_time: bool = False
     real_time_seconds_per_cycle: float = 600.0  # 10 minutes = 1 full day
-    _rt_anchor_time: float = 0.0   # wall-clock time when real-time started
-    _rt_anchor_ticks: int = 0      # tick value at that anchor
-
-    class Config:
-        underscore_attrs_are_private = True
+    _rt_anchor_time: float = PrivateAttr(default=0.0)
+    _rt_anchor_ticks: int = PrivateAttr(default=0)
 
     def enable_real_time(self) -> None:
         """Enable real-time mode, anchoring to the current wall clock."""
@@ -82,7 +79,6 @@ class DayNightCycle(BaseModel):
     @property
     def current_period(self) -> TimePeriod:
         """Derive the current period from ticks."""
-        self._sync_real_time()
         position = self.ticks % self.cycle_length
         cumulative = 0.0
         for period, fraction in PERIOD_SEQUENCE:
@@ -94,7 +90,6 @@ class DayNightCycle(BaseModel):
     @property
     def period_progress(self) -> float:
         """Progress within the current period (0.0 to 1.0)."""
-        self._sync_real_time()
         position = self.ticks % self.cycle_length
         cumulative = 0.0
         for period, fraction in PERIOD_SEQUENCE:
@@ -111,7 +106,6 @@ class DayNightCycle(BaseModel):
     @property
     def day_number(self) -> int:
         """Which day it is (starting from 1)."""
-        self._sync_real_time()
         return self.ticks // self.cycle_length + 1
 
     def advance(self, steps: int = 1) -> None:
