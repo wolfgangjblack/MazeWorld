@@ -819,6 +819,23 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
 
     _validate_puzzle_tools(event_list, registry)
 
+    # --- Checker → Validator chain for events ---
+    from src.generate.checker import EventChecker
+    from src.generate.validator import EventValidator
+    _event_checker = EventChecker()
+    _event_validator = EventValidator()
+    for event in event_list:
+        chk = _event_checker.check(event)
+        if not chk.passed:
+            logger.warning("Room %d event %s check issues: %s",
+                           room_idx, event.get("id"), chk.issues)
+        val = _event_validator.validate(
+            event, context={"tool_attributes": available_tool_attrs},
+        )
+        if not val.passed:
+            logger.warning("Room %d event %s validation issues: %s",
+                           room_idx, event.get("id"), val.reasons)
+
     event_position_map = []
     for idx, (ex, ey) in enumerate(event_positions):
         event_position_map.append({"x": ex, "y": ey, "event_id": event_list[idx]["id"]})
@@ -1092,6 +1109,36 @@ def _generate_room_content(layout: dict, num_rooms: int, story,
     logger.info("Room %d: %d quests (%d story).", room_idx, len(quest_list),
                 sum(1 for q in quest_list if q.get("is_story_quest")))
 
+    # --- Checker → Validator chain for quests ---
+    from src.generate.checker import QuestChecker
+    from src.generate.validator import QuestValidator
+    _quest_checker = QuestChecker()
+    _quest_validator = QuestValidator()
+    npc_id_set = {str(n["id"]) for n in npc_pool if n.get("selected")}
+    item_id_set = {p["item_id"] for p in item_placements}
+    event_id_set = {e["id"] for e in event_list}
+    quest_id_set = {q["id"] for q in quest_list}
+    quest_ctx = {
+        "npc_ids": npc_id_set,
+        "item_ids": item_id_set,
+        "event_ids": event_id_set,
+        "quest_ids": quest_id_set,
+    }
+    for quest in quest_list:
+        # Normalize NPC ID fields to strings for comparison
+        normalized = dict(quest)
+        for key in ("giver_npc_id", "escort_npc_id", "target_npc_id"):
+            if key in normalized:
+                normalized[key] = str(normalized[key])
+        chk = _quest_checker.check(normalized, context=quest_ctx)
+        if not chk.passed:
+            logger.warning("Room %d quest %s check issues: %s",
+                           room_idx, quest.get("id"), chk.issues)
+        val = _quest_validator.validate(normalized, context=quest_ctx)
+        if not val.passed:
+            logger.warning("Room %d quest %s validation issues: %s",
+                           room_idx, quest.get("id"), val.reasons)
+
     # --- Dialogue trees ---
     if GAME_MODE == "offline_static":
         for npc in active_npcs:
@@ -1305,7 +1352,7 @@ async def _async_generate_classes(bible: WorldBible, env_type: str,
                                   env_name: str) -> list:
     """Async wrapper for class generation that writes to Bible."""
     from src.generate.class_gen import generate_classes
-    player_classes = generate_classes(env_type, env_name)
+    player_classes = await asyncio.to_thread(generate_classes, env_type, env_name)
     for pc in player_classes:
         bible.add_player_class(EntityLore(
             entity_type="player_class",
@@ -1320,7 +1367,9 @@ async def _async_generate_items(bible: WorldBible, room_id: str,
                                 env_type: str, env_name: str,
                                 room_level: int) -> dict | None:
     """Async wrapper for item generation that writes to Bible."""
-    generated = _llm_generate_items(env_type, env_name, room_level=room_level)
+    generated = await asyncio.to_thread(
+        _llm_generate_items, env_type, env_name, room_level=room_level,
+    )
     if generated:
         for item_id, item_data in generated.items():
             bible.add_item(room_id, EntityLore(
@@ -1347,13 +1396,21 @@ async def _async_generate_npcs(bible: WorldBible, room_id: str,
         zone_npcs = []
         is_merchant_zone = random.random() < MERCHANT_CHANCE
         for i in range(3):
-            personality = _llm_generate_personality(env_type, env_name)
-            greeting = _llm_generate_greeting(personality)
-            portrait_prompt = _llm_generate_image_desc(personality)
+            personality = await asyncio.to_thread(
+                _llm_generate_personality, env_type, env_name,
+            )
+            greeting = await asyncio.to_thread(
+                _llm_generate_greeting, personality,
+            )
+            portrait_prompt = await asyncio.to_thread(
+                _llm_generate_image_desc, personality,
+            )
             identity = _build_identity(personality)
 
             # Generate backstory using Bible context
-            backstory = _llm_generate_npc_backstory(personality, story_context)
+            backstory = await asyncio.to_thread(
+                _llm_generate_npc_backstory, personality, story_context,
+            )
 
             npc_type = "MerchantNPC" if (is_merchant_zone and i == 0) else random.choice(NPC_TYPES)
 
@@ -1427,7 +1484,8 @@ async def _async_generate_monsters(bible: WorldBible, room_id: str,
     story_context = bible.get_story_context(room_id)
     try:
         from src.generate.generators.llm_primitives import generate_monster_primitive
-        monsters = generate_monster_primitive(
+        monsters = await asyncio.to_thread(
+            generate_monster_primitive,
             {"environment": {"type": env_type, "name": env_name}},
             room_level, story_context,
         )
@@ -1611,6 +1669,27 @@ def generate_world():
             layout, num_rooms, story, npc_pool, generated_items,
         )
         room_results.append(result)
+
+    # === World Editor cross-validation (PDR Phase 2) ===
+    from src.generate.world_editor import cross_validate
+    all_npc_pool = []
+    all_event_list = []
+    all_quest_list = []
+    all_item_placements = []
+    for rr in room_results:
+        all_npc_pool.extend(rr["npc_pool"])
+        all_event_list.extend(rr["event_list"])
+        all_quest_list.extend(rr["quest_list"])
+        all_item_placements.extend(rr["item_placements"])
+    xval_issues = cross_validate(
+        bible, all_npc_pool, all_event_list, all_quest_list, all_item_placements,
+    )
+    if xval_issues:
+        logger.warning("World Editor cross-validation found %d issues:", len(xval_issues))
+        for issue in xval_issues:
+            logger.warning("  - %s", issue)
+    else:
+        logger.info("World Editor cross-validation passed (no dangling references).")
 
     # --- Backward-compatible writes (room 0 data to legacy paths) ---
     r0 = room_results[0]
