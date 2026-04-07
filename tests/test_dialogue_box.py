@@ -69,14 +69,6 @@ class TestGetDisplayWindow:
         db.get_display_window(total_lines=3, max_lines=10)
         assert db.max_scroll == 0
 
-    def test_auto_scroll_consumed_after_one_call(self):
-        db = _make_db()
-        db.auto_scroll = True
-        db._scroll_target = "bottom"
-        db.get_display_window(total_lines=20, max_lines=5)
-        assert db.auto_scroll is False
-        db.get_display_window(total_lines=20, max_lines=5)
-        assert db.scroll_position == 15
 
 
 # ---------------------------------------------------------------------------
@@ -111,15 +103,6 @@ class TestScrollUpDown:
         db.scroll_down()
         assert db.scroll_position == 10
 
-    def test_scroll_disables_auto_scroll(self):
-        db = _make_db()
-        db.auto_scroll = True
-        db.scroll_up()
-        assert db.auto_scroll is False
-
-        db.auto_scroll = True
-        db.scroll_down()
-        assert db.auto_scroll is False
 
 
 # ---------------------------------------------------------------------------

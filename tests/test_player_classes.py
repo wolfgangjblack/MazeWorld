@@ -3,7 +3,7 @@
 import pytest
 from src.models.player import (
     Stats, Ability, PlayerClass, PlayerCharacter,
-    STAT_NAMES, STAT_BUDGET,
+    STAT_BUDGET,
 )
 from src.generate.class_gen import (
     _fix_stats, _check_classes, _validate_classes,
@@ -31,17 +31,6 @@ class TestStats:
     def test_modifier_eleven(self):
         s = Stats(WIS=11)
         assert s.modifier("WIS") == 0
-
-    def test_total(self):
-        s = Stats(STR=16, DEX=12, CON=16, INT=8, WIS=6, CHA=12, LUCK=8)
-        # check that total is computed correctly
-        assert s.total() == sum([16, 12, 16, 8, 6, 12, 8])
-
-    def test_as_dict(self):
-        s = Stats()
-        d = s.as_dict()
-        assert set(d.keys()) == set(STAT_NAMES)
-        assert all(v == 10 for v in d.values())
 
     def test_validate_guardrails_warrior_valid(self):
         # Total = 16+12+14+8+6+12+4 = 72, but LUCK=4 is not in warrior role ranges

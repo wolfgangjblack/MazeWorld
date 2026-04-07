@@ -35,7 +35,7 @@ def _key_event(key):
 
 
 class TestShopViewNavigation:
-    def test_initial_state(self):
+    def test_shop_view_defaults_to_buy_column(self):
         merchant = _make_merchant()
         player = _make_player()
         screen = pygame.display.get_surface()

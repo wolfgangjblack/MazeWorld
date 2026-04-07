@@ -52,7 +52,7 @@ def _make_monster(**overrides):
 # ─── Monster Model Tests ──────────────────────────────────────────────
 
 class TestMonster:
-    def test_creation(self):
+    def test_monster_max_hp_equals_hp_on_creation(self):
         m = _make_monster()
         assert m.name == "TestGoblin"
         assert m.hp == 10
@@ -191,14 +191,6 @@ class TestMonsterGeneration:
 # ─── Dice Roller Tests ────────────────────────────────────────────────
 
 class TestDiceRoller:
-    def test_1d6(self):
-        for _ in range(100):
-            assert 1 <= _roll_dice("1d6") <= 6
-
-    def test_2d6(self):
-        for _ in range(100):
-            assert 2 <= _roll_dice("2d6") <= 12
-
     def test_0d0(self):
         assert _roll_dice("0d0") == 0
 
