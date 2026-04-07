@@ -195,6 +195,25 @@ ATTACK_NAMES = {
     "city":    ["punch", "shiv", "club swing", "tackle"],
 }
 
+# Night-only monster pools — harder, scarier creatures that roam after dark
+NIGHT_MONSTER_POOLS = {
+    "forest":  ["Dire Wolf", "Shadow Stalker", "Night Hag", "Warg", "Dark Treant", "Phantom Stag"],
+    "cave":    ["Shadow Lurker", "Nightcrawler", "Abyssal Slime", "Gloom Bat", "Cave Wraith", "Dark Crystal Golem"],
+    "dungeon": ["Revenant", "Banshee", "Shadow Knight", "Death Crawler", "Night Phantom", "Bone Lord"],
+    "castle":  ["Vampire Spawn", "Spectral Knight", "Shadow Hound", "Nightwalker", "Cursed Warden", "Dread Gargoyle"],
+    "house":   ["Shade", "Nightmare Doll", "Wraith Cat", "Sleep Paralysis", "Dark Poltergeist", "Shadow Crawler"],
+    "city":    ["Night Stalker", "Vampire Thrall", "Shadow Assassin", "Ghoul", "Sewer Abomination", "Dark Enforcer"],
+}
+
+NIGHT_ATTACK_NAMES = {
+    "forest":  ["shadow bite", "dark claw", "nightfall strike", "phantom lunge"],
+    "cave":    ["shadow slam", "void spit", "dark crush", "wail"],
+    "dungeon": ["death slash", "spectral drain", "bone shatter", "shadow bolt"],
+    "castle":  ["blood strike", "spectral slash", "dark charge", "dread wail"],
+    "house":   ["shadow grasp", "nightmare touch", "dark scratch", "soul chill"],
+    "city":    ["shadow stab", "blood drain", "dark strike", "phantom tackle"],
+}
+
 ELEMENTAL_TYPES = ["fire", "water", "forest", "light", "dark"]
 
 # Loot item pools by category (item IDs from items.json)
@@ -374,3 +393,100 @@ def create_scaled_monster(
         magic_resistance=level,
         loot_table=loot_table,
     )
+
+
+def generate_night_monster(environment: str, room_level: int) -> Monster:
+    """Generate a night-exclusive monster — slightly stronger than daytime equivalents."""
+    level = min(room_level, max(LEVEL_SCALING.keys()))
+    # Night monsters scale one tier harder (capped at max)
+    boosted_level = min(level + 1, max(LEVEL_SCALING.keys()))
+    scaling = LEVEL_SCALING.get(boosted_level, LEVEL_SCALING[1])
+
+    pool = NIGHT_MONSTER_POOLS.get(environment, NIGHT_MONSTER_POOLS["dungeon"])
+    monster_name = random.choice(pool)
+
+    attacks = NIGHT_ATTACK_NAMES.get(environment, NIGHT_ATTACK_NAMES["dungeon"])
+
+    hp = random.randint(*scaling["hp"])
+    ac = random.randint(*scaling["ac"])
+    str_mod = random.randint(*scaling["str_mod"])
+    dex_mod = random.randint(*scaling["dex_mod"])
+    damage_dice_expr = random.choice(scaling["damage_dice"])
+    damage_dice_int = _parse_dice_sides(damage_dice_expr) or 6
+
+    # Night monsters always have dark affinity
+    elemental = "dark"
+
+    # Night monsters have higher ability chance (~50%)
+    abilities = []
+    if random.random() < 0.35 + (level * 0.1):
+        ability_type = random.choice(["poison", "stun", "elemental"])
+        if ability_type == "poison":
+            abilities.append(MonsterAbility(
+                name="Shadow Venom",
+                effect_type="poison",
+                damage_dice="1d6",
+                duration=2 + level // 2,
+                chance=0.3,
+            ))
+        elif ability_type == "stun":
+            abilities.append(MonsterAbility(
+                name="Dread Gaze",
+                effect_type="stun",
+                damage_dice="0d0",
+                duration=1,
+                chance=0.25,
+            ))
+        elif ability_type == "elemental":
+            abilities.append(MonsterAbility(
+                name="Dark Blast",
+                effect_type="damage",
+                damage_dice=damage_dice_expr,
+                damage_type="dark",
+                chance=0.35,
+            ))
+
+    # Night monsters drop slightly better loot
+    loot = []
+    if random.random() < 0.6 + (level * 0.05):
+        category = random.choice(["food", "drink", "tool"])
+        item_id = random.choice(LOOT_POOLS[category])
+        loot.append(LootDrop(item_id=item_id, probability=0.5 + level * 0.05))
+
+    return Monster(
+        species=monster_name,
+        name=monster_name,
+        hp=hp,
+        ac=ac,
+        str_mod=str_mod,
+        dex_mod=dex_mod,
+        attack_name=random.choice(attacks),
+        damage_dice=damage_dice_int,
+        damage_dice_expr=damage_dice_expr,
+        damage_type="dark",
+        elemental_affinity=elemental,
+        magic_resistance=boosted_level,
+        level=boosted_level,
+        abilities=abilities,
+        loot_table=loot,
+        portrait_prompt=f"a {monster_name.lower()} dark creature in a {environment} at night, fantasy pixel art",
+    )
+
+
+def generate_night_encounter_monsters(environment: str, room_level: int) -> List[Monster]:
+    """Generate a group of night monsters for a random night encounter."""
+    roll = random.random()
+    if roll < 0.5:
+        # Solo night monster
+        return [generate_night_monster(environment, room_level)]
+    elif roll < 0.8:
+        # Pack: 2-3 night monsters
+        count = random.randint(2, 3)
+        return [generate_night_monster(environment, room_level) for _ in range(count)]
+    else:
+        # Mixed: 1 strong + 1-2 regular night
+        strong = [generate_night_monster(environment, room_level)]
+        weak_count = random.randint(1, 2)
+        weak_level = max(1, room_level - 1)
+        weak = [generate_night_monster(environment, weak_level) for _ in range(weak_count)]
+        return strong + weak
