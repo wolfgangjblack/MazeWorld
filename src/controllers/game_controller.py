@@ -10,7 +10,7 @@ from src.systems.fog_of_war import FogOfWar
 from src.systems.day_night import (
     apply_rest, apply_combat_rest, player_has_torch,
     consume_torch_use, is_event_active_at_time, is_npc_available,
-    get_night_overlay_alpha,
+    get_night_overlay_alpha, spawn_night_encounter,
 )
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
@@ -36,6 +36,11 @@ class GameController:
         self.fog = fog or FogOfWar()
         # Day/Night Cycle
         self.day_night = day_night or DayNightCycle()
+        # Enable real-time day cycle from config
+        from config import DAY_NIGHT_REAL_TIME, DAY_NIGHT_REAL_TIME_SECONDS
+        if DAY_NIGHT_REAL_TIME and not self.day_night.real_time:
+            self.day_night.real_time_seconds_per_cycle = DAY_NIGHT_REAL_TIME_SECONDS
+            self.day_night.enable_real_time()
 
         # Managers
         self.quest_manager = QuestManager(self.quests, self.events)
@@ -277,6 +282,16 @@ class GameController:
         else:
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
             self.current_npc = self.player.get_nearby_npc(self.npcs)
+
+        # Random night encounter check — only when walking on open tiles at night
+        if (self.day_night.is_night
+                and not self._in_full_combat
+                and not self.dialogue_box.event_active
+                and not self.dialogue_box.dialogue_active):
+            night_event = spawn_night_encounter(
+                self.maze, self.player, self.day_night, self.current_room + 1)
+            if night_event:
+                self._start_full_combat(night_event)
 
         # Check escort zone completion
         completed_escort = self.quest_manager.check_escort_zone(self.player)
@@ -1167,7 +1182,27 @@ class GameController:
             self.item_detail_active = True
 
     def update(self, current_time):
-        """Update game logic (NPC movement, etc.)"""
+        """Update game logic (NPC movement, real-time day cycle, etc.)"""
+        # Advance real-time day/night cycle
+        prev_period = self.day_night.current_period
+        self.day_night.update()
+
+        # Notify player on period transitions (real-time driven)
+        if self.day_night.real_time and self.day_night.current_period != prev_period:
+            new_period = self.day_night.current_period
+            self._update_fog()
+            if not self.has_active_overlay and not self.item_message_active:
+                period_messages = {
+                    "dawn": "The sun begins to rise. Dawn breaks.",
+                    "day": "Daylight fills the area.",
+                    "dusk": "The light fades. Dusk approaches.",
+                    "night": "Night falls. Beware of creatures in the dark.",
+                }
+                msg = period_messages.get(new_period.value, "")
+                if msg:
+                    self.dialogue_box.set_item_message(msg)
+                    self.item_message_active = True
+
         if self.dialogue_box.generating:
             self.dialogue_box.check_generation()
 

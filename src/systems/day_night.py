@@ -3,7 +3,11 @@
 Time advances with movement, combat turns, and rest actions.
 Night reduces fog of war visibility. Torch/lantern negates this.
 Rest recovers HP with hunger/thirst caps.
+Night encounters spawn randomly when the player moves at night.
 """
+
+import random
+from typing import Optional
 
 from src.models.time import DayNightCycle, TimePeriod
 
@@ -117,3 +121,39 @@ def get_night_overlay_alpha(period: TimePeriod, progress: float) -> int:
     if period == TimePeriod.NIGHT:
         return 80
     return 0
+
+
+def spawn_night_encounter(maze, player, cycle: DayNightCycle,
+                          room_level: int = 1) -> Optional[object]:
+    """Roll for a random night encounter when the player moves at night.
+
+    Returns a CombatEvent if an encounter spawns, or None.
+    Only triggers on open tiles (not event tiles, doors, etc.).
+    """
+    if not cycle.is_night:
+        return None
+
+    from config import NIGHT_ENCOUNTER_CHANCE
+    if random.random() > NIGHT_ENCOUNTER_CHANCE:
+        return None
+
+    # Only spawn on walkable open tiles (value 0)
+    if maze.grid[player.y][player.x] != 0:
+        return None
+
+    from src.models.monster import generate_night_encounter_monsters
+    from src.models.encounter import CombatEvent
+    import uuid
+
+    env = getattr(maze, 'environment', 'dungeon')
+    monsters = generate_night_encounter_monsters(env, room_level)
+
+    return CombatEvent(
+        id=f"night_{uuid.uuid4().hex[:8]}",
+        name="Night Ambush",
+        description="Creatures of the night emerge from the shadows!",
+        monsters=monsters,
+        room_level=room_level,
+        time_gate="night",
+        money_drop=[5 * room_level, 15 * room_level],
+    )

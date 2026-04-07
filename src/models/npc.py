@@ -28,6 +28,7 @@ class NPC(BaseModel):
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
+    availability: Optional[str] = None  # "day" | "night" | "always" | None
     color: Tuple[int, int, int] = (0, 255, 0)
     move_interval: int = 5000
     last_move_time: int = 0
