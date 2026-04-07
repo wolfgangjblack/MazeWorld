@@ -449,6 +449,19 @@ WEAPON_PRICE_BY_DICE = {
     "1d10": (40, 55), "2d4": (25, 35), "1d12": (55, 70),
 }
 
+# Consumable stat & price multipliers by room level
+CONSUMABLE_SCALING = {
+    1: 1.0,
+    2: 1.3,
+    3: 1.6,
+    4: 2.0,
+}
+
+
+def _consumable_mult(room_level: int) -> float:
+    """Return the consumable scaling multiplier for a given room level."""
+    return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
+
 
 def _llm_generate_items(env_type: str, env_name: str, room_level: int = 1) -> dict | None:
     """Call LLM to generate environment-themed items. Returns items dict keyed by ID, or None."""
@@ -471,6 +484,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
     """Convert LLM-generated item pools into the items.json format keyed by ID."""
     items = {}
     item_id = 200
+    mult = _consumable_mult(room_level)
 
     for raw in llm_result.get("food", [])[:4]:
         items[str(item_id)] = {
@@ -479,11 +493,11 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "desc": raw.get("desc", ""),
             "room_level": room_level,
             "item_stats": {
-                "nutrition_value": raw.get("nutrition_value", 15),
+                "nutrition_value": int(raw.get("nutrition_value", 15) * mult),
                 "hydration_value": 0,
-                "health_value": raw.get("health_value", 0),
+                "health_value": int(raw.get("health_value", 0) * mult),
                 "uses": 1,
-                "price": random.randint(5, 15),
+                "price": int(random.randint(5, 15) * mult),
             },
         }
         item_id += 1
@@ -497,10 +511,10 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "room_level": room_level,
             "item_stats": {
                 "nutrition_value": 0,
-                "hydration_value": raw.get("hydration_value", 15),
-                "health_value": raw.get("health_value", 0),
+                "hydration_value": int(raw.get("hydration_value", 15) * mult),
+                "health_value": int(raw.get("health_value", 0) * mult),
                 "uses": 1,
-                "price": random.randint(5, 15),
+                "price": int(random.randint(5, 15) * mult),
             },
         }
         item_id += 1
@@ -518,7 +532,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "hydration_value": -5,
                 "health_value": 0,
                 "uses": 3,
-                "price": random.randint(10, 25),
+                "price": int(random.randint(10, 25) * mult),
             },
         }
         item_id += 1
@@ -542,6 +556,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
         item_id += 1
 
     item_id = 600
+    scroll_mult = 1.0 + (mult - 1.0) * 0.5  # scrolls scale at half rate
     for raw in llm_result.get("spell_scrolls", [])[:2]:
         items[str(item_id)] = {
             "category": "spell_scroll",
@@ -550,10 +565,10 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "spell_effect": raw.get("spell_effect", "generic"),
             "room_level": room_level,
             "item_stats": {
-                "health_value": 25 if raw.get("spell_effect") == "heal" else 0,
-                "nutrition_value": 30 if raw.get("spell_effect") == "sustain" else 0,
-                "hydration_value": 30 if raw.get("spell_effect") == "sustain" else 0,
-                "price": random.randint(20, 40),
+                "health_value": int((25 if raw.get("spell_effect") == "heal" else 0) * scroll_mult),
+                "nutrition_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
+                "hydration_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
+                "price": int(random.randint(20, 40) * mult),
             },
         }
         item_id += 1
