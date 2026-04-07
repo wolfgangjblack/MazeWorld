@@ -392,7 +392,7 @@ class TestLLMPrimitives:
 
 class TestStep2AsyncWiring:
     def test_step2_calls_all_generators(self):
-        """Verify Step 2 dispatches items, NPCs, monsters, and classes in parallel."""
+        """Verify Step 2 dispatches items, NPCs, monsters, and classes."""
         from unittest.mock import AsyncMock, patch
 
         bible = WorldBible(
@@ -418,8 +418,8 @@ class TestStep2AsyncWiring:
              patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]) as mock_npcs, \
              patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]) as mock_mons:
 
-            from src.generate.pipeline import _step2_generate_entities
-            result = asyncio.run(_step2_generate_entities(bible, [layout]))
+            from src.generate.pipeline import _step2_sequential_rooms
+            result = asyncio.run(_step2_sequential_rooms(bible, [layout]))
 
         mock_cls.assert_called_once()
         mock_items.assert_called_once()
@@ -449,15 +449,15 @@ class TestStep2AsyncWiring:
              patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[{"id": 1, "selected": True}]), \
              patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
 
-            from src.generate.pipeline import _step2_generate_entities
-            result = asyncio.run(_step2_generate_entities(bible, [layout]))
+            from src.generate.pipeline import _step2_sequential_rooms
+            result = asyncio.run(_step2_sequential_rooms(bible, [layout]))
 
         # Items failed but NPCs and monsters should still be present
         entities = result["room_entities"].get("room_0", {})
         assert entities.get("npc_pool") == [{"id": 1, "selected": True}]
 
-    def test_step2_multi_room_parallel(self):
-        """Verify Step 2 handles multiple rooms."""
+    def test_step2_multi_room_sequential(self):
+        """Verify Step 2 handles multiple rooms sequentially."""
         from unittest.mock import AsyncMock, patch
 
         bible = WorldBible(story=OverarchingStory(title="Test"))
@@ -478,8 +478,8 @@ class TestStep2AsyncWiring:
              patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]), \
              patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
 
-            from src.generate.pipeline import _step2_generate_entities
-            result = asyncio.run(_step2_generate_entities(bible, layouts))
+            from src.generate.pipeline import _step2_sequential_rooms
+            result = asyncio.run(_step2_sequential_rooms(bible, layouts))
 
         assert "room_0" in result["room_entities"]
         assert "room_1" in result["room_entities"]
@@ -578,3 +578,258 @@ class TestWeaponSoftRestriction:
         # so bonus is 0 — but that's fine, unarmed is weak by design
         bonus = player._weapon_stat_bonus("STR")
         assert bonus == 0
+
+
+# ---------------------------------------------------------------------------
+# Sequential Bible propagation tests
+# ---------------------------------------------------------------------------
+
+
+class TestSequentialBiblePropagation:
+    """Tests verifying that room N's Bible context includes room N-1's entities."""
+
+    def _make_multi_room_bible(self):
+        """Create a Bible with 3 rooms, room 0 populated with entities."""
+        bible = WorldBible(
+            story=OverarchingStory(
+                title="The Dark Tide",
+                synopsis="Evil rises.",
+                faction=Faction(name="Abyssal Order", description="deep-sea cult",
+                                history="Ancient evil"),
+                beats=[
+                    RoomStoryBeat(room_id="room_0", summary="Strange tides.", escalation=1),
+                    RoomStoryBeat(room_id="room_1", summary="The deep calls.", escalation=3),
+                    RoomStoryBeat(room_id="room_2", summary="The abyss opens.", escalation=5),
+                ],
+                story_npcs=[StoryNPC(name="Marina", backstory="lighthouse keeper", room_id="room_0")],
+            ),
+        )
+        for i in range(3):
+            rid = f"room_{i}"
+            bible.rooms[rid] = RoomBible(
+                environment=["forest", "cave", "dungeon"][i],
+                environment_name=["Whisperwood", "Gloomhollow", "Dreadkeep"][i],
+                level=i + 1,
+                story_beat=bible.story.beats[i].summary,
+            )
+        # Populate room 0 with generated entities
+        bible.add_npc("room_0", EntityLore(
+            entity_type="npc", name="Greta", room_id="room_0",
+            lore="A blacksmith who forges weapons against the cult.",
+        ))
+        bible.add_item("room_0", EntityLore(
+            entity_type="item", name="Tide-Forged Blade", room_id="room_0",
+            lore="A sword tempered in tidal waters.",
+        ))
+        bible.add_monster("room_0", EntityLore(
+            entity_type="monster", name="Corrupted Crab", room_id="room_0",
+            lore="A massive crab twisted by abyssal magic.",
+        ))
+        return bible
+
+    def test_room1_context_includes_room0_entities(self):
+        """Room 1's cumulative context includes room 0's generated NPCs, items, monsters."""
+        bible = self._make_multi_room_bible()
+        ctx = bible.get_cumulative_context("room_1")
+
+        # Should include story context
+        assert "The Dark Tide" in ctx
+        assert "Abyssal Order" in ctx
+        assert "The deep calls" in ctx  # room 1's own beat
+
+        # Should include room 0's generated entities
+        assert "Greta" in ctx
+        assert "Tide-Forged Blade" in ctx
+        assert "Corrupted Crab" in ctx
+        assert "Previously generated content" in ctx
+
+    def test_room0_context_has_no_previous_rooms(self):
+        """Room 0's cumulative context should NOT include 'Previously generated' section."""
+        bible = self._make_multi_room_bible()
+        ctx = bible.get_cumulative_context("room_0")
+
+        assert "The Dark Tide" in ctx
+        assert "Previously generated content" not in ctx
+
+    def test_room2_context_includes_room0_and_room1(self):
+        """Room 2's cumulative context includes entities from both room 0 and room 1."""
+        bible = self._make_multi_room_bible()
+        # Add room 1 entities
+        bible.add_npc("room_1", EntityLore(
+            entity_type="npc", name="Cavern Elder", room_id="room_1",
+            lore="An ancient guide through the caves.",
+        ))
+        bible.add_item("room_1", EntityLore(
+            entity_type="item", name="Glowing Mushroom", room_id="room_1",
+            lore="Bioluminescent fungus.",
+        ))
+
+        ctx = bible.get_cumulative_context("room_2")
+
+        # Room 0 entities
+        assert "Greta" in ctx
+        assert "Tide-Forged Blade" in ctx
+        assert "Corrupted Crab" in ctx
+
+        # Room 1 entities
+        assert "Cavern Elder" in ctx
+        assert "Glowing Mushroom" in ctx
+
+    def test_quest_generator_receives_bible_context(self):
+        """Verify that quest generators can receive Bible context."""
+        bible = self._make_multi_room_bible()
+        ctx = bible.get_cumulative_context("room_1")
+
+        # The context should be non-empty and contain story info
+        assert len(ctx) > 50
+        assert "Abyssal Order" in ctx
+
+    def test_multi_step_quests_can_reference_cross_room_entities(self):
+        """Verify cross-room quest linking works."""
+        from src.generate.pipeline import _link_cross_room_quests
+
+        story = OverarchingStory(
+            title="Test",
+            faction=Faction(name="TestFaction", description="test"),
+        )
+        bible = self._make_multi_room_bible()
+
+        room_results = [
+            {
+                "room_id": "room_0", "room_idx": 0, "room_level": 1,
+                "environment": "forest", "environment_name": "Wood",
+                "npc_pool": [], "active_npcs": [],
+                "event_list": [], "item_placements": [],
+                "quest_list": [
+                    {"id": "r0_q_000", "type": "fetch", "is_story_quest": True,
+                     "giver_npc_id": 100, "prerequisite_quest_id": None,
+                     "title": "Gather Intel"},
+                ],
+                "gate_encounter_id": None, "player_start": (1, 1),
+                "maze": None, "generated_items": None, "room_dir": "/tmp",
+            },
+            {
+                "room_id": "room_1", "room_idx": 1, "room_level": 2,
+                "environment": "cave", "environment_name": "Hollow",
+                "npc_pool": [], "active_npcs": [],
+                "event_list": [], "item_placements": [],
+                "quest_list": [
+                    {"id": "r1_q_000", "type": "combat", "is_story_quest": True,
+                     "giver_npc_id": 1100, "prerequisite_quest_id": None,
+                     "title": "Purge the Depths"},
+                ],
+                "gate_encounter_id": None, "player_start": (1, 1),
+                "maze": None, "generated_items": None, "room_dir": "/tmp",
+            },
+        ]
+
+        _link_cross_room_quests(room_results, bible, story)
+
+        # Room 1's first story quest should now have room 0's last story quest as prerequisite
+        assert room_results[1]["quest_list"][0]["prerequisite_quest_id"] == "r0_q_000"
+
+        # A global multi-step quest should have been created in the last room
+        multi_quests = [q for q in room_results[-1]["quest_list"] if q["type"] == "multi_step"]
+        assert len(multi_quests) == 1
+        assert "r0_q_000" in multi_quests[0]["sub_quest_ids"]
+        assert "r1_q_000" in multi_quests[0]["sub_quest_ids"]
+
+
+class TestSequentialStep2:
+    """Tests for the sequential room-by-room entity generation."""
+
+    def test_sequential_rooms_processes_in_order(self):
+        """Verify _step2_sequential_rooms processes rooms sequentially."""
+        from unittest.mock import AsyncMock, patch
+
+        bible = WorldBible(story=OverarchingStory(title="Test"))
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+        bible.rooms["room_1"] = RoomBible(environment="cave", level=2)
+
+        layouts = [
+            {"room_id": "room_0", "room_idx": 0, "room_level": 1,
+             "id_offset": 0, "environment": "forest",
+             "environment_name": "Wood", "npc_zones": [], "open_spaces": []},
+            {"room_id": "room_1", "room_idx": 1, "room_level": 2,
+             "id_offset": 1000, "environment": "cave",
+             "environment_name": "Hollow", "npc_zones": [], "open_spaces": []},
+        ]
+
+        call_order = []
+
+        async def mock_room_entities(bible, layout):
+            call_order.append(layout["room_id"])
+            return {"items": None, "npc_pool": [], "monsters": []}
+
+        with patch("src.generate.pipeline._async_generate_classes",
+                   new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline._step2_generate_room_entities",
+                   side_effect=mock_room_entities):
+
+            from src.generate.pipeline import _step2_sequential_rooms
+            result = asyncio.run(_step2_sequential_rooms(bible, layouts))
+
+        # Rooms should have been processed in order
+        assert call_order == ["room_0", "room_1"]
+        assert "room_0" in result["room_entities"]
+        assert "room_1" in result["room_entities"]
+
+    def test_sequential_room_entities_parallel_within_room(self):
+        """Verify that within a single room, items/NPCs/monsters run in parallel."""
+        from unittest.mock import AsyncMock, patch
+
+        bible = WorldBible(story=OverarchingStory(title="Test"))
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+
+        layout = {
+            "room_id": "room_0", "room_idx": 0, "room_level": 1,
+            "id_offset": 0, "environment": "forest",
+            "environment_name": "Wood", "npc_zones": [], "open_spaces": [],
+        }
+
+        with patch("src.generate.pipeline._async_generate_items",
+                   new_callable=AsyncMock, return_value={"100": {"name": "Bread"}}) as mock_items, \
+             patch("src.generate.pipeline._async_generate_npcs",
+                   new_callable=AsyncMock, return_value=[{"id": 1}]) as mock_npcs, \
+             patch("src.generate.pipeline._async_generate_monsters",
+                   new_callable=AsyncMock, return_value=[]) as mock_mons:
+
+            from src.generate.pipeline import _step2_generate_room_entities
+            result = asyncio.run(_step2_generate_room_entities(bible, layout))
+
+        mock_items.assert_called_once()
+        mock_npcs.assert_called_once()
+        mock_mons.assert_called_once()
+        assert result["items"] == {"100": {"name": "Bread"}}
+        assert result["npc_pool"] == [{"id": 1}]
+
+
+class TestEditorCoherenceCheck:
+    """Tests for the editor agent coherence check."""
+
+    def test_detects_duplicate_npc_names(self):
+        from src.generate.world_editor import editor_coherence_check
+
+        bible = WorldBible(story=OverarchingStory(title="Test"))
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+        bible.rooms["room_1"] = RoomBible(environment="cave", level=2)
+        bible.add_npc("room_0", EntityLore(entity_type="npc", name="Greta", room_id="room_0"))
+        bible.add_npc("room_1", EntityLore(entity_type="npc", name="Greta", room_id="room_1"))
+
+        issues = editor_coherence_check(bible, [
+            {"room_id": "room_0", "event_list": [{"id": "e1"}], "quest_list": [{"id": "q1", "is_story_quest": True}]},
+            {"room_id": "room_1", "event_list": [{"id": "e2"}], "quest_list": [{"id": "q2", "is_story_quest": True}]},
+        ])
+        assert any("Duplicate NPC name" in i for i in issues)
+
+    def test_flags_empty_rooms(self):
+        from src.generate.world_editor import editor_coherence_check
+
+        bible = WorldBible(story=OverarchingStory(title="Test"))
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+
+        issues = editor_coherence_check(bible, [
+            {"room_id": "room_0", "event_list": [], "quest_list": []},
+        ])
+        assert any("no events" in i for i in issues)
+        assert any("no quests" in i for i in issues)

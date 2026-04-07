@@ -84,6 +84,40 @@ class WorldBible(BaseModel):
                 parts.append(f"Story monster: {mon.name} — {mon.lore}")
         return "\n".join(parts)
 
+    def get_cumulative_context(self, room_id: str) -> str:
+        """Return story context enriched with all *previous* rooms' generated content.
+
+        For room_0 this is the same as get_story_context(). For room_N it
+        includes NPCs, items, and monsters generated in rooms 0..N-1 so that
+        generators for room N can build on what came before.
+        """
+        parts = [self.get_story_context(room_id)]
+
+        room_idx = int(room_id.split("_")[1]) if "_" in room_id else 0
+        for prev_idx in range(room_idx):
+            prev_id = f"room_{prev_idx}"
+            prev_room = self.rooms.get(prev_id)
+            if not prev_room:
+                continue
+            header = f"\n--- Previously generated content (Room {prev_idx}: {prev_room.environment_name or prev_room.environment}) ---"
+            prev_parts = [header]
+            for npc in prev_room.npcs:
+                if npc.name:
+                    lore_snip = f" — {npc.lore[:120]}" if npc.lore else ""
+                    prev_parts.append(f"  NPC: {npc.name}{lore_snip}")
+            for item in prev_room.items:
+                if item.name:
+                    lore_snip = f" — {item.lore[:80]}" if item.lore else ""
+                    prev_parts.append(f"  Item: {item.name}{lore_snip}")
+            for mon in prev_room.monsters:
+                if mon.name:
+                    lore_snip = f" — {mon.lore[:80]}" if mon.lore else ""
+                    prev_parts.append(f"  Monster: {mon.name}{lore_snip}")
+            if len(prev_parts) > 1:
+                parts.extend(prev_parts)
+
+        return "\n".join(parts)
+
     def get_all_npc_names(self) -> list[str]:
         """Return all NPC names across all rooms."""
         names = []

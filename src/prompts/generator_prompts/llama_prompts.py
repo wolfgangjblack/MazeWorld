@@ -131,13 +131,18 @@ class LlamaPromptSet(PromptSet):
             max_tokens=10,
         )
 
-    def event_generation(self, env: str, env_name: str, event_type: str) -> LLMRequest:
+    def event_generation(self, env: str, env_name: str, event_type: str,
+                         story_context: str = "") -> LLMRequest:
+        ctx_suffix = (
+            f"\nWorld lore:\n{story_context[:300]}" if story_context else ""
+        )
         if event_type == "combat":
             return LLMRequest(
                 system=(
                     "You generate combat encounters for a fantasy game. "
                     "Output a JSON object with: name, description, difficulty (1-5), "
-                    "damage_type (health|hunger|thirst), damage_range ([min,max])."
+                    "damage_type (health|hunger|thirst), damage_range ([min,max]). "
+                    "Reference the world lore when provided."
                 ),
                 examples=[
                     ("environment: 'forest', env_name: 'Shadowleaf'",
@@ -147,7 +152,7 @@ class LlamaPromptSet(PromptSet):
                      '{"name": "Cave Troll", "description": "A hulking troll emerges from the shadows!", '
                      '"difficulty": 4, "damage_type": "health", "damage_range": [8, 20]}'),
                 ],
-                user_message=f"environment: '{env}', env_name: '{env_name}'",
+                user_message=f"environment: '{env}', env_name: '{env_name}'{ctx_suffix}",
                 max_tokens=80,
             )
         else:
@@ -156,7 +161,8 @@ class LlamaPromptSet(PromptSet):
                     "You generate puzzle encounters for a fantasy game. "
                     "Output a JSON object with: name, description, difficulty (1-5), "
                     "choices (array with: text, stat_check, tool_attribute, dc, auto_success). "
-                    "Include 2-3 choices. One should be a safe walk-away option."
+                    "Include 2-3 choices. One should be a safe walk-away option. "
+                    "Reference the world lore when provided."
                 ),
                 examples=[
                     ("environment: 'cave', env_name: 'Gloomhollow'",
@@ -165,30 +171,34 @@ class LlamaPromptSet(PromptSet):
                      '{"text": "Force it open", "stat_check": "health", "tool_attribute": null, "dc": 12, "auto_success": false}, '
                      '{"text": "Walk away", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}'),
                 ],
-                user_message=f"environment: '{env}', env_name: '{env_name}'",
+                user_message=f"environment: '{env}', env_name: '{env_name}'{ctx_suffix}",
                 max_tokens=200,
             )
 
     def quest_generation(self, env: str, env_name: str,
                          available_npcs: list[dict], available_items: list[dict],
-                         available_events: list[dict], quest_type: str) -> LLMRequest:
-        context = str({
+                         available_events: list[dict], quest_type: str,
+                         story_context: str = "") -> LLMRequest:
+        ctx_data = {
             "environment": env, "environment_name": env_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
-        })
+        }
+        if story_context:
+            ctx_data["world_bible_context"] = story_context[:400]
+        context = str(ctx_data)
         return LLMRequest(
             system=(
                 "You generate quests for a fantasy game. Given context about NPCs, items, events, "
-                "output a JSON object with: title, description, giver_npc_id. "
+                "and world lore, output a JSON object with: title, description, giver_npc_id. "
                 "For fetch: add target_items [{item_id, count}]. "
                 "For escort: add escort_npc_id. "
                 "For delivery: add delivery_item_id, target_npc_id. "
                 "For combat: add target_event_id. "
                 "For dialogue_gated: add dialogue_tree with prompt and choices. "
-                "Use ONLY ids from context."
+                "Use ONLY ids from context. Reference the world lore."
             ),
             examples=[],
             user_message=context,
@@ -209,7 +219,8 @@ class LlamaPromptSet(PromptSet):
             max_tokens=400,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int) -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int,
+                        story_context: str = "") -> LLMRequest:
         return LLMRequest(
             system=(
                 "You generate environment-themed items for a fantasy game. "
@@ -220,7 +231,7 @@ class LlamaPromptSet(PromptSet):
                 "Each tool: {name, desc, attribute (bludgeon|cutting|digging|climbing)}. "
                 "Each weapon: {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}. "
                 "Each spell_scroll: {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}. "
-                "Items must be thematic to the environment."
+                "Items must be thematic to the environment and world lore."
             ),
             examples=[
                 (
@@ -252,7 +263,10 @@ class LlamaPromptSet(PromptSet):
                     '"spell_effect": "heal"}]}'
                 ),
             ],
-            user_message=f"environment: '{env}', name: '{env_name}', room_level: {room_level}",
+            user_message=(
+                f"environment: '{env}', name: '{env_name}', room_level: {room_level}"
+                + (f"\nWorld lore:\n{story_context[:300]}" if story_context else "")
+            ),
             max_tokens=600,
         )
 
@@ -355,15 +369,19 @@ class LlamaPromptSet(PromptSet):
                                available_npcs: list[dict],
                                available_items: list[dict],
                                available_events: list[dict],
-                               quest_type: str) -> LLMRequest:
-        context = str({
+                               quest_type: str,
+                               story_context: str = "") -> LLMRequest:
+        ctx_data = {
             "environment": env, "environment_name": env_name,
             "story_beat": story_beat, "faction_name": faction_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
             "events": [{"id": e.get("id"), "name": e.get("name", "event")} for e in available_events[:3]],
-        })
+        }
+        if story_context:
+            ctx_data["world_bible_context"] = story_context[:400]
+        context = str(ctx_data)
         return LLMRequest(
             system=(
                 "You generate story quests for a fantasy game referencing a faction and story beat. "

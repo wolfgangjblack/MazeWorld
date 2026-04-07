@@ -75,26 +75,30 @@ def generate_environment_name(env_type: str) -> str:
     return _extract_response(raw)
 
 
-def generate_event_primitive(environment: dict, event_type: str) -> dict:
+def generate_event_primitive(environment: dict, event_type: str,
+                             story_context: str = "") -> dict:
     """Generate a combat or puzzle event for the given environment."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.event_generation(env, env_name, event_type)
+    request = prompts.event_generation(env, env_name, event_type,
+                                       story_context=story_context)
     raw = generate(request)
     return _parse_json_response(raw)
 
 
 def generate_quest_primitive(environment: dict, npcs: list[dict],
                              items: list[dict], events: list[dict],
-                             quest_type: str) -> dict:
+                             quest_type: str,
+                             story_context: str = "") -> dict:
     """Generate a quest given available NPCs, items, events."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.quest_generation(env, env_name, npcs, items, events, quest_type)
+    request = prompts.quest_generation(env, env_name, npcs, items, events, quest_type,
+                                       story_context=story_context)
     raw = generate(request)
     return _parse_json_response(raw)
 
@@ -111,13 +115,15 @@ def generate_story_primitive(story_seed: str, room_count: int,
 def generate_story_quest_primitive(environment: dict, story_beat: str,
                                    faction_name: str, npcs: list[dict],
                                    items: list[dict], events: list[dict],
-                                   quest_type: str) -> dict:
+                                   quest_type: str,
+                                   story_context: str = "") -> dict:
     """Generate a story-connected quest."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
     request = prompts.story_quest_generation(
         env, env_name, story_beat, faction_name, npcs, items, events, quest_type,
+        story_context=story_context,
     )
     raw = generate(request)
     return _parse_json_response(raw)
@@ -139,7 +145,8 @@ WEAPON_DICE_BY_LEVEL = {
 }
 
 
-def generate_item_primitive(environment: dict, room_level: int = 1) -> dict:
+def generate_item_primitive(environment: dict, room_level: int = 1,
+                            story_context: str = "") -> dict:
     """Generate environment-themed items via LLM. Returns dict with category arrays."""
     import random as _rng
 
@@ -147,7 +154,8 @@ def generate_item_primitive(environment: dict, room_level: int = 1) -> dict:
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.item_generation(env, env_name, room_level)
+    request = prompts.item_generation(env, env_name, room_level,
+                                      story_context=story_context)
     raw = generate(request)
     result = _parse_json_response(raw)
 
