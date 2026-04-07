@@ -3,7 +3,7 @@
 import random
 import pytest
 import pygame
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.models.monster import (
     Monster, MonsterAbility, LootEntry,
@@ -147,21 +147,19 @@ class TestMonsterGeneration:
             assert m.name in MONSTER_POOLS[env]
 
     def test_encounter_composition_solo(self):
-        random.seed(1)
-        # Run multiple times, expect at least one solo
-        counts = []
-        for _ in range(100):
-            monsters = generate_encounter_monsters("forest", 1)
-            counts.append(len(monsters))
-        assert 1 in counts  # At least one solo
+        """Roll < 0.4 triggers solo: exactly 1 monster at room level."""
+        with patch('random.random', return_value=0.1):
+            monsters = generate_encounter_monsters("forest", 2)
+        assert len(monsters) == 1
+        assert monsters[0].level == 2
 
     def test_encounter_composition_pack(self):
-        random.seed(42)
-        counts = []
-        for _ in range(100):
+        """Roll between 0.4 and 0.75 triggers pack: 2-4 weaker monsters."""
+        with patch('random.random', return_value=0.5):
             monsters = generate_encounter_monsters("cave", 2)
-            counts.append(len(monsters))
-        assert any(c >= 2 for c in counts)  # At least one pack
+        assert 2 <= len(monsters) <= 4
+        for m in monsters:
+            assert m.level == 1  # max(1, room_level - 1)
 
     def test_encounter_composition_mixed(self):
         random.seed(7)

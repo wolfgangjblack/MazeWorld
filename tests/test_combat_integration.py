@@ -114,14 +114,22 @@ class TestUnifiedSpell:
         assert PlayerSpell is Spell
 
     def test_parse_damage_dice_int(self):
+        """Integer input passes through unchanged."""
         assert _parse_damage_dice(8) == 8
+        assert _parse_damage_dice(0) == 0
+        assert _parse_damage_dice(12) == 12
 
     def test_parse_damage_dice_str_dice(self):
+        """Dice notation extracts the die size (number of sides)."""
         assert _parse_damage_dice("1d8") == 8
         assert _parse_damage_dice("2d6") == 6
+        assert _parse_damage_dice("1d4") == 4
+        assert _parse_damage_dice("3d10") == 10
 
     def test_parse_damage_dice_str_number(self):
+        """Plain numeric string parses to integer."""
         assert _parse_damage_dice("0") == 0
+        assert _parse_damage_dice("6") == 6
 
     def test_parse_spells_old_field_names(self):
         """_parse_spells should accept old cost_hunger/cost_thirst field names."""

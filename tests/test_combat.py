@@ -171,16 +171,31 @@ def make_pack(count=3):
 # ---------------------------------------------------------------------------
 
 class TestStatModifier:
+    """Known D&D modifier table: (stat - 10) // 2."""
+
     def test_average_stat(self):
         assert stat_modifier(10) == 0
+
+    def test_above_average(self):
+        assert stat_modifier(14) == 2
+
+    def test_below_average(self):
+        assert stat_modifier(7) == -2
 
     def test_high_stat(self):
         assert stat_modifier(16) == 3
 
+    def test_very_high_stat(self):
+        assert stat_modifier(18) == 4
+
+    def test_max_stat(self):
+        assert stat_modifier(20) == 5
+
     def test_low_stat(self):
         assert stat_modifier(8) == -1
 
-    def test_odd_stat(self):
+    def test_odd_stat_rounds_down(self):
+        assert stat_modifier(11) == 0
         assert stat_modifier(15) == 2
 
 
@@ -197,14 +212,11 @@ class TestInitiative:
         assert inits == sorted(inits, reverse=True)
 
     def test_player_wins_ties(self, warrior, weak_monster):
-        """On initiative tie, player acts first."""
-        # Force identical initiatives
-        random.seed(0)
-        cc = CombatController(warrior, [weak_monster])
-        # Manually set same initiative
-        for c in cc.combatants:
-            c.initiative = 15
-        cc.combatants.sort(key=lambda c: (-c.initiative, not c.is_player))
+        """On initiative tie, player acts first (CombatController resolves)."""
+        from unittest.mock import patch
+        with patch.object(type(warrior), 'roll_initiative', return_value=15), \
+             patch.object(type(weak_monster), 'roll_initiative', return_value=15):
+            cc = CombatController(warrior, [weak_monster])
         assert cc.combatants[0].is_player
 
     def test_multiple_monsters_sorted(self, warrior):

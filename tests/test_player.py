@@ -191,33 +191,45 @@ def test_get_inventory_format():
     assert ("juice", 2) in inv
 
 
-def test_apply_hunger_thirst_effects_starving():
+def test_move_while_starving_costs_health():
+    """Moving when hunger reaches 0 costs 1 HP."""
+    from unittest.mock import MagicMock
+    maze = MagicMock()
+    maze.is_wall.return_value = False
     player = PlayerCharacter(x=0, y=0)
-    player.hunger = 0
+    player.hunger = 1  # drops to 0 after move
     player.thirst = 50
     initial_health = player.health
-
-    player.apply_hunger_thirst_effects()
+    player.move(dx=1, dy=0, maze=maze)
+    assert player.hunger == 0
     assert player.health == initial_health - 1
 
 
-def test_apply_hunger_thirst_effects_low_hunger():
+def test_move_while_low_hunger_slows_player():
+    """Moving when hunger drops below 20 reduces speed to 80%."""
+    from unittest.mock import MagicMock
+    maze = MagicMock()
+    maze.is_wall.return_value = False
     player = PlayerCharacter(x=0, y=0)
-    player.hunger = 15
+    player.hunger = 16  # drops to 15 after move
     player.thirst = 50
     initial_speed = player.speed
-
-    player.apply_hunger_thirst_effects()
+    player.move(dx=1, dy=0, maze=maze)
+    assert player.hunger == 15
     assert player.speed == initial_speed * 0.8
 
 
-def test_apply_hunger_thirst_effects_dehydrated():
+def test_move_while_dehydrated_costs_health():
+    """Moving when thirst reaches 0 costs 1 HP."""
+    from unittest.mock import MagicMock
+    maze = MagicMock()
+    maze.is_wall.return_value = False
     player = PlayerCharacter(x=0, y=0)
     player.hunger = 50
-    player.thirst = 0
+    player.thirst = 1  # drops to 0 after move
     initial_health = player.health
-
-    player.apply_hunger_thirst_effects()
+    player.move(dx=1, dy=0, maze=maze)
+    assert player.thirst == 0
     assert player.health == initial_health - 1
 
 

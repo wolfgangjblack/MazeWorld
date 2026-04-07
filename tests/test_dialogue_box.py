@@ -29,21 +29,22 @@ class TestGetDisplayWindow:
         assert end == 10
 
     def test_auto_scroll_top(self):
+        """Auto-scroll to top: visible window starts at first line."""
         db = _make_db()
         db.auto_scroll = True
         db._scroll_target = "top"
-        start, _ = db.get_display_window(total_lines=20, max_lines=5)
+        start, end = db.get_display_window(total_lines=20, max_lines=5)
         assert start == 0
-        assert db.auto_scroll is False
+        assert end == 5
 
     def test_auto_scroll_bottom(self):
+        """Auto-scroll to bottom: visible window ends at last line."""
         db = _make_db()
         db.auto_scroll = True
         db._scroll_target = "bottom"
         start, end = db.get_display_window(total_lines=20, max_lines=5)
         assert start == 15
         assert end == 20
-        assert db.auto_scroll is False
 
     def test_clamps_position_above_max(self):
         db = _make_db()

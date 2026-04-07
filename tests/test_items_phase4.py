@@ -1,3 +1,5 @@
+import random
+
 from src.models.items import (
     Weapon, SpellScroll, Food, Tool, ItemStats,
 )
@@ -43,10 +45,10 @@ def test_weapon_unequip():
 
 
 def test_weapon_roll_damage():
+    """Fixed seed: 1d6 weapon produces a known damage value."""
     weapon = _make_weapon(attack_dice="1d6")
-    for _ in range(50):
-        dmg = weapon.roll_damage()
-        assert 1 <= dmg <= 6
+    random.seed(42)
+    assert weapon.roll_damage() == 6  # known result for seed 42
 
 
 def test_weapon_roll_damage_multi_dice():
