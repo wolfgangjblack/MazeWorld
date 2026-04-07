@@ -383,3 +383,198 @@ class TestLLMPrimitives:
             result = generate_npc_backstory({"name": "Greta"}, "context")
 
         assert "brave" in result
+
+
+# ---------------------------------------------------------------------------
+# Step 2 async entity generation tests
+# ---------------------------------------------------------------------------
+
+
+class TestStep2AsyncWiring:
+    def test_step2_calls_all_generators(self):
+        """Verify Step 2 dispatches items, NPCs, monsters, and classes in parallel."""
+        from unittest.mock import AsyncMock, patch
+
+        bible = WorldBible(
+            story=OverarchingStory(title="Test", synopsis="A test."),
+        )
+        bible.rooms["room_0"] = RoomBible(
+            environment="forest", environment_name="Testwood", level=1,
+        )
+
+        layout = {
+            "room_id": "room_0",
+            "room_idx": 0,
+            "room_level": 1,
+            "id_offset": 0,
+            "environment": "forest",
+            "environment_name": "Testwood",
+            "npc_zones": [(0, 0)],
+            "open_spaces": [(5, 5), (6, 6)],
+        }
+
+        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]) as mock_cls, \
+             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, return_value=None) as mock_items, \
+             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]) as mock_npcs, \
+             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]) as mock_mons:
+
+            from src.generate.pipeline import _step2_generate_entities
+            result = asyncio.run(_step2_generate_entities(bible, [layout]))
+
+        mock_cls.assert_called_once()
+        mock_items.assert_called_once()
+        mock_npcs.assert_called_once()
+        mock_mons.assert_called_once()
+        assert "player_classes" in result
+        assert "room_entities" in result
+
+    def test_step2_handles_failures_gracefully(self):
+        """Verify Step 2 continues even if some generators raise."""
+        from unittest.mock import AsyncMock, patch
+
+        bible = WorldBible(
+            story=OverarchingStory(title="Test"),
+        )
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+
+        layout = {
+            "room_id": "room_0", "room_idx": 0, "room_level": 1,
+            "id_offset": 0, "environment": "forest",
+            "environment_name": "Wood", "npc_zones": [],
+            "open_spaces": [],
+        }
+
+        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
+             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[{"id": 1, "selected": True}]), \
+             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
+
+            from src.generate.pipeline import _step2_generate_entities
+            result = asyncio.run(_step2_generate_entities(bible, [layout]))
+
+        # Items failed but NPCs and monsters should still be present
+        entities = result["room_entities"].get("room_0", {})
+        assert entities.get("npc_pool") == [{"id": 1, "selected": True}]
+
+    def test_step2_multi_room_parallel(self):
+        """Verify Step 2 handles multiple rooms."""
+        from unittest.mock import AsyncMock, patch
+
+        bible = WorldBible(story=OverarchingStory(title="Test"))
+        bible.rooms["room_0"] = RoomBible(environment="forest", level=1)
+        bible.rooms["room_1"] = RoomBible(environment="cave", level=2)
+
+        layouts = [
+            {"room_id": "room_0", "room_idx": 0, "room_level": 1,
+             "id_offset": 0, "environment": "forest",
+             "environment_name": "Wood", "npc_zones": [], "open_spaces": []},
+            {"room_id": "room_1", "room_idx": 1, "room_level": 2,
+             "id_offset": 1000, "environment": "cave",
+             "environment_name": "Hollow", "npc_zones": [], "open_spaces": []},
+        ]
+
+        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, return_value={"100": {"name": "Bread"}}), \
+             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
+
+            from src.generate.pipeline import _step2_generate_entities
+            result = asyncio.run(_step2_generate_entities(bible, layouts))
+
+        assert "room_0" in result["room_entities"]
+        assert "room_1" in result["room_entities"]
+
+
+# ---------------------------------------------------------------------------
+# Weapon soft-restriction tests
+# ---------------------------------------------------------------------------
+
+
+class TestWeaponSoftRestriction:
+    def _make_player(self, archetype: str, weapon_type: str, weapon_stat: str = "STR"):
+        from src.models.player import PlayerCharacter, PlayerClass, Stats
+        from src.models.weapon import Weapon
+
+        stats = Stats(STR=16, DEX=14, CON=12, INT=10, WIS=10, CHA=10, LUCK=10)
+        if archetype == "jester":
+            stats = Stats(STR=10, DEX=10, CON=10, INT=10, WIS=10, CHA=10, LUCK=16)
+
+        pc = PlayerClass(
+            name="Test", archetype=archetype, flavor_text="test",
+            environment="forest", stats=stats,
+        )
+        weapon = Weapon(
+            name="TestWeapon", weapon_type=weapon_type,
+            stat=weapon_stat, damage_dice=8,
+        )
+        player = PlayerCharacter(name="Hero", x=0, y=0)
+        player.player_class = pc
+        player.weapon = weapon
+        return player
+
+    def test_warrior_heavy_weapon_gets_bonus(self):
+        """Warrior with a heavy weapon gets full stat bonus."""
+        player = self._make_player("warrior", "heavy", "STR")
+        bonus = player._weapon_stat_bonus("STR")
+        # STR=16 → modifier = 3
+        assert bonus == 3
+
+    def test_warrior_simple_weapon_no_bonus(self):
+        """Warrior with a simple (mage) weapon gets 0 stat bonus."""
+        player = self._make_player("warrior", "simple", "INT")
+        bonus = player._weapon_stat_bonus("INT")
+        assert bonus == 0
+
+    def test_mage_simple_weapon_gets_bonus(self):
+        """Mage with a simple weapon gets full stat bonus."""
+        player = self._make_player("mage", "simple", "INT")
+        bonus = player._weapon_stat_bonus("INT")
+        # INT=10 → modifier = 0
+        assert bonus == 0  # 0 is correct for INT=10
+
+    def test_mage_heavy_weapon_no_bonus(self):
+        """Mage with a heavy (warrior) weapon gets 0 stat bonus."""
+        player = self._make_player("mage", "heavy", "STR")
+        bonus = player._weapon_stat_bonus("STR")
+        assert bonus == 0
+
+    def test_jester_any_weapon_uses_luck_avg(self):
+        """Jester gets avg(LUCK mod, weapon stat mod) for any weapon."""
+        player = self._make_player("jester", "heavy", "STR")
+        bonus = player._weapon_stat_bonus("STR")
+        # LUCK=16 → mod 3, STR=10 → mod 0, avg = 1
+        assert bonus == 1
+
+    def test_jester_luck_weapon_bonus(self):
+        """Jester with high LUCK and matching stat still uses averaging."""
+        from src.models.player import PlayerCharacter, PlayerClass, Stats
+        from src.models.weapon import Weapon
+
+        stats = Stats(STR=16, DEX=10, CON=10, INT=10, WIS=10, CHA=10, LUCK=16)
+        pc = PlayerClass(
+            name="Trickster", archetype="jester", flavor_text="t",
+            environment="forest", stats=stats,
+        )
+        weapon = Weapon(name="Blade", weapon_type="heavy", stat="STR", damage_dice=8)
+        player = PlayerCharacter(name="Jester", x=0, y=0)
+        player.player_class = pc
+        player.weapon = weapon
+        # STR=16 → mod 3, LUCK=16 → mod 3, avg = 3
+        assert player._weapon_stat_bonus("STR") == 3
+
+    def test_no_weapon_unarmed(self):
+        """Without a weapon, soft-restriction still applies."""
+        from src.models.player import PlayerCharacter, PlayerClass, Stats
+
+        stats = Stats(STR=16, DEX=14, CON=12, INT=10, WIS=10, CHA=10, LUCK=10)
+        pc = PlayerClass(
+            name="Fighter", archetype="warrior", flavor_text="t",
+            environment="forest", stats=stats,
+        )
+        player = PlayerCharacter(name="Hero", x=0, y=0)
+        player.player_class = pc
+        player.weapon = None
+        # Unarmed: weapon_type defaults to "simple", warrior doesn't match
+        # so bonus is 0 — but that's fine, unarmed is weak by design
+        bonus = player._weapon_stat_bonus("STR")
+        assert bonus == 0

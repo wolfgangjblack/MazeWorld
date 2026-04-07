@@ -642,21 +642,22 @@ def _generate_loot_table(item_ids: list[int], difficulty: int) -> list[dict]:
     return loot
 
 
-def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
-                    all_class_options: list | None = None):
-    """Generate all content for a single room. Returns room metadata dict."""
+def _generate_room_layout(room_idx: int, room_dir: str):
+    """Generate maze layout and structural data for a single room.
+
+    This is Phase A of room generation — no LLM calls, just maze structure.
+    Returns a layout dict used by Step 2 entity gen and Phase B content gen.
+    """
     room_level = room_idx + 1
     room_id = f"room_{room_idx}"
-    id_offset = room_idx * 1000  # Offset IDs to avoid collisions across rooms
+    id_offset = room_idx * 1000
 
-    # --- Maze ---
     maze = Maze()
     maze.generate()
     env_name = _llm_generate_env_name(maze.environment)
     maze.environment_name = env_name
     logger.info("Room %d: %s (%s)", room_idx, maze.environment, env_name)
 
-    # --- Event tiles ---
     maze.place_event_tiles()
     event_positions = []
     for y, row in enumerate(maze.grid):
@@ -664,22 +665,65 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
             if cell == maze.event_tile_id:
                 event_positions.append((x, y))
 
-    # --- Items ---
+    npc_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 10)
+    quest_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 20)
+    open_spaces = maze.find_open_spaces()
+
+    if open_spaces:
+        player_start = random.choice(open_spaces)
+        open_spaces.remove(player_start)
+    else:
+        player_start = (1, 1)
+
+    os.makedirs(room_dir, exist_ok=True)
+
+    return {
+        "room_id": room_id,
+        "room_idx": room_idx,
+        "room_level": room_level,
+        "id_offset": id_offset,
+        "environment": maze.environment,
+        "environment_name": env_name,
+        "maze": maze,
+        "event_positions": event_positions,
+        "npc_zones": npc_zones,
+        "quest_zones": quest_zones,
+        "open_spaces": open_spaces,
+        "player_start": player_start,
+        "room_dir": room_dir,
+    }
+
+
+def _generate_room_content(layout: dict, num_rooms: int, story,
+                           npc_pool: list, generated_items: dict | None):
+    """Generate events, quests, dialogue, and write files for a room.
+
+    This is Phase B — runs AFTER async entity generation has produced
+    items and NPCs for this room.
+    """
+    room_idx = layout["room_idx"]
+    room_level = layout["room_level"]
+    room_id = layout["room_id"]
+    id_offset = layout["id_offset"]
+    maze = layout["maze"]
+    env_name = layout["environment_name"]
+    event_positions = layout["event_positions"]
+    quest_zones = layout["quest_zones"]
+    player_start = layout["player_start"]
+    room_dir = layout["room_dir"]
+
+    # --- Register items and place on maze ---
     item_id_base = 200 + id_offset
-    generated_items = _llm_generate_items(maze.environment, env_name, room_level=room_level)
     if generated_items:
-        # Re-key items with room-specific offset
         rekeyed = {}
         for i, (_, item_data) in enumerate(sorted(generated_items.items())):
             rekeyed[str(item_id_base + i)] = item_data
         generated_items = rekeyed
 
     items_path = os.path.join(room_dir, "items.json")
-    os.makedirs(room_dir, exist_ok=True)
     if generated_items:
         with open(items_path, "w") as f:
             json.dump(generated_items, f, indent=2)
-        # Reload items so registry has this room's items for placement
         registry._loaded = False
         registry._load_items_from(items_path)
         registry._loaded = True
@@ -694,86 +738,8 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
             if registry.is_item(cell):
                 item_placements.append({"x": x, "y": y, "item_id": cell})
 
-    # --- Zones ---
-    npc_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 10)
-    quest_zones = _compute_zones(MAZE_WIDTH, MAZE_HEIGHT, 20)
-
-    # --- NPC pool ---
-    npc_pool = []
-    npc_id_counter = 100 + id_offset
-    open_spaces = maze.find_open_spaces()
-
-    npc_bar = tqdm(total=len(npc_zones) * 3,
-                   desc=f"  Room {room_idx} NPCs", unit="npc", leave=True)
-    for zone_x, zone_y in npc_zones:
-        zone_npcs = []
-        is_merchant_zone = random.random() < MERCHANT_CHANCE
-        for i in range(3):
-            personality = _llm_generate_personality(maze.environment, env_name)
-            greeting = _llm_generate_greeting(personality)
-            portrait_prompt = _llm_generate_image_desc(personality)
-            identity = _build_identity(personality)
-
-            npc_type = "MerchantNPC" if (is_merchant_zone and i == 0) else random.choice(NPC_TYPES)
-
-            npc_data = {
-                "id": npc_id_counter,
-                "type": npc_type,
-                "name": personality.get("name", f"NPC_{npc_id_counter}"),
-                "job": "merchant" if npc_type == "MerchantNPC" else personality.get("job", "peasant"),
-                "personality": personality.get("personality", "stoic"),
-                "hobby": personality.get("hobby", "walking"),
-                "environment": maze.environment,
-                "environment_name": env_name,
-                "identity": identity,
-                "description": personality.get("description", ""),
-                "opening_greeting": greeting,
-                "portrait_prompt": portrait_prompt,
-                "profile_image": None,
-                "dialogue_tree": None,
-                "quest_id": None,
-                "zone": [zone_x, zone_y],
-                "selected": False,
-            }
-            if npc_type == "MerchantNPC":
-                shop_items = _generate_shop_inventory(registry)
-                npc_data["shop_inventory"] = shop_items
-
-            zone_npcs.append(npc_data)
-            npc_id_counter += 1
-            npc_bar.update(1)
-
-        if is_merchant_zone:
-            selected = zone_npcs[0]
-        else:
-            selected = random.choice(zone_npcs)
-        selected["selected"] = True
-
-        zone_open = [
-            (x, y) for (x, y) in open_spaces
-            if zone_x <= x < zone_x + 10 and zone_y <= y < zone_y + 10
-        ]
-        if zone_open:
-            sx, sy = random.choice(zone_open)
-            selected["x"] = sx
-            selected["y"] = sy
-            if (sx, sy) in open_spaces:
-                open_spaces.remove((sx, sy))
-        else:
-            selected["selected"] = False
-
-        npc_pool.extend(zone_npcs)
-
-    npc_bar.close()
     active_npcs = [n for n in npc_pool if n.get("selected")]
     logger.info("Room %d: NPCs %d pool / %d active", room_idx, len(npc_pool), len(active_npcs))
-
-    # --- Player start ---
-    if open_spaces:
-        player_start = random.choice(open_spaces)
-        open_spaces.remove(player_start)
-    else:
-        player_start = (1, 1)
 
     # --- Events ---
     event_list = []
@@ -1480,46 +1446,85 @@ async def _async_generate_monsters(bible: WorldBible, room_id: str,
     return []
 
 
-async def _step2_generate_entities(bible: WorldBible, num_rooms: int,
-                                   environments: list[str],
-                                   room_results: list[dict]) -> list:
-    """Step 2: Parallel async entity generation per room.
+async def _step2_generate_entities(bible: WorldBible, layouts: list[dict]) -> dict:
+    """Step 2: Parallel async entity generation for all rooms.
 
-    Each generator reads the Bible for context and writes results back.
-    After all generators complete, the Bible is updated and persisted.
+    Runs items, NPCs, monsters per room AND player classes in parallel via
+    asyncio.gather. Each generator reads Bible context and writes back.
+
+    Returns dict with:
+      - "player_classes": list of PlayerClass objects
+      - "room_entities": {room_id: {"items": ..., "npc_pool": ...}}
     """
     logger.info("=== Step 2: Parallel Entity Generation ===")
 
-    # Generate player classes (global, based on first room)
-    first_env = environments[0] if environments else "forest"
-    first_env_name = room_results[0]["environment_name"] if room_results else "Unknown"
+    first_layout = layouts[0] if layouts else {}
+    first_env = first_layout.get("environment", "forest")
+    first_env_name = first_layout.get("environment_name", "Unknown")
 
-    # Run class gen + per-room entity gen in parallel
+    # Build all async tasks: classes + (items, NPCs, monsters) per room
+    task_keys = []  # Track what each task index corresponds to
     tasks = []
-    tasks.append(_async_generate_classes(bible, first_env, first_env_name))
 
-    for rr in room_results:
-        room_id = rr["room_id"]
-        env_type = rr["environment"]
-        env_name = rr["environment_name"]
-        room_level = rr["room_level"]
+    # Global: player classes
+    tasks.append(_async_generate_classes(bible, first_env, first_env_name))
+    task_keys.append(("classes", None))
+
+    for layout in layouts:
+        room_id = layout["room_id"]
+        env_type = layout["environment"]
+        env_name = layout["environment_name"]
+        room_level = layout["room_level"]
+        npc_zones = layout["npc_zones"]
+        open_spaces = list(layout["open_spaces"])  # copy to avoid mutation issues
+        id_offset = layout["id_offset"]
+
+        # Per-room items
+        tasks.append(_async_generate_items(
+            bible, room_id, env_type, env_name, room_level,
+        ))
+        task_keys.append(("items", room_id))
+
+        # Per-room NPCs
+        tasks.append(_async_generate_npcs(
+            bible, room_id, env_type, env_name,
+            npc_zones, open_spaces, id_offset,
+        ))
+        task_keys.append(("npcs", room_id))
+
+        # Per-room monsters
         tasks.append(_async_generate_monsters(
             bible, room_id, env_type, env_name, room_level,
         ))
+        task_keys.append(("monsters", room_id))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            logger.warning("Async entity generation task %d failed: %s", i, result)
+    # Unpack results
+    player_classes = []
+    room_entities = {}
 
-    player_classes = results[0] if not isinstance(results[0], Exception) else []
+    for i, result in enumerate(results):
+        key_type, room_id = task_keys[i]
+        if isinstance(result, Exception):
+            logger.warning("Async %s gen failed (room=%s): %s", key_type, room_id, result)
+            continue
+
+        if key_type == "classes":
+            player_classes = result or []
+        elif key_type == "items":
+            room_entities.setdefault(room_id, {})["items"] = result
+        elif key_type == "npcs":
+            room_entities.setdefault(room_id, {})["npc_pool"] = result or []
+        elif key_type == "monsters":
+            room_entities.setdefault(room_id, {})["monsters"] = result or []
 
     # Persist Bible after Step 2
     bible.persist(BIBLE_PATH)
-    logger.info("World Bible updated after entity generation.")
+    logger.info("World Bible updated after entity generation (%d rooms, %d classes).",
+                len(room_entities), len(player_classes))
 
-    return player_classes
+    return {"player_classes": player_classes, "room_entities": room_entities}
 
 
 def _llm_generate_npc_backstory(personality: dict, story_context: str) -> str:
@@ -1535,7 +1540,15 @@ def _llm_generate_npc_backstory(personality: dict, story_context: str) -> str:
 
 
 def generate_world():
-    """Main generation pipeline. Two-step Bible-driven architecture."""
+    """Main generation pipeline. Two-step Bible-driven architecture.
+
+    Flow:
+      1. Step 1 (sequential): Generate story arc + story entities → World Bible
+      2. Room layouts (sequential, fast): Maze structure, zones, positions
+      3. Step 2 (parallel via asyncio): Items, NPCs, monsters, player classes
+      4. Room content (sequential): Events, quests, dialogue, file writes
+      5. Portraits, manifest, legacy compat
+    """
     logger.info("=== MazeWorld World Generator ===")
     logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
 
@@ -1545,7 +1558,6 @@ def generate_world():
     registry.load()
 
     num_rooms = NUM_ROOMS
-    room_results = []
 
     # Save RNG state before story generation
     rng_state = random.getstate()
@@ -1559,36 +1571,46 @@ def generate_world():
 
     # Restore RNG state for deterministic room generation
     random.setstate(rng_state)
-    # Re-pick environments with restored state so rooms get same envs
     environments = random.choices(ENVIRONMENT_TYPES, k=num_rooms)
 
-    # --- Generate each room (maze layout, items, NPCs, events, quests) ---
+    # === ROOM LAYOUTS (fast, no LLM) ===
+    layouts = []
     for room_idx in range(num_rooms):
         room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_idx}")
-        os.makedirs(room_dir, exist_ok=True)
-        result = _generate_room(room_idx, num_rooms, story, room_dir)
-        # Update Bible room with environment name from maze generation
+        layout = _generate_room_layout(room_idx, room_dir)
+        # Update Bible room with env from maze generation
         room_id = f"room_{room_idx}"
         if room_id in bible.rooms:
-            bible.rooms[room_id].environment_name = result["environment_name"]
-            bible.rooms[room_id].environment = result["environment"]
-        room_results.append(result)
+            bible.rooms[room_id].environment_name = layout["environment_name"]
+            bible.rooms[room_id].environment = layout["environment"]
+        layouts.append(layout)
 
     # === STEP 2: Parallel async entity generation ===
-    player_classes = asyncio.run(
-        _step2_generate_entities(bible, num_rooms, environments, room_results)
-    )
-    if player_classes:
-        class_data_list = [pc.model_dump() for pc in player_classes]
-    else:
-        # Fallback: generate classes synchronously
+    step2_result = asyncio.run(_step2_generate_entities(bible, layouts))
+    player_classes = step2_result["player_classes"]
+    room_entities = step2_result["room_entities"]
+
+    if not player_classes:
         from src.generate.class_gen import generate_classes
         first_env = environments[0] if environments else "forest"
-        first_env_name = _llm_generate_env_name(first_env)
+        first_env_name = layouts[0]["environment_name"] if layouts else "Unknown"
         player_classes = generate_classes(first_env, first_env_name)
-        class_data_list = [pc.model_dump() for pc in player_classes]
 
+    class_data_list = [pc.model_dump() for pc in player_classes]
     logger.info("Generated %d player classes.", len(player_classes))
+
+    # === ROOM CONTENT (events, quests, files — depends on entities) ===
+    room_results = []
+    for layout in layouts:
+        room_id = layout["room_id"]
+        entities = room_entities.get(room_id, {})
+        npc_pool = entities.get("npc_pool", [])
+        generated_items = entities.get("items")
+
+        result = _generate_room_content(
+            layout, num_rooms, story, npc_pool, generated_items,
+        )
+        room_results.append(result)
 
     # --- Backward-compatible writes (room 0 data to legacy paths) ---
     r0 = room_results[0]
