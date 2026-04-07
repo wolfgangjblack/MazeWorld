@@ -892,9 +892,10 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
             climax_event["loot_table"] = _generate_loot_table(all_item_ids, boss_level)
             climax_event["money_drop"] = [boss_level * 10, boss_level * 30]
         event_list.append(climax_event)
+        maze.gate_encounter_id = boss_id
 
-    # --- Door placement (for non-final rooms) ---
-    if room_idx < num_rooms - 1:
+    # --- Door placement (rooms with a next room OR a climax boss) ---
+    if room_idx < num_rooms - 1 or (room_idx == num_rooms - 1 and num_rooms > 1):
         maze.place_door(player_start)
 
     # --- Quests ---
@@ -1066,9 +1067,11 @@ def _generate_room(room_idx: int, num_rooms: int, story, room_dir: str,
         quest_list.append(multi_quest)
         quest_id_counter += 1
 
-    # --- Door-reveal quest (one per non-final room) ---
-    if room_idx < num_rooms - 1 and npcs_for_quest and combat_events_for_quest:
-        dr_target = random.choice(combat_events_for_quest)
+    # --- Door-reveal quest (one per room that has a door) ---
+    climax_boss_id = maze.gate_encounter_id if room_idx == num_rooms - 1 else None
+    dr_candidates = [e for e in combat_events_for_quest if e["id"] != climax_boss_id]
+    if maze.door_position and npcs_for_quest and dr_candidates:
+        dr_target = random.choice(dr_candidates)
         dr_giver_id = random.choice(npcs_for_quest)["id"]
         door_reveal_quest = {
             "id": f"{event_id_prefix}q_{quest_id_counter:03d}",

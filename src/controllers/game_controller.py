@@ -139,10 +139,13 @@ class GameController:
         self.total_encounters = sum(
             1 for e in self.events.values()
             if not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
         self.resolved_encounters = sum(
             1 for e in self.events.values()
-            if e.resolved and not getattr(e, 'is_gate', False)
+            if e.resolved
+            and not getattr(e, 'is_gate', False)
+            and not getattr(e, 'is_climax_boss', False)
         )
 
     @property
@@ -327,6 +330,9 @@ class GameController:
 
     def _signal_room_transition(self):
         """Signal the main loop to transition to the next room."""
+        if self.current_room >= self.total_rooms - 1:
+            self.pending_action = "victory"
+            return
         # Check for incomplete story quests
         undone = [q for q in self.quests.values()
                   if getattr(q, 'is_story_quest', False)
@@ -918,6 +924,8 @@ class GameController:
             self.stats["monsters_killed"] += sum(
                 1 for m in combat_event.monsters if not m.is_alive)
         if getattr(combat_event, 'is_climax_boss', False):
+            self.resolved_encounters += 1
+            self.gate_cleared = True
             self.pending_action = "victory"
         elif not getattr(combat_event, 'is_gate', False):
             self.resolved_encounters += 1
