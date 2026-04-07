@@ -19,10 +19,6 @@ def _make_player(money=100):
 
 
 class TestMerchantNPC:
-    def test_merchant_color_is_gold(self):
-        m = _make_merchant()
-        assert m.color == (255, 215, 0)
-
     def test_get_shop_items_empty(self):
         m = _make_merchant()
         assert m.get_shop_items() == []

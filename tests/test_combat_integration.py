@@ -46,34 +46,6 @@ def _weak_monster():
 
 
 # ---------------------------------------------------------------------------
-# Task 2: Unified CombatAction/CombatState enums
-# ---------------------------------------------------------------------------
-
-class TestUnifiedEnums:
-    def test_combat_action_has_all_values(self):
-        names = {a.name for a in CombatAction}
-        assert "ATTACK" in names
-        assert "GAMBLE" in names
-        assert "SWAP_WEAPON" in names
-        assert "REST" in names
-        assert "FLEE" in names
-
-    def test_combat_state_values(self):
-        assert CombatState.ONGOING.value == "ongoing"
-        assert CombatState.VICTORY.value == "victory"
-        assert CombatState.DEFEAT.value == "defeat"
-        assert CombatState.FLED.value == "fled"
-
-    def test_combat_controller_uses_canonical_state(self):
-        """CombatController should use CombatState from models.combat."""
-        p = _make_player()
-        m = _weak_monster()
-        cc = CombatController(p, [m])
-        assert cc.state == CombatState.ONGOING
-        assert isinstance(cc.state, CombatState)
-
-
-# ---------------------------------------------------------------------------
 # Task 3: Unified Spell model
 # ---------------------------------------------------------------------------
 

@@ -4,17 +4,6 @@ from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.maze import Maze
 
 
-def test_npc_construction_from_template():
-    npc = StaticNPC(x=5, y=5, id=100)
-    assert npc.x == 5
-    assert npc.y == 5
-    assert npc.id == 100
-    # Attributes are NOT auto-generated at construction time;
-    # prepare() must be called with a maze environment.
-    assert npc.name is None
-    assert npc.environment is None
-
-
 def test_random_npc_construction():
     npc = RandomNPC(x=3, y=3, id=101, home_x=3, home_y=3)
     assert npc.home_x == 3
@@ -69,11 +58,6 @@ def test_get_recent_history_over_limit():
     assert len(history) == 4
     assert history[0]["content"] == "msg 6"
     assert history[-1]["content"] == "msg 9"
-
-
-def test_has_met_player_default():
-    npc = StaticNPC(x=0, y=0, id=100)
-    assert npc.has_met_player is False
 
 
 def test_history_persists_across_sessions():

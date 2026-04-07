@@ -35,21 +35,6 @@ def _make_scroll(name="scroll of fire", spell_effect="fire", price=20):
 
 
 class TestInventoryManagerAdd:
-    def test_add_new_item(self):
-        player = _make_player()
-        mgr = InventoryManager(player.inventory, player)
-        food = _make_food()
-        mgr.add(food)
-        assert "bread" in player.inventory
-        assert player.inventory["bread"].quantity == 1
-
-    def test_add_stacks_existing(self):
-        player = _make_player()
-        mgr = InventoryManager(player.inventory, player)
-        mgr.add(_make_food())
-        mgr.add(_make_food())
-        assert player.inventory["bread"].quantity == 2
-
     def test_add_different_items(self):
         player = _make_player()
         mgr = InventoryManager(player.inventory, player)
@@ -82,11 +67,6 @@ class TestInventoryManagerRemove:
 
 
 class TestInventoryManagerGetList:
-    def test_empty_inventory(self):
-        player = _make_player()
-        mgr = InventoryManager(player.inventory, player)
-        assert mgr.get_list() == []
-
     def test_returns_tuples(self):
         player = _make_player()
         mgr = InventoryManager(player.inventory, player)

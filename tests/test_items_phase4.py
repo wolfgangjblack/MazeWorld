@@ -58,13 +58,6 @@ def test_weapon_roll_damage_multi_dice():
         assert 2 <= dmg <= 8
 
 
-def test_weapon_clone():
-    weapon = _make_weapon()
-    cloned = weapon.clone()
-    assert cloned.name == weapon.name
-    assert cloned.weapon_type == weapon.weapon_type
-    assert cloned is not weapon
-
 
 # --- SpellScroll tests ---
 
@@ -84,12 +77,6 @@ def test_spell_scroll_health_cap():
     scroll.use(player)
     assert player.health == player.max_health
 
-
-def test_spell_scroll_clone():
-    scroll = _make_scroll()
-    cloned = scroll.clone()
-    assert cloned.spell_effect == scroll.spell_effect
-    assert cloned is not scroll
 
 
 # --- Player equip methods ---

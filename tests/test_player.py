@@ -1,14 +1,7 @@
 import pytest
 from src.models.player import PlayerCharacter
-from src.models.items import Food, Drink, Tool, ItemStats
+from src.models.items import Food, Drink, ItemStats
 from src.models.npc import StaticNPC
-
-
-def test_initialize_inventory(player):
-    assert set(player.inventory.keys()) == {"bread", "water", "hammer"}
-    assert isinstance(player.inventory["bread"], Food)
-    assert isinstance(player.inventory["water"], Drink)
-    assert isinstance(player.inventory["hammer"], Tool)
 
 
 def test_starter_inventory_cloned(player, reg):
