@@ -1,20 +1,81 @@
+import logging
+
 from config import GAME_MODE
 from src.prompts import get_prompt_set
+from src.prompts.base import LLMRequest
 from src.generate.llm_client import generate
+
+logger = logging.getLogger(__name__)
 
 # LLM failure fallback
 _LLM_FAILURE_RESPONSE = "No... I can not talk about that..."
+
+# Minimum turns before the LLM exhaustion check kicks in
+_LLM_EXHAUSTION_MIN_TURNS = 3
+
+
+def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = None) -> bool:
+    """Use an LLM call to decide if the NPC's dialogue should end.
+
+    Returns True if the LLM judges the conversation should be exhausted.
+    Falls back to False (continue) on any error.
+    """
+    history_text = "\n".join(
+        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}"
+        for t in npc.interaction_history[-6:]
+    )
+
+    quest_info = ""
+    if quest_context:
+        quest_info = (
+            f"Active quest: \"{quest_context.get('title', 'unknown')}\" "
+            f"(type: {quest_context.get('type', '?')}, "
+            f"status: {quest_context.get('status', 'active')}). "
+        )
+
+    request = LLMRequest(
+        system=(
+            "You are a game-master adjudicating NPC dialogue in a fantasy RPG. "
+            "Given the conversation history, decide whether the NPC should end "
+            "the dialogue. Answer ONLY 'yes' or 'no'.\n\n"
+            "Answer 'yes' (exhaust dialogue) if ANY of these are true:\n"
+            "- The quest topic has been fully addressed\n"
+            "- The NPC has nothing more useful to say\n"
+            "- The player is being abusive, off-topic, or not engaging\n"
+            "- The conversation is going in circles\n\n"
+            "Answer 'no' (continue dialogue) if:\n"
+            "- The NPC still has quest-relevant information to share\n"
+            "- The player is actively engaging and making progress"
+        ),
+        user_message=(
+            f"NPC: {npc.name} ({getattr(npc, 'job', 'unknown')} — "
+            f"{getattr(npc, 'personality', 'unknown')})\n"
+            f"{quest_info}\n"
+            f"Recent conversation:\n{history_text}\n\n"
+            f"Player's latest input: \"{player_input}\"\n\n"
+            "Should the NPC end this conversation? (yes/no)"
+        ),
+        max_tokens=10,
+    )
+
+    try:
+        raw = generate(request)
+        answer = raw.strip().lower()
+        return answer.startswith("yes")
+    except Exception as e:
+        logger.warning("LLM exhaustion check failed, using heuristic fallback: %s", e)
+        # Heuristic fallback: non-quest NPCs exhaust after 6+ turns
+        turn_count = len(npc.interaction_history)
+        if turn_count >= 6 and not quest_context:
+            return True
+        return False
 
 
 def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None = None) -> bool:
     """Check if an NPC's dialogue should be exhausted after a player reply.
 
-    Evaluates (via simple heuristics for offline, LLM for online):
-    - Is this quest-related? Has the user solved/answered the quest?
-    - Does the NPC have more to tell from a game perspective?
-    - Is the player behaving/helping?
-
-    If the NPC is done or annoyed, returns True (exhaust dialogue).
+    - offline_static: heuristic (dialogue tree end node, turn count)
+    - online / offline_local: LLM call after minimum turns, with heuristic fallback
     """
     if getattr(npc, "dialogue_exhausted", False):
         return True
@@ -30,18 +91,16 @@ def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None
     if quest_context and quest_context.get("status") == "completed":
         return True
 
-    # For offline modes, use simple turn-based exhaustion
+    # For offline_static, use simple heuristics (no LLM)
     if GAME_MODE == "offline_static":
-        # Static NPCs exhaust when dialogue tree reaches "end" node
         tree = getattr(npc, "dialogue_tree", None)
         if tree and tree.get("_current") == "end":
             return True
         return False
 
-    # For LLM modes, check if the conversation is going nowhere
-    if turn_count >= 6 and not quest_context:
-        # Non-quest NPC with 6+ turns — exhaust
-        return True
+    # For online / offline_local: use LLM after a few turns
+    if turn_count >= _LLM_EXHAUSTION_MIN_TURNS:
+        return _llm_check_exhaustion(npc, player_input, quest_context)
 
     return False
 
