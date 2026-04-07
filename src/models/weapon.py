@@ -69,3 +69,44 @@ STARTER_WEAPONS = {
 
 # Stats that a jester's random weapon can roll on each attack
 RANDOM_WEAPON_STATS = ["STR", "DEX", "INT"]
+
+# Weapon type -> archetypes that get the full stat bonus
+WEAPON_CLASS_AFFINITY: dict[str, list[str]] = {
+    "heavy": ["warrior"],
+    "light": ["rogue"],
+    "simple": ["mage", "healer", "warrior"],
+    "random": ["jester"],
+}
+
+
+def weapon_stat_bonus(player, weapon: Weapon | None) -> int:
+    """Compute the stat bonus a player gets from their weapon.
+
+    - Matching class: full stat modifier from weapon.stat
+    - Jester: (stat_mod + LUCK mod) // 2 for any weapon
+    - Mismatched class: 0 (can still use the weapon, just no stat bonus)
+    """
+    if weapon is None:
+        return 0
+
+    archetype = ""
+    if player.player_class:
+        archetype = player.player_class.archetype
+
+    stat_name = weapon.stat
+    if weapon.weapon_type == "random":
+        import random as _rng
+        stat_name = _rng.choice(RANDOM_WEAPON_STATS)
+
+    if archetype == "jester":
+        # Jester uses average of normal stat mod and LUCK mod
+        luck_mod = player.get_stat_mod("LUCK")
+        normal_mod = player.get_stat_mod(stat_name)
+        return (luck_mod + normal_mod) // 2
+
+    affinities = WEAPON_CLASS_AFFINITY.get(weapon.weapon_type, [])
+    if archetype in affinities:
+        return player.get_stat_mod(stat_name)
+
+    # Mismatched class: no stat bonus
+    return 0

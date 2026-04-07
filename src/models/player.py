@@ -349,17 +349,19 @@ class PlayerCharacter(BaseModel):
         return self.weapon.stat
 
     def roll_attack(self) -> int:
-        """1d20 + weapon stat mod + level mod."""
-        stat = self._resolve_weapon_stat()
-        return random.randint(1, 20) + self.get_stat_mod(stat) + (self.level - 1)
+        """1d20 + weapon stat bonus (class-restricted) + level mod."""
+        from src.models.weapon import weapon_stat_bonus
+        bonus = weapon_stat_bonus(self, self.weapon)
+        return random.randint(1, 20) + bonus + (self.level - 1)
 
     def roll_weapon_damage(self) -> int:
-        """Roll weapon damage dice + weapon stat modifier."""
-        stat = self._resolve_weapon_stat()
+        """Roll weapon damage dice + weapon stat bonus (class-restricted)."""
+        from src.models.weapon import weapon_stat_bonus
+        bonus = weapon_stat_bonus(self, self.weapon)
         if self.weapon is None:
-            return max(1, random.randint(1, 4) + self.get_stat_mod(stat))
+            return max(1, random.randint(1, 4) + bonus)
         base = self.weapon.roll_damage()
-        return max(1, base + self.get_stat_mod(stat))
+        return max(1, base + bonus)
 
     def roll_magic_attack(self) -> int:
         """1d20 + INT (mage) or WIS (healer) + level mod."""

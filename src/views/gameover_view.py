@@ -15,7 +15,8 @@ MENU_ITEMS = ["Load Game", "Quit to Start"]
 class GameOverView:
     """Game Over screen with brief stats summary and load/quit options."""
 
-    def __init__(self, screen, font, player, has_saves=False, portrait_path=None):
+    def __init__(self, screen, font, player, has_saves=False, portrait_path=None,
+                 story_paragraph=""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
@@ -24,6 +25,7 @@ class GameOverView:
         self.has_saves = has_saves
         self.selected_index = 0
         self.bg_image = None
+        self.story_paragraph = story_paragraph
 
         if portrait_path and os.path.exists(portrait_path):
             try:
@@ -63,6 +65,11 @@ class GameOverView:
             self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y))
             y += 28
 
+        # Story paragraph (Bible-driven)
+        if self.story_paragraph:
+            y += 10
+            y = self._draw_wrapped(self.story_paragraph, 60, y, SCREEN_WIDTH - 120)
+
         # Menu options
         y = SCREEN_HEIGHT // 2 + 60
         for i, item in enumerate(MENU_ITEMS):
@@ -77,6 +84,26 @@ class GameOverView:
             surf = self.font.render(f"{prefix}{item}", True, color)
             self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y))
             y += 40
+
+    def _draw_wrapped(self, text: str, x: int, y: int, max_w: int) -> int:
+        words = text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.small_font.size(test)[0] <= max_w:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        for line in lines:
+            surf = self.small_font.render(line, True, TEXT_COLOR)
+            self.screen.blit(surf, (x, y))
+            y += self.small_font.get_linesize()
+        return y
 
     def handle_input(self, event) -> str | None:
         """Returns 'load' or 'quit_to_start', or None."""

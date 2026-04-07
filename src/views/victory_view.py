@@ -13,7 +13,8 @@ PANEL_BG = (20, 20, 40)
 class VictoryView:
     """Displays victory screen with game stats summary."""
 
-    def __init__(self, screen, font, player, stats: dict, total_rooms: int):
+    def __init__(self, screen, font, player, stats: dict, total_rooms: int,
+                 story_paragraph: str = ""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 56)
@@ -22,6 +23,7 @@ class VictoryView:
         self.player = player
         self.stats = stats
         self.total_rooms = total_rooms
+        self.story_paragraph = story_paragraph
 
     def handle_input(self, event) -> str | None:
         """Returns 'quit' or 'menu'."""
@@ -80,7 +82,33 @@ class VictoryView:
             self.screen.blit(value_surf, (panel_x + 230, y))
             y += 32
 
+        # Victory narrative (Bible-driven)
+        if self.story_paragraph:
+            y += 10
+            self._draw_wrapped(self.story_paragraph, panel_x + 20, y,
+                               panel_w - 40)
+
         # Hint
         hint = self.small_font.render(
             "Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
+
+    def _draw_wrapped(self, text: str, x: int, y: int, max_w: int) -> int:
+        words = text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.small_font.size(test)[0] <= max_w:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        for line in lines:
+            surf = self.small_font.render(line, True, STAT_COLOR)
+            self.screen.blit(surf, (x, y))
+            y += self.small_font.get_linesize()
+        return y

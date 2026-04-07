@@ -197,6 +197,16 @@ ATTACK_NAMES = {
 
 ELEMENTAL_TYPES = ["fire", "water", "forest", "light", "dark"]
 
+# Night-only monster pools: harder, dark-elemental variants
+NIGHT_MONSTER_POOLS = {
+    "forest":  ["Shadow Wolf", "Night Treant", "Dark Stalker"],
+    "cave":    ["Shade Crawler", "Umbral Slime", "Void Bat"],
+    "dungeon": ["Phantom", "Revenant", "Night Wraith"],
+    "castle":  ["Dark Knight", "Specter", "Midnight Hound"],
+    "house":   ["Nightmare", "Shadow Fiend", "Dark Poltergeist"],
+    "city":    ["Night Stalker", "Shadow Thief", "Dark Prowler"],
+}
+
 # Loot item pools by category (item IDs from items.json)
 LOOT_POOLS = {
     "food":  [200, 201, 202, 203],
@@ -330,6 +340,19 @@ def generate_encounter_monsters(environment: str, room_level: int) -> List[Monst
         weak_level = max(1, room_level - 1)
         weak = [generate_monster(environment, weak_level) for _ in range(weak_count)]
         return strong + weak
+
+
+def generate_night_monster(environment: str, room_level: int) -> Monster:
+    """Generate a night-only monster variant: dark elemental, harder stats."""
+    pool = NIGHT_MONSTER_POOLS.get(environment, NIGHT_MONSTER_POOLS["dungeon"])
+    name = random.choice(pool)
+    # Night monsters are +1 effective level (harder stats)
+    effective_level = min(room_level + 1, max(LEVEL_SCALING.keys()))
+    monster = generate_monster(environment, effective_level, name_override=name)
+    # Force dark elemental affinity
+    monster.elemental_affinity = "dark"
+    monster.damage_type = "dark"
+    return monster
 
 
 # ---------------------------------------------------------------------------

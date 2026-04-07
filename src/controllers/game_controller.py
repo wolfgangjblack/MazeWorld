@@ -1187,6 +1187,9 @@ class GameController:
 
     def update(self, current_time):
         """Update game logic (NPC movement, etc.)"""
+        # Advance real-time day/night clock
+        self.day_night.update_realtime(current_time)
+
         if self.dialogue_box.generating:
             self.dialogue_box.check_generation()
 
