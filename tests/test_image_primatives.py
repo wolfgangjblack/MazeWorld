@@ -28,6 +28,7 @@ class TestApiImageBackend:
 # -- Portrait helpers via registry ------------------------------------------
 
 def test_generate_npc_portraits_delegates(tmp_path):
+    """When IMAGE_BACKEND is 'local', falls back to sequential path via get_image_backend."""
     mock_backend = MagicMock()
     mock_backend.generate_and_save.return_value = True
 
@@ -36,7 +37,11 @@ def test_generate_npc_portraits_delegates(tmp_path):
         "101": {"description": "an elf"},
     }
 
-    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend):
+    # Patch both get_image_backend AND IMAGE_BACKEND so the parallel path
+    # falls through to the sequential backend.
+    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend), \
+         patch("src.generate.image_client.os.environ.get", return_value=None), \
+         patch("config.IMAGE_BACKEND", "local"):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
     assert mock_backend.generate_and_save.call_count == 2
@@ -45,12 +50,14 @@ def test_generate_npc_portraits_delegates(tmp_path):
 
 
 def test_generate_npc_portraits_handles_failure(tmp_path):
+    """When backend returns False, profile_image should be None."""
     mock_backend = MagicMock()
     mock_backend.generate_and_save.return_value = False
 
     npc_db = {"101": {"description": "an elf"}}
 
-    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend):
+    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend), \
+         patch("config.IMAGE_BACKEND", "local"):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
     assert npc_db["101"]["profile_image"] is None

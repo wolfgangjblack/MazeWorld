@@ -1,0 +1,210 @@
+{
+  "2200": {
+    "category": "food",
+    "name": "ember-cured jerky",
+    "desc": "Meat dried over sacred flames, stamped with cult sigils.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 35,
+      "hydration_value": 0,
+      "health_value": 4,
+      "uses": 1,
+      "price": 9
+    }
+  },
+  "2201": {
+    "category": "food",
+    "name": "flame-blessed bread",
+    "desc": "Ritual loaf baked in consecrated braziers by zealot acolytes.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 28,
+      "hydration_value": 0,
+      "health_value": 0,
+      "uses": 1,
+      "price": 20
+    }
+  },
+  "2202": {
+    "category": "food",
+    "name": "charred root stew",
+    "desc": "Underground tubers blackened in ceremonial fire pits.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 40,
+      "hydration_value": 0,
+      "health_value": 12,
+      "uses": 1,
+      "price": 16
+    }
+  },
+  "2203": {
+    "category": "food",
+    "name": "branded fruit",
+    "desc": "Apples seared with Ignis Eternal's mark of purification.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 24,
+      "hydration_value": 0,
+      "health_value": 8,
+      "uses": 1,
+      "price": 16
+    }
+  },
+  "2204": {
+    "category": "drink",
+    "name": "sanctified wine",
+    "desc": "Crimson vintage heated in ritual chalices for transcendence ceremonies.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 32,
+      "health_value": 19,
+      "uses": 1,
+      "price": 12
+    }
+  },
+  "2205": {
+    "category": "drink",
+    "name": "molten spring water",
+    "desc": "Geothermally heated water from the sanctum's burning depths.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 40,
+      "health_value": 0,
+      "uses": 1,
+      "price": 14
+    }
+  },
+  "2206": {
+    "category": "drink",
+    "name": "ash tea",
+    "desc": "Bitter brew steeped with ashes of the purified faithful.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 28,
+      "health_value": 9,
+      "uses": 1,
+      "price": 20
+    }
+  },
+  "2207": {
+    "category": "drink",
+    "name": "flame essence",
+    "desc": "Concentrated liquid fire consumed during initiation rites.",
+    "room_level": 3,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 19,
+      "health_value": 24,
+      "uses": 1,
+      "price": 12
+    }
+  },
+  "2208": {
+    "category": "tool",
+    "name": "cult brand iron",
+    "desc": "Sacred marking tool bearing Ignis Eternal's burning sigil.",
+    "room_level": 3,
+    "item_stats": {
+      "attribute": "bludgeon",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 27
+    }
+  },
+  "2209": {
+    "category": "tool",
+    "name": "ceremonial dagger",
+    "desc": "Ritual blade used to carve flame marks into initiates.",
+    "room_level": 3,
+    "item_stats": {
+      "attribute": "cutting",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 19
+    }
+  },
+  "2210": {
+    "category": "tool",
+    "name": "zealot's pickaxe",
+    "desc": "Mining tool for excavating sanctum passages to the surface.",
+    "room_level": 3,
+    "item_stats": {
+      "attribute": "digging",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 28
+    }
+  },
+  "2211": {
+    "category": "weapon",
+    "name": "purifier's mace",
+    "desc": "Heavy iron mace crowned with eternally burning brazier head.",
+    "weapon_type": "heavy",
+    "room_level": 3,
+    "item_stats": {
+      "attack_dice": "1d8",
+      "stat_modifier": "STR",
+      "price": 44
+    }
+  },
+  "2212": {
+    "category": "weapon",
+    "name": "flame-touched rapier",
+    "desc": "Noble's blade corrupted by cult infiltrators, wreathed in ember.",
+    "weapon_type": "light",
+    "room_level": 3,
+    "item_stats": {
+      "attack_dice": "1d10",
+      "stat_modifier": "DEX",
+      "price": 51
+    }
+  },
+  "2213": {
+    "category": "weapon",
+    "name": "ignis staff",
+    "desc": "Obsidian rod channeling the primordial fire deity's power.",
+    "weapon_type": "simple",
+    "room_level": 3,
+    "item_stats": {
+      "attack_dice": "1d8",
+      "stat_modifier": "INT",
+      "price": 31
+    }
+  },
+  "2214": {
+    "category": "spell_scroll",
+    "name": "scroll of burning ward",
+    "desc": "Creates protective barrier of sacred flame around the faithful.",
+    "spell_effect": "shield",
+    "room_level": 3,
+    "item_stats": {
+      "health_value": 0,
+      "nutrition_value": 0,
+      "hydration_value": 0,
+      "price": 44
+    }
+  },
+  "2215": {
+    "category": "spell_scroll",
+    "name": "scroll of cellular sight",
+    "desc": "Reveals hidden cult networks and infiltrator locations.",
+    "spell_effect": "reveal",
+    "room_level": 3,
+    "item_stats": {
+      "health_value": 0,
+      "nutrition_value": 0,
+      "hydration_value": 0,
+      "price": 59
+    }
+  }
+}

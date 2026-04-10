@@ -1,0 +1,3210 @@
+[
+  {
+    "id": "r1_evt_000",
+    "type": "combat",
+    "name": "Molten Predator Ambush",
+    "description": "A natural lava flow has created a perfect hunting ground for a dangerous creature that lurks beneath the bubbling surface. The air shimmers with heat as something massive stirs beneath the molten rock.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber with glowing lava pools and rocky overhangs, heat shimmer distorting the air, dangerous predatory shadows moving beneath molten surface",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "f042fd1c-adbd-4260-a070-f95dd5cdabda",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [
+          {
+            "name": "Poison",
+            "effect_type": "poison",
+            "damage_dice": "1d4",
+            "damage_type": "physical",
+            "duration": 2,
+            "chance": 0.25
+          }
+        ],
+        "loot_table": [
+          {
+            "item_id": 301,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "59cba83f-8b80-42d9-8266-0cc723a7657f",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "f09eefa0-5ecd-41a9-9f5a-1abeaa5480a8",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 8,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 300,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "af0209e1-1049-418c-9b04-2016b24307f0",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 3207,
+        "drop_chance": 0.15
+      },
+      {
+        "item_id": 4215,
+        "drop_chance": 0.5
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_001",
+    "type": "combat",
+    "name": "Dawn Scavenger Hunt",
+    "description": "As daylight filters through cracks in the cavern ceiling, hungry scavengers emerge from their hiding places to hunt for prey. The morning light reveals fresh bones scattered across the heated stone floor.",
+    "difficulty": 2,
+    "portrait_prompt": "A cave entrance with dawn light streaming in, scattered bones on hot stone floor, predatory creatures emerging from shadows",
+    "profile_image": null,
+    "time_gate": "day",
+    "monsters": [
+      {
+        "id": "a9412aad-5806-48a0-a342-cfcdcc8c8681",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 2,
+        "hp": 13,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 2,
+        "dex_mod": 2,
+        "attack_name": "crush",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "forest",
+        "elemental_affinity": "forest",
+        "magic_resistance": 2,
+        "abilities": [
+          {
+            "name": "Forest Blast",
+            "effect_type": "damage",
+            "damage_dice": "1d8",
+            "damage_type": "forest",
+            "duration": 0,
+            "chance": 0.3
+          }
+        ],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "d8638252-37b0-48d0-b90a-fbc209321a8c",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "slam",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "87ae55a4-1167-4b7e-b0af-484e419bd0a9",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 1,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "acid spit",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "fire",
+        "elemental_affinity": "fire",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "83c56e71-90a3-4e54-b36b-75509f400a69",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "slam",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "water",
+        "elemental_affinity": "water",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 301,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 2212,
+        "drop_chance": 0.32
+      },
+      {
+        "item_id": 2204,
+        "drop_chance": 0.46
+      },
+      {
+        "item_id": 2215,
+        "drop_chance": 0.13
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_002",
+    "type": "combat",
+    "name": "Nocturnal Fire Sprites",
+    "description": "When darkness falls, mischievous fire sprites dance among the glowing embers of the cavern walls. Their playful nature quickly turns aggressive when disturbed, filling the air with burning sparks.",
+    "difficulty": 2,
+    "portrait_prompt": "A dark cave illuminated by dancing fire sprites and glowing embers, sparks floating through the air, magical flames flickering on cave walls",
+    "profile_image": null,
+    "time_gate": "night",
+    "monsters": [
+      {
+        "id": "c16cc249-978d-4203-9b06-915f21f2f202",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 2,
+        "hp": 17,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 2,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "water",
+        "elemental_affinity": "water",
+        "magic_resistance": 2,
+        "abilities": [
+          {
+            "name": "Poison",
+            "effect_type": "poison",
+            "damage_dice": "1d4",
+            "damage_type": "physical",
+            "duration": 3,
+            "chance": 0.25
+          }
+        ],
+        "loot_table": [
+          {
+            "item_id": 200,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4213,
+        "drop_chance": 0.45
+      },
+      {
+        "item_id": 2209,
+        "drop_chance": 0.11
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_003",
+    "type": "combat",
+    "name": "Daybreak Ember Guards",
+    "description": "Ancient guardians awaken with the rising sun, their forms wreathed in flames that dance higher in the daylight. They patrol these sacred burning grounds with unwavering vigilance.",
+    "difficulty": 3,
+    "portrait_prompt": "A bright cave chamber with sunlight streaming down, flame-wreathed guardian creatures patrolling among glowing rocks and embers",
+    "profile_image": null,
+    "time_gate": "day",
+    "monsters": [
+      {
+        "id": "d3939aa1-0103-49d0-ae60-cb2ff7e17790",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 2,
+        "hp": 17,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 203,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 1203,
+        "drop_chance": 0.37
+      },
+      {
+        "item_id": 205,
+        "drop_chance": 0.5
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_004",
+    "type": "combat",
+    "name": "Thermal Vent Eruption",
+    "description": "A massive thermal vent suddenly erupts with scalding steam and superheated gas, disturbing the creatures that nest around its mineral-rich deposits. The ground trembles with geothermal activity.",
+    "difficulty": 4,
+    "portrait_prompt": "A cave chamber with a massive erupting thermal vent, scalding steam and gas clouds, creatures disturbed from mineral deposits around the vent",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "be9a935a-5069-480f-bdc1-2ec9614d0769",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 2,
+        "hp": 20,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "slam",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "forest",
+        "elemental_affinity": "forest",
+        "magic_resistance": 2,
+        "abilities": [
+          {
+            "name": "Forest Blast",
+            "effect_type": "damage",
+            "damage_dice": "1d8",
+            "damage_type": "forest",
+            "duration": 0,
+            "chance": 0.3
+          }
+        ],
+        "loot_table": [
+          {
+            "item_id": 300,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 1200,
+        "drop_chance": 0.63
+      }
+    ],
+    "money_drop": [
+      8,
+      32
+    ]
+  },
+  {
+    "id": "r1_evt_005",
+    "type": "combat",
+    "name": "Crystal Formation Defenders",
+    "description": "Beautiful fire-crystals have grown in this chamber over centuries, and their otherworldly beauty has attracted protective entities. They guard these precious formations with fierce determination.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber filled with beautiful glowing fire crystals, otherworldly beauty, protective entities guarding the crystal formations",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "9a0e23b5-ac86-45c4-8dfa-785fc75a4a7f",
+        "species": "Bat Swarm",
+        "name": "Bat Swarm",
+        "level": 2,
+        "hp": 17,
+        "max_hp": 10,
+        "ac": 13,
+        "str_mod": 2,
+        "dex_mod": 0,
+        "attack_name": "acid spit",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a bat swarm monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 1201,
+        "drop_chance": 0.3
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_006",
+    "type": "combat",
+    "name": "Magma Chamber Dwellers",
+    "description": "Deep within the cavern system, a magma chamber houses creatures perfectly adapted to extreme heat. The very air burns as these beings emerge to defend their molten domain.",
+    "difficulty": 4,
+    "portrait_prompt": "A deep cave magma chamber with extreme heat distortion, creatures emerging from molten rock pools, burning air and intense heat effects",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "873cf668-f881-4353-a51c-e57a52a8aa2f",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 2,
+        "hp": 17,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "fire",
+        "elemental_affinity": "fire",
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 401,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "5c52eff4-4793-455c-bd70-4a69ca1c53f0",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 1,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "2d777e69-382a-48b2-9e66-f88442e0bac1",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 403,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "78688daf-4d4d-45ef-99f3-4abc02a6ce3c",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [
+          {
+            "name": "Poison",
+            "effect_type": "poison",
+            "damage_dice": "1d4",
+            "damage_type": "physical",
+            "duration": 2,
+            "chance": 0.25
+          }
+        ],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 2214,
+        "drop_chance": 0.54
+      },
+      {
+        "item_id": 3213,
+        "drop_chance": 0.62
+      }
+    ],
+    "money_drop": [
+      8,
+      32
+    ]
+  },
+  {
+    "id": "r1_evt_007",
+    "type": "combat",
+    "name": "Midnight Flame Dancers",
+    "description": "Under cover of darkness, ethereal beings perform an ancient ritual dance around pillars of eternal flame. Their ceremony must not be interrupted, lest their wrath be kindled.",
+    "difficulty": 3,
+    "portrait_prompt": "A dark cave chamber with ethereal beings dancing around pillars of eternal flame, mystical ritual atmosphere, ancient ceremonial setting",
+    "profile_image": null,
+    "time_gate": "night",
+    "monsters": [
+      {
+        "id": "acadc00b-e06e-401f-af59-11ae26601f9e",
+        "species": "Bat Swarm",
+        "name": "Bat Swarm",
+        "level": 2,
+        "hp": 14,
+        "max_hp": 10,
+        "ac": 13,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a bat swarm monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "5ccc85c6-7b92-47d3-b6bb-3ae978ba5fee",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 1,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 401,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "3aa21152-cf6b-4044-a40e-28d10981187f",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 402,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 1208,
+        "drop_chance": 0.44
+      },
+      {
+        "item_id": 3202,
+        "drop_chance": 0.14
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_008",
+    "type": "combat",
+    "name": "Sulfur Pool Sentries",
+    "description": "Bubbling pools of sulfur create a toxic maze where adapted creatures stand guard. The acrid fumes burn the lungs while these sentries patrol their poisonous domain.",
+    "difficulty": 2,
+    "portrait_prompt": "A cave chamber with bubbling sulfur pools creating a toxic maze, acrid fumes in the air, sentinel creatures patrolling the poisonous environment",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "6481e46d-fa08-4a3b-b706-d7340493524c",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 2,
+        "hp": 18,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 2201,
+        "drop_chance": 0.34
+      },
+      {
+        "item_id": 3206,
+        "drop_chance": 0.42
+      },
+      {
+        "item_id": 4210,
+        "drop_chance": 0.48
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_009",
+    "type": "combat",
+    "name": "Infernal Gateway",
+    "description": "A natural arch of volcanic rock pulses with otherworldly energy, serving as a conduit for beings from realms of fire. The gateway thrums with power as entities answer its call.",
+    "difficulty": 4,
+    "portrait_prompt": "A cave chamber with a natural volcanic arch pulsing with otherworldly energy, otherworldly beings emerging through a fiery gateway, mystical portal atmosphere",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "dedfbb40-0589-423e-8541-6dbc2c32f966",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 2,
+        "hp": 13,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 2,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [
+          {
+            "name": "Poison",
+            "effect_type": "poison",
+            "damage_dice": "1d4",
+            "damage_type": "physical",
+            "duration": 3,
+            "chance": 0.25
+          }
+        ],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "0d153b4f-12af-49ea-ac6f-1e26d2a9efc4",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 1,
+        "hp": 10,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 401,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "83a0ea11-b895-4a86-bcae-dd8ae92b1833",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "c6356590-f844-4ad7-a2fc-dc024eabeed2",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 3210,
+        "drop_chance": 0.2
+      },
+      {
+        "item_id": 209,
+        "drop_chance": 0.37
+      }
+    ],
+    "money_drop": [
+      8,
+      32
+    ]
+  },
+  {
+    "id": "r1_evt_010",
+    "type": "combat",
+    "name": "Crimson Flame Ritual Site",
+    "description": "A hidden chamber reveals clear signs of Crimson Flame cult activity - ritual circles burned into the stone floor, sacred flame braziers, and the lingering presence of those who would guard their holy site from intruders.",
+    "difficulty": 4,
+    "portrait_prompt": "A secret cave chamber with ritual circles burned into stone floor, sacred flame braziers, cult symbols and ceremonial items, ominous religious atmosphere",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "ac34433d-68ca-4e25-b299-cc7841103cd6",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "fire",
+        "elemental_affinity": "fire",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "e7024fa3-d79b-4719-93b5-5e7e28d6d09f",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 8,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "slam",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "light",
+        "elemental_affinity": "light",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4215,
+        "drop_chance": 0.37
+      },
+      {
+        "item_id": 3204,
+        "drop_chance": 0.25
+      },
+      {
+        "item_id": 2212,
+        "drop_chance": 0.18
+      }
+    ],
+    "money_drop": [
+      8,
+      32
+    ]
+  },
+  {
+    "id": "r1_evt_011",
+    "type": "combat",
+    "name": "Ember Worm Territory",
+    "description": "The walls show distinctive bore holes from massive creatures that tunnel through the heated rock. Vibrations through the stone warn of an approaching territorial dispute.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber with distinctive bore holes in the walls, heated rock showing tunnel marks, vibrations in the stone, territorial creature signs",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "4104291e-96c0-49a6-b222-5bd1bff0a479",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 2,
+        "hp": 15,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 2,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [
+          {
+            "name": "Stun",
+            "effect_type": "stun",
+            "damage_dice": "0d0",
+            "damage_type": "physical",
+            "duration": 1,
+            "chance": 0.2
+          }
+        ],
+        "loot_table": [
+          {
+            "item_id": 302,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 2206,
+        "drop_chance": 0.17
+      },
+      {
+        "item_id": 201,
+        "drop_chance": 0.3
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_012",
+    "type": "combat",
+    "name": "Morning Heat Hunters",
+    "description": "As the day begins, predators that hunt by thermal signature emerge to patrol their territory. The rising temperature of the cavern makes them more active and aggressive.",
+    "difficulty": 2,
+    "portrait_prompt": "A cave chamber in morning light with predatory creatures hunting by thermal signature, rising heat making them aggressive, active hunting atmosphere",
+    "profile_image": null,
+    "time_gate": "day",
+    "monsters": [
+      {
+        "id": "332f8f84-b989-403f-95f7-858c110cdd9d",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 8,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "acid spit",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 200,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "7441fecf-26fc-4151-b424-e3096a75dba0",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 11,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "crush",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 402,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "759776aa-c655-4728-8a97-1f2952937765",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 1,
+        "hp": 10,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "55852a1d-3034-419a-a96d-1bd99d6f9b3f",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 1,
+        "hp": 10,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "crush",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "dark",
+        "elemental_affinity": "dark",
+        "magic_resistance": 1,
+        "abilities": [
+          {
+            "name": "Stun",
+            "effect_type": "stun",
+            "damage_dice": "0d0",
+            "damage_type": "physical",
+            "duration": 1,
+            "chance": 0.2
+          }
+        ],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4204,
+        "drop_chance": 0.45
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_013",
+    "type": "combat",
+    "name": "Lava Tube Ambush",
+    "description": "An ancient lava tube serves as the perfect hiding spot for creatures that strike from above. The smooth obsidian walls offer no purchase for escape once the ambush begins.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber with ancient lava tubes and smooth obsidian walls, creatures positioned for ambush from above, dangerous enclosed environment",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "e693b00d-892f-45c9-9c46-6abf33f705a2",
+        "species": "Slime",
+        "name": "Slime",
+        "level": 2,
+        "hp": 20,
+        "max_hp": 10,
+        "ac": 13,
+        "str_mod": 1,
+        "dex_mod": 2,
+        "attack_name": "slam",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 402,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a slime monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4206,
+        "drop_chance": 0.48
+      },
+      {
+        "item_id": 1201,
+        "drop_chance": 0.39
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_014",
+    "type": "combat",
+    "name": "Geothermal Garden Guards",
+    "description": "A unique ecosystem has developed around the geothermal vents, with strange heat-loving plants and their protective symbionts. This garden paradise has its own fierce guardians.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber with unique heat-loving plants around geothermal vents, strange ecosystem with protective symbiotic creatures, garden paradise with fierce guardians",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "0fdba9f8-5022-4e3b-b0e5-0e7da8a4eb97",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 2,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 202,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4204,
+        "drop_chance": 0.43
+      },
+      {
+        "item_id": 4209,
+        "drop_chance": 0.15
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_015",
+    "type": "combat",
+    "name": "Cinder Storm",
+    "description": "A sudden wind through the cavern system whips up a storm of burning cinders and ash. Creatures that thrive in these conditions use the chaos to launch their attack.",
+    "difficulty": 2,
+    "portrait_prompt": "A cave chamber with swirling cinders and ash storm, wind whipping burning particles through the air, creatures emerging from the chaotic storm conditions",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "8be445be-40b6-4a01-ae5b-99e2ddf42d0e",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 2,
+        "hp": 20,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 2,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 201,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 205,
+        "drop_chance": 0.48
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_016",
+    "type": "combat",
+    "name": "Obsidian Maze Encounter",
+    "description": "Sharp obsidian formations create a natural maze where sound echoes deceptively. Something stalks through this labyrinth of volcanic glass, using the reflective surfaces to its advantage.",
+    "difficulty": 3,
+    "portrait_prompt": "A cave chamber with sharp obsidian formations creating a natural maze, reflective volcanic glass surfaces, stalking creature using the labyrinth to its advantage",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "fddc21ed-6718-4b5d-b009-892b367eea6f",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 2,
+        "hp": 18,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 200,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 3204,
+        "drop_chance": 0.13
+      },
+      {
+        "item_id": 215,
+        "drop_chance": 0.51
+      },
+      {
+        "item_id": 211,
+        "drop_chance": 0.31
+      }
+    ],
+    "money_drop": [
+      6,
+      24
+    ]
+  },
+  {
+    "id": "r1_evt_017",
+    "type": "combat",
+    "name": "Underground Furnace",
+    "description": "What appears to be a natural formation reveals itself as an underground furnace where something has been forging with intense heat. The creators of this forge don't welcome visitors.",
+    "difficulty": 4,
+    "portrait_prompt": "A cave chamber with an underground forge and furnace, intense heat and forging equipment, hostile creators defending their workspace",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "b1391679-d72a-4808-a69b-1107e0b0a61b",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 2,
+        "hp": 13,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 2,
+        "dex_mod": 2,
+        "attack_name": "screech",
+        "damage_dice": 8,
+        "damage_dice_expr": "1d8",
+        "damage_type": "water",
+        "elemental_affinity": "water",
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 3204,
+        "drop_chance": 0.41
+      },
+      {
+        "item_id": 4202,
+        "drop_chance": 0.12
+      },
+      {
+        "item_id": 1202,
+        "drop_chance": 0.51
+      }
+    ],
+    "money_drop": [
+      8,
+      32
+    ]
+  },
+  {
+    "id": "r1_evt_018",
+    "type": "combat",
+    "name": "Flame Beetle Colony",
+    "description": "A colony of fire-adapted insects has made their home in the mineral-rich walls. Their synchronized movements and defensive pheromones create a formidable collective threat.",
+    "difficulty": 2,
+    "portrait_prompt": "A cave chamber with fire-adapted insects in mineral-rich walls, synchronized colony movements, defensive pheromones creating collective threat",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "ed45d3c2-8ce5-4a4a-8e5c-702d5a1f264d",
+        "species": "Cave Troll",
+        "name": "Cave Troll",
+        "level": 2,
+        "hp": 16,
+        "max_hp": 10,
+        "ac": 13,
+        "str_mod": 2,
+        "dex_mod": 2,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a cave troll monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "27f8a4b3-c71c-4655-89fb-2998e705c543",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 1,
+        "hp": 10,
+        "max_hp": 10,
+        "ac": 10,
+        "str_mod": 1,
+        "dex_mod": 0,
+        "attack_name": "slam",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "dark",
+        "elemental_affinity": "dark",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 402,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "b5342926-bdf0-4f59-9da7-6afcb49242d1",
+        "species": "Crystal Beetle",
+        "name": "Crystal Beetle",
+        "level": 1,
+        "hp": 9,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 200,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a crystal beetle monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "ab54b29c-e639-4535-8aef-8501e1cbda3d",
+        "species": "Bat Swarm",
+        "name": "Bat Swarm",
+        "level": 1,
+        "hp": 8,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "fire",
+        "elemental_affinity": "fire",
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a bat swarm monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 1211,
+        "drop_chance": 0.13
+      }
+    ],
+    "money_drop": [
+      4,
+      16
+    ]
+  },
+  {
+    "id": "r1_evt_019",
+    "type": "combat",
+    "name": "Volcanic Convergence",
+    "description": "Multiple creatures have gathered at this central point where several lava flows converge. The intense heat and territorial disputes create a chaotic battleground where alliances shift like flowing magma.",
+    "difficulty": 5,
+    "portrait_prompt": "A large cave chamber where multiple lava flows converge, intense heat with multiple creature types gathering, chaotic battleground with shifting territorial disputes",
+    "profile_image": null,
+    "time_gate": null,
+    "monsters": [
+      {
+        "id": "8d3a2b93-a73d-4367-a437-03c9bfe9cf9a",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 2,
+        "hp": 14,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 2,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 6,
+        "damage_dice_expr": "1d6",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 2,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 300,
+            "probability": 0.5
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "efbbd9db-b3ec-49c3-b42b-7ea2bab59407",
+        "species": "Bat Swarm",
+        "name": "Bat Swarm",
+        "level": 1,
+        "hp": 8,
+        "max_hp": 10,
+        "ac": 11,
+        "str_mod": 0,
+        "dex_mod": 1,
+        "attack_name": "screech",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a bat swarm monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "09c818f1-d7f3-40af-837f-18bc6720d8f8",
+        "species": "Rock Golem",
+        "name": "Rock Golem",
+        "level": 1,
+        "hp": 12,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 1,
+        "dex_mod": 1,
+        "attack_name": "slam",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [],
+        "loot_table": [
+          {
+            "item_id": 400,
+            "probability": 0.45
+          }
+        ],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a rock golem monster in a cave setting, fantasy pixel art"
+      },
+      {
+        "id": "b3dfa7dc-4d92-4a03-a834-427d4b95e3a3",
+        "species": "Blind Crawler",
+        "name": "Blind Crawler",
+        "level": 1,
+        "hp": 10,
+        "max_hp": 10,
+        "ac": 12,
+        "str_mod": 0,
+        "dex_mod": 0,
+        "attack_name": "screech",
+        "damage_dice": 4,
+        "damage_dice_expr": "1d4",
+        "damage_type": "physical",
+        "elemental_affinity": null,
+        "magic_resistance": 1,
+        "abilities": [
+          {
+            "name": "Stun",
+            "effect_type": "stun",
+            "damage_dice": "0d0",
+            "damage_type": "physical",
+            "duration": 1,
+            "chance": 0.2
+          }
+        ],
+        "loot_table": [],
+        "description": "",
+        "backstory": "",
+        "time_availability": "always",
+        "profile_image": null,
+        "portrait_prompt": "a blind crawler monster in a cave setting, fantasy pixel art"
+      }
+    ],
+    "room_level": 2,
+    "loot_table": [
+      {
+        "item_id": 4202,
+        "drop_chance": 0.49
+      }
+    ],
+    "money_drop": [
+      10,
+      40
+    ]
+  },
+  {
+    "id": "r1_evt_020",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_021",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_022",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_023",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_024",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_025",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_026",
+    "type": "puzzle",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_027",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_028",
+    "type": "puzzle",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_029",
+    "type": "puzzle",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_030",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_031",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_032",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_033",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_034",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_035",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_036",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_037",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_038",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_039",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_040",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_041",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_042",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_043",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_044",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_045",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_046",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_047",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_048",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_049",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_050",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_051",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_052",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_053",
+    "type": "puzzle",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_054",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_055",
+    "type": "puzzle",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_056",
+    "type": "puzzle",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_057",
+    "type": "puzzle",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a puzzle scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "correct_tool": null,
+    "correct_ability": null
+  },
+  {
+    "id": "r1_evt_058",
+    "type": "event",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_059",
+    "type": "event",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_060",
+    "type": "event",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "hunger",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_061",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "hunger",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_062",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_063",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_064",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_065",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "hunger",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_066",
+    "type": "event",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_067",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_068",
+    "type": "event",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_069",
+    "type": "event",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_070",
+    "type": "event",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 3,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "hunger",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_071",
+    "type": "event",
+    "name": "Locked Chest",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "night",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_072",
+    "type": "event",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "hunger",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_073",
+    "type": "event",
+    "name": "Crumbling Bridge",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_074",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 1,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": "day",
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "thirst",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_075",
+    "type": "event",
+    "name": "Strange Rune",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  },
+  {
+    "id": "r1_evt_076",
+    "type": "event",
+    "name": "Trapped Door",
+    "description": "A mysterious obstacle blocks your path...",
+    "difficulty": 2,
+    "portrait_prompt": "a event scene in a cave, pixel art",
+    "profile_image": null,
+    "time_gate": null,
+    "choices": [
+      {
+        "text": "Try to force through",
+        "stat_check": "health",
+        "dc": 12,
+        "auto_success": false
+      },
+      {
+        "text": "Walk away",
+        "auto_success": true
+      }
+    ],
+    "failure_damage_type": "health",
+    "failure_damage_range": [
+      5,
+      12
+    ]
+  }
+]

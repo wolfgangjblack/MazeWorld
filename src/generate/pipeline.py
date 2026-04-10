@@ -144,15 +144,33 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         leader=faction_data.get("leader", "Unknown"),
     ) if faction_data else None
 
+    # Build a slim story summary to pass to beat generation — avoids sending the
+    # full model dump (~1600 tokens of empty arrays) as input to each beat call.
+    story_summary = {
+        "title": overarching_data.get("title", ""),
+        "synopsis": overarching_data.get("synopsis", ""),
+        "faction_name": overarching_data.get("faction", {}).get("name", ""),
+        "faction_description": overarching_data.get("faction", {}).get("description", ""),
+        "leader": overarching_data.get("faction", {}).get("leader", ""),
+        "escalation_arc": overarching_data.get("escalation_arc", []),
+        "climax": overarching_data.get("climax", ""),
+        "final_boss_name": overarching_data.get("final_boss_name", ""),
+        "key_npc_names": overarching_data.get("key_npc_names", []),
+    }
+
     room_beats: list[dict] = []
     logger.info("Generating %d room story beats...", num_rooms)
     for room_idx in tqdm(range(num_rooms), desc="  Room Beats", unit="beat", leave=True):
         try:
             from src.generate.generators.llm_primitives import generate_room_story_beat
             beat_data = generate_room_story_beat(
-                overarching_data, environments[room_idx], room_idx, room_beats)
+                story_summary, environments[room_idx], room_idx, room_beats)
             if "error" not in beat_data:
                 room_beats.append(beat_data)
+                logger.info("Room %d beat: %s (escalation %d, boss: %s)",
+                            room_idx, environments[room_idx]["name"],
+                            beat_data.get("escalation", room_idx + 1),
+                            beat_data.get("mini_boss", {}).get("name", "none"))
                 continue
         except Exception as e:
             logger.warning("Room %d beat generation failed: %s", room_idx, e)
@@ -389,9 +407,17 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
         llm_data = llm_npcs[i] if i < len(llm_npcs) else {}
         x, y = tile.position
 
+        _NPC_TYPE_MAP = {
+            "merchant": "MerchantNPC",
+            "quest": "RandomNPC",
+            "combat_npc": "AggressiveNPC",
+            "regular": "StaticNPC",
+        }
+        npc_type = _NPC_TYPE_MAP.get(tile.npc_role or "regular", "StaticNPC")
+
         npc_data = {
             "id": npc_id_counter,
-            "type": "MerchantNPC" if tile.npc_role == "merchant" else "StaticNPC",
+            "type": npc_type,
             "name": llm_data.get("name", f"NPC_{npc_id_counter}"),
             "job": llm_data.get("job", "peasant"),
             "personality": llm_data.get("personality", "stoic"),
@@ -407,6 +433,7 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
             "quest_type": tile.quest_type,
             "quest_target_tile": list(tile.quest_target_tile) if tile.quest_target_tile else None,
             "max_exchanges": tile.npc_max_exchanges,
+            "is_story_npc": tile.is_story_npc,
             "x": x,
             "y": y,
             "selected": True,
@@ -470,6 +497,70 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Phase 4A helpers
+# ---------------------------------------------------------------------------
+
+# Build a position→event_id index for O(1) quest target lookup.
+def _build_event_pos_index(event_list: list[dict],
+                           event_tiles: list) -> dict:
+    """Return a dict mapping tile position tuples to event IDs."""
+    index: dict[tuple, str] = {}
+    for tile in event_tiles:
+        evt_id = None
+        for e in event_list:
+            # Match by checking if the tile's position was used to generate this event.
+            # Events are assigned IDs sequentially; we match on recorded tile position.
+            if e.get("_tile_pos") == list(tile.position):
+                evt_id = e["id"]
+                break
+        if evt_id:
+            index[tile.position] = evt_id
+    return index
+
+
+# Quest success/failure templates — derived from quest type, no LLM call.
+_QUEST_SUCCESS = {
+    "combat_event": "You've done it. The threat is gone — here's what I promised.",
+    "solve_puzzle": "I knew you could figure it out. Take this for your trouble.",
+    "fetch_item": "You found it! This means more to me than you know. Please, take this.",
+    "follower_same": "We made it. I'm safe now, thanks to you. Take this for your bravery.",
+    "follower_next": "You got me through. I won't forget this. Here is your reward.",
+    "combat_npc": "You bested me. I yield. A deal is a deal — take your prize.",
+    "solve_event": "I couldn't have done that alone. You've earned this.",
+}
+_QUEST_FAILURE = {
+    "combat_event": "It's over... they were too strong. I'm sorry, I have nothing left to give.",
+    "solve_puzzle": "It's still blocked. Come back when you have what you need.",
+    "fetch_item": "Without it, I can't help you. Maybe another time.",
+    "follower_same": "I... I can't go on. Leave me here.",
+    "follower_next": "We didn't make it. Perhaps fate has other plans.",
+    "combat_npc": "Ha — you weren't ready for me. Come back when you're stronger.",
+    "solve_event": "You couldn't handle it. The situation remains unsolved.",
+}
+
+
+def _monster_dict_to_model(m: dict, room_level: int):
+    """Convert an LLM monster dict (with hp_range/ac_range) to a Monster model."""
+    from src.models.monster import Monster
+    hp_range = m.get("hp_range", [8 + room_level * 2, 15 + room_level * 3])
+    ac_range = m.get("ac_range", [9 + room_level, 12 + room_level])
+    hp = random.randint(int(hp_range[0]), int(hp_range[1]))
+    ac = random.randint(int(ac_range[0]), int(ac_range[1]))
+    return Monster(
+        name=m.get("name", "Unknown"),
+        species=m.get("species", m.get("name", "creature")),
+        description=m.get("description", ""),
+        hp=hp,
+        max_hp=hp,
+        ac=ac,
+        damage_type=m.get("damage_type", "physical"),
+        elemental_affinity=m.get("elemental_affinity"),
+        level=room_level,
+        portrait_prompt=m.get("portrait_prompt"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Phase 4A: Events & Quests (per room, batched by type)
 # ---------------------------------------------------------------------------
 
@@ -491,6 +582,10 @@ def _phase4a_events(layout: dict, bible: WorldBible,
     event_tiles = maze.get_tiles_by_type("event")
     event_list = []
     event_id_prefix = f"r{room_idx}_"
+
+    # Separate regular and boss monsters for combat assignment
+    regular_monsters = [m for m in monster_db if not m.get("is_boss")]
+    boss_monsters = [m for m in monster_db if m.get("is_boss")]
 
     for event_type in ["combat", "puzzle", "event"]:
         typed_tiles = [t for t in event_tiles if t.event_type == event_type]
@@ -529,14 +624,20 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                                                 f"a {event_type} scene in a {env_type}, pixel art"),
                 "profile_image": None,
                 "time_gate": tile.time_gate,
+                "_tile_pos": list(tile.position),  # used by quest reconciliation lookup
             }
 
             if event_type == "combat":
-                from src.models.monster import generate_encounter_monsters
                 count = tile.multi_combat_count if tile.is_multi_combat else 1
                 all_monsters = []
-                for _ in range(count):
-                    all_monsters.extend(generate_encounter_monsters(env_type, room_level))
+                if regular_monsters:
+                    selected = random.choices(regular_monsters,
+                                              k=min(count, len(regular_monsters)))
+                    all_monsters = [_monster_dict_to_model(m, room_level) for m in selected]
+                else:
+                    from src.models.monster import generate_encounter_monsters
+                    for _ in range(count):
+                        all_monsters.extend(generate_encounter_monsters(env_type, room_level))
                 event_data["monsters"] = [m.to_dict() for m in all_monsters]
                 event_data["room_level"] = room_level
                 all_item_ids = registry.item_ids()
@@ -565,34 +666,83 @@ def _phase4a_events(layout: dict, bible: WorldBible,
 
             event_list.append(event_data)
 
+    # Build position→event lookup for quest reconciliation
+    pos_to_event: dict[tuple, dict] = {}
+    for e in event_list:
+        pos = e.pop("_tile_pos", None)  # remove internal field
+        if pos:
+            pos_to_event[tuple(pos)] = e
+
+    # --- Quest reconciliation: handle all 7 quest types ---
     quest_list = []
     for npc in npc_pool:
-        if npc.get("quest_type") and npc.get("quest_target_tile"):
-            target_pos = tuple(npc["quest_target_tile"])
-            target_event = next(
-                (e for e in event_list
-                 if any(t.position == target_pos for t in event_tiles
-                        if f"evt_{event_list.index(e):03d}" in e.get("id", ""))),
-                None)
-            quest_list.append({
-                "id": f"{event_id_prefix}q_{len(quest_list):03d}",
-                "type": npc["quest_type"],
-                "title": f"Quest from {npc['name']}",
-                "description": f"{npc['name']} needs your help.",
-                "giver_npc_id": npc["id"],
-                "room_id": room_id,
-                "target_tile": list(target_pos),
-                "target_event_id": target_event["id"] if target_event else None,
-                "is_story_quest": False,
-                "reward": {"xp": 25},
-                "failure_penalty": {"hp_damage": 0},
-                "prerequisite_quest_id": None,
-                "portrait_prompt": None,
-                "profile_image": None,
-            })
-            npc["quest_id"] = quest_list[-1]["id"]
+        qtype = npc.get("quest_type")
+        if not qtype:
+            continue
 
-    logger.info("Room %d: %d events, %d quests.", room_idx, len(event_list), len(quest_list))
+        npc_first_name = npc.get("name", "").split()[0] or "Unknown"
+        base_quest = {
+            "id": f"{event_id_prefix}q_{len(quest_list):03d}",
+            "type": qtype,
+            "title": f"{npc_first_name}'s Request",
+            "description": f"{npc.get('name', 'Someone')} needs your help.",
+            "giver_npc_id": npc["id"],
+            "room_id": room_id,
+            "is_story_quest": npc.get("is_story_npc", False),
+            "reward": {"xp": 25 + room_level * 10, "item_id": None},
+            "failure_penalty": {"hp_damage": max(0, room_level * 2)},
+            "success_dialogue": _QUEST_SUCCESS.get(qtype, "Thank you, traveler."),
+            "failure_dialogue": _QUEST_FAILURE.get(qtype, "I needed your help."),
+            "prerequisite_quest_id": None,
+            "portrait_prompt": None,
+            "profile_image": None,
+        }
+
+        target_pos = tuple(npc["quest_target_tile"]) if npc.get("quest_target_tile") else None
+
+        if qtype in ("combat_event", "solve_puzzle", "solve_event") and target_pos:
+            target_event = pos_to_event.get(target_pos)
+            base_quest["target_event_id"] = target_event["id"] if target_event else None
+
+        elif qtype == "fetch_item":
+            item_tile_list = maze.get_tiles_by_type("item")
+            if item_tile_list:
+                t = random.choice(item_tile_list)
+                base_quest["target_tile"] = list(t.position)
+                base_quest["item_category"] = t.item_category
+
+        elif qtype in ("follower_same", "follower_next"):
+            base_quest["target_position"] = (list(maze.door_position)
+                                              if maze.door_position else None)
+            base_quest["escort_npc_id"] = npc["id"]
+            base_quest["crosses_room"] = (qtype == "follower_next")
+
+        elif qtype == "combat_npc":
+            # NPC is also a combatant — give them stats and add to monster_db
+            npc["type"] = "AggressiveNPC"
+            npc_monster = {
+                "name": npc.get("name", "Hostile NPC"),
+                "species": "npc",
+                "description": npc.get("backstory", f"A hostile {npc.get('job', 'figure')}."),
+                "hp_range": [10 + room_level * 3, 15 + room_level * 5],
+                "ac_range": [9 + room_level, 12 + room_level],
+                "damage_type": "physical",
+                "elemental_affinity": None,
+                "weakness": None,
+                "abilities": [],
+                "is_boss": False,
+                "portrait_prompt": npc.get("portrait_prompt",
+                                           "a hostile NPC, pixel art fantasy"),
+            }
+            monster_db.append(npc_monster)
+            base_quest["target_npc_id"] = npc["id"]
+
+        quest_list.append(base_quest)
+        npc["quest_id"] = base_quest["id"]
+
+    story_count = sum(1 for q in quest_list if q.get("is_story_quest"))
+    logger.info("Room %d: %d events, %d quests (%d story).",
+                room_idx, len(event_list), len(quest_list), story_count)
     return event_list, quest_list
 
 

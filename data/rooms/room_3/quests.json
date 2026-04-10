@@ -1,0 +1,48 @@
+[
+  {
+    "id": "r3_q_000",
+    "type": "combat_event",
+    "title": "Quest from NPC_3107",
+    "description": "NPC_3107 needs your help.",
+    "giver_npc_id": 3107,
+    "room_id": "room_3",
+    "target_tile": [
+      21,
+      2
+    ],
+    "target_event_id": "r3_evt_000",
+    "is_story_quest": false,
+    "reward": {
+      "xp": 25
+    },
+    "failure_penalty": {
+      "hp_damage": 0
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null
+  },
+  {
+    "id": "r3_q_001",
+    "type": "combat_event",
+    "title": "Quest from NPC_3108",
+    "description": "NPC_3108 needs your help.",
+    "giver_npc_id": 3108,
+    "room_id": "room_3",
+    "target_tile": [
+      20,
+      15
+    ],
+    "target_event_id": "r3_evt_000",
+    "is_story_quest": false,
+    "reward": {
+      "xp": 25
+    },
+    "failure_penalty": {
+      "hp_damage": 0
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null
+  }
+]

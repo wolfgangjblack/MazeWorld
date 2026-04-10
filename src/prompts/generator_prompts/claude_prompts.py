@@ -517,32 +517,83 @@ class ClaudePromptSet(PromptSet):
             "environment": env,
             "environment_name": env_name,
             "room_level": room_level,
+            "story_context": story_context[:STORY_CONTEXT_LIMIT],
         })
         return LLMRequest(
             system=(
                 "You generate monsters for a fantasy dungeon-crawling game room. "
-                "Generate 4-6 monster types themed to the environment.\n\n"
-                "World context (use to ground monsters in the world's story, faction, "
-                "and environment — reference it, don't repeat it verbatim):\n"
-                f"{story_context[:STORY_CONTEXT_LIMIT]}\n\n"
-                "Respond with ONLY a JSON array of monster objects:\n"
-                '[{"name": "...", "species": "...", "description": "...", "backstory": "full lore paragraph", '
-                '"level": N, "hp": N, "ac": N, "damage_type": "physical|fire|water|forest|light|dark", '
-                '"elemental_affinity": "fire|water|forest|light|dark|null", '
-                '"time_availability": "always|night_only|day_only", '
-                '"abilities": [{"name": "...", "effect_type": "damage|poison|stun", "damage_dice": "1d6", "chance": 0.3}], '
-                '"portrait_prompt": "visual description for pixel art"}]\n\n'
-                "Each monster's description and backstory should tie to the faction or "
-                "environment. Scale lore depth to room_level. Some monsters should be "
-                "faction-related if the context mentions a faction. At least 1 monster "
-                "should be night_only. Scale stats to room_level (1=easy, 4=hard). "
-                "Be information-dense: every name, species, and backstory should reinforce "
-                "the world's lore. Do not pad or ramble."
+                "Generate 4-6 monster types themed to the environment and story_context.\n\n"
+                "RULES:\n"
+                "- At least 2 monsters must be direct agents or corrupted victims of the faction "
+                "named in story_context. Ground them in what that faction does.\n"
+                "- Exactly 1 monster must be the room's boss (is_boss: true). The boss must have "
+                "a unique proper name and title — NEVER 'Boss', 'Lieutenant', or a generic rank. "
+                "Their motivation must connect to the faction's goal in story_context.\n"
+                "- At least 1 monster should be night_only.\n"
+                "- Scale stats to room_level (1=easy, 4=hard).\n"
+                "- Use hp_range [min, max] and ac_range [min, max] instead of fixed values — "
+                "actual stats will be rolled from these ranges at combat time.\n"
+                "- Include a weakness field — the element this monster is vulnerable to "
+                "(fire|water|forest|light|dark or null).\n\n"
+                "Each monster object:\n"
+                '{name, species, description, backstory (story-grounded lore paragraph), '
+                'hp_range [min,max], ac_range [min,max], '
+                'damage_type (physical|fire|water|forest|light|dark), '
+                'elemental_affinity (fire|water|forest|light|dark|null), '
+                'weakness (fire|water|forest|light|dark|null), '
+                'time_availability (always|night_only|day_only), '
+                'abilities [{name, effect_type (damage|poison|stun), damage_dice, chance}], '
+                'is_boss (bool), portrait_prompt}\n\n'
+                "Be information-dense. Do not pad or ramble."
                 + _NO_FENCES
             ),
-            examples=[],
+            examples=[
+                (
+                    json.dumps({
+                        "environment": "cave",
+                        "environment_name": "Stonebiter Caverns",
+                        "room_level": 1,
+                        "story_context": "Faction: The Brackwater Guild, led by Harrowmaster Veln. They use extortion and debt-binding to control trade. Room boss: Shrike, the Guild's Route-Closer.",
+                    }),
+                    json.dumps([
+                        {
+                            "name": "Debt-Bound Miner",
+                            "species": "coerced human",
+                            "description": "A miner forced into Guild service through debt contracts. Hollow-eyed and malnourished, they fight with pick-axes and no hope of escape.",
+                            "backstory": "These miners signed Brackwater Guild contracts promising fair wages but found the terms adjusted weekly until every shift added to their debt. Now they swing picks at anyone who threatens the Guild's operation, knowing refusal means their family's debts double.",
+                            "hp_range": [7, 12],
+                            "ac_range": [8, 10],
+                            "damage_type": "physical",
+                            "elemental_affinity": None,
+                            "weakness": "light",
+                            "time_availability": "always",
+                            "abilities": [{"name": "Desperate Strike", "effect_type": "damage", "damage_dice": "1d6", "chance": 0.3}],
+                            "is_boss": False,
+                            "portrait_prompt": "a gaunt miner in worn leather armor, hollow eyes, raising a cracked pickaxe, pixel art fantasy"
+                        },
+                        {
+                            "name": "Shrike, the Guild's Route-Closer",
+                            "species": "Guild enforcer",
+                            "description": "Compact and precise, Shrike carries a ledger of every debt she has collected. She fights with twin short blades and treats violence as an accounting entry.",
+                            "backstory": "Shrike rose through the Brackwater Guild by being the agent Harrowmaster Veln trusted to close problematic operations quietly. She views Stonebiter Caverns as a routine assignment — extract the shipment, eliminate complications, report back. Failure is not something she has ever logged.",
+                            "hp_range": [28, 38],
+                            "ac_range": [13, 15],
+                            "damage_type": "physical",
+                            "elemental_affinity": None,
+                            "weakness": "forest",
+                            "time_availability": "always",
+                            "abilities": [
+                                {"name": "Twin Slash", "effect_type": "damage", "damage_dice": "1d6", "chance": 0.4},
+                                {"name": "Ledger Mark", "effect_type": "stun", "damage_dice": "0d0", "chance": 0.2}
+                            ],
+                            "is_boss": True,
+                            "portrait_prompt": "a compact woman in dark leather armor with a brass-clasped ledger at her hip and two short blades drawn, pixel art fantasy villain"
+                        }
+                    ])
+                )
+            ],
             user_message=context,
-            max_tokens=1200,
+            max_tokens=2000,
         )
 
     def npc_backstory_generation(self, npc_data: dict,
@@ -581,6 +632,7 @@ class ClaudePromptSet(PromptSet):
     def npc_batch_generation(self, room_env: dict, room_story: str,
                              npc_slots: list[dict],
                              story_context: str) -> LLMRequest:
+        npc_count = len(npc_slots)
         context = json.dumps({
             "environment": room_env,
             "room_story": room_story,
@@ -589,22 +641,48 @@ class ClaudePromptSet(PromptSet):
         })
         return LLMRequest(
             system=(
-                "You generate a batch of unique NPCs for a fantasy game room. "
-                "Each NPC MUST have a unique name and distinct personality. "
-                "Vary jobs widely — guards, merchants, scholars, servants, nobles, "
-                "cooks, jesters, librarians, etc.\n\n"
-                "Match each NPC to their assigned role (quest-giver, merchant, regular). "
-                "NPCs should know about events on their map, nearby monsters, other NPCs, "
-                "and share lore about the room and overarching story. Make them feel alive.\n\n"
-                "Each NPC object: {name, job, personality, hobby, opening_greeting "
-                "(1-2 sentences in character), backstory (3-5 sentences referencing world "
-                "lore), portrait_prompt (visual description for pixel art generation)}\n\n"
+                f"You generate a batch of exactly {npc_count} unique NPCs for a fantasy game room.\n\n"
+                "RULES:\n"
+                "- Each NPC must be a living witness to the room_story events in the input — "
+                "their backstory, job, and personality must directly reflect the SPECIFIC "
+                "situation described in room_story, not generic fantasy tropes.\n"
+                "- Every name must be culturally specific to the environment type — never "
+                "placeholder names. Vary jobs widely: scribes, fishwives, apothecaries, "
+                "runaway apprentices, disgraced guards, travelling performers, etc.\n"
+                f"- Generate EXACTLY {npc_count} NPCs in the array, one per slot in order.\n"
+                "- Match each NPC's content to their assigned role: quest-givers know what "
+                "they need help with, merchants know what they sell, regular NPCs know local "
+                "gossip and are affected by the room_story events.\n\n"
+                "Each NPC object must include:\n"
+                "  name, job, personality, hobby,\n"
+                "  opening_greeting (1-2 sentences, fully in character, referencing their "
+                "specific situation),\n"
+                "  backstory (3-5 sentences grounded in the room_story and world_context),\n"
+                "  portrait_prompt (vivid visual description for pixel art generation)\n\n"
                 "Respond with ONLY a JSON array of NPC objects."
                 + _NO_FENCES
             ),
-            examples=[],
+            examples=[
+                (
+                    json.dumps({
+                        "environment": {"type": "cave", "name": "Stonebiter Caverns"},
+                        "room_story": "The Iron Pact bandit gang has occupied these caves for months, using them as a smuggling hub. Local miners are trapped or working as forced labor. The gang's enforcer, a woman called Shrike, keeps order through fear. One miner has been secretly organizing an escape.",
+                        "npc_slots": [{"position": [8, 12], "role": "quest", "quest_type": "combat_event", "max_exchanges": 5}],
+                        "world_context": "Faction: The Iron Pact, led by Warden Greiss. They control trade routes through extortion and violence."
+                    }),
+                    json.dumps([{
+                        "name": "Torval Duskpick",
+                        "job": "lead miner, secretly organizing the escape",
+                        "personality": "exhausted but resolute — he has kept hope alive in the others for three months through small acts of defiance",
+                        "hobby": "carving small figures from cave stone to pass time and calm his nerves",
+                        "opening_greeting": "Keep moving and don't look at me. If Shrike sees us talking she'll put you in the deep shaft with the others.",
+                        "backstory": "Torval was the first miner taken when the Iron Pact arrived at Stonebiter Caverns. He watched Warden Greiss shoot his crew foreman for refusing to cooperate and decided then that open resistance was suicide — instead he has spent months memorizing guard rotations, counting weapons, and quietly identifying which fellow captives still have fight left in them. He has a plan to collapse the north tunnel as a distraction while the others escape through the sump passage, but he needs someone to deal with Shrike first or she'll hunt them all down before they reach the surface.",
+                        "portrait_prompt": "a stocky middle-aged miner with a cracked leather helmet and coal-dusted hands, haunted but determined eyes, hiding a small carved stone figure in his fist, pixel art fantasy portrait"
+                    }])
+                )
+            ],
             user_message=context,
-            max_tokens=3000,
+            max_tokens=5000,
         )
 
     # ------------------------------------------------------------------
@@ -865,25 +943,65 @@ class ClaudePromptSet(PromptSet):
         })
         return LLMRequest(
             system=(
-                "You write a detailed story beat for one room in a fantasy dungeon-crawling "
-                "game. The enemy faction is consistent throughout but manifests differently "
-                "per environment.\n\n"
-                "Include in your JSON response:\n"
-                "- summary: a full narrative paragraph for this room\n"
-                "- faction_presence: how the faction operates in this environment\n"
-                "- characters: array of 2-4 named characters [{name, role "
-                "(ally|betrayer|quest_giver|merchant|resistance_leader), motivation (1 sentence)}]\n"
-                "- mini_boss: {name, description, motivation} — the local faction threat\n"
-                "- conflicts: array of 2-3 local conflicts/problems the player can engage with\n"
-                "- escalation: integer 1-5, increasing across rooms\n\n"
-                "Build on prior room beats — reference characters or events from earlier rooms "
-                "when it makes narrative sense. Escalate tension toward the climax.\n\n"
+                "You write a detailed story beat for one room in a fantasy dungeon-crawling game.\n\n"
+                "The enemy faction is CONSISTENT across all rooms — the same group, the same goal — "
+                "but they manifest differently in each environment based on what that place offers them.\n\n"
+                "RULES:\n"
+                "- `summary`: full narrative paragraph describing what is happening RIGHT NOW in this "
+                "room — specific events, specific people, specific stakes. Not atmosphere alone.\n"
+                "- `faction_presence`: exactly how this faction operates HERE — what they have taken "
+                "over, who they have recruited, what specific activity they are conducting.\n"
+                "- `characters`: 2-4 named individuals with proper names (not 'a guard' or 'a merchant'). "
+                "Each must have a role AND a specific motivation tied to the room's situation.\n"
+                "- `mini_boss`: must have a unique proper name and title within the faction hierarchy — "
+                "NEVER 'Lieutenant' or a generic rank. Their motivation must connect to the overarching "
+                "faction's goal.\n"
+                "- `conflicts`: 2-3 specific, actionable situations the player can intervene in — name "
+                "the characters involved and describe what is at stake right now.\n"
+                "- `escalation`: 1-5, increasing each room. For the final room (escalation 5), the "
+                "`summary` MUST reference the climax from overarching_story.\n"
+                "- Build on prior_beats: reference named characters or events from earlier rooms when "
+                "narratively logical. Show consequence.\n\n"
                 "Respond with ONLY a JSON object."
                 + _NO_FENCES
             ),
-            examples=[],
+            examples=[
+                (
+                    json.dumps({
+                        "overarching_story": {
+                            "title": "The Sunken Ledger",
+                            "faction_name": "The Brackwater Guild",
+                            "leader": "Harrowmaster Veln",
+                            "climax": "Harrowmaster Veln completes the debt-binding ritual in the harbor vault, enslaving the entire merchant class",
+                            "escalation_arc": ["Guild enforcers arrive in the fishing district", "Guild takeover of the cave smuggling routes"]
+                        },
+                        "room": {"index": 0, "environment": {"type": "cave", "name": "Stonebiter Caverns"}},
+                        "prior_beats": []
+                    }),
+                    json.dumps({
+                        "summary": "The Brackwater Guild has seized Stonebiter Caverns as the cornerstone of their new smuggling operation. Miners who once extracted copper for the city now haul contraband under armed watch, their wages confiscated as 'debt repayment.' The cavern's foreman, a soft-spoken man named Torval Duskpick, has been keeping a quiet count of how many guards patrol each shift — waiting for someone capable of tipping the scales. Guild enforcer Shrike paces the upper gallery with visible impatience, aware that the longer they stay, the more locals learn the Guild's methods.",
+                        "faction_presence": "The Brackwater Guild has posted four enforcers at the cavern entrance and converted the ore-sorting hall into a contraband depot. They are extorting the miners' labor as debt repayment while moving goods stolen from surface merchants through the cave's hidden sump passage.",
+                        "characters": [
+                            {"name": "Torval Duskpick", "role": "resistance_leader", "motivation": "Free his fellow miners and collapse the Guild's route before Shrike ships the next contraband load"},
+                            {"name": "Mira Coalseam", "role": "betrayer", "motivation": "Trading information about the escape plan to Shrike in exchange for her family's debts being forgiven"},
+                            {"name": "Old Fenwick", "role": "ally", "motivation": "Too broken to fight but knows every tunnel in these caves and will guide anyone who treats him kindly"}
+                        ],
+                        "mini_boss": {
+                            "name": "Shrike, the Guild's Route-Closer",
+                            "description": "A compact, precise woman who carries a ledger of every debt she has collected. She fights with two short blades and treats violence as an accounting entry.",
+                            "motivation": "Close the Stonebiter route cleanly and return to Harrowmaster Veln with a full shipment — anything less is a failure she refuses to report"
+                        },
+                        "conflicts": [
+                            "Torval needs Shrike eliminated before Mira's betrayal is acted upon — he does not yet know Mira has turned",
+                            "Old Fenwick is locked in the deep shaft as punishment for slow work; freeing him would give the resistance a critical guide but requires dealing with the shaft guard",
+                            "The contraband shipment is already packed — if it leaves the cave tonight, the Guild gains enough funds to hire twice as many enforcers for the next stage"
+                        ],
+                        "escalation": 1
+                    })
+                )
+            ],
             user_message=context,
-            max_tokens=800,
+            max_tokens=1500,
         )
 
 

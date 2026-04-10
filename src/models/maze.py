@@ -61,6 +61,7 @@ class TileMeta:
     npc_max_exchanges: int = 5
     quest_type: str | None = None
     quest_target_tile: tuple[int, int] | None = None
+    is_story_npc: bool = False  # First quest NPC per room is flagged as story-relevant
     # Item-specific
     item_category: str | None = None
 
@@ -353,6 +354,12 @@ class Maze:
                 quest_type=qt,
                 quest_target_tile=target_tile,
             ))
+
+        # Mark the first quest NPC tile as a story NPC so at least 1 story quest
+        # is guaranteed per room regardless of LLM output.
+        quest_npc_tiles = [t for t in meta if t.tile_type == "npc" and t.quest_type]
+        if quest_npc_tiles:
+            quest_npc_tiles[0].is_story_npc = True
 
         # -- Items: ITEM_DENSITY of open cells --
         remaining = [p for p in open_cells if p not in used]

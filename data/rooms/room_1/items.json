@@ -1,0 +1,210 @@
+{
+  "1200": {
+    "category": "food",
+    "name": "ember-dried jerky",
+    "desc": "Meat cured over sacred flame altars, still warm to the touch.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 28,
+      "hydration_value": 0,
+      "health_value": 3,
+      "uses": 1,
+      "price": 7
+    }
+  },
+  "1201": {
+    "category": "food",
+    "name": "sulfur mushrooms",
+    "desc": "Cavern fungi that thrive near volcanic vents, bitter and acrid.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 19,
+      "hydration_value": 0,
+      "health_value": 0,
+      "uses": 1,
+      "price": 11
+    }
+  },
+  "1202": {
+    "category": "food",
+    "name": "flame-kissed root",
+    "desc": "Tubers roasted in ritual fires, bearing faint Crimson Flame brands.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 23,
+      "hydration_value": 0,
+      "health_value": 10,
+      "uses": 1,
+      "price": 7
+    }
+  },
+  "1203": {
+    "category": "food",
+    "name": "cinder bread",
+    "desc": "Dense loaf baked on heated volcanic stones by cult initiates.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 32,
+      "hydration_value": 0,
+      "health_value": 6,
+      "uses": 1,
+      "price": 6
+    }
+  },
+  "1204": {
+    "category": "drink",
+    "name": "molten spring water",
+    "desc": "Naturally heated water from deep thermal springs.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 26,
+      "health_value": 2,
+      "uses": 1,
+      "price": 15
+    }
+  },
+  "1205": {
+    "category": "drink",
+    "name": "fire wine",
+    "desc": "Fermented beverage infused with volcanic minerals, burns the throat.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 19,
+      "health_value": 0,
+      "uses": 1,
+      "price": 11
+    }
+  },
+  "1206": {
+    "category": "drink",
+    "name": "zealot's draught",
+    "desc": "Ceremonial drink used in Crimson Flame initiation rites.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 15,
+      "health_value": 13,
+      "uses": 1,
+      "price": 16
+    }
+  },
+  "1207": {
+    "category": "drink",
+    "name": "ash-filtered brew",
+    "desc": "Bitter tea strained through sacred volcanic ash.",
+    "room_level": 2,
+    "item_stats": {
+      "nutrition_value": 0,
+      "hydration_value": 32,
+      "health_value": 6,
+      "uses": 1,
+      "price": 19
+    }
+  },
+  "1208": {
+    "category": "tool",
+    "name": "flame-forged pickaxe",
+    "desc": "Mining tool blessed in Ignis Eternal's fires, never dulls.",
+    "room_level": 2,
+    "item_stats": {
+      "attribute": "digging",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 19
+    }
+  },
+  "1209": {
+    "category": "tool",
+    "name": "obsidian shard",
+    "desc": "Razor-sharp volcanic glass used in cult rituals.",
+    "room_level": 2,
+    "item_stats": {
+      "attribute": "cutting",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 29
+    }
+  },
+  "1210": {
+    "category": "tool",
+    "name": "branded rope",
+    "desc": "Heat-treated climbing rope bearing flame cult symbols.",
+    "room_level": 2,
+    "item_stats": {
+      "attribute": "climbing",
+      "nutrition_value": -5,
+      "hydration_value": -5,
+      "health_value": 0,
+      "uses": 3,
+      "price": 28
+    }
+  },
+  "1211": {
+    "category": "weapon",
+    "name": "cinder mace",
+    "desc": "Volcanic stone club wrapped in smoldering bandages.",
+    "weapon_type": "heavy",
+    "room_level": 2,
+    "item_stats": {
+      "attack_dice": "1d6",
+      "stat_modifier": "STR",
+      "price": 17
+    }
+  },
+  "1212": {
+    "category": "weapon",
+    "name": "flame dagger",
+    "desc": "Ceremonial blade used for cult branding rituals.",
+    "weapon_type": "light",
+    "room_level": 2,
+    "item_stats": {
+      "attack_dice": "1d8",
+      "stat_modifier": "DEX",
+      "price": 44
+    }
+  },
+  "1213": {
+    "category": "weapon",
+    "name": "zealot's brand",
+    "desc": "Iron rod heated in sacred fires, sears flesh and spirit.",
+    "weapon_type": "simple",
+    "room_level": 2,
+    "item_stats": {
+      "attack_dice": "1d6",
+      "stat_modifier": "INT",
+      "price": 20
+    }
+  },
+  "1214": {
+    "category": "spell_scroll",
+    "name": "scroll of purifying flame",
+    "desc": "Ignis Eternal's fire burns away corruption and weakness.",
+    "spell_effect": "heal",
+    "room_level": 2,
+    "item_stats": {
+      "health_value": 28,
+      "nutrition_value": 0,
+      "hydration_value": 0,
+      "price": 26
+    }
+  },
+  "1215": {
+    "category": "spell_scroll",
+    "name": "scroll of ember sight",
+    "desc": "See through smoke and darkness as the Fire King does.",
+    "spell_effect": "reveal",
+    "room_level": 2,
+    "item_stats": {
+      "health_value": 0,
+      "nutrition_value": 0,
+      "hydration_value": 0,
+      "price": 33
+    }
+  }
+}
