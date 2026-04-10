@@ -395,7 +395,7 @@ class TestPlayerQuestState:
 
 class TestQuestValidation:
     def test_validate_basic_quest(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}]
         item_placements = [{"item_id": 200}]
         event_list = [{"id": "evt_001"}]
@@ -406,12 +406,12 @@ class TestQuestValidation:
         assert _validate_quest(quest, npc_pool, item_placements, event_list, []) is True
 
     def test_validate_missing_npc(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         quest = {"id": "q_000", "type": "fetch", "giver_npc_id": 999}
         assert _validate_quest(quest, [], [], [], []) is False
 
     def test_validate_combat_quest(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}]
         event_list = [{"id": "evt_001"}]
         quest = {"id": "q_000", "type": "combat", "giver_npc_id": 100,
@@ -419,21 +419,21 @@ class TestQuestValidation:
         assert _validate_quest(quest, npc_pool, [], event_list, []) is True
 
     def test_validate_combat_missing_event(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}]
         quest = {"id": "q_000", "type": "combat", "giver_npc_id": 100,
                  "target_event_id": "evt_999"}
         assert _validate_quest(quest, npc_pool, [], [], []) is False
 
     def test_validate_escort_quest(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}, {"id": 101, "selected": True}]
         quest = {"id": "q_000", "type": "escort", "giver_npc_id": 100,
                  "escort_npc_id": 101}
         assert _validate_quest(quest, npc_pool, [], [], []) is True
 
     def test_validate_delivery_quest(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}, {"id": 101, "selected": True}]
         item_placements = [{"item_id": 200}]
         quest = {"id": "q_000", "type": "delivery", "giver_npc_id": 100,
@@ -441,7 +441,7 @@ class TestQuestValidation:
         assert _validate_quest(quest, npc_pool, item_placements, [], []) is True
 
     def test_validate_prerequisite_depth_limit(self):
-        from src.generate.pipeline import _validate_quest
+        from src.generate.pipeline_utils import _validate_quest
         npc_pool = [{"id": 100, "selected": True}]
         existing = [
             {"id": "q_000", "type": "fetch", "prerequisite_quest_id": None},

@@ -493,7 +493,7 @@ def test_config_view_volume_clamped_below(screen, font):
 
 def test_manifest_schema():
     """build_manifest() output matches PDR spec structure and computes counts."""
-    from src.generate.pipeline import build_manifest
+    from src.generate.pipeline_utils import build_manifest
 
     event_list = [
         {"id": "e1", "event_type": "combat", "monsters": [{"name": "goblin"}, {"name": "orc"}]},
@@ -558,7 +558,7 @@ def test_manifest_schema():
 
 def test_manifest_schema_with_validation_report():
     """build_manifest() preserves full ValidationReport structure."""
-    from src.generate.pipeline import build_manifest
+    from src.generate.pipeline_utils import build_manifest
     from src.generate.validator import ValidationReport
 
     report = ValidationReport(rooms_validated=1)

@@ -243,7 +243,7 @@ def _sample_llm_result():
 
 def test_build_items_json_structure():
     """Test _build_items_json converts LLM output to proper items.json format."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=1)
     # Check food IDs start at 200
     assert "200" in items
@@ -274,7 +274,7 @@ def test_weapon_dice_scaling():
 def test_validate_puzzle_tools():
     """Test that _validate_puzzle_tools fixes invalid tool_attribute references."""
     from unittest.mock import MagicMock
-    from src.generate.pipeline import _validate_puzzle_tools
+    from src.generate.pipeline_utils import _validate_puzzle_tools
     from src.models.items import ItemStats
 
     mock_reg = MagicMock()
@@ -302,7 +302,7 @@ def test_validate_puzzle_tools():
 
 def test_consumable_scaling_level_1_no_change():
     """At room_level 1 the multiplier is 1.0 so stats stay at base values."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=1)
     assert items["200"]["item_stats"]["nutrition_value"] == 20
     assert items["300"]["item_stats"]["hydration_value"] == 15
@@ -310,7 +310,7 @@ def test_consumable_scaling_level_1_no_change():
 
 def test_consumable_scaling_level_3():
     """At room_level 3 the multiplier is 1.6 — stats and prices should increase."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     import random
     random.seed(42)
     items = _build_items_json(_sample_llm_result(), room_level=3)
@@ -324,7 +324,7 @@ def test_consumable_scaling_level_3():
 
 def test_consumable_scaling_level_4():
     """At room_level 4 the multiplier is 2.0 — stats double."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=4)
     assert items["200"]["item_stats"]["nutrition_value"] == 40  # 20 * 2.0
     assert items["300"]["item_stats"]["hydration_value"] == 30  # 15 * 2.0
@@ -332,14 +332,14 @@ def test_consumable_scaling_level_4():
 
 def test_consumable_scaling_high_level_caps_at_4():
     """Room levels above 4 use the level-4 multiplier (2.0)."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=7)
     assert items["200"]["item_stats"]["nutrition_value"] == 40  # same as level 4
 
 
 def test_tool_uses_not_scaled():
     """Tool uses should remain constant regardless of room level."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items_l1 = _build_items_json(_sample_llm_result(), room_level=1)
     items_l4 = _build_items_json(_sample_llm_result(), room_level=4)
     assert items_l1["400"]["item_stats"]["uses"] == 3
@@ -348,7 +348,7 @@ def test_tool_uses_not_scaled():
 
 def test_tool_price_scales():
     """Tool prices should increase with room level."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     import random
     random.seed(42)
     items_l1 = _build_items_json(_sample_llm_result(), room_level=1)
@@ -359,7 +359,7 @@ def test_tool_price_scales():
 
 def test_spell_scroll_scales_at_half_rate():
     """Spell scroll effects scale at half the consumable rate."""
-    from src.generate.pipeline import _build_items_json
+    from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=4)
     # mult=2.0, scroll_mult = 1.0 + (2.0-1.0)*0.5 = 1.5
     # heal scroll: 25 * 1.5 = 37
@@ -368,7 +368,7 @@ def test_spell_scroll_scales_at_half_rate():
 
 def test_consumable_scaling_dict_values():
     """Verify the CONSUMABLE_SCALING dict has expected values."""
-    from src.generate.pipeline import CONSUMABLE_SCALING
+    from src.generate.pipeline_utils import CONSUMABLE_SCALING
     assert CONSUMABLE_SCALING[1] == 1.0
     assert CONSUMABLE_SCALING[2] == 1.3
     assert CONSUMABLE_SCALING[3] == 1.6

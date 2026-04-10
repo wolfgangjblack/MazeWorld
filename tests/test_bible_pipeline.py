@@ -250,7 +250,7 @@ class TestGeneratorBase:
 
 class TestPipelineHelpers:
     def test_build_manifest(self):
-        from src.generate.pipeline import build_manifest
+        from src.generate.pipeline_utils import build_manifest
         m = build_manifest(
             seed=1234,
             story_seed="test",
@@ -280,11 +280,11 @@ class TestPipelineHelpers:
 
     def test_step1_builds_bible_with_fallback(self):
         """Test that _step1_generate_story produces a valid Bible even when LLM fails."""
-        from src.generate.pipeline import _step1_generate_story
+        from src.generate.pipeline_legacy import _step1_generate_story
         from unittest.mock import patch
 
-        with patch("src.generate.pipeline._llm_generate_full_story", return_value=None), \
-             patch("src.generate.pipeline._llm_generate_story", return_value=None):
+        with patch("src.generate.pipeline_legacy._llm_generate_full_story", return_value=None), \
+             patch("src.generate.pipeline_legacy._llm_generate_story", return_value=None):
             story, bible = _step1_generate_story(
                 "test seed", 2, ["forest", "cave"]
             )
@@ -297,7 +297,7 @@ class TestPipelineHelpers:
 
     def test_step1_with_story_data(self):
         """Test Step 1 with mocked LLM returning full story data."""
-        from src.generate.pipeline import _step1_generate_story
+        from src.generate.pipeline_legacy import _step1_generate_story
         from unittest.mock import patch
 
         mock_story = {
@@ -318,7 +318,7 @@ class TestPipelineHelpers:
             "story_monsters": [{"name": "Sea Hag", "description": "Corrupted siren", "lore": "She sings death.", "room_id": "room_0", "is_boss": True, "species": "siren"}],
         }
 
-        with patch("src.generate.pipeline._llm_generate_full_story", return_value=mock_story):
+        with patch("src.generate.pipeline_legacy._llm_generate_full_story", return_value=mock_story):
             story, bible = _step1_generate_story(
                 "test", 2, ["forest", "cave"]
             )
@@ -413,12 +413,12 @@ class TestStep2AsyncWiring:
             "open_spaces": [(5, 5), (6, 6)],
         }
 
-        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]) as mock_cls, \
-             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, return_value=None) as mock_items, \
-             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]) as mock_npcs, \
-             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]) as mock_mons:
+        with patch("src.generate.pipeline_legacy._async_generate_classes", new_callable=AsyncMock, return_value=[]) as mock_cls, \
+             patch("src.generate.pipeline_legacy._async_generate_items", new_callable=AsyncMock, return_value=None) as mock_items, \
+             patch("src.generate.pipeline_legacy._async_generate_npcs", new_callable=AsyncMock, return_value=[]) as mock_npcs, \
+             patch("src.generate.pipeline_legacy._async_generate_monsters", new_callable=AsyncMock, return_value=[]) as mock_mons:
 
-            from src.generate.pipeline import _step2_sequential_rooms
+            from src.generate.pipeline_legacy import _step2_sequential_rooms
             result = asyncio.run(_step2_sequential_rooms(bible, [layout]))
 
         mock_cls.assert_called_once()
@@ -444,12 +444,12 @@ class TestStep2AsyncWiring:
             "open_spaces": [],
         }
 
-        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
-             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
-             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[{"id": 1, "selected": True}]), \
-             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
+        with patch("src.generate.pipeline_legacy._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline_legacy._async_generate_items", new_callable=AsyncMock, side_effect=RuntimeError("boom")), \
+             patch("src.generate.pipeline_legacy._async_generate_npcs", new_callable=AsyncMock, return_value=[{"id": 1, "selected": True}]), \
+             patch("src.generate.pipeline_legacy._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
 
-            from src.generate.pipeline import _step2_sequential_rooms
+            from src.generate.pipeline_legacy import _step2_sequential_rooms
             result = asyncio.run(_step2_sequential_rooms(bible, [layout]))
 
         # Items failed but NPCs and monsters should still be present
@@ -473,12 +473,12 @@ class TestStep2AsyncWiring:
              "environment_name": "Hollow", "npc_zones": [], "open_spaces": []},
         ]
 
-        with patch("src.generate.pipeline._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
-             patch("src.generate.pipeline._async_generate_items", new_callable=AsyncMock, return_value={"100": {"name": "Bread"}}), \
-             patch("src.generate.pipeline._async_generate_npcs", new_callable=AsyncMock, return_value=[]), \
-             patch("src.generate.pipeline._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
+        with patch("src.generate.pipeline_legacy._async_generate_classes", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline_legacy._async_generate_items", new_callable=AsyncMock, return_value={"100": {"name": "Bread"}}), \
+             patch("src.generate.pipeline_legacy._async_generate_npcs", new_callable=AsyncMock, return_value=[]), \
+             patch("src.generate.pipeline_legacy._async_generate_monsters", new_callable=AsyncMock, return_value=[]):
 
-            from src.generate.pipeline import _step2_sequential_rooms
+            from src.generate.pipeline_legacy import _step2_sequential_rooms
             result = asyncio.run(_step2_sequential_rooms(bible, layouts))
 
         assert "room_0" in result["room_entities"]
@@ -686,7 +686,7 @@ class TestSequentialBiblePropagation:
 
     def test_multi_step_quests_can_reference_cross_room_entities(self):
         """Verify cross-room quest linking works."""
-        from src.generate.pipeline import _link_cross_room_quests
+        from src.generate.pipeline_legacy import _link_cross_room_quests
 
         story = OverarchingStory(
             title="Test",
@@ -761,12 +761,12 @@ class TestSequentialStep2:
             call_order.append(layout["room_id"])
             return {"items": None, "npc_pool": [], "monsters": []}
 
-        with patch("src.generate.pipeline._async_generate_classes",
+        with patch("src.generate.pipeline_legacy._async_generate_classes",
                    new_callable=AsyncMock, return_value=[]), \
-             patch("src.generate.pipeline._step2_generate_room_entities",
+             patch("src.generate.pipeline_legacy._step2_generate_room_entities",
                    side_effect=mock_room_entities):
 
-            from src.generate.pipeline import _step2_sequential_rooms
+            from src.generate.pipeline_legacy import _step2_sequential_rooms
             result = asyncio.run(_step2_sequential_rooms(bible, layouts))
 
         # Rooms should have been processed in order
@@ -787,14 +787,14 @@ class TestSequentialStep2:
             "environment_name": "Wood", "npc_zones": [], "open_spaces": [],
         }
 
-        with patch("src.generate.pipeline._async_generate_items",
+        with patch("src.generate.pipeline_legacy._async_generate_items",
                    new_callable=AsyncMock, return_value={"100": {"name": "Bread"}}) as mock_items, \
-             patch("src.generate.pipeline._async_generate_npcs",
+             patch("src.generate.pipeline_legacy._async_generate_npcs",
                    new_callable=AsyncMock, return_value=[{"id": 1}]) as mock_npcs, \
-             patch("src.generate.pipeline._async_generate_monsters",
+             patch("src.generate.pipeline_legacy._async_generate_monsters",
                    new_callable=AsyncMock, return_value=[]) as mock_mons:
 
-            from src.generate.pipeline import _step2_generate_room_entities
+            from src.generate.pipeline_legacy import _step2_generate_room_entities
             result = asyncio.run(_step2_generate_room_entities(bible, layout))
 
         mock_items.assert_called_once()

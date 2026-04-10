@@ -417,7 +417,7 @@ class TestWriteWorldBible:
 
 class TestRetryWithFeedback:
     def test_passes_first_try(self):
-        from src.generate.pipeline import _retry_with_feedback
+        from src.generate.pipeline_utils import _retry_with_feedback
 
         def gen(feedback=None):
             return {"value": 42}
@@ -429,7 +429,7 @@ class TestRetryWithFeedback:
         assert result == {"value": 42}
 
     def test_retries_then_passes(self):
-        from src.generate.pipeline import _retry_with_feedback
+        from src.generate.pipeline_utils import _retry_with_feedback
 
         call_count = [0]
 
@@ -449,7 +449,7 @@ class TestRetryWithFeedback:
         assert call_count[0] == 3
 
     def test_exhausts_retries_returns_fallback(self):
-        from src.generate.pipeline import _retry_with_feedback
+        from src.generate.pipeline_utils import _retry_with_feedback
 
         def gen(feedback=None):
             return {"always_bad": True}
@@ -461,7 +461,7 @@ class TestRetryWithFeedback:
         assert result == "fallback_val"
 
     def test_passes_feedback_to_generator(self):
-        from src.generate.pipeline import _retry_with_feedback
+        from src.generate.pipeline_utils import _retry_with_feedback
 
         received_feedback = []
 
@@ -481,7 +481,7 @@ class TestRetryWithFeedback:
         assert "it broke" in received_feedback
 
     def test_handles_generator_exception(self):
-        from src.generate.pipeline import _retry_with_feedback
+        from src.generate.pipeline_utils import _retry_with_feedback
 
         call_count = [0]
 
