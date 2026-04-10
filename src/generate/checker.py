@@ -129,13 +129,13 @@ class ClassChecker(BaseChecker):
                     issues.append(f"{label} {stat}={val} outside primary 14-18")
             for stat in roles.get("secondary", []):
                 val = stats.get(stat, 10)
-                lo, hi = (9, 13) if archetype == "jester" else (11, 14)
+                lo, hi = (11, 15) if archetype == "jester" else (12, 16)
                 if not (lo <= val <= hi):
                     issues.append(f"{label} {stat}={val} outside secondary {lo}-{hi}")
             for stat in roles.get("dump", []):
                 val = stats.get(stat, 10)
-                if not (6 <= val <= 10):
-                    issues.append(f"{label} {stat}={val} outside dump 6-10")
+                if not (8 <= val <= 12):
+                    issues.append(f"{label} {stat}={val} outside dump 8-12")
 
         return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
 

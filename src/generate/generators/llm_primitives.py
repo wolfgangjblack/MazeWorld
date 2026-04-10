@@ -1,8 +1,21 @@
 import ast
 import json
+import re
 
 from src.prompts import get_prompt_set
 from src.generate.llm_client import generate
+
+
+def _strip_fences(raw: str) -> str:
+    """Remove markdown code fences (```json ... ```) from LLM output."""
+    text = raw.strip()
+    if text.startswith("```"):
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline + 1:]
+    if text.rstrip().endswith("```"):
+        text = text.rstrip()[:-3]
+    return text.strip()
 
 
 def generate_personality_primitive(environment: dict) -> dict:
@@ -19,11 +32,12 @@ def generate_personality_primitive(environment: dict) -> dict:
 
 
 def _parse_personality(raw: str, env: str, env_name: str) -> dict:
+    stripped = _strip_fences(raw)
     try:
-        output = json.loads(raw)
+        output = json.loads(stripped)
     except (json.JSONDecodeError, ValueError):
         try:
-            extracted = raw.split("##Output:")[-1].split("\n========")[0].strip()
+            extracted = stripped.split("##Output:")[-1].split("\n========")[0].strip()
             output = ast.literal_eval(extracted)
         except Exception as e:
             return {"error": str(e)}
@@ -238,8 +252,8 @@ def generate_class_portrait_description(class_data: dict) -> str:
 
 def _parse_class_array(raw: str) -> list[dict]:
     """Parse a JSON array of class definitions from LLM output."""
-    # Try to find a JSON array in the response
-    for candidate in [raw]:
+    stripped = _strip_fences(raw)
+    for candidate in [stripped, raw]:
         start = candidate.find("[")
         end = candidate.rfind("]") + 1
         if start != -1 and end > start:
@@ -256,6 +270,96 @@ def _parse_class_array(raw: str) -> list[dict]:
                 except Exception:
                     pass
     return []
+
+
+def generate_npc_batch(room_env: dict, room_story: str,
+                       npc_slots: list[dict],
+                       story_context: str) -> list[dict]:
+    """Generate all NPCs for a room in a single batched call."""
+    prompts = get_prompt_set()
+    request = prompts.npc_batch_generation(room_env, room_story, npc_slots, story_context)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_event_batch(room_env: dict, room_story: str,
+                         event_type: str, event_slots: list[dict],
+                         story_context: str) -> list[dict]:
+    """Generate a batch of events of the same type for a room."""
+    prompts = get_prompt_set()
+    request = prompts.event_batch_generation(room_env, room_story, event_type,
+                                             event_slots, story_context)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_dialogue_context(room_env: dict, room_story: str,
+                              npc_data: list[dict],
+                              story_context: str) -> list[dict]:
+    """Generate dialogue context (greeting, exhaustion, personality notes) for online mode."""
+    prompts = get_prompt_set()
+    request = prompts.dialogue_context_generation(room_env, room_story, npc_data, story_context)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_weapon_database(environments: list[dict],
+                             num_rooms: int) -> list[dict]:
+    """Generate the full weapon database across all rooms."""
+    prompts = get_prompt_set()
+    request = prompts.weapon_database_generation(environments, num_rooms)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_spell_database(class_type: str, environments: list[dict],
+                            num_rooms: int) -> list[dict]:
+    """Generate spells for a class (mage or healer)."""
+    prompts = get_prompt_set()
+    request = prompts.spell_database_generation(class_type, environments, num_rooms)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_utility_abilities(environments: list[dict],
+                               num_rooms: int) -> list[dict]:
+    """Generate utility abilities usable by any class."""
+    prompts = get_prompt_set()
+    request = prompts.utility_ability_generation(environments, num_rooms)
+    raw = generate(request)
+    return _parse_json_array(raw)
+
+
+def generate_environment_sequence(story_seed: str, num_rooms: int,
+                                  known_types: list[str]) -> list[dict]:
+    """Generate a narrative environment sequence for the world."""
+    prompts = get_prompt_set()
+    request = prompts.environment_sequence_generation(story_seed, num_rooms, known_types)
+    raw = generate(request)
+    result = _parse_json_array(raw)
+    if result and all(isinstance(r, dict) and "type" in r and "name" in r for r in result):
+        return result[:num_rooms]
+    return []
+
+
+def generate_overarching_story(story_seed: str,
+                               environments: list[dict]) -> dict:
+    """Generate the high-level story arc (no per-room beats)."""
+    prompts = get_prompt_set()
+    request = prompts.overarching_story_generation(story_seed, environments)
+    raw = generate(request)
+    return _parse_json_response(raw)
+
+
+def generate_room_story_beat(overarching_story: dict, room_env: dict,
+                             room_index: int,
+                             prior_beats: list[dict]) -> dict:
+    """Generate a detailed story beat for a single room."""
+    prompts = get_prompt_set()
+    request = prompts.room_story_beat_generation(
+        overarching_story, room_env, room_index, prior_beats)
+    raw = generate(request)
+    return _parse_json_response(raw)
 
 
 def generate_full_story_primitive(story_seed: str, room_count: int,
@@ -288,7 +392,8 @@ def generate_npc_backstory(npc_data: dict, story_context: str) -> str:
 
 def _parse_json_array(raw: str) -> list[dict]:
     """Parse a JSON array from LLM output."""
-    for candidate in [raw]:
+    stripped = _strip_fences(raw)
+    for candidate in [stripped, raw]:
         start = candidate.find("[")
         end = candidate.rfind("]") + 1
         if start != -1 and end > start:
@@ -309,18 +414,16 @@ def _parse_json_array(raw: str) -> list[dict]:
 
 def _extract_response(raw: str) -> str:
     """Extract the usable response from raw LLM output."""
-    if "##Output:" in raw:
-        response = raw.split("##Output:")[-1].strip()
-    else:
-        response = raw.strip()
-    return response.split("\n")[0].strip()
+    text = _strip_fences(raw)
+    if "##Output:" in text:
+        text = text.split("##Output:")[-1].strip()
+    return text.split("\n")[0].strip()
 
 
 def _parse_json_response(raw: str) -> dict:
     """Parse a JSON response from LLM output, with fallback to ast.literal_eval."""
-    cleaned = _extract_response(raw)
-    # Try to find JSON in the response
-    for candidate in [cleaned, raw]:
+    stripped = _strip_fences(raw)
+    for candidate in [stripped, raw]:
         start = candidate.find("{")
         end = candidate.rfind("}") + 1
         if start != -1 and end > start:

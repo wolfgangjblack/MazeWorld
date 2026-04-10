@@ -665,7 +665,7 @@ class TestQuestDoorReveal:
 class TestConfig:
     def test_num_rooms_default(self):
         from config import NUM_ROOMS
-        assert NUM_ROOMS == 1
+        assert NUM_ROOMS == 5
 
     def test_door_reveal_threshold(self):
         from config import DOOR_REVEAL_THRESHOLD

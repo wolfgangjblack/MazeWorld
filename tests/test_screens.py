@@ -366,9 +366,11 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
 # --- New config settings ---
 
 def test_config_new_settings_exist():
-    """All Phase 1 gap settings exist in config module."""
+    """All required settings exist in config module."""
     assert hasattr(cfg, "NUM_ROOMS")
-    assert hasattr(cfg, "QUEST_DENSITY")
+    assert hasattr(cfg, "EVENT_DENSITY")
+    assert hasattr(cfg, "ITEM_DENSITY")
+    assert hasattr(cfg, "NPC_DENSITY")
     assert hasattr(cfg, "MAP_COLORS")
     assert hasattr(cfg, "MASTER_VOLUME")
     assert hasattr(cfg, "MUSIC_VOLUME")
@@ -376,13 +378,13 @@ def test_config_new_settings_exist():
 
 
 def test_config_num_rooms_default():
-    assert cfg.NUM_ROOMS == 1
+    assert cfg.NUM_ROOMS == 5
     assert isinstance(cfg.NUM_ROOMS, int)
 
 
-def test_config_quest_density_default():
-    assert cfg.QUEST_DENSITY == 0.1
-    assert isinstance(cfg.QUEST_DENSITY, float)
+def test_config_event_density_default():
+    assert cfg.EVENT_DENSITY == 0.1
+    assert isinstance(cfg.EVENT_DENSITY, float)
 
 
 def test_config_map_colors_default():
@@ -412,10 +414,9 @@ def test_game_mode_in_generation_tab():
 
 
 def test_new_settings_in_generation_tab():
-    """NUM_ROOMS, QUEST_DENSITY, MAP_COLORS are in generation (read-only) tab."""
+    """NUM_ROOMS, EVENT_DENSITY, MAP_COLORS are in generation (read-only) tab."""
     gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
     assert "NUM_ROOMS" in gen_attrs
-    assert "QUEST_DENSITY" in gen_attrs
     assert "MAP_COLORS" in gen_attrs
 
 

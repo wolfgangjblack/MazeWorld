@@ -1,0 +1,146 @@
+[
+  {
+    "id": "r0_q_000",
+    "type": "dialogue",
+    "title": "Convince Sir Gareth",
+    "description": "Use your words carefully.",
+    "giver_npc_id": 111,
+    "room_id": "room_0",
+    "is_story_quest": false,
+    "reward": {
+      "item_id": 603
+    },
+    "failure_penalty": {
+      "hp_damage": 0,
+      "hunger_damage": 5,
+      "thirst_damage": 5
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null,
+    "dc": 14,
+    "dialogue_tree": {
+      "prompt": "What business do you have with me?",
+      "choices": [
+        {
+          "text": "I need your help.",
+          "next_node_id": "success"
+        },
+        {
+          "text": "Never mind.",
+          "next_node_id": "fail"
+        }
+      ]
+    },
+    "can_fail": true,
+    "can_retry": true
+  },
+  {
+    "id": "r0_q_001",
+    "type": "delivery",
+    "title": "Deliver twin daggers",
+    "description": "Bring a twin daggers to Sir Gareth.",
+    "giver_npc_id": 100,
+    "room_id": "room_0",
+    "is_story_quest": false,
+    "reward": {
+      "item_id": 205
+    },
+    "failure_penalty": {
+      "hp_damage": 10,
+      "hunger_damage": 0,
+      "thirst_damage": 5
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null,
+    "delivery_item_id": 505,
+    "target_npc_id": 128
+  },
+  {
+    "id": "r0_q_002",
+    "type": "dialogue",
+    "title": "Convince Sir Gareth",
+    "description": "Use your words carefully.",
+    "giver_npc_id": 105,
+    "room_id": "room_0",
+    "is_story_quest": false,
+    "reward": {
+      "item_id": 205
+    },
+    "failure_penalty": {
+      "hp_damage": 10,
+      "hunger_damage": 0,
+      "thirst_damage": 5
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null,
+    "dc": 10,
+    "dialogue_tree": {
+      "prompt": "What business do you have with me?",
+      "choices": [
+        {
+          "text": "I need your help.",
+          "next_node_id": "success"
+        },
+        {
+          "text": "Never mind.",
+          "next_node_id": "fail"
+        }
+      ]
+    },
+    "can_fail": true,
+    "can_retry": true
+  },
+  {
+    "id": "r0_q_003",
+    "type": "delivery",
+    "title": "The Last Light's Burden",
+    "description": "As The Umbral Covenant's shadow-touched cultists complete their final rituals around the dimensional rift in Ironspire's corrupted halls, a surviving resistance member has entrusted you with a scroll of insight containing the last untainted knowledge of Vethara's original protective wards. This ancient wisdom must reach Sir Gareth, who leads the final stand against Theron Vex's apocalyptic transformation. The scroll pulses with fading light magic - the only force that might disrupt the cult's ritual before eternal night consumes the world.",
+    "giver_npc_id": 100,
+    "room_id": "room_0",
+    "is_story_quest": true,
+    "reward": {
+      "item_id": 200
+    },
+    "failure_penalty": {
+      "hp_damage": 0,
+      "hunger_damage": 0,
+      "thirst_damage": 5
+    },
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null,
+    "delivery_item_id": 603,
+    "target_npc_id": 114
+  },
+  {
+    "id": "r0_q_004",
+    "type": "multi_step",
+    "title": "The The Umbral Covenant Conspiracy",
+    "description": "Unravel the The Umbral Covenant's plot through a series of connected tasks.",
+    "giver_npc_id": 111,
+    "room_id": "room_0",
+    "is_story_quest": true,
+    "reward": {
+      "item_id": 210,
+      "xp": 50,
+      "story_info": "A crucial revelation about the faction's plans."
+    },
+    "failure_penalty": {
+      "hp_damage": 10,
+      "hunger_damage": 5,
+      "thirst_damage": 5
+    },
+    "sub_quest_ids": [
+      "r0_q_000",
+      "r0_q_001",
+      "r0_q_002"
+    ],
+    "current_step": 0,
+    "prerequisite_quest_id": null,
+    "portrait_prompt": null,
+    "profile_image": null
+  }
+]

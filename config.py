@@ -17,11 +17,28 @@ MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
 WORLD_SEED = 1234 # Set to -1 for random seed
-STORY_SEED = ""  # 1-liner story prompt; empty = LLM generates freely
-NUM_ROOMS = int(os.getenv("NUM_ROOMS", "1"))
-EVENT_PERCENT = 0.1
-EVENT_DENSITY = EVENT_PERCENT  # Alias: configurable encounter density
-QUEST_DENSITY = float(os.getenv("QUEST_DENSITY", "0.1"))
+STORY_SEED = "A fire cult plans to infiltrate the castle nobility and take over the kingdom"  # 1-liner story prompt; empty = LLM generates freely
+NUM_ROOMS = 5
+# Density parameters (% of OPEN/PATH cells, not total cells)
+EVENT_DENSITY = 0.10
+ITEM_DENSITY = 0.10
+NPC_DENSITY = 0.02
+
+# Event type distribution
+COMBAT_CHANCE = 0.40
+PUZZLE_CHANCE = 0.30
+EVENT_CHANCE = 0.30
+
+# Time-gated events: 25% of events are day/night only
+TIME_GATE_FRACTION = 0.25
+
+# Legacy aliases for backward compatibility (used by current pipeline.py, maze.py)
+EVENT_PERCENT = EVENT_DENSITY
+NUM_FOOD = 2
+NUM_DRINKS = 2
+NUM_TOOLS = 1
+NUM_WEAPONS = 2
+NUM_SPELL_SCROLLS = 1
 MAP_COLORS = {
     "wall": (40, 40, 40),
     "path": (200, 200, 200),
@@ -29,7 +46,6 @@ MAP_COLORS = {
 }
 
 # Multi-room progression
-NUM_ROOMS = 1  # Number of rooms in the dungeon (1 = single room, no progression)
 DOOR_REVEAL_THRESHOLD = 0.4  # Fraction of encounters to clear before exit door reveals
 
 # Dialogue box
@@ -43,16 +59,7 @@ WHITE = (255, 255, 255)
 # Game mode
 GAME_MODE = os.getenv("GAME_MODE", "online")  # "online" | "offline_local" | "offline_static"
 
-#NPC settings
-# ------------------------------------
 
-## Item settings
-# ------------------------------------
-NUM_FOOD = 2
-NUM_DRINKS = 2
-NUM_TOOLS = 1
-NUM_WEAPONS = 2
-NUM_SPELL_SCROLLS = 1
 STARTING_MONEY = 50
 
 ## Fog of War settings

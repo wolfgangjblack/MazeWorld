@@ -6,7 +6,7 @@ from src.registry import registry
 
 StatName = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
 STAT_NAMES: list[StatName] = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
-STAT_BUDGET = 72
+STAT_BUDGET = 95
 
 # Archetype stat role assignments: primary stats get 14-18, secondary 11-14, dump 6-10
 ARCHETYPE_STAT_ROLES = {
@@ -69,15 +69,15 @@ class Stats(BaseModel):
         for stat in roles.get("secondary", []):
             val = getattr(self, stat)
             if archetype == "jester":
-                if not (9 <= val <= 13):
-                    errors.append(f"{stat}={val} not in secondary range 9-13")
+                if not (11 <= val <= 15):
+                    errors.append(f"{stat}={val} not in secondary range 11-15")
             else:
-                if not (11 <= val <= 14):
-                    errors.append(f"{stat}={val} not in secondary range 11-14")
+                if not (12 <= val <= 16):
+                    errors.append(f"{stat}={val} not in secondary range 12-16")
         for stat in roles.get("dump", []):
             val = getattr(self, stat)
-            if not (6 <= val <= 10):
-                errors.append(f"{stat}={val} not in dump range 6-10")
+            if not (8 <= val <= 12):
+                errors.append(f"{stat}={val} not in dump range 8-12")
         if self.total() != STAT_BUDGET:
             errors.append(f"total={self.total()} != budget {STAT_BUDGET}")
         return errors

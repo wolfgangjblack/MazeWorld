@@ -494,6 +494,57 @@ class LlamaPromptSet(PromptSet):
         )
 
 
+    # Stubs for new prompts — local model delegates to Claude prompt set
+    def npc_batch_generation(self, room_env: dict, room_story: str,
+                             npc_slots: list[dict], story_context: str) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().npc_batch_generation(room_env, room_story, npc_slots, story_context)
+
+    def event_batch_generation(self, room_env: dict, room_story: str,
+                               event_type: str, event_slots: list[dict],
+                               story_context: str) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().event_batch_generation(room_env, room_story, event_type, event_slots, story_context)
+
+    def dialogue_context_generation(self, room_env: dict, room_story: str,
+                                    npc_data: list[dict], story_context: str) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().dialogue_context_generation(room_env, room_story, npc_data, story_context)
+
+    def weapon_database_generation(self, environments: list[dict],
+                                   num_rooms: int) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().weapon_database_generation(environments, num_rooms)
+
+    def spell_database_generation(self, class_type: str,
+                                  environments: list[dict],
+                                  num_rooms: int) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().spell_database_generation(class_type, environments, num_rooms)
+
+    def utility_ability_generation(self, environments: list[dict],
+                                   num_rooms: int) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().utility_ability_generation(environments, num_rooms)
+
+    def environment_sequence_generation(self, story_seed: str, num_rooms: int,
+                                        known_types: list[str]) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().environment_sequence_generation(story_seed, num_rooms, known_types)
+
+    def overarching_story_generation(self, story_seed: str,
+                                     environments: list[dict]) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().overarching_story_generation(story_seed, environments)
+
+    def room_story_beat_generation(self, overarching_story: dict,
+                                   room_env: dict, room_index: int,
+                                   prior_beats: list[dict]) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().room_story_beat_generation(
+            overarching_story, room_env, room_index, prior_beats)
+
+
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:
     """Convert neutral history dicts into (user, npc) turn pairs for few-shot."""
     examples: list[tuple[str, str]] = []

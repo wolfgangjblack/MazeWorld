@@ -99,3 +99,44 @@ class PromptSet(ABC):
     @abstractmethod
     def npc_backstory_generation(self, npc_data: dict,
                                  story_context: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def npc_batch_generation(self, room_env: dict, room_story: str,
+                             npc_slots: list[dict],
+                             story_context: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def event_batch_generation(self, room_env: dict, room_story: str,
+                               event_type: str, event_slots: list[dict],
+                               story_context: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def dialogue_context_generation(self, room_env: dict, room_story: str,
+                                    npc_data: list[dict],
+                                    story_context: str) -> LLMRequest: ...
+
+    @abstractmethod
+    def weapon_database_generation(self, environments: list[dict],
+                                   num_rooms: int) -> LLMRequest: ...
+
+    @abstractmethod
+    def spell_database_generation(self, class_type: str,
+                                  environments: list[dict],
+                                  num_rooms: int) -> LLMRequest: ...
+
+    @abstractmethod
+    def utility_ability_generation(self, environments: list[dict],
+                                   num_rooms: int) -> LLMRequest: ...
+
+    @abstractmethod
+    def environment_sequence_generation(self, story_seed: str, num_rooms: int,
+                                        known_types: list[str]) -> LLMRequest: ...
+
+    @abstractmethod
+    def overarching_story_generation(self, story_seed: str,
+                                     environments: list[dict]) -> LLMRequest: ...
+
+    @abstractmethod
+    def room_story_beat_generation(self, overarching_story: dict,
+                                   room_env: dict, room_index: int,
+                                   prior_beats: list[dict]) -> LLMRequest: ...

@@ -160,14 +160,14 @@ class ClassValidator(BaseValidator):
 
         for stat in roles.get("secondary", []):
             val = getattr(stats, stat, 10)
-            lo, hi = (9, 13) if archetype == "jester" else (11, 14)
+            lo, hi = (11, 15) if archetype == "jester" else (12, 16)
             if not (lo <= val <= hi):
                 reasons.append(f"{stat}={val} outside secondary {lo}-{hi}")
 
         for stat in roles.get("dump", []):
             val = getattr(stats, stat, 10)
-            if not (6 <= val <= 10):
-                reasons.append(f"{stat}={val} outside dump 6-10")
+            if not (8 <= val <= 12):
+                reasons.append(f"{stat}={val} outside dump 8-12")
 
         # Minimum content counts
         min_ab = self.MIN_ABILITIES.get(archetype, 0)

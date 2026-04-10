@@ -510,21 +510,18 @@ class TestJesterStatRangeFix:
         errors = stats.validate_guardrails("jester")
         assert errors == [], f"Jester fallback stats failed guardrails: {errors}"
 
-    def test_jester_secondary_9_passes(self):
-        """A jester stat at 9 should pass secondary validation."""
-        # Build stats where a secondary is exactly 9
-        stats = Stats(LUCK=16, STR=9, DEX=11, CON=11, INT=11, WIS=10, CHA=4)
-        # Only checking secondary range for jester, LUCK is primary
+    def test_jester_secondary_11_passes(self):
+        """A jester stat at 11 should pass secondary validation (range 11-15)."""
+        stats = Stats(LUCK=16, STR=11, DEX=13, CON=13, INT=13, WIS=13, CHA=11)
         errors = stats.validate_guardrails("jester")
         secondary_errors = [e for e in errors if "secondary" in e]
-        # STR=9 should be valid for jester secondary (9-13)
-        assert not any("STR=9" in e for e in secondary_errors)
+        assert not any("STR=11" in e for e in secondary_errors)
 
-    def test_jester_secondary_14_fails(self):
-        """A jester stat at 14 should fail secondary validation (max is 13)."""
-        stats = Stats(LUCK=16, STR=14, DEX=10, CON=10, INT=10, WIS=10, CHA=2)
+    def test_jester_secondary_16_fails(self):
+        """A jester stat at 16 should fail secondary validation (max is 15)."""
+        stats = Stats(LUCK=16, STR=16, DEX=11, CON=11, INT=11, WIS=11, CHA=11)
         errors = stats.validate_guardrails("jester")
-        assert any("STR=14" in e and "secondary" in e for e in errors)
+        assert any("STR=16" in e and "secondary" in e for e in errors)
 
     @pytest.mark.parametrize("archetype", ["warrior", "mage", "healer", "jester"])
     def test_fallback_class_passes_guardrails(self, archetype):

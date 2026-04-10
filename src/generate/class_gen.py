@@ -134,30 +134,27 @@ def _fix_stats(raw: dict, archetype: str) -> Stats:
         lo, hi = _range_for_role("dump", archetype)
         values[stat] = max(lo, min(hi, values[stat]))
 
-    # Handle LUCK for non-jester (LUCK is dump range 6-10 unless jester)
     all_assigned = [s for role_stats in effective_roles.values() for s in role_stats]
     unassigned = [s for s in STAT_NAMES if s not in all_assigned]
     for stat in unassigned:
-        values[stat] = max(6, min(10, values[stat]))
+        values[stat] = max(8, min(12, values[stat]))
 
     # Redistribute to hit budget
     total = sum(values.values())
     diff = total - STAT_BUDGET
 
     if diff != 0:
-        # Adjust secondary, dump, and unassigned stats
         adjustable = (effective_roles.get("secondary", [])
                       + effective_roles.get("dump", [])
-                      + unassigned)
-        if not adjustable:
-            adjustable = [s for s in STAT_NAMES if s not in effective_roles.get("primary", [])]
+                      + unassigned
+                      + effective_roles.get("primary", []))
 
         idx = 0
         while diff != 0 and idx < len(adjustable) * 30:
             stat = adjustable[idx % len(adjustable)]
             role = _stat_role(stat, effective_roles)
             if stat in unassigned:
-                lo, hi = (6, 10)
+                lo, hi = (8, 12)
             else:
                 lo, hi = _range_for_role(role, archetype)
 
@@ -183,11 +180,10 @@ def _range_for_role(role: str, archetype: str = "") -> tuple[int, int]:
     if role == "primary":
         return (14, 18)
     elif role == "secondary":
-        # Jester needs wider secondary range to hit 72 budget
         if archetype == "jester":
-            return (9, 13)
-        return (11, 14)
-    return (6, 10)
+            return (11, 15)
+        return (12, 16)
+    return (8, 12)
 
 
 def _parse_abilities(raw_list: list) -> list[Ability]:
@@ -343,7 +339,7 @@ def _fallback_class(archetype: str, env_type: str, env_name: str) -> dict:
 
     # Build raw stat targets, then use _fix_stats for budget enforcement
     if archetype == "jester":
-        stats = {s: 11 for s in STAT_NAMES if s != "LUCK"}
+        stats = {s: 13 for s in STAT_NAMES if s != "LUCK"}
         stats["LUCK"] = 16
     else:
         roles = ARCHETYPE_STAT_ROLES[archetype]
@@ -351,11 +347,11 @@ def _fallback_class(archetype: str, env_type: str, env_name: str) -> dict:
         for stat in roles.get("primary", []):
             stats[stat] = 16
         for stat in roles.get("secondary", []):
-            stats[stat] = 12
+            stats[stat] = 14
         for stat in roles.get("dump", []):
-            stats[stat] = 8
+            stats[stat] = 10
         if "LUCK" not in stats:
-            stats["LUCK"] = 8
+            stats["LUCK"] = 10
 
     # Use _fix_stats for budget-correct redistribution
     fixed = _fix_stats(stats, archetype)

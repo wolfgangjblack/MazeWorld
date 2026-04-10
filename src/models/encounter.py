@@ -284,17 +284,36 @@ class CombatEvent(Event):
 class PuzzleEvent(Event):
     """Puzzle encounter requiring specific tool/ability.
 
-    Correct tool = solved + reward.
-    Wrong tool = consumed + warning + puzzle remains.
-    No tool = can leave and return.
+    If player has correct_tool or correct_ability: auto-success, no roll.
+    Without the right tool: normal dice roll (stat + modifier vs DC).
+    Walk away always available.
     """
     type: str = "puzzle"
     choices: List[EventChoice] = Field(default_factory=list)
     reward_item_id: Optional[int] = None
-    required_tools: List[str] = Field(default_factory=list)  # Valid tool attributes that solve it
+    required_tools: List[str] = Field(default_factory=list)
+    correct_tool: Optional[str] = None
+    correct_ability: Optional[str] = None
+
+    def _has_correct_tool(self, player) -> bool:
+        """Check if the player has the correct tool or ability for auto-success."""
+        if self.correct_tool:
+            for item in player.inventory.values():
+                stats = getattr(item, 'item_stats', None)
+                if stats and getattr(stats, 'attribute', None) == self.correct_tool:
+                    return True
+        if self.correct_ability:
+            for ability in getattr(player, 'abilities', []):
+                if getattr(ability, 'name', '') == self.correct_ability:
+                    return True
+        return False
 
     def resolve(self, choice_index: int, dice_roll: int, player) -> dict:
-        """Apply chosen option. Stat/tool check + roll vs DC."""
+        """Apply chosen option.
+
+        If the player has the correct tool/ability: auto-success.
+        Otherwise: normal stat + modifier roll vs DC.
+        """
         if choice_index < 0 or choice_index >= len(self.choices):
             return {"success": False, "message": "Invalid choice."}
 
@@ -305,6 +324,15 @@ class PuzzleEvent(Event):
                 "success": True,
                 "message": "You walk away safely.",
                 "reward_item_id": None,
+            }
+
+        if self._has_correct_tool(player):
+            self.resolved = True
+            return {
+                "success": True,
+                "message": f"Your preparation pays off! You easily overcome the {self.name}.",
+                "reward_item_id": self.reward_item_id,
+                "auto_solved": True,
             }
 
         modifier = 0
@@ -328,7 +356,6 @@ class PuzzleEvent(Event):
                 "reward_item_id": self.reward_item_id,
             }
         else:
-            # Wrong tool consumed if tool_attribute was specified
             consumed_tool = None
             if choice.tool_attribute:
                 for item_name, item in list(player.inventory.items()):
