@@ -30,6 +30,7 @@ class GenerationStats:
     llm_backend: str = "local"    # "api" | "local"
     image_backend: str = "local"  # "api" | "local"
     music_backend: str = "none"   # "none" | "api"
+    sfx_backend: str = "none"     # "none" | "elevenlabs"
 
     # LLM usage
     llm_calls: int = 0
@@ -121,8 +122,8 @@ class GenerationStats:
 
     @property
     def sfx_cost_usd(self) -> float | None:
-        """USD cost for SFX generation. None when music backend is 'none'."""
-        if self.music_backend == "none":
+        """USD cost for SFX generation. None when sfx backend is 'none'."""
+        if self.sfx_backend == "none":
             return None
         return self.sfx_succeeded * _ELEVENLABS_COST_PER_SFX
 
@@ -159,6 +160,7 @@ class GenerationStats:
             "llm_backend": self.llm_backend,
             "image_backend": self.image_backend,
             "music_backend": self.music_backend,
+            "sfx_backend": self.sfx_backend,
             "llm_calls": self.llm_calls,
             "input_tokens": self.input_tokens,
             "output_tokens": self.output_tokens,
@@ -215,7 +217,7 @@ class GenerationStats:
             "  SFX: %d/%d effects [%s]",
             d["sfx_succeeded"],
             d["sfx_attempted"],
-            d["music_backend"],
+            d["sfx_backend"],
         )
         if d["total_cost_usd"] is not None:
             logger.info(

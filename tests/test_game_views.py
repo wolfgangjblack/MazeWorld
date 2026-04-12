@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
-from src.views.maze_view import MazeView, DEBUG_EVENT_COLOR
+from src.views.maze_view import MazeView, DEBUG_EVENT_FALLBACK
 
 
 @pytest.fixture(autouse=True)
@@ -86,8 +86,8 @@ class TestMazeViewEventVisibility:
         cx = 1 * GRID_SIZE + GRID_SIZE // 2
         cy = 2 * GRID_SIZE + HUD_HEIGHT + GRID_SIZE // 2
         color = screen.get_at((cx, cy))
-        assert (color.r, color.g, color.b) == DEBUG_EVENT_COLOR, (
-            f"Event tile should be purple when debug_reveal=True, got {color}"
+        assert (color.r, color.g, color.b) == DEBUG_EVENT_FALLBACK, (
+            f"Event tile should be purple (fallback) when debug_reveal=True without event_type_map, got {color}"
         )
 
 

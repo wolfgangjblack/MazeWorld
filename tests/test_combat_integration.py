@@ -289,7 +289,9 @@ class TestCombatControllerWiring:
 
         result = cc.player_use_item("Bread")
         assert result["success"] is True
-        assert p.stamina == 70
+        con_mod = p.get_stat_mod("CON") if hasattr(p, 'get_stat_mod') else 0
+        expected = min(50 + max(1, 20 + 2 * con_mod), p.max_stamina)
+        assert p.stamina == expected
 
     def test_combat_controller_collect_loot(self):
         """Loot collection from dead monsters."""

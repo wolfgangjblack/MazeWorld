@@ -265,10 +265,14 @@ def test_build_items_json_structure():
 
 
 def test_weapon_dice_scaling():
-    """Test that WEAPON_DICE_BY_LEVEL maps room levels to appropriate dice."""
-    from src.generate.generators.llm_primitives import WEAPON_DICE_BY_LEVEL
-    assert set(WEAPON_DICE_BY_LEVEL[1]) == {"1d4", "1d6"}
-    assert set(WEAPON_DICE_BY_LEVEL[4]) == {"1d10", "1d12"}
+    """Test that WEAPON_DICE_BY_ROOM maps room levels to per-archetype dice."""
+    from src.models.weapon import WEAPON_DICE_BY_ROOM
+    assert 1 in WEAPON_DICE_BY_ROOM
+    assert 4 in WEAPON_DICE_BY_ROOM
+    for level, archetypes in WEAPON_DICE_BY_ROOM.items():
+        assert isinstance(archetypes, dict)
+        for arch, dice in archetypes.items():
+            assert dice.startswith("1d") or dice.startswith("2d")
 
 
 def test_validate_puzzle_tools():

@@ -2,13 +2,16 @@ import pytest
 from src.models.player import PlayerCharacter
 from src.models.items import Food, Drink, ItemStats
 from src.models.npc import StaticNPC
+from tests.conftest import requires_data
 
 
+@requires_data
 def test_starter_inventory_cloned(player, reg):
     player.inventory["bread"].quantity = 99
     assert reg.starter_inventory["bread"].quantity == 1
 
 
+@requires_data
 def test_is_item_at_player_position(maze, reg):
     player = PlayerCharacter(x=0, y=0)
     for y, row in enumerate(maze.grid):
@@ -30,6 +33,7 @@ def test_is_item_at_empty_position(maze):
                 return
 
 
+@requires_data
 def test_pick_up_item(maze, reg):
     player = PlayerCharacter(x=0, y=0)
     player.initialize_inventory()

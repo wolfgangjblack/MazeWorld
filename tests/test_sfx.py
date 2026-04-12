@@ -153,10 +153,10 @@ class TestSFXControllerKeyMapping:
             sfx.play_weapon_swing("heavy")
             mock_play.assert_called_once_with("weapon_heavy_swing")
 
-    def test_weapon_swing_random_normalizes_to_light(self):
+    def test_weapon_swing_wild_normalizes_to_light(self):
         sfx = self._make_controller()
         with patch.object(sfx, "play") as mock_play:
-            sfx.play_weapon_swing("random")
+            sfx.play_weapon_swing("wild")
             mock_play.assert_called_once_with("weapon_light_swing")
 
     def test_weapon_hit_key(self):
@@ -165,10 +165,10 @@ class TestSFXControllerKeyMapping:
             sfx.play_weapon_hit("simple")
             mock_play.assert_called_once_with("weapon_simple_hit")
 
-    def test_weapon_hit_random_normalizes_to_light(self):
+    def test_weapon_hit_wild_normalizes_to_light(self):
         sfx = self._make_controller()
         with patch.object(sfx, "play") as mock_play:
-            sfx.play_weapon_hit("random")
+            sfx.play_weapon_hit("wild")
             mock_play.assert_called_once_with("weapon_light_hit")
 
     def test_spell_damage_single_cast(self):

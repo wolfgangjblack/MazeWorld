@@ -8,6 +8,7 @@ from src.models.npc import MerchantNPC
 from src.models.player import PlayerCharacter
 from src.models.items import Food, ItemStats
 from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from tests.conftest import requires_data
 
 
 @pytest.fixture(autouse=True)
@@ -100,6 +101,7 @@ class TestShopViewNavigation:
 
 
 class TestShopViewConfirm:
+    @requires_data
     def test_buy_triggers_confirm(self, reg):
         merchant = _make_merchant(shop_inventory=[
             {"item_id": 200, "price": 10, "stock": 2},
@@ -114,6 +116,7 @@ class TestShopViewConfirm:
         assert view.confirming is True
         assert view.confirm_action["type"] == "buy"
 
+    @requires_data
     def test_confirm_buy(self, reg):
         merchant = _make_merchant(shop_inventory=[
             {"item_id": 200, "price": 10, "stock": 2},
@@ -127,6 +130,7 @@ class TestShopViewConfirm:
         assert result == {"action": "buy", "index": 0}
         assert view.confirming is False
 
+    @requires_data
     def test_cancel_confirm(self, reg):
         merchant = _make_merchant(shop_inventory=[
             {"item_id": 200, "price": 10, "stock": 2},

@@ -1,6 +1,7 @@
 from src.models.npc import MerchantNPC
 from src.models.player import PlayerCharacter
 from src.models.items import Food, Weapon, ItemStats, EscortItem
+from tests.conftest import requires_data
 
 
 def _make_merchant(shop_inventory=None):
@@ -32,6 +33,7 @@ class TestMerchantNPC:
         assert len(available) == 1
         assert available[0]["item_id"] == 201
 
+    @requires_data
     def test_buy_from_success(self, reg):
         m = _make_merchant(shop_inventory=[
             {"item_id": 200, "price": 10, "stock": 3},  # bread
@@ -104,6 +106,7 @@ class TestMerchantNPC:
         m.sell_to("sword", player)
         assert player.equipped_weapon is None
 
+    @requires_data
     def test_buy_reduces_stock(self, reg):
         m = _make_merchant(shop_inventory=[
             {"item_id": 200, "price": 5, "stock": 1},

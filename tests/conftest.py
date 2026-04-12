@@ -9,6 +9,14 @@ from src.registry import registry
 from src.models.maze import Maze
 from src.models.player import PlayerCharacter
 
+HAS_GENERATED_DATA = (
+    os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "items", "items.json"))
+)
+requires_data = pytest.mark.skipif(
+    not HAS_GENERATED_DATA,
+    reason="Requires generated world data (run pipeline first)",
+)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def load_registry():
