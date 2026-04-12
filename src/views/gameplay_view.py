@@ -29,7 +29,8 @@ class GameView:
                   quest_log_active=False, quest_log=None, followers=None,
                   fog=None, visibility_radius=3, night_alpha=0,
                   time_period=None, day_number=None, period_progress=0.0,
-                  item_detail_active=False, event_type_map=None):
+                  item_detail_active=False, event_type_map=None,
+                  event_flag_map=None):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -46,7 +47,8 @@ class GameView:
                                      fog=fog, player_x=player.x, player_y=player.y,
                                      visibility_radius=visibility_radius,
                                      night_alpha=night_alpha,
-                                     event_type_map=event_type_map)
+                                     event_type_map=event_type_map,
+                                     event_flag_map=event_flag_map)
 
             for npc in npcs:
                 # Only draw NPCs in revealed/visible tiles (if fog active)

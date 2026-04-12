@@ -266,8 +266,8 @@ class TestGateEncounter:
 # ---------------------------------------------------------------------------
 
 class TestGateFailurePenalty:
-    def test_flee_gate_applies_penalty(self):
-        """Fleeing a gate encounter applies HP/stamina penalty."""
+    def test_flee_gate_does_not_clear(self):
+        """Fleeing a gate encounter does NOT clear the gate (flee is blocked)."""
         from src.controllers.game_controller import GameController
 
         combat_event = MagicMock()
@@ -286,38 +286,40 @@ class TestGateFailurePenalty:
         gc.gate_cleared = False
         gc.current_room = 0
         gc.item_message_active = False
+        gc.sfx = None
 
         gc._finalize_combat(combat_event)
 
-        assert gc.player.health < 100
-        assert gc.player.stamina < 100
-        assert gc.gate_cleared is True
+        assert gc.player.health == 100
+        assert gc.player.stamina == 100
+        assert gc.gate_cleared is False
 
-    def test_flee_gate_penalty_scales_with_room(self):
-        """Gate penalty is worse in later rooms."""
+    def test_gate_victory_clears_gate(self):
+        """Winning a gate encounter clears the gate."""
         from src.controllers.game_controller import GameController
 
-        for room_idx, expected_min_hp_loss in [(0, 20), (2, 40)]:
-            combat_event = MagicMock()
-            combat_event.resolved = False
-            combat_event.is_gate = True
-            combat_event.player_fled = True
-            combat_event.id = "gate_001"
+        combat_event = MagicMock()
+        combat_event.resolved = True
+        combat_event.is_gate = True
+        combat_event.player_fled = False
+        combat_event.id = "gate_001"
 
-            gc = GameController.__new__(GameController)
-            gc.maze = MagicMock()
-            gc.player = PlayerCharacter(x=1, y=1)
-            gc.player.health = 100
-            gc.player.stamina = 100
-            gc.quests = {}
-            gc.dialogue_box = MagicMock()
-            gc.gate_cleared = False
-            gc.current_room = room_idx
-            gc.item_message_active = False
+        gc = GameController.__new__(GameController)
+        gc.maze = MagicMock()
+        gc.player = PlayerCharacter(x=1, y=1)
+        gc.player.health = 100
+        gc.player.stamina = 100
+        gc.quests = {}
+        gc.dialogue_box = MagicMock()
+        gc.gate_cleared = False
+        gc.current_room = 0
+        gc.item_message_active = False
+        gc.sfx = None
+        gc.quest_manager = MagicMock()
 
-            gc._finalize_combat(combat_event)
-            hp_loss = 100 - gc.player.health
-            assert hp_loss >= expected_min_hp_loss
+        gc._finalize_combat(combat_event)
+
+        gc.quest_manager.on_event_resolved.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

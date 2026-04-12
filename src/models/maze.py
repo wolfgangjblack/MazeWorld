@@ -64,6 +64,8 @@ class TileMeta:
     # Combat assignment (filled by enrichment pass from monster DB)
     assigned_monsters: list | None = None
     assigned_monster_count: int = 1
+    is_gate: bool = False
+    is_climax_boss: bool = False
     # NPC-specific
     npc_role: str | None = None
     npc_max_exchanges: int = 5

@@ -61,12 +61,17 @@ class GameController:
         self.event_position_map: dict[tuple[int, int], str] = {}
         self._build_event_position_map()
 
-        # Build event type map for debug color rendering
+        # Build event type/flag maps for rendering
         self._event_type_map: dict[tuple[int, int], str] = {}
+        self._event_flag_map: dict[tuple[int, int], str] = {}
         for pos, eid in self.event_position_map.items():
             evt = self.events.get(eid)
             if evt:
                 self._event_type_map[pos] = getattr(evt, 'type', '')
+                if getattr(evt, 'is_climax_boss', False):
+                    self._event_flag_map[pos] = "climax_boss"
+                elif getattr(evt, 'is_gate', False):
+                    self._event_flag_map[pos] = "gate"
 
         # Check for kill quests already cleared at startup
         self.quest_manager.check_kill_quests_already_cleared(self.player)
@@ -186,7 +191,6 @@ class GameController:
         if (self.maze.door_position
                 and not self.maze.door_revealed
                 and self.total_rooms > 1
-                and self.current_room < self.total_rooms - 1
                 and self.encounter_clear_fraction >= DOOR_REVEAL_THRESHOLD):
             self.maze.reveal_door()
             self.dialogue_box.set_item_message(
@@ -717,7 +721,9 @@ class GameController:
             return
 
         # Player turn — action grid (3×2)
-        grid = CombatView.get_action_grid(cc)
+        _gate = (getattr(self.combat_event, 'is_gate', False)
+                 or getattr(self.combat_event, 'is_climax_boss', False))
+        grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
         total_slots = CombatView.GRID_COLS * CombatView.GRID_ROWS
         cur = self.combat_selected_action
         row = cur // CombatView.GRID_COLS
@@ -756,13 +762,18 @@ class GameController:
             elif action_name == "Weapons":
                 self._execute_combat_by_name("Swap Weapon", 0)
             elif action_name == "Flee":
+                if (getattr(self.combat_event, 'is_gate', False)
+                        or getattr(self.combat_event, 'is_climax_boss', False)):
+                    return
                 self._execute_combat_by_name("Flee", 0)
             elif action_name == "Gamble":
                 self._execute_combat_by_name("Gamble", 0)
 
     def _grid_action_name(self, cc: CombatController) -> str | None:
         """Return the action label at the current grid selection, or None."""
-        grid = CombatView.get_action_grid(cc)
+        _gate = (getattr(self.combat_event, 'is_gate', False)
+                 or getattr(self.combat_event, 'is_climax_boss', False))
+        grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
         row = self.combat_selected_action // CombatView.GRID_COLS
         col = self.combat_selected_action % CombatView.GRID_COLS
         if row < len(grid) and col < len(grid[row]):
@@ -1252,16 +1263,6 @@ class GameController:
         if combat_event.resolved:
             self.maze.grid[self.player.y][self.player.x] = 0
             self.quest_manager.on_event_resolved(combat_event.id, self.player)
-        elif is_gate and getattr(combat_event, 'player_fled', False):
-            penalty_hp = 20 + self.current_room * 10
-            penalty_stamina = 25
-            self.player.health = max(1, self.player.health - penalty_hp)
-            self.player.stamina = max(0, self.player.stamina - penalty_stamina)
-            self.gate_cleared = True
-            self.dialogue_box.set_item_message(
-                f"You flee the gate guardian! Penalty: -{penalty_hp} HP, "
-                f"-{penalty_stamina} stamina. The door is now open.")
-            self.item_message_active = True
 
         self._end_event()
 
@@ -1467,6 +1468,8 @@ class GameController:
     def draw(self, current_time):
         """Draw the current game state."""
         if self._in_full_combat and self.combat_view and self.combat_controller:
+            _gate_fight = (getattr(self.combat_event, 'is_gate', False)
+                           or getattr(self.combat_event, 'is_climax_boss', False))
             self.combat_view.draw(
                 self.combat_controller,
                 selected_action=self.combat_selected_action,
@@ -1477,6 +1480,7 @@ class GameController:
                 selecting_item=self.combat_selecting_item,
                 selected_item=self.combat_selected_item,
                 game_over_selection=self.combat_game_over_selection,
+                is_gate_fight=_gate_fight,
             )
             return
 
@@ -1514,4 +1518,5 @@ class GameController:
             period_progress=self.day_night.period_progress,
             item_detail_active=self.item_detail_active,
             event_type_map=self._event_type_map if self.debug_reveal else None,
+            event_flag_map=self._event_flag_map,
         )

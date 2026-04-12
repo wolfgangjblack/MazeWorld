@@ -52,14 +52,15 @@ class CombatView:
              selected_target: int = 0, selecting_target: bool = False,
              selecting_spell: bool = False, selected_spell: int = 0,
              selecting_item: bool = False, selected_item: int = 0,
-             game_over_selection: int = 0):
+             game_over_selection: int = 0, is_gate_fight: bool = False):
         self.screen.fill(DARK_GRAY)
         self._draw_player_stats(combat.player)
         self._draw_turn_order(combat)
         self._draw_monsters(combat)
         self._draw_action_menu(combat, selected_action, selected_target,
                                selecting_target, selecting_spell, selected_spell,
-                               selecting_item, selected_item)
+                               selecting_item, selected_item,
+                               is_gate_fight=is_gate_fight)
         self._draw_combat_log(combat)
         self._draw_state_banner(combat, game_over_selection)
 
@@ -186,7 +187,7 @@ class CombatView:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def get_action_grid(combat: CombatController) -> list[list[str | None]]:
+    def get_action_grid(combat: CombatController, is_gate_fight: bool = False) -> list[list[str | None]]:
         pc = combat.player.player_class
         archetype = pc.archetype if pc else "warrior"
 
@@ -197,17 +198,20 @@ class CombatView:
         else:
             cast_label = "Cast Spell"
 
+        flee_label = None if is_gate_fight else "Flee"
+
         if archetype == "jester":
-            row1 = [cast_label, "Gamble", "Flee"]
+            row1 = [cast_label, "Gamble", flee_label]
         else:
-            row1 = [cast_label, "Flee", None]
+            row1 = [cast_label, flee_label, None]
 
         return [row0, row1]
 
     def _draw_action_menu(self, combat: CombatController, selected: int,
                           selected_target: int, selecting_target: bool,
                           selecting_spell: bool = False, selected_spell: int = 0,
-                          selecting_item: bool = False, selected_item: int = 0):
+                          selecting_item: bool = False, selected_item: int = 0,
+                          is_gate_fight: bool = False):
         menu_y = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 5
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
             hint = self.font.render(
@@ -229,7 +233,7 @@ class CombatView:
             self._draw_target_selector(combat, menu_y, selected_target)
             return
 
-        grid = self.get_action_grid(combat)
+        grid = self.get_action_grid(combat, is_gate_fight=is_gate_fight)
         col_w = (SCREEN_WIDTH - 60) // self.GRID_COLS
         row_h = 36
 

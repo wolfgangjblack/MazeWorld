@@ -90,6 +90,8 @@ class CombatEvent(Event):
     type: str = "combat"
     monsters: List[Monster] = Field(default_factory=list)
     room_level: int = 1
+    is_gate: bool = False
+    is_climax_boss: bool = False
 
     # Legacy fields for backwards compat with old single-roll combat
     damage_type: str = "health"

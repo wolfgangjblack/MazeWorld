@@ -627,7 +627,33 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
             if target and target.assigned_monsters:
                 tile.quest_target_monsters = list(target.assigned_monsters)
 
-    logger.info("Enrichment pass complete: assigned monsters and requirements to tiles.")
+        # Designate gate/boss tile: pick combat tile closest to door
+        door_pos = maze.door_position
+        if door_pos and combat_tile_map:
+            room_idx = layout["room_idx"]
+            num_rooms = len(layouts)
+            is_final = (room_idx == num_rooms - 1)
+
+            boss_monsters = [m for m in monster_db if m.get("is_boss")]
+            sorted_tiles = sorted(
+                combat_tile_map.values(),
+                key=lambda t: abs(t.position[0] - door_pos[0]) + abs(t.position[1] - door_pos[1]),
+            )
+            gate_tile = sorted_tiles[0]
+
+            if is_final:
+                gate_tile.is_climax_boss = True
+                gate_tile.is_gate = True
+                if boss_monsters:
+                    gate_tile.assigned_monsters = [boss_monsters[0].get("name", "Final Boss")]
+                    gate_tile.assigned_monster_count = 1
+            else:
+                gate_tile.is_gate = True
+                if boss_monsters:
+                    gate_tile.assigned_monsters = [boss_monsters[0].get("name", "Gate Guardian")]
+                    gate_tile.assigned_monster_count = 1
+
+    logger.info("Enrichment pass complete: assigned monsters, requirements, and gate/boss tiles.")
 
 
 # Quest success/failure templates — derived from quest type, no LLM call.
@@ -825,6 +851,7 @@ def _phase4a_events(layout: dict, bible: WorldBible,
 
     # --- Combat: build programmatically, no LLM ---
     combat_tiles = [t for t in event_tiles if t.event_type == "combat"]
+    gate_event_id = None
     for tile in combat_tiles:
         idx = len(event_list)
         event_data = _build_combat_event(
@@ -832,7 +859,16 @@ def _phase4a_events(layout: dict, bible: WorldBible,
             env_type, env_name, room_level, monster_db,
             tile.is_story_related, faction_name,
         )
+        if tile.is_gate:
+            event_data["is_gate"] = True
+            gate_event_id = event_data["id"]
+        if tile.is_climax_boss:
+            event_data["is_climax_boss"] = True
         event_list.append(event_data)
+
+    if gate_event_id:
+        maze.gate_encounter_id = gate_event_id
+        logger.info("Room %d gate encounter: %s", room_idx, gate_event_id)
 
     # --- Puzzle & Event: chunked LLM generation with summaries ---
     for event_type in ["puzzle", "event"]:
@@ -1656,7 +1692,7 @@ def generate_world():
         advance(PHASE_NAMES[10])
         try:
             from src.generate.guide_builder import build_guide
-            build_guide(data_dir=DATA_DIR, generate_pdf=False)
+            build_guide(data_dir=DATA_DIR, generate_pdf=True)
         except Exception as e:
             logger.warning("Guide generation failed: %s", e)
         phase_bar.update(1)

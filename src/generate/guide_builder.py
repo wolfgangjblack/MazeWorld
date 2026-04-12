@@ -35,6 +35,8 @@ MAP_COLORS = {
     "wall": (40, 40, 50),
     "path": (200, 200, 180),
     "event": (180, 50, 50),
+    "boss": (140, 20, 20),
+    "gate": (180, 140, 30),
     "item": (220, 180, 50),
     "npc": (50, 100, 200),
     "player_start": (50, 200, 80),
@@ -170,7 +172,8 @@ def _merge_deduped_events(existing: list[dict], new_entries: list[dict]) -> list
 # ---------------------------------------------------------------------------
 
 def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
-                     npcs: list[dict], output_dir: str = MAP_OUTPUT_DIR) -> str | None:
+                     npcs: list[dict], events: list[dict] | None = None,
+                     output_dir: str = MAP_OUTPUT_DIR) -> str | None:
     """Render a maze grid to a color-coded PNG and return the output path."""
     try:
         from PIL import Image, ImageDraw, ImageFont
@@ -204,6 +207,20 @@ def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
     for ip in maze_data.get("item_placements", []):
         item_positions.add((int(ip["x"]), int(ip["y"])))
 
+    # Build boss/gate position lookup from events
+    event_flag_pos: dict[tuple[int, int], str] = {}
+    for ep in maze_data.get("event_positions", []):
+        eid = ep.get("event_id", "")
+        epos = (int(ep["x"]), int(ep["y"]))
+        if events:
+            for evt in events:
+                if evt.get("id") == eid:
+                    if evt.get("is_climax_boss"):
+                        event_flag_pos[epos] = "boss"
+                    elif evt.get("is_gate"):
+                        event_flag_pos[epos] = "gate"
+                    break
+
     for y, row in enumerate(grid):
         for x, cell in enumerate(row):
             px, py = x * TILE_SIZE, y * TILE_SIZE
@@ -218,7 +235,13 @@ def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
             elif pos in item_positions:
                 color = MAP_COLORS["item"]
             elif cell == -1:
-                color = MAP_COLORS["event"]
+                flag = event_flag_pos.get(pos, "")
+                if flag == "boss":
+                    color = MAP_COLORS["boss"]
+                elif flag == "gate":
+                    color = MAP_COLORS["gate"]
+                else:
+                    color = MAP_COLORS["event"]
             elif cell == 1:
                 color = MAP_COLORS["wall"]
             elif cell == 0:
@@ -247,6 +270,8 @@ def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
         (MAP_COLORS["wall"], "Wall"),
         (MAP_COLORS["path"], "Path"),
         (MAP_COLORS["event"], "Event"),
+        (MAP_COLORS["boss"], "Boss"),
+        (MAP_COLORS["gate"], "Gate"),
         (MAP_COLORS["item"], "Item"),
         (MAP_COLORS["npc"], "NPC"),
         (MAP_COLORS["player_start"], "Start"),
@@ -405,8 +430,14 @@ def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
         else ""
     )
 
+    boss_label = ""
+    if evt.get("is_climax_boss"):
+        boss_label = " — **FINAL BOSS**"
+    elif evt.get("is_gate"):
+        boss_label = " — **GATE GUARDIAN**"
+
     lines = [
-        f'#### {evt.get("name", "Event")} ({evt_type})',
+        f'#### {evt.get("name", "Event")} ({evt_type}){boss_label}',
         '',
     ]
     if img_tag:
@@ -657,7 +688,7 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
             lines.append('')
 
     # b) Map
-    map_path = _render_maze_png(maze, room_id, room_idx, npcs)
+    map_path = _render_maze_png(maze, room_id, room_idx, npcs, events=events)
     if map_path:
         lines.append('### Level Map')
         lines.append('')
