@@ -126,7 +126,7 @@ class ClaudePromptSet(PromptSet):
                 system=(
                     "You generate combat encounter descriptions for a fantasy game. "
                     "Given an environment, respond with ONLY a JSON object with keys: "
-                    "name, description, difficulty (1-5), damage_type (health|hunger|thirst), "
+                    "name, description, difficulty (1-5), damage_type (health|stamina), "
                     "damage_range ([min, max]). Name and describe encounters using the "
                     "world's lore when provided — faction creatures, story-relevant hazards."
                     + _NO_FENCES
@@ -147,7 +147,7 @@ class ClaudePromptSet(PromptSet):
                     "You generate puzzle encounter descriptions for a fantasy game. "
                     "Given an environment, respond with ONLY a JSON object with keys: "
                     "name, description, difficulty (1-5), choices (array of objects with: "
-                    "text, stat_check (health|hunger|thirst|null), tool_attribute "
+                    "text, stat_check (health|stamina|null), tool_attribute "
                     "(bludgeon|cutting|digging|climbing|null), dc (number), auto_success (bool)). "
                     "Include 2-3 choices, one should be a safe 'walk away' option. "
                     "Name and describe puzzles using the world's lore when provided — "
@@ -244,8 +244,8 @@ class ClaudePromptSet(PromptSet):
                 "environment name, and room level, generate a JSON object with item pools. "
                 "Items MUST be thematic to the environment and world lore.\n\n"
                 "Return ONLY a JSON object with these keys:\n"
-                "- food: array of 4 items, each {name, desc, nutrition_value (10-30), health_value (0-15)}\n"
-                "- drink: array of 4 items, each {name, desc, hydration_value (10-30), health_value (0-15)}\n"
+                "- food: array of 4 items, each {name, desc, stamina_value (10-30), health_value (0-15)}\n"
+                "- drink: array of 4 items, each {name, desc, stamina_value (10-30), health_value (0-15)}\n"
                 "- tools: array of 3 items, each {name, desc, attribute (bludgeon|cutting|digging|climbing)}\n"
                 "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}\n"
                 "- spell_scrolls: array of 2 items, each {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}\n\n"
@@ -262,16 +262,16 @@ class ClaudePromptSet(PromptSet):
                     "environment: 'forest', name: 'Whisperwood', room_level: 1",
                     json.dumps({
                         "food": [
-                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", "nutrition_value": 20, "health_value": 0},
-                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries.", "nutrition_value": 10, "health_value": 5},
-                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire.", "nutrition_value": 25, "health_value": 10},
-                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey.", "nutrition_value": 15, "health_value": 5},
+                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", "stamina_value": 20, "health_value": 0},
+                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries.", "stamina_value": 10, "health_value": 5},
+                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire.", "stamina_value": 25, "health_value": 10},
+                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey.", "stamina_value": 15, "health_value": 5},
                         ],
                         "drink": [
-                            {"name": "spring water", "desc": "Cool, clear water from a forest spring.", "hydration_value": 15, "health_value": 0},
-                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs.", "hydration_value": 20, "health_value": 10},
-                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries.", "hydration_value": 10, "health_value": 5},
-                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves.", "hydration_value": 10, "health_value": 0},
+                            {"name": "spring water", "desc": "Cool, clear water from a forest spring.", "stamina_value": 15, "health_value": 0},
+                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs.", "stamina_value": 20, "health_value": 10},
+                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries.", "stamina_value": 10, "health_value": 5},
+                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves.", "stamina_value": 10, "health_value": 0},
                         ],
                         "tools": [
                             {"name": "woodcutter's hatchet", "desc": "A small hatchet for chopping branches.", "attribute": "cutting"},
@@ -360,10 +360,11 @@ class ClaudePromptSet(PromptSet):
                 "  Mage: INT 14-18; WIS,DEX 11-14; STR,CON,CHA 6-10; LUCK 6-10\n"
                 "  Healer: WIS 14-18; CHA,CON 11-14; STR,DEX,INT 6-10; LUCK 6-10\n"
                 "  Jester: LUCK 14-18; all others 11-14 except 1 random dump stat 6-10\n"
-                "- abilities: array of {name, description, stat, hunger_cost, thirst_cost}\n"
+                "- abilities: array of {name, description, stat}\n"
                 "  Warrior gets 4 utility abilities (break door, intimidate, bash, rally type)\n"
                 "  Jester gets 0-3 random abilities from other classes\n"
-                "- spells: array of {name, description, element, damage_dice, spell_type, hunger_cost, thirst_cost}\n"
+                "- spells: array of {name, description, element, spell_type, stat, targets (single|multi|self)}\n"
+                "  Do NOT include damage_dice, hunger_cost, thirst_cost, or stamina_cost — the system assigns these.\n"
                 "  Mage: 1 element + 4 spells (2 damage, 2 utility), elements: fire|water|forest|light|dark\n"
                 "  Healer: 1 element + 4 spells (1 heal, 1 buff, 1 damage, 1 utility)\n"
                 "  Warrior: no spells. Jester: random 0-3 from other classes\n"
@@ -691,50 +692,116 @@ class ClaudePromptSet(PromptSet):
 
     def event_batch_generation(self, room_env: dict, room_story: str,
                                event_type: str, event_slots: list[dict],
-                               story_context: str) -> LLMRequest:
+                               story_context: str,
+                               previous_summaries: list[str] | None = None,
+                               available_abilities: list[str] | None = None,
+                               available_spells: list[str] | None = None,
+                               available_tools: list[str] | None = None) -> LLMRequest:
+        tool_list = ", ".join(available_tools or ["bludgeon", "cutting", "digging", "climbing"])
+        ability_list = ", ".join(available_abilities or [])
+        spell_list = ", ".join(available_spells or [])
+
         type_guidance = {
-            "combat": (
-                "Generate combat encounter descriptions. Each needs: name, description, "
-                "difficulty (1-5), portrait_prompt. Monsters are assigned separately — "
-                "just provide the narrative framing for each fight."
-            ),
             "puzzle": (
-                "Generate puzzle encounters. Each needs: name, description, difficulty (1-5), "
-                "correct_tool (bludgeon|cutting|digging|climbing or null), "
-                "correct_ability (ability name or null), "
-                "choices (array of {text, stat_check, tool_attribute, dc, auto_success}), "
-                "portrait_prompt. If the player has the correct tool/ability, it auto-solves. "
-                "Without it, they roll normally. Include a walk-away option. "
-                "Each class should have at least one viable approach."
+                "Generate PUZZLE encounters — environmental/physical obstacles that block the player's path.\n"
+                "Puzzles are about interacting with the WORLD: ancient mechanisms, natural hazards, magical seals, "
+                "structural collapses, trapped passages. NOT about people.\n\n"
+                "Each puzzle needs: name, description, difficulty (1-5), "
+                f"correct_tool (one of: {tool_list}, or null), "
+                f"correct_ability (one of: {ability_list}, or null — pick ONLY from this list), "
+                f"correct_spell (one of: {spell_list}, or null — pick ONLY from this list), "
+                "choices (array of {{text, stat_check, tool_attribute, dc, auto_success}}), "
+                "summary (1-2 line description of the puzzle + how to solve it), "
+                "portrait_prompt.\n\n"
+                "CRITICAL RULES for choice text:\n"
+                "- The `text` field is what the PLAYER reads. It must describe a NARRATIVE ACTION, not a stat label.\n"
+                "- The `stat_check` and `tool_attribute` fields are behind-the-scenes metadata.\n"
+                '- GOOD: {{"text": "Shoulder the boulder aside with brute force", "stat_check": "STR", "dc": 14}}\n'
+                '- BAD:  {{"text": "Attempt a STR check", "stat_check": "STR", "dc": 14}}\n'
+                '- GOOD: {{"text": "Wedge your pickaxe under the stone and lever it free", "tool_attribute": "digging"}}\n'
+                '- BAD:  {{"text": "Use a digging tool", "tool_attribute": "digging"}}\n\n'
+                "DESCRIPTION RULES:\n"
+                "- Each description must be a vivid, specific scene tied to the environment.\n"
+                "- Include a narrative hook: who built it, why it exists, what's at stake.\n"
+                "- Do NOT write generic text like 'A puzzle blocks your path' or 'A runic seal blocks the way.'\n\n"
+                "If an event_slot has requires_type and requires_ref, that MUST be the "
+                "auto-solve option (correct_tool, correct_ability, or correct_spell).\n"
+                "Include a walk-away option with contextual text (not just 'Walk away')."
             ),
             "event": (
-                "Generate narrative event encounters. Each needs: name, description, "
-                "difficulty (1-5), choices (array of {text, stat_check, dc, auto_success}), "
-                "failure_damage_type (health|hunger|thirst), failure_damage_range ([min, max]), "
-                "portrait_prompt. Events are narrative moments with meaningful tradeoffs. "
-                "Each class should have at least one viable approach. Failure doesn't give "
-                "the reward but should feel like a story moment, not just a penalty."
+                "Generate EVENT encounters — people/narrative-driven social situations.\n"
+                "Events are about interacting with PEOPLE: faction encounters, moral dilemmas, "
+                "cultural moments, social confrontations, story scenes. NOT about environmental obstacles.\n\n"
+                "Each event needs: name, description, difficulty (1-5), "
+                "choices (EXACTLY 5 choices — see structure below), "
+                f"correct_ability (one of: {ability_list}, or null), "
+                f"correct_spell (one of: {spell_list}, or null), "
+                "failure_damage_type (health|stamina), failure_damage_range ([min, max]), "
+                "summary (1-2 line description of the event + consequences), "
+                "portrait_prompt.\n\n"
+                "EXACTLY 5 CHOICES with this structure:\n"
+                "1. Stat check: {text, stat_check, dc} — a physical/mental action\n"
+                "2. Ability slot: {text, stat_check: null, dc: 0} — text describes using an ability narratively\n"
+                "3. Spell slot: {text, stat_check: null, dc: 0} — text describes casting a spell narratively\n"
+                "4. Item/tool slot: {text, tool_attribute, dc} — text describes using an item\n"
+                "5. Walk away: {text, auto_success: true} — contextual exit\n\n"
+                "CRITICAL RULES for choice text:\n"
+                "- The `text` field is what the PLAYER reads. Describe WHAT THEY DO, not what stat they roll.\n"
+                "- `stat_check`, `tool_attribute` are behind-the-scenes metadata, never exposed to the player.\n"
+                '- GOOD: "Step between the thugs and stare them down" (stat_check: CHA)\n'
+                '- BAD:  "Attempt a CHA check"\n'
+                '- GOOD: "Cut the ropes binding the prisoner" (tool_attribute: cutting)\n'
+                '- BAD:  "Use cutting tool"\n'
+                '- GOOD: "Slip away before they notice you" (auto_success: true)\n'
+                '- BAD:  "Walk away"\n\n'
+                "DESCRIPTION RULES:\n"
+                "- Paint a specific scene with NAMED characters or groups and clear stakes.\n"
+                "- Do NOT write 'Something unexpected happens' or any generic placeholder.\n"
+                "- Each event must feel like a unique narrative moment."
             ),
         }
-        context = json.dumps({
+
+        context_data = {
             "environment": room_env,
             "room_story": room_story,
             "event_type": event_type,
             "event_slots": event_slots,
             "world_context": story_context[:STORY_CONTEXT_LIMIT],
-        })
+        }
+        if available_tools:
+            context_data["available_tools"] = available_tools
+        if available_abilities:
+            context_data["available_abilities"] = available_abilities
+        if available_spells:
+            context_data["available_spells"] = available_spells
+        if previous_summaries:
+            context_data["existing_encounters"] = previous_summaries
+
+        context = json.dumps(context_data)
+
+        previous_note = ""
+        if previous_summaries:
+            previous_note = (
+                "\n\nExisting encounters in this room (avoid duplicating these):\n"
+                + "\n".join(f"- {s}" for s in previous_summaries[-15:])
+            )
+
+        max_tokens = max(2000, len(event_slots) * 300)
+
         return LLMRequest(
             system=(
                 f"You generate {event_type} encounters for a fantasy game room.\n\n"
                 f"{type_guidance.get(event_type, type_guidance['event'])}\n\n"
                 "Story-related events (marked is_story_related) should reference the "
-                "faction, room story, or overarching narrative.\n\n"
+                "faction, room story, or overarching narrative.\n"
+                f"Generate EXACTLY {len(event_slots)} events.\n\n"
                 "Respond with ONLY a JSON array of event objects."
                 + _NO_FENCES
+                + previous_note
             ),
             examples=[],
             user_message=context,
-            max_tokens=2500,
+            max_tokens=max_tokens,
         )
 
     # ------------------------------------------------------------------
@@ -935,7 +1002,8 @@ class ClaudePromptSet(PromptSet):
 
     def room_story_beat_generation(self, overarching_story: dict,
                                    room_env: dict, room_index: int,
-                                   prior_beats: list[dict]) -> LLMRequest:
+                                   prior_beats: list[dict],
+                                   num_rooms: int = 5) -> LLMRequest:
         context = json.dumps({
             "overarching_story": overarching_story,
             "room": {"index": room_index, "environment": room_env},
@@ -958,7 +1026,8 @@ class ClaudePromptSet(PromptSet):
                 "faction's goal.\n"
                 "- `conflicts`: 2-3 specific, actionable situations the player can intervene in — name "
                 "the characters involved and describe what is at stake right now.\n"
-                "- `escalation`: 1-5, increasing each room. For the final room (escalation 5), the "
+                f"- `escalation`: 1-{num_rooms}, increasing each room. For the final room "
+                f"(escalation {num_rooms}), the "
                 "`summary` MUST reference the climax from overarching_story.\n"
                 "- Build on prior_beats: reference named characters or events from earlier rooms when "
                 "narratively logical. Show consequence.\n\n"
@@ -1002,6 +1071,199 @@ class ClaudePromptSet(PromptSet):
             ],
             user_message=context,
             max_tokens=1500,
+        )
+
+
+    def music_prompt_generation(self, story_summary: dict,
+                                environments: list[str]) -> LLMRequest:
+        context = json.dumps({
+            "story": story_summary,
+            "environments": environments,
+        })
+        return LLMRequest(
+            system=(
+                "You write music prompts for a synthwave video game soundtrack. "
+                "Given a story summary and a list of environment types actually present in the game, "
+                "generate Lyra 3 music prompts for the combat track and one maze track per environment.\n\n"
+                "STYLE RULES (apply to ALL prompts you write):\n"
+                "- Synthwave, retrowave, analog synths, 80s-inspired video game soundtrack\n"
+                "- Instrumental only, absolutely no vocals\n"
+                "- Loop-friendly: the opening texture must mirror the closing texture for seamless looping\n"
+                "- Use timestamped sections [0:00-0:20] ... [1:40-2:00] for structure\n"
+                "- All tracks are 2 minutes except game_over (null — handled separately)\n\n"
+                "COMBAT: The combat track should reflect the story faction's character — their methods, "
+                "tone, and the threat they pose. Tense, urgent, driving.\n\n"
+                "MAZE TRACKS: Each maze track should blend the natural feeling of the environment "
+                "(peaceful, mysterious, industrial, etc.) with an undercurrent of tension — "
+                "the world is dangerous. Example: village music is warm and pastoral with occasional "
+                "swells of unease; cave music is deep and atmospheric with lurking dread.\n\n"
+                "Respond with ONLY a JSON object. Keys: 'combat', and 'maze_{env}' for each env in the list. "
+                "Set puzzle_event, start_screen, victory, game_over to null (handled separately)."
+                + _NO_FENCES
+            ),
+            examples=[
+                (
+                    json.dumps({
+                        "story": {
+                            "title": "The Sunken Ledger",
+                            "faction_name": "The Brackwater Guild",
+                            "faction_description": "A criminal guild controlling trade routes through extortion and debt bondage",
+                            "climax": "Harrowmaster Veln completes a debt-binding ritual enslaving the merchant class",
+                        },
+                        "environments": ["cave"],
+                    }),
+                    json.dumps({
+                        "combat": (
+                            "[0:00-0:20] Tense synthwave bass pulse in a minor key, slow and ominous. "
+                            "The cold precision of hired enforcers. "
+                            "[0:20-1:10] Driving drum machine at 130 BPM, sharp arpeggiated synth leads, "
+                            "dark and business-like — violence as transaction. "
+                            "[1:10-1:40] Escalation: dissonant synth stabs, faster arpeggios, relentless momentum. "
+                            "[1:40-2:00] Return to opening bass pulse for seamless loop. "
+                            "Synthwave, retrowave, instrumental only, no vocals."
+                        ),
+                        "maze_cave": (
+                            "[0:00-0:20] Deep cave drone, low analog bass hum, cavernous reverb. "
+                            "[0:20-1:00] Slow atmospheric synthwave pad, dripping echo, minor key. "
+                            "Feels like exploring tunnels where something lurks. "
+                            "[1:00-1:30] Tension rises: deeper bass pulse, hint of a melody that resolves nowhere. "
+                            "[1:30-2:00] Return to opening drone for seamless loop. "
+                            "Synthwave, analog synths, instrumental only, no vocals."
+                        ),
+                        "puzzle_event": None,
+                        "start_screen": None,
+                        "victory": None,
+                        "game_over": None,
+                    }),
+                )
+            ],
+            user_message=context,
+            max_tokens=2000,
+        )
+
+
+    def sfx_prompt_generation(self, story_summary: dict,
+                              environments: list[dict],
+                              spell_elements: list[str]) -> LLMRequest:
+        context = json.dumps({
+            "story": story_summary,
+            "environments": environments,
+            "spell_elements": spell_elements,
+        })
+        return LLMRequest(
+            system=(
+                "You write sound effect prompts for a fantasy video game. "
+                "Given the story context, environment list, and active spell elements, "
+                "generate short text descriptions that will be sent to an AI SFX generator "
+                "(ElevenLabs). Each prompt must describe a specific, short sound.\n\n"
+                "OUTPUT FORMAT: Respond with ONLY a JSON object. Each key maps to an object "
+                "with 'prompt' (string), 'duration' (float, seconds), and 'loop' (boolean).\n\n"
+                "CATEGORIES TO GENERATE:\n\n"
+                "1. WEAPON SFX (6 keys) — flavor these with the story's faction/theme:\n"
+                "   - weapon_light_swing (1.5s): fast slash of a light blade (dagger, rapier)\n"
+                "   - weapon_light_hit (0.5s): light blade impact on flesh/armor\n"
+                "   - weapon_heavy_swing (2s): slow heavy weapon arc (maul, axe, hammer)\n"
+                "   - weapon_heavy_hit (0.75s): heavy weapon impact, weighty thud\n"
+                "   - weapon_simple_swing (1.5s): staff or scepter swing\n"
+                "   - weapon_simple_hit (0.5s): staff/mace impact\n\n"
+                "2. SPELL SFX (7 keys) — color these with the dominant spell elements:\n"
+                "   - spell_heal_cast (2s): healing magic activation\n"
+                "   - spell_damage_single_cast (1.5s): single-target attack spell cast\n"
+                "   - spell_damage_single_impact (1s): single-target spell hitting\n"
+                "   - spell_damage_multi_cast (2s): area-of-effect spell cast\n"
+                "   - spell_damage_multi_impact (1.5s): area spell hitting multiple targets\n"
+                "   - spell_buff_cast (2s): protective/stat buff activation\n"
+                "   - spell_reveal_cast (2s): reveal/sight magic activation\n\n"
+                "3. ENVIRONMENT AMBIENCE (one per environment) — key: ambience_{env_type}:\n"
+                "   Each is 12-15 seconds, loop=true. Describe the ambient soundscape of that "
+                "   specific environment colored by the story's faction presence and tone. "
+                "   Use the environment name for specificity.\n\n"
+                "PROMPT STYLE RULES:\n"
+                "- Be specific and vivid: describe actual sounds, not abstract concepts\n"
+                "- Include the faction's thematic flavor in weapons and ambience\n"
+                "- Spell sounds should reference the dominant element (fire=crackling, water=rushing, "
+                "  forest=rustling, light=chiming, dark=whispering)\n"
+                "- Keep prompts concise (1-3 sentences each)\n"
+                "- All durations in seconds\n"
+                "- Only ambience tracks get loop=true; all others loop=false"
+                + _NO_FENCES
+            ),
+            examples=[
+                (
+                    json.dumps({
+                        "story": {
+                            "title": "The Sunken Ledger",
+                            "faction_name": "The Brackwater Guild",
+                            "faction_description": "A criminal guild controlling trade routes",
+                            "climax": "Harrowmaster Veln enslaves the merchant class",
+                        },
+                        "environments": [
+                            {"type": "cave", "name": "Stonebiter Caverns"},
+                        ],
+                        "spell_elements": ["water", "dark"],
+                    }),
+                    json.dumps({
+                        "weapon_light_swing": {
+                            "prompt": "A quick sharp blade cutting through damp air with a wet metallic whoosh. Fast and precise, like a debt collector's razor.",
+                            "duration": 1.5, "loop": False,
+                        },
+                        "weapon_light_hit": {
+                            "prompt": "A short wet slap of steel on flesh. Quick blade impact, sharp and clinical.",
+                            "duration": 0.5, "loop": False,
+                        },
+                        "weapon_heavy_swing": {
+                            "prompt": "A heavy iron tool swinging through air with a deep whoosh and chain rattle. Slow, brutal, like a dockworker's maul.",
+                            "duration": 2.0, "loop": False,
+                        },
+                        "weapon_heavy_hit": {
+                            "prompt": "A crushing impact of heavy metal on bone. Deep thud with a crunch. Devastating.",
+                            "duration": 0.75, "loop": False,
+                        },
+                        "weapon_simple_swing": {
+                            "prompt": "A wooden staff cutting through air with a smooth whoosh. Light and swift, with a faint hum of energy.",
+                            "duration": 1.5, "loop": False,
+                        },
+                        "weapon_simple_hit": {
+                            "prompt": "A hollow wooden thud of a staff striking armor. Resonant impact.",
+                            "duration": 0.5, "loop": False,
+                        },
+                        "spell_heal_cast": {
+                            "prompt": "Rushing water sounds swirling upward, building to a gentle splash and warm shimmer. Healing water magic.",
+                            "duration": 2.0, "loop": False,
+                        },
+                        "spell_damage_single_cast": {
+                            "prompt": "A dark water jet pressurizing and firing: building rush then sharp crack of a water lance.",
+                            "duration": 1.5, "loop": False,
+                        },
+                        "spell_damage_single_impact": {
+                            "prompt": "A pressurized water blast impacting a surface. Wet explosive hit.",
+                            "duration": 1.0, "loop": False,
+                        },
+                        "spell_damage_multi_cast": {
+                            "prompt": "Dark tidal energy swelling outward: rising rush of cursed water, building to a roaring wave burst.",
+                            "duration": 2.0, "loop": False,
+                        },
+                        "spell_damage_multi_impact": {
+                            "prompt": "Multiple impacts of dark water bursts hitting stone and metal. Scattered wet explosions.",
+                            "duration": 1.5, "loop": False,
+                        },
+                        "spell_buff_cast": {
+                            "prompt": "A protective shell of flowing water encasing something: gentle rush building to a sealed dome of liquid energy.",
+                            "duration": 2.0, "loop": False,
+                        },
+                        "spell_reveal_cast": {
+                            "prompt": "Dark whispers dissolving into clarity: shadowy murmur fading as hidden things become visible. Eerie then clear.",
+                            "duration": 2.0, "loop": False,
+                        },
+                        "ambience_cave": {
+                            "prompt": "Deep cave ambience in smuggler tunnels: distant water dripping, echoing footsteps, faint clinking of contraband chains, occasional low wind moaning through stone passages. Tense and claustrophobic.",
+                            "duration": 15.0, "loop": True,
+                        },
+                    }),
+                )
+            ],
+            user_message=context,
+            max_tokens=3000,
         )
 
 

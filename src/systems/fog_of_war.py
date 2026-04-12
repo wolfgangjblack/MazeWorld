@@ -9,14 +9,19 @@ from typing import List
 
 from config import (
     MAZE_WIDTH, MAZE_HEIGHT, FOG_DEFAULT_RADIUS,
-    FOG_NIGHT_PENALTY, FOG_DIM_EDGE,
+    FOG_DAWN_BONUS, FOG_DAY_BONUS, FOG_DUSK_PENALTY, FOG_NIGHT_PENALTY,
+    FOG_DIM_EDGE,
 )
 
-
-# Use config.py constants as the single source of truth
 DEFAULT_VISIBILITY_RADIUS = FOG_DEFAULT_RADIUS
-NIGHT_VISIBILITY_PENALTY = FOG_NIGHT_PENALTY
 DIM_EDGE_TILES = FOG_DIM_EDGE
+
+_PERIOD_MODIFIERS = {
+    "dawn": FOG_DAWN_BONUS,
+    "day": FOG_DAY_BONUS,
+    "dusk": -FOG_DUSK_PENALTY,
+    "night": -FOG_NIGHT_PENALTY,
+}
 
 
 class FogOfWar:
@@ -31,21 +36,24 @@ class FogOfWar:
         ]
 
     def get_visibility_radius(self, player, is_night: bool = False,
-                              has_torch: bool = False) -> int:
+                              has_torch: bool = False,
+                              time_period: str | None = None) -> int:
         """Calculate effective visibility radius.
 
         Base radius + WIS bonus (+1 per 2 WIS modifier points).
-        Night reduces by NIGHT_VISIBILITY_PENALTY unless torch is active.
+        Varies by time period: dawn/day give bonuses, dusk/night give penalties.
+        Torch negates night/dusk penalties.
         """
         radius = DEFAULT_VISIBILITY_RADIUS
 
-        # WIS modifier bonus: +1 tile per 2 WIS modifier points
         wis_mod = player.get_stat_mod("WIS") if hasattr(player, 'get_stat_mod') else 0
         radius += max(0, wis_mod // 2)
 
-        # Night penalty (torch negates)
-        if is_night and not has_torch:
-            radius -= NIGHT_VISIBILITY_PENALTY
+        period = time_period or ("night" if is_night else "day")
+        modifier = _PERIOD_MODIFIERS.get(period, 0)
+        if modifier < 0 and has_torch:
+            modifier = 0
+        radius += modifier
 
         return max(1, radius)
 

@@ -10,6 +10,7 @@ from typing import List, Optional
 from src.models.combat import CombatState
 from src.models.monster import Monster
 from src.models.spell import Spell, elemental_multiplier
+from src.models.weapon import step_down_weapon_dice, roll_dice_expr
 
 
 def roll_buff_duration(caster) -> int:
@@ -59,9 +60,12 @@ class Combatant:
 class CombatController:
     """Orchestrates a single combat encounter."""
 
-    def __init__(self, player, monsters: List[Monster]):
+    def __init__(self, player, monsters: List[Monster], room_level: int = 1,
+                 survival=None):
         self.player = player
         self.monsters = list(monsters)
+        self.room_level = room_level
+        self.survival = survival
         self.log: List[str] = []
         self.state: CombatState = CombatState.ONGOING
         self.turn_index: int = 0
@@ -162,19 +166,28 @@ class CombatController:
         return result
 
     def player_multi_attack(self, target_indices: Optional[List[int]] = None) -> dict:
-        """Multi-target melee attack (warrior ability). Costs 8 hunger."""
-        cost = 8
-        if self.player.hunger < cost:
-            msg = "Not enough hunger to multi-attack!"
+        """Multi-target melee attack. Warrior only, 6 stamina, reduced dice."""
+        if not self.player.player_class or self.player.player_class.archetype != "warrior":
+            msg = "Only warriors can multi-attack!"
             self.log.append(msg)
             return {"success": False, "message": msg}
 
-        self.player.hunger = max(0, self.player.hunger - cost)
+        cost = 6
+        if self.player.stamina < cost:
+            msg = "Not enough stamina to multi-attack!"
+            self.log.append(msg)
+            return {"success": False, "message": msg}
+
+        self.player.stamina = max(0, self.player.stamina - cost)
         alive = self._alive_monsters()
         if target_indices is None:
             targets = alive
         else:
             targets = [alive[i] for i in target_indices if i < len(alive)]
+
+        dice_expr = step_down_weapon_dice(self.player.weapon)
+        stat = self.player._resolve_weapon_stat()
+        stat_bonus = self.player._weapon_stat_bonus(stat)
 
         messages = []
         total_damage = 0
@@ -184,7 +197,7 @@ class CombatController:
             target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
             dc = target_ac + target.dex_mod
             if attack_roll >= dc:
-                damage = self.player.roll_weapon_damage()
+                damage = max(1, roll_dice_expr(dice_expr) + stat_bonus)
                 target.take_damage(damage)
                 total_damage += damage
                 hit_msg = f"Hit {target.name} for {damage}!"
@@ -208,8 +221,13 @@ class CombatController:
 
         spell: Spell = self.player.spells[spell_index]
 
+        if self.survival and not self.survival.can_cast(self.player):
+            msg = "You are too exhausted to cast spells!"
+            self.log.append(msg)
+            return {"success": False, "message": msg}
+
         if not self.player.can_afford_spell(spell):
-            msg = f"Not enough resources to cast {spell.name}!"
+            msg = f"Not enough stamina to cast {spell.name}!"
             self.log.append(msg)
             return {"success": False, "message": msg}
 
@@ -236,11 +254,9 @@ class CombatController:
             return {"success": True, "message": msg}
 
         if spell.spell_type == "buff_sustain":
-            # Restore some hunger/thirst each turn — apply immediate small boost
             restore = 3
-            self.player.hunger = min(self.player.max_hunger, self.player.hunger + restore)
-            self.player.thirst = min(self.player.max_thirst, self.player.thirst + restore)
-            msg = f"You cast {spell.name}! Sustenance flows through you (+{restore} hunger/thirst)."
+            self.player.stamina = min(self.player.max_stamina, self.player.stamina + restore)
+            msg = f"You cast {spell.name}! Energy flows through you (+{restore} stamina)."
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -277,7 +293,8 @@ class CombatController:
             if magic_roll >= dc:
                 base_damage = spell.roll_damage()
                 mult = elemental_multiplier(spell.element, target.elemental_affinity)
-                damage = max(1, int(base_damage * mult))
+                effectiveness = self.survival.get_spell_effectiveness(self.player) if self.survival else 1.0
+                damage = max(1, int(base_damage * mult * effectiveness))
                 target.take_damage(damage)
                 total_damage += damage
                 eff = ""

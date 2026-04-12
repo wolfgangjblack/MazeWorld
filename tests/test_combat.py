@@ -66,8 +66,7 @@ def mage():
             element="fire",
             stat="INT",
             damage_dice=8,
-            hunger_cost=5,
-            thirst_cost=0,
+            stamina_cost=5,
             targets="single",
         ),
         Spell(
@@ -76,8 +75,7 @@ def mage():
             element="fire",
             stat="INT",
             damage_dice=6,
-            hunger_cost=10,
-            thirst_cost=0,
+            stamina_cost=10,
             targets="multi",
         ),
     ]
@@ -94,8 +92,7 @@ def healer():
             element="light",
             stat="WIS",
             heal_amount=10,
-            hunger_cost=0,
-            thirst_cost=8,
+            stamina_cost=8,
             targets="self",
         ),
         Spell(
@@ -106,8 +103,7 @@ def healer():
             buff_stat="CON",
             buff_value=2,
             buff_duration=3,
-            hunger_cost=0,
-            thirst_cost=5,
+            stamina_cost=5,
             targets="self",
         ),
     ]
@@ -315,38 +311,38 @@ class TestElementalMultiplier:
 
 
 # ---------------------------------------------------------------------------
-# Spell hunger/thirst cost deduction
+# Spell stamina cost deduction
 # ---------------------------------------------------------------------------
 
 class TestSpellCosts:
-    def test_damage_spell_costs_hunger(self, mage, weak_monster):
-        initial_hunger = mage.hunger
-        cc = CombatController(mage, [weak_monster])
+    def test_damage_spell_costs_stamina(self, mage, weak_monster):
+        initial_stamina = mage.stamina
+        cc = CombatController(mage, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
-        cc.player_cast_spell(0, 0)  # Fireball costs 5 hunger
-        assert mage.hunger == initial_hunger - 5
+        cc.player_cast_spell(0, 0)
+        assert mage.stamina == initial_stamina - 5
 
-    def test_heal_spell_costs_thirst(self, healer, weak_monster):
-        initial_thirst = healer.thirst
-        healer.health = 50  # Need healing
-        cc = CombatController(healer, [weak_monster])
+    def test_heal_spell_costs_stamina(self, healer, weak_monster):
+        initial_stamina = healer.stamina
+        healer.health = 50
+        cc = CombatController(healer, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
-        cc.player_cast_spell(0, 0)  # Heal costs 8 thirst
-        assert healer.thirst == initial_thirst - 8
+        cc.player_cast_spell(0, 0)
+        assert healer.stamina == initial_stamina - 8
 
-    def test_buff_spell_costs_thirst(self, healer, weak_monster):
-        initial_thirst = healer.thirst
-        cc = CombatController(healer, [weak_monster])
+    def test_buff_spell_costs_stamina(self, healer, weak_monster):
+        initial_stamina = healer.stamina
+        cc = CombatController(healer, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
-        cc.player_cast_spell(1, 0)  # Fortify costs 5 thirst
-        assert healer.thirst == initial_thirst - 5
+        cc.player_cast_spell(1, 0)
+        assert healer.stamina == initial_stamina - 5
 
-    def test_cannot_cast_when_starving(self, mage, weak_monster):
-        mage.hunger = 0
-        cc = CombatController(mage, [weak_monster])
+    def test_cannot_cast_when_no_stamina(self, mage, weak_monster):
+        mage.stamina = 0
+        cc = CombatController(mage, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
         result = cc.player_cast_spell(0, 0)
@@ -360,28 +356,27 @@ class TestSpellCosts:
 class TestMultiTarget:
     def test_multi_attack_hits_multiple(self, warrior):
         pack = make_pack(3)
-        warrior.player_class.stats.STR = 30  # guaranteed hits
+        warrior.player_class.stats.STR = 30
         warrior.level = 5
-        cc = CombatController(warrior, pack)
+        cc = CombatController(warrior, pack, room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
         result = cc.player_multi_attack()
         assert result["success"] is True
-        # At least some wolves should have taken damage
         damaged = sum(1 for m in pack if m.hp < m.max_hp)
         assert damaged > 0
 
-    def test_multi_attack_costs_hunger(self, warrior, weak_monster):
-        initial = warrior.hunger
-        cc = CombatController(warrior, [weak_monster])
+    def test_multi_attack_costs_stamina(self, warrior, weak_monster):
+        initial = warrior.stamina
+        cc = CombatController(warrior, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
         cc.player_multi_attack()
-        assert warrior.hunger == initial - 8
+        assert warrior.stamina == initial - 6
 
-    def test_multi_attack_fails_when_starving(self, warrior, weak_monster):
-        warrior.hunger = 3
-        cc = CombatController(warrior, [weak_monster])
+    def test_multi_attack_fails_when_no_stamina(self, warrior, weak_monster):
+        warrior.stamina = 3
+        cc = CombatController(warrior, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
         result = cc.player_multi_attack()
@@ -389,15 +384,14 @@ class TestMultiTarget:
 
     def test_multi_spell_hits_all_targets(self, mage):
         pack = make_pack(3)
-        # Give mage high INT for guaranteed hits and set low magic resistance
         mage.player_class.stats.INT = 30
         mage.level = 5
         for m in pack:
             m.magic_resistance = 0
-        cc = CombatController(mage, pack)
+        cc = CombatController(mage, pack, room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
-        result = cc.player_cast_spell(1, 0)  # Inferno (multi)
+        result = cc.player_cast_spell(1, 0)
         assert result["success"] is True
 
 
@@ -533,20 +527,22 @@ class TestCombatEndConditions:
 # ---------------------------------------------------------------------------
 
 class TestUseItem:
-    def test_use_food_heals_hunger(self, warrior, weak_monster):
+    def test_use_food_restores_stamina(self, warrior, weak_monster):
         from src.models.items import Food, ItemStats
         bread = Food(
             category="food", name="Bread", desc="A loaf",
-            item_stats=ItemStats(nutrition_value=20, health_value=5),
+            item_stats=ItemStats(stamina_value=20, health_value=5),
         )
         warrior.inventory = {"Bread": bread}
-        warrior.hunger = 50
-        cc = CombatController(warrior, [weak_monster])
+        warrior.stamina = 50
+        cc = CombatController(warrior, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
+        con_mod = warrior.get_stat_mod("CON") if hasattr(warrior, 'get_stat_mod') else 0
+        expected = min(50 + max(1, 20 + 2 * con_mod), warrior.max_stamina)
         result = cc.player_use_item("Bread")
         assert result["success"] is True
-        assert warrior.hunger == 70
+        assert warrior.stamina == expected
 
 
 # ---------------------------------------------------------------------------
@@ -609,23 +605,21 @@ class TestBuffDuration:
             Spell(
                 name="Fortify", spell_type="buff_stat", element="light", stat="WIS",
                 buff_stat="CON", buff_value=2, buff_duration=3,
-                hunger_cost=0, thirst_cost=5, targets="self",
+                stamina_cost=5, targets="self",
             ),
         ]
-        # Run many trials — duration should vary (not always 3)
         durations = set()
         for seed in range(50):
             random.seed(seed)
             healer.active_buffs = []
-            healer.thirst = 100
+            healer.stamina = 100
             m = Monster(id="m", species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
-            cc = CombatController(healer, [m])
+            cc = CombatController(healer, [m], room_level=1)
             cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
             cc.turn_index = 0
             cc.player_cast_spell(0, 0)
             if healer.active_buffs:
                 durations.add(healer.active_buffs[0].turns_remaining)
-        # Should have more than one unique duration value
         assert len(durations) > 1
 
 
@@ -701,9 +695,9 @@ class TestPlayerCombat:
         assert mod == (3 + 0) // 2  # 1
 
     def test_can_afford_spell(self, mage):
-        spell = mage.spells[0]  # Fireball: 5 hunger
+        spell = mage.spells[0]
         assert mage.can_afford_spell(spell)
-        mage.hunger = 0
+        mage.stamina = 0
         assert not mage.can_afford_spell(spell)
 
     def test_is_alive(self, warrior):

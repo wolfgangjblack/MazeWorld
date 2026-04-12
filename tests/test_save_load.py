@@ -40,8 +40,7 @@ def player_with_class():
     p.apply_class(pc)
     p.money = 100
     p.health = 80
-    p.hunger = 60
-    p.thirst = 40
+    p.stamina = 60
     p.active_quests = ["q1", "q2"]
     p.completed_quests = ["q0"]
     p.failed_quests = ["q_fail"]
@@ -50,7 +49,7 @@ def player_with_class():
     # Add items to inventory
     food = Food(
         category="food", name="Bread", desc="Fresh bread",
-        item_stats=ItemStats(nutrition_value=20, health_value=5),
+        item_stats=ItemStats(stamina_value=20, health_value=5),
     )
     weapon = Weapon(
         category="weapon", name="Longsword", desc="A sharp blade",
@@ -75,8 +74,7 @@ class TestPlayerSerialization:
         assert restored.x == 5
         assert restored.y == 10
         assert restored.health == 80
-        assert restored.hunger == 60
-        assert restored.thirst == 40
+        assert restored.stamina == 60
         assert restored.money == 100
         assert restored.level == 1
         assert restored.equipped_weapon == "Longsword"
@@ -94,7 +92,7 @@ class TestPlayerSerialization:
         assert "Longsword" in restored.inventory
         assert isinstance(restored.inventory["Bread"], Food)
         assert isinstance(restored.inventory["Longsword"], Weapon)
-        assert restored.inventory["Bread"].item_stats.nutrition_value == 20
+        assert restored.inventory["Bread"].item_stats.stamina_value == 20
         assert restored.inventory["Longsword"].weapon_type == "heavy"
 
     def test_player_class_preserved(self, player_with_class):
@@ -327,11 +325,11 @@ class TestItemReconstruction:
     def test_reconstruct_food(self):
         item = save_manager._reconstruct_item(
             {"category": "food", "name": "Apple", "desc": "Red apple",
-             "item_stats": {"nutrition_value": 15}},
+             "item_stats": {"stamina_value": 15}},
             "Food",
         )
         assert isinstance(item, Food)
-        assert item.item_stats.nutrition_value == 15
+        assert item.item_stats.stamina_value == 15
 
     def test_reconstruct_weapon(self):
         item = save_manager._reconstruct_item(

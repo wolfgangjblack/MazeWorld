@@ -93,7 +93,7 @@ class TestQuestModels:
         assert r.door_reveal is True
 
     def test_quest_failure_penalty(self):
-        p = QuestFailurePenalty(hp_damage=10, hunger_damage=5, thirst_damage=5)
+        p = QuestFailurePenalty(hp_damage=10, stamina_damage=5)
         assert p.hp_damage == 10
 
     def test_quest_is_story_quest(self):
@@ -115,14 +115,13 @@ class TestQuestModels:
         player = _make_player()
         q = Quest(
             id="q1", type="fetch", title="T", description="D", giver_npc_id=100,
-            failure_penalty=QuestFailurePenalty(hp_damage=20, hunger_damage=15, thirst_damage=10),
+            failure_penalty=QuestFailurePenalty(hp_damage=20, stamina_damage=15),
         )
         msg = q.apply_failure_penalty(player)
         assert player.health == 80
-        assert player.hunger == 85
-        assert player.thirst == 90
+        assert player.stamina == 85
         assert "Lost 20 HP" in msg
-        assert "Lost 15 hunger" in msg
+        assert "Lost 15 stamina" in msg
 
     def test_apply_failure_penalty_empty(self):
         player = _make_player()
@@ -566,7 +565,7 @@ class TestQuestManager:
     def test_fail_quest_applies_penalties(self):
         q = FetchQuest(id="q1", title="T", description="D",
                        giver_npc_id=100, status="active",
-                       failure_penalty=QuestFailurePenalty(hp_damage=15, hunger_damage=10))
+                       failure_penalty=QuestFailurePenalty(hp_damage=15, stamina_damage=10))
         qm = self._make_qm({"q1": q})
         player = _make_player()
         player.accept_quest("q1")
@@ -576,7 +575,7 @@ class TestQuestManager:
         assert q.status == "failed"
         assert "q1" in player.failed_quests
         assert player.health == 85
-        assert player.hunger == 90
+        assert player.stamina == 90
         assert "Lost 15 HP" in msg
 
     def test_on_event_resolved_completes_combat_quest(self):
@@ -853,7 +852,7 @@ class TestStoryGeneration:
 def _make_player(**kwargs) -> PlayerCharacter:
     defaults = {
         "x": 0, "y": 0, "name": "TestHero",
-        "health": 100, "hunger": 100, "thirst": 100,
+        "health": 100, "stamina": 100,
     }
     defaults.update(kwargs)
     return PlayerCharacter(**defaults)

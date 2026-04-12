@@ -6,7 +6,10 @@ from src.registry import registry
 
 
 EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
-DEBUG_EVENT_COLOR = (128, 0, 128)  # Purple — shown when debug reveal is active
+DEBUG_COMBAT_COLOR = (200, 50, 50)    # Red — combat encounters
+DEBUG_PUZZLE_COLOR = (50, 150, 220)   # Blue — puzzles
+DEBUG_EVENT_COLOR = (50, 200, 100)    # Green — narrative events
+DEBUG_EVENT_FALLBACK = (128, 0, 128)  # Purple — unknown type
 DOOR_COLOR = (255, 215, 0)    # Gold for revealed exit doors
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
@@ -20,9 +23,15 @@ NIGHT_OVERLAY_COLOR = (10, 10, 50)
 
 
 class MazeView:
+    _EVENT_TYPE_COLORS = {
+        "combat": DEBUG_COMBAT_COLOR,
+        "puzzle": DEBUG_PUZZLE_COLOR,
+        "event": DEBUG_EVENT_COLOR,
+    }
+
     def draw_maze(self, screen, maze, escort_zones=None, debug_reveal=False,
                   fog=None, player_x=0, player_y=0, visibility_radius=3,
-                  night_alpha=0):
+                  night_alpha=0, event_type_map=None):
 
         for y, row in enumerate(maze.grid):
             for x, cell in enumerate(row):
@@ -39,16 +48,17 @@ class MazeView:
                 if cell == maze.wall_tile_id:
                     pygame.draw.rect(screen, WHITE, rect)
                 elif cell == maze.event_tile_id:
-                    # Encounter tiles remain invisible even in revealed areas
                     pygame.draw.rect(screen, BLACK, rect)
                     if debug_reveal:
+                        etype = (event_type_map or {}).get((x, y), "")
+                        dcolor = self._EVENT_TYPE_COLORS.get(etype, DEBUG_EVENT_FALLBACK)
                         event_rect = pygame.Rect(
                             screen_x + GRID_SIZE // 4,
                             screen_y + GRID_SIZE // 4,
                             GRID_SIZE // 2,
                             GRID_SIZE // 2,
                         )
-                        pygame.draw.rect(screen, DEBUG_EVENT_COLOR, event_rect)
+                        pygame.draw.rect(screen, dcolor, event_rect)
                 elif cell == maze.door_tile_id:
                     # Revealed exit door — gold tile
                     pygame.draw.rect(screen, BLACK, rect)

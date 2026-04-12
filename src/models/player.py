@@ -87,8 +87,7 @@ class Ability(BaseModel):
     name: str
     description: str
     stat: StatName = "STR"
-    cost_hunger: int = 0
-    cost_thirst: int = 0
+    stamina_cost: int = 0
 
 
 class PlayerClass(BaseModel):
@@ -115,12 +114,10 @@ class PlayerCharacter(BaseModel):
     level: int = 1
     color: Tuple[int, int, int] = (0, 0, 255)
     health: int = 100
-    hunger: int = 100
-    thirst: int = 100
+    stamina: int = 100
     speed: float = 1.0
-    max_hunger: int = 100
     max_health: int = 100
-    max_thirst: int = 100
+    max_stamina: int = 100
     max_speed: float = 2.0
     selected_item_index: int = 0
     inventory: Dict[str, object] = Field(default_factory=dict)
@@ -217,13 +214,6 @@ class PlayerCharacter(BaseModel):
         if not maze.is_wall(new_x, new_y):
             self.x = new_x
             self.y = new_y
-            if survival_system is not None:
-                survival_system.on_move(self)
-            else:
-                # Legacy fallback
-                self.hunger = max(0, self.hunger - 1)
-                self.thirst = max(0, self.thirst - 1)
-                self.apply_hunger_thirst_effects()
 
     def add_to_inventory(self, item):
         """Add an item to the player's inventory."""
@@ -245,24 +235,9 @@ class PlayerCharacter(BaseModel):
         """Give the currently selected item."""
         return self._get_inv_manager().give_selected(self.selected_item_index)
     
-    def update_hunger_and_thirst(self):
-        """Decrease hunger and thirst over time."""
-        self.hunger = max(0, self.hunger - 0.05)
-        self.thirst = max(0, self.thirst - 0.1)
-
-    def apply_hunger_thirst_effects(self):
-        """Apply penalties based on hunger and thirst levels."""
-        # Hunger effects
-        if self.hunger == 0:
-            self.health -= 1  # Lose health when starving
-        elif self.hunger < 20:
-            self.speed = self.speed * 0.8  # Reduce speed
-        elif self.hunger < 80:
-            self.speed = self.max_speed  # Normal speed
-
-        # Thirst effects
-        if self.thirst == 0:
-            self.health -= 1 # Lose health faster when dehydrated
+    def pay_stamina(self, amount: int):
+        """Deduct stamina, clamped to 0."""
+        self.stamina = max(0, self.stamina - amount)
 
     def is_item_at_player_position(self, maze):
         """Check if there is an item at the player's current position."""
@@ -282,13 +257,6 @@ class PlayerCharacter(BaseModel):
             self.health = 0
             # Handle player death (e.g., end game or respawn)
 
-    def apply_buffs(self):
-        """Apply buffs when hunger and thirst are high."""
-        if self.hunger > 80 and self.thirst > 80:
-            self.speed = self.max_speed  
-        else:
-            self.speed = self.speed  # Normal speed
-            
     def get_nearby_npc(self, npcs):
         """Return an NPC if one is adjacent to the player."""
         for npc in npcs:
@@ -353,7 +321,7 @@ class PlayerCharacter(BaseModel):
         """Return the stat governing the current weapon. Random weapons pick a random stat."""
         if self.weapon is None:
             return "STR"
-        if self.weapon.weapon_type == "random":
+        if self.weapon.weapon_type == "wild":
             from src.models.weapon import RANDOM_WEAPON_STATS
             return random.choice(RANDOM_WEAPON_STATS)
         return self.weapon.stat
@@ -401,11 +369,10 @@ class PlayerCharacter(BaseModel):
         return (luck_mod + normal_mod) // 2
 
     def can_afford_spell(self, spell) -> bool:
-        return self.hunger >= spell.hunger_cost and self.thirst >= spell.thirst_cost
+        return self.stamina >= spell.stamina_cost
 
     def pay_spell_cost(self, spell):
-        self.hunger = max(0, self.hunger - spell.hunger_cost)
-        self.thirst = max(0, self.thirst - spell.thirst_cost)
+        self.stamina = max(0, self.stamina - spell.stamina_cost)
 
     def apply_buff(self, stat: str, value: int, duration: int):
         self.active_buffs.append(ActiveBuff(stat=stat, value=value, turns_remaining=duration))

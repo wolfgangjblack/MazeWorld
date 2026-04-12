@@ -13,6 +13,14 @@ from src.generate.backends.registry import get_image_backend
 
 logger = logging.getLogger(__name__)
 
+_active_stats = None
+
+
+def set_stats(stats) -> None:
+    """Wire a GenerationStats instance to accumulate image counts from this module."""
+    global _active_stats
+    _active_stats = stats
+
 
 # ---------------------------------------------------------------------------
 # Sequential fallback (local backend or single images)
@@ -26,6 +34,7 @@ def generate_portraits(entity_database: dict, save_dir: str = "data/portraits",
     os.makedirs(save_dir, exist_ok=True)
     backend = get_image_backend()
 
+    succeeded = 0
     for entity_id, entity in entity_database.items():
         prompt = entity.get("portrait_prompt") or entity.get(
             "description", "a fantasy character portrait"
@@ -35,8 +44,12 @@ def generate_portraits(entity_database: dict, save_dir: str = "data/portraits",
 
         if backend.generate_and_save(prompt, filepath):
             entity["profile_image"] = filepath
+            succeeded += 1
         else:
             entity["profile_image"] = None
+
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=len(entity_database), succeeded=succeeded)
 
 
 # ---------------------------------------------------------------------------
@@ -49,11 +62,12 @@ async def _generate_one_async(fal_model: str, prompt: str, filepath: str,
     try:
         import fal_client
         import aiohttp
+        from config import IMAGE_WIDTH, IMAGE_HEIGHT
         result = await fal_client.subscribe_async(
             fal_model,
             arguments={
                 "prompt": prompt,
-                "image_size": {"width": 256, "height": 256},
+                "image_size": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT},
                 "num_images": 1,
             },
         )
@@ -106,6 +120,48 @@ def generate_portraits_parallel(entity_database: dict, save_dir: str,
     generated = sum(1 for e in entity_database.values() if e.get("profile_image"))
     logger.info("Portraits: %d/%d generated (parallel, max_concurrent=%d).",
                 generated, len(entity_database), max_concurrent)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=len(entity_database), succeeded=generated)
+
+
+async def generate_portraits_parallel_async(
+    entity_database: dict,
+    save_dir: str,
+    prefix: str = "",
+    max_concurrent: int = 15,
+) -> None:
+    """Awaitable version of generate_portraits_parallel — no asyncio.run() inside.
+
+    Must be awaited from within an already-running event loop (e.g. via
+    asyncio.gather in pipeline._phase7_portraits). Skips gracefully if the
+    entity_database is empty or IMAGE_BACKEND is not 'api'.
+    """
+    if not entity_database:
+        return
+
+    from config import IMAGE_BACKEND
+    if IMAGE_BACKEND != "api":
+        generate_portraits(entity_database, save_dir, prefix)
+        return
+
+    from config import FAL_MODEL
+    os.makedirs(save_dir, exist_ok=True)
+    sem = asyncio.Semaphore(max_concurrent)
+
+    async def _bounded(entity_id: str, entity: dict):
+        async with sem:
+            prompt = entity.get("portrait_prompt") or entity.get(
+                "description", "a fantasy character portrait, pixel art"
+            )
+            filepath = os.path.join(save_dir, f"{prefix}{entity_id}.png")
+            await _generate_one_async(FAL_MODEL, prompt, filepath, entity)
+
+    await asyncio.gather(*[_bounded(eid, e) for eid, e in entity_database.items()])
+    generated = sum(1 for e in entity_database.values() if e.get("profile_image"))
+    logger.info("Portraits: %d/%d generated (parallel, max_concurrent=%d).",
+                generated, len(entity_database), max_concurrent)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=len(entity_database), succeeded=generated)
 
 
 # ---------------------------------------------------------------------------
@@ -140,15 +196,20 @@ def generate_monster_portraits(monster_database: dict,
 def generate_and_save_image(prompt: str, filepath: str) -> bool:
     """Generate a single image and save to *filepath*. Returns True on success."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    return get_image_backend().generate_and_save(prompt, filepath)
+    ok = get_image_backend().generate_and_save(prompt, filepath)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=1, succeeded=1 if ok else 0)
+    return ok
 
 
 def generate_player_portrait(portrait_prompt: str,
                               save_dir: str = "data/portraits") -> str | None:
+    os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, "player.png")
-    if get_image_backend().generate_and_save(portrait_prompt, filepath):
-        return filepath
-    return None
+    ok = get_image_backend().generate_and_save(portrait_prompt, filepath)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=1, succeeded=1 if ok else 0)
+    return filepath if ok else None
 
 
 def generate_room_portrait(prompt: str, room_id: str,
@@ -156,9 +217,10 @@ def generate_room_portrait(prompt: str, room_id: str,
     """Generate a room/environment portrait. Returns filepath or None."""
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, f"{room_id}.png")
-    if get_image_backend().generate_and_save(prompt, filepath):
-        return filepath
-    return None
+    ok = get_image_backend().generate_and_save(prompt, filepath)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=1, succeeded=1 if ok else 0)
+    return filepath if ok else None
 
 
 def generate_game_over_portrait(prompt: str,
@@ -166,6 +228,7 @@ def generate_game_over_portrait(prompt: str,
     """Generate a game-over portrait. Returns filepath or None."""
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, "game_over.png")
-    if get_image_backend().generate_and_save(prompt, filepath):
-        return filepath
-    return None
+    ok = get_image_backend().generate_and_save(prompt, filepath)
+    if _active_stats is not None:
+        _active_stats.record_images(attempted=1, succeeded=1 if ok else 0)
+    return filepath if ok else None

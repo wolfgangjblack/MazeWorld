@@ -7,12 +7,13 @@ from src.views.shop_view import ShopView
 from src.models.npc import MerchantNPC
 from src.models.player import PlayerCharacter
 from src.models.items import Food, ItemStats
+from config import SCREEN_WIDTH, SCREEN_HEIGHT
 
 
 @pytest.fixture(autouse=True)
 def init_pygame():
     pygame.init()
-    pygame.display.set_mode((800, 700))
+    pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     yield
     pygame.quit()
 

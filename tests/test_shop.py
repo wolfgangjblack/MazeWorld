@@ -65,7 +65,7 @@ class TestMerchantNPC:
         player = _make_player(money=0)
         food = Food(
             category="food", name="apple", desc="test",
-            item_stats=ItemStats(nutrition_value=10, price=20),
+            item_stats=ItemStats(stamina_value=10, price=20),
         )
         player.inventory = {"apple": food}
         msg = m.sell_to("apple", player)

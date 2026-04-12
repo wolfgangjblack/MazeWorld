@@ -12,5 +12,10 @@ pytest==9.0.2
 pre-commit==4.5.1
 protobuf>=4.25.0
 python-dotenv==1.1.0
+google-genai>=0.3.0
+elevenlabs>=1.0.0
 sentencepiece>=0.2.0
 tqdm>=4.66.0
+Pillow>=10.0.0
+markdown>=3.5
+weasyprint>=60.0

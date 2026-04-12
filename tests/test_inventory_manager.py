@@ -11,10 +11,10 @@ def _make_player(**kwargs):
     return PlayerCharacter(x=0, y=0, **kwargs)
 
 
-def _make_food(name="bread", nutrition=15, price=10):
+def _make_food(name="bread", stamina=15, price=10):
     return Food(
         category="food", name=name, desc="test food",
-        item_stats=ItemStats(nutrition_value=nutrition, price=price),
+        item_stats=ItemStats(stamina_value=stamina, price=price),
     )
 
 
@@ -39,7 +39,7 @@ class TestInventoryManagerAdd:
         player = _make_player()
         mgr = InventoryManager(player.inventory, player)
         mgr.add(_make_food("bread"))
-        mgr.add(_make_food("apple", nutrition=10, price=5))
+        mgr.add(_make_food("apple", stamina=10, price=5))
         assert len(player.inventory) == 2
 
 
@@ -125,12 +125,12 @@ class TestInventoryManagerEquip:
 
 class TestInventoryManagerUseGive:
     def test_use_food(self):
-        player = _make_player(hunger=50)
+        player = _make_player(stamina=50)
         mgr = InventoryManager(player.inventory, player)
-        mgr.add(_make_food(nutrition=20))
+        mgr.add(_make_food(stamina=20))
         msg = mgr.use_selected(0)
         assert "ate" in msg.lower() or "used" in msg.lower()
-        assert player.hunger == 70
+        assert player.stamina == 70
         assert "bread" not in player.inventory
 
     def test_use_escort_item_not_removed(self):
@@ -216,10 +216,10 @@ class TestPlayerDelegation:
         assert result == [("bread", 1)]
 
     def test_use_item(self):
-        player = _make_player(hunger=50)
-        player.add_to_inventory(_make_food(nutrition=20))
+        player = _make_player(stamina=50)
+        player.add_to_inventory(_make_food(stamina=20))
         player.use_item()
-        assert player.hunger == 70
+        assert player.stamina == 70
 
     def test_give_item(self):
         player = _make_player()

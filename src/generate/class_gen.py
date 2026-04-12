@@ -11,7 +11,7 @@ from src.models.player import (
     Stats, Ability, PlayerClass,
     STAT_NAMES, STAT_BUDGET, ARCHETYPE_STAT_ROLES,
 )
-from src.models.spell import Spell
+from src.models.spell import Spell, compute_stamina_cost
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +195,7 @@ def _parse_abilities(raw_list: list) -> list[Ability]:
                     name=a.get("name", "Unknown"),
                     description=a.get("description", ""),
                     stat=a.get("stat", "STR"),
-                    cost_hunger=a.get("hunger_cost", a.get("cost_hunger", 0)),
-                    cost_thirst=a.get("thirst_cost", a.get("cost_thirst", 0)),
+                    stamina_cost=a.get("stamina_cost", a.get("hunger_cost", 0) + a.get("thirst_cost", 0)),
                 ))
             except Exception:
                 pass
@@ -234,18 +233,17 @@ def _parse_spells(raw_list: list) -> list[Spell]:
             try:
                 raw_type = s.get("spell_type", "damage")
                 spell_type = _SPELL_TYPE_MAP.get(raw_type, raw_type)
-                hunger = s.get("hunger_cost", s.get("cost_hunger", 5))
-                thirst = s.get("thirst_cost", s.get("cost_thirst", 0))
+                damage_dice = _parse_damage_dice(s.get("damage_dice", 6))
+                targets = s.get("targets", "single")
                 spells.append(Spell(
                     name=s.get("name", "Unknown Spell"),
                     description=s.get("description", ""),
                     element=s.get("element", "fire"),
                     stat=s.get("stat", "INT"),
-                    damage_dice=_parse_damage_dice(s.get("damage_dice", 6)),
+                    damage_dice=damage_dice,
                     spell_type=spell_type,
-                    hunger_cost=hunger,
-                    thirst_cost=thirst,
-                    targets=s.get("targets", "single"),
+                    stamina_cost=compute_stamina_cost(spell_type, damage_dice, targets),
+                    targets=targets,
                     heal_amount=s.get("heal_amount", 0),
                     buff_stat=s.get("buff_stat"),
                     buff_value=s.get("buff_value", 2),
@@ -259,10 +257,10 @@ def _pad_abilities(existing: list[Ability], target: int, archetype: str) -> list
     """Pad abilities list with generic fallbacks."""
     fallbacks = {
         "warrior": [
-            Ability(name="Bash", description="Slam target with your shield.", stat="STR", cost_hunger=5),
-            Ability(name="Intimidate", description="Frighten an enemy into hesitation.", stat="CHA", cost_hunger=3),
-            Ability(name="Break Door", description="Force open a stuck door.", stat="STR", cost_hunger=8),
-            Ability(name="Rally", description="Boost morale, restoring a small amount of party HP.", stat="CHA", cost_hunger=5),
+            Ability(name="Bash", description="Slam target with your shield.", stat="STR", stamina_cost=5),
+            Ability(name="Intimidate", description="Frighten an enemy into hesitation.", stat="CHA", stamina_cost=3),
+            Ability(name="Break Door", description="Force open a stuck door.", stat="STR", stamina_cost=8),
+            Ability(name="Rally", description="Boost morale, restoring a small amount of party HP.", stat="CHA", stamina_cost=5),
         ],
     }
     defaults = fallbacks.get(archetype, [
@@ -284,31 +282,31 @@ def _pad_spells(existing: list[Spell], target: int, archetype: str) -> list[Spel
         defaults = [
             Spell(name=f"{element.title()} Bolt", description=f"A bolt of {element} energy.",
                   element=element, stat="INT", damage_dice=8, spell_type="damage_single",
-                  hunger_cost=5, targets="single"),
+                  stamina_cost=compute_stamina_cost("damage_single", 8, "single"), targets="single"),
             Spell(name=f"{element.title()} Blast", description=f"An explosion of {element} force.",
                   element=element, stat="INT", damage_dice=6, spell_type="damage_multi",
-                  hunger_cost=10, targets="multi"),
+                  stamina_cost=compute_stamina_cost("damage_multi", 6, "multi"), targets="multi"),
             Spell(name=f"{element.title()} Shield", description=f"A protective {element} barrier.",
                   element=element, stat="INT", spell_type="buff_stat", buff_stat="CON",
-                  hunger_cost=5, targets="self"),
+                  stamina_cost=compute_stamina_cost("buff_stat", 0, "self"), targets="self"),
             Spell(name=f"{element.title()} Sight", description=f"See hidden things using {element} magic.",
                   element=element, stat="INT", spell_type="buff_sustain",
-                  hunger_cost=3, targets="self"),
+                  stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"), targets="self"),
         ]
     elif archetype == "healer":
         defaults = [
             Spell(name="Healing Light", description="Restore HP to a target.",
                   element=element, stat="WIS", spell_type="heal", heal_amount=10,
-                  thirst_cost=8, targets="self"),
+                  stamina_cost=compute_stamina_cost("heal", 0, "self"), targets="self"),
             Spell(name="Bolster", description="Temporarily boost an ally's defense.",
                   element=element, stat="WIS", spell_type="buff_stat", buff_stat="CON",
-                  thirst_cost=5, targets="self"),
+                  stamina_cost=compute_stamina_cost("buff_stat", 0, "self"), targets="self"),
             Spell(name=f"{element.title()} Strike", description=f"A damaging bolt of {element}.",
                   element=element, stat="WIS", damage_dice=6, spell_type="damage_single",
-                  hunger_cost=5, targets="single"),
+                  stamina_cost=compute_stamina_cost("damage_single", 6, "single"), targets="single"),
             Spell(name="Purify", description="Remove a negative effect.",
                   element=element, stat="WIS", spell_type="buff_sustain",
-                  hunger_cost=3, targets="self"),
+                  stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"), targets="self"),
         ]
     else:
         defaults = []

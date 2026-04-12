@@ -45,7 +45,7 @@ def _fireball():
     return Spell(
         name="Fireball", spell_type="damage_single",
         element="fire", stat="INT",
-        damage_dice=8, hunger_cost=5,
+        damage_dice=8, stamina_cost=5,
     )
 
 
@@ -53,14 +53,14 @@ def _heal():
     return Spell(
         name="Heal", spell_type="heal",
         element="light", stat="WIS",
-        heal_amount=10, thirst_cost=8,
+        heal_amount=10,
     )
 
 
 def _bread():
     return Food(
-        category="consumable", name="Bread", desc="Restores 5 hunger",
-        item_stats=ItemStats(nutrition_value=5),
+        category="consumable", name="Bread", desc="Restores 5 stamina",
+        item_stats=ItemStats(stamina_value=5),
     )
 
 
@@ -73,8 +73,7 @@ class TestSpellSelection:
         """Player can select a specific spell by index, not just index 0."""
         player = _make_player("mage")
         player.spells = [_fireball(), _heal()]
-        player.hunger = 100
-        player.thirst = 100
+        player.stamina = 100
         cc = CombatController(player, [_weak_monster()])
 
         # Force player turn
@@ -106,7 +105,7 @@ class TestSpellSelection:
 class TestItemSelection:
     def test_use_specific_item_by_name(self):
         player = _make_player("warrior")
-        player.hunger = 50
+        player.stamina = 50
         bread = _bread()
         player.inventory["Bread"] = bread
         cc = CombatController(player, [_weak_monster()])
@@ -116,7 +115,7 @@ class TestItemSelection:
 
         result = cc.player_use_item("Bread")
         assert result["success"]
-        assert player.hunger > 50  # bread restored some hunger
+        assert player.stamina > 50
 
     def test_use_item_not_in_inventory(self):
         player = _make_player("warrior")
@@ -135,7 +134,8 @@ class TestItemSelection:
 @pytest.fixture
 def _pygame_init():
     pygame.init()
-    screen = pygame.display.set_mode((800, 600), pygame.HIDDEN)
+    from config import SCREEN_WIDTH, SCREEN_HEIGHT
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
     font = pygame.font.SysFont(None, 24)
     yield screen, font
     pygame.quit()

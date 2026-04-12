@@ -11,9 +11,9 @@ Layout:
   5. Action prompt at bottom
 """
 
-import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+from src.views.portrait_utils import load_portrait as _load_portrait
 
 # Colors
 RED = (220, 50, 50)
@@ -42,27 +42,6 @@ ELEMENT_COLORS = {
     "dark": PURPLE,
 }
 
-_PORTRAIT_CACHE_MAX = 64
-_portrait_cache: dict[str, pygame.Surface | None] = {}
-
-
-def _load_portrait(path: str | None, size: tuple[int, int] = (128, 128)) -> pygame.Surface | None:
-    if not path:
-        return None
-    if path in _portrait_cache:
-        return _portrait_cache[path]
-    if os.path.exists(path):
-        try:
-            img = pygame.image.load(path).convert_alpha()
-            img = pygame.transform.scale(img, size)
-            if len(_portrait_cache) >= _PORTRAIT_CACHE_MAX:
-                _portrait_cache.pop(next(iter(_portrait_cache)))
-            _portrait_cache[path] = img
-            return img
-        except Exception:
-            pass
-    _portrait_cache[path] = None
-    return None
 
 
 class EncounterView:
@@ -261,7 +240,7 @@ class EncounterView:
     # ------------------------------------------------------------------
 
     def _draw_puzzle(self, event, dialogue_box, y):
-        """Puzzle encounter: choices, dice roll, result."""
+        """Puzzle encounter: dynamic choices (tool/ability prepended), dice roll, result."""
         choices = getattr(event, 'choices', [])
         ctx = dialogue_box.event_context
         result = ctx.get("result")
@@ -271,7 +250,6 @@ class EncounterView:
         y += 8
 
         if result:
-            # Show result
             self._draw_dice_result(ctx, y)
             y += 50
             success = result.get("success", False)
@@ -284,13 +262,11 @@ class EncounterView:
             self._draw_prompt("Press Enter or Escape to continue", LIGHT_GRAY)
 
         elif dialogue_box.awaiting_roll:
-            # Show selected choice, awaiting dice roll
             if selected is not None and selected < len(choices):
                 chosen = choices[selected]
                 choice_surf = self.font.render(f"Selected: {chosen.text}", True, YELLOW)
                 self.screen.blit(choice_surf, (30, y))
                 y += 28
-                # Show DC hint
                 dc_text = f"DC: {chosen.dc}"
                 if chosen.stat_check:
                     dc_text += f"  [{chosen.stat_check} check]"
@@ -303,43 +279,95 @@ class EncounterView:
             self._draw_prompt("Press R to roll (1d20)  |  Escape to leave", YELLOW)
 
         else:
-            # Show choices
             label = self.font.render("What do you do?", True, WHITE)
             self.screen.blit(label, (30, y))
             y += 26
 
-            for i, choice in enumerate(choices):
-                # Choice text
-                text = f"  {i + 1}. {choice.text}"
-                choice_color = BLUE
-                choice_surf = self.font.render(text, True, choice_color)
-                self.screen.blit(choice_surf, (30, y))
+            rendered = self._build_puzzle_choices(event, dialogue_box)
+            ctx["rendered_choices"] = rendered
+            highlight = ctx.get("highlight", 0)
 
-                # Hints on the right side
-                hints = []
-                if choice.stat_check:
-                    hints.append(f"[{choice.stat_check}]")
-                if choice.tool_attribute:
-                    hints.append(f"[needs: {choice.tool_attribute}]")
-                if choice.auto_success:
-                    hints.append("[safe]")
-                if hints:
-                    hint_text = "  ".join(hints)
-                    hint_surf = self.small_font.render(hint_text, True, GOLD)
-                    self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
+            hint_col_x = SCREEN_WIDTH - 140
+            max_text_w = hint_col_x - 50
 
-                y += 24
+            for i, rc in enumerate(rendered):
+                available = rc.get("available", True)
+                is_highlighted = (i == highlight)
+                prefix = "> " if is_highlighted else "  "
+                text = f"{prefix}{i + 1}. {rc['text']}"
+
+                if is_highlighted:
+                    choice_color = YELLOW
+                elif available:
+                    choice_color = BLUE
+                else:
+                    choice_color = MED_GRAY
+
+                lines = self._wrap_text(text, self.font, max_text_w)
+                for li, line in enumerate(lines):
+                    choice_surf = self.font.render(line, True, choice_color)
+                    self.screen.blit(choice_surf, (30, y))
+                    if li == 0 and rc.get("hint"):
+                        hint_surf = self.small_font.render(rc["hint"], True, GOLD)
+                        self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
+                    y += self.font.get_linesize()
 
             y += 8
-            num = min(len(choices), 9)
-            self._draw_prompt(f"Press 1-{num} to choose  |  Escape to leave", LIGHT_GRAY)
+            self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to leave", LIGHT_GRAY)
+
+    def _build_puzzle_choices(self, event, dialogue_box) -> list[dict]:
+        """Build rendered choice list for puzzles, prepending tool/ability if available."""
+        rendered = []
+        player = self._get_player(dialogue_box)
+
+        if event.correct_tool and player:
+            tool_name, _ = event.find_tool_item(player)
+            if tool_name:
+                rendered.append({
+                    "text": f"Use {tool_name} (consumed)",
+                    "kind": "tool",
+                    "hint": "[auto-success]",
+                    "available": True,
+                    "choice_idx": -1,
+                })
+
+        if event.correct_ability and player:
+            ability = event._find_matching_ability(player)
+            if ability:
+                cost = getattr(ability, 'stamina_cost', 0)
+                cost_text = f" (-{cost} stam)" if cost else ""
+                rendered.append({
+                    "text": f"Use {ability.name}{cost_text}",
+                    "kind": "ability",
+                    "hint": "[auto-success]",
+                    "available": True,
+                    "choice_idx": -1,
+                })
+
+        for i, choice in enumerate(getattr(event, 'choices', [])):
+            hints = []
+            if choice.stat_check:
+                hints.append(f"[{choice.stat_check}]")
+            if choice.tool_attribute:
+                hints.append(f"[needs: {choice.tool_attribute}]")
+            if choice.auto_success:
+                hints.append("[safe]")
+            rendered.append({
+                "text": choice.text,
+                "kind": "walk_away" if choice.auto_success else "stat",
+                "hint": "  ".join(hints) if hints else "",
+                "available": True,
+                "choice_idx": i,
+            })
+
+        return rendered
 
     # ------------------------------------------------------------------
     # Event encounter
     # ------------------------------------------------------------------
 
     def _draw_event(self, event, dialogue_box, y):
-        """Event encounter: multi-choice with hints, dice, result."""
+        """Event encounter: 5-slot structured choices with availability."""
         choices = getattr(event, 'choices', [])
         ctx = dialogue_box.event_context
         result = ctx.get("result")
@@ -359,7 +387,6 @@ class EncounterView:
                 self.screen.blit(surf, (30, y))
                 y += self.font.get_linesize()
 
-            # Show consequence details
             if not success and result.get("damage"):
                 dmg_text = f"Lost {result['damage']} {result.get('damage_type', 'health')}"
                 dmg_surf = self.small_font.render(dmg_text, True, RED)
@@ -388,28 +415,133 @@ class EncounterView:
             self.screen.blit(label, (30, y))
             y += 26
 
-            for i, choice in enumerate(choices):
-                text = f"  {i + 1}. {choice.text}"
-                choice_surf = self.font.render(text, True, PURPLE)
-                self.screen.blit(choice_surf, (30, y))
+            rendered = self._build_event_choices(event, dialogue_box)
+            ctx["rendered_choices"] = rendered
+            highlight = ctx.get("highlight", 0)
 
-                hints = []
-                if choice.stat_check:
-                    hints.append(f"[{choice.stat_check} check]")
-                if choice.tool_attribute:
-                    hints.append(f"[requires {choice.tool_attribute}]")
-                if choice.auto_success:
-                    hints.append("[safe]")
-                if hints:
-                    hint_text = "  ".join(hints)
-                    hint_surf = self.small_font.render(hint_text, True, GOLD)
-                    self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
+            hint_col_x = SCREEN_WIDTH - 140
+            max_text_w = hint_col_x - 50
 
-                y += 24
+            for i, rc in enumerate(rendered):
+                available = rc.get("available", True)
+                is_highlighted = (i == highlight)
+                prefix = "> " if is_highlighted else "  "
+                text = f"{prefix}{i + 1}. {rc['text']}"
+
+                if is_highlighted:
+                    choice_color = YELLOW
+                elif available:
+                    choice_color = PURPLE
+                else:
+                    choice_color = MED_GRAY
+
+                # Wrap text if it would overlap hints
+                lines = self._wrap_text(text, self.font, max_text_w)
+                for li, line in enumerate(lines):
+                    choice_surf = self.font.render(line, True, choice_color)
+                    self.screen.blit(choice_surf, (30, y))
+                    if li == 0 and rc.get("hint"):
+                        hint_color = GOLD if available else MED_GRAY
+                        hint_surf = self.small_font.render(rc["hint"], True, hint_color)
+                        self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
+                    y += self.font.get_linesize()
 
             y += 8
-            num = min(len(choices), 9)
-            self._draw_prompt(f"Press 1-{num} to choose  |  Escape to walk away", LIGHT_GRAY)
+            self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to walk away", LIGHT_GRAY)
+
+    def _build_event_choices(self, event, dialogue_box) -> list[dict]:
+        """Build rendered choice list for events with availability indicators."""
+        rendered = []
+        player = self._get_player(dialogue_box)
+        choices = getattr(event, 'choices', [])
+
+        for i, choice in enumerate(choices):
+            if choice.auto_success:
+                rendered.append({
+                    "text": choice.text,
+                    "kind": "walk_away",
+                    "hint": "[safe]",
+                    "available": True,
+                    "choice_idx": i,
+                })
+                continue
+
+            if choice.tool_attribute:
+                has_tool = False
+                tool_name = None
+                if player:
+                    for iname, item in player.inventory.items():
+                        stats = getattr(item, 'item_stats', None)
+                        if stats and getattr(stats, 'attribute', None) == choice.tool_attribute:
+                            has_tool = True
+                            tool_name = iname
+                            break
+                hint = f"[consumes: {tool_name}]" if has_tool else f"[requires: {choice.tool_attribute}]"
+                rendered.append({
+                    "text": choice.text,
+                    "kind": "stat",
+                    "hint": hint,
+                    "available": True,
+                    "choice_idx": i,
+                })
+                continue
+
+            rendered.append({
+                "text": choice.text,
+                "kind": "stat",
+                "hint": f"[{choice.stat_check}]" if choice.stat_check else "",
+                "available": True,
+                "choice_idx": i,
+            })
+
+        if event.correct_ability:
+            ability = event._find_ability(player) if player else None
+            if ability:
+                cost = getattr(ability, 'stamina_cost', 0)
+                cost_text = f" (-{cost} stam)" if cost else ""
+                ab_choice = next((c for c in choices if not c.auto_success and not c.tool_attribute
+                                  and not c.stat_check), None)
+                text = ab_choice.text if ab_choice else f"Use {ability.name}"
+                rendered.insert(-1 if rendered else 0, {
+                    "text": f"{text}{cost_text}",
+                    "kind": "ability",
+                    "hint": "[ability]",
+                    "available": True,
+                    "choice_idx": -1,
+                })
+            else:
+                rendered.insert(-1 if rendered else 0, {
+                    "text": f"[Requires ability: {event.correct_ability}]",
+                    "kind": "ability",
+                    "hint": "[locked]",
+                    "available": False,
+                    "choice_idx": -1,
+                })
+
+        if event.correct_spell:
+            spell = event._find_spell(player) if player else None
+            if spell:
+                cost = getattr(spell, 'stamina_cost', 0)
+                cost_text = f" (-{cost} stam)" if cost else ""
+                sp_choice = None
+                text = f"Cast {spell.name}"
+                rendered.insert(-1 if rendered else 0, {
+                    "text": f"{text}{cost_text}",
+                    "kind": "spell",
+                    "hint": "[spell]",
+                    "available": True,
+                    "choice_idx": -1,
+                })
+            else:
+                rendered.insert(-1 if rendered else 0, {
+                    "text": f"[Requires spell: {event.correct_spell}]",
+                    "kind": "spell",
+                    "hint": "[locked]",
+                    "available": False,
+                    "choice_idx": -1,
+                })
+
+        return rendered
 
     # ------------------------------------------------------------------
     # Shared drawing helpers
@@ -450,6 +582,11 @@ class EncounterView:
         pygame.draw.line(self.screen, MED_GRAY, (0, prompt_y - 5), (SCREEN_WIDTH, prompt_y - 5))
         surf = self.font.render(text, True, color)
         self.screen.blit(surf, (SCREEN_WIDTH // 2 - surf.get_width() // 2, prompt_y))
+
+    @staticmethod
+    def _get_player(dialogue_box):
+        """Extract the player from the dialogue_box's game controller, if available."""
+        return getattr(dialogue_box, 'player', None)
 
     def _wrap_text(self, text, font, max_width):
         """Wrap text to fit within max_width."""

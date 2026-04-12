@@ -108,7 +108,7 @@ class PromptSet(ABC):
     @abstractmethod
     def event_batch_generation(self, room_env: dict, room_story: str,
                                event_type: str, event_slots: list[dict],
-                               story_context: str) -> LLMRequest: ...
+                               story_context: str, **kwargs) -> LLMRequest: ...
 
     @abstractmethod
     def dialogue_context_generation(self, room_env: dict, room_story: str,
@@ -139,4 +139,14 @@ class PromptSet(ABC):
     @abstractmethod
     def room_story_beat_generation(self, overarching_story: dict,
                                    room_env: dict, room_index: int,
-                                   prior_beats: list[dict]) -> LLMRequest: ...
+                                   prior_beats: list[dict],
+                                   num_rooms: int = 5) -> LLMRequest: ...
+
+    @abstractmethod
+    def music_prompt_generation(self, story_summary: dict,
+                                environments: list[str]) -> LLMRequest: ...
+
+    @abstractmethod
+    def sfx_prompt_generation(self, story_summary: dict,
+                              environments: list[dict],
+                              spell_elements: list[str]) -> LLMRequest: ...

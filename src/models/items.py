@@ -18,19 +18,17 @@ def consumable_scale_factor(room_level: int) -> float:
 
 
 def scale_item_stats(stats: "ItemStats", room_level: int) -> "ItemStats":
-    """Return a copy of stats with nutrition/hydration/health/price scaled by room level."""
+    """Return a copy of stats with stamina/health/price scaled by room level."""
     factor = consumable_scale_factor(room_level)
     return stats.model_copy(update={
-        "nutrition_value": int(stats.nutrition_value * factor),
-        "hydration_value": int(stats.hydration_value * factor),
+        "stamina_value": int(stats.stamina_value * factor),
         "health_value": int(stats.health_value * factor),
         "price": int(stats.price * factor),
     })
 
 
 class ItemStats(BaseModel):
-    nutrition_value: int = 0
-    hydration_value: int = 0
+    stamina_value: int = 0
     health_value: int = 0
     uses: int = 1
     attribute: Optional[str] = None
@@ -71,34 +69,43 @@ class Item(BaseModel):
 
 class Food(Item):
     """Represents food items."""
-    
+
     def use(self, player):
-        """Feed the player."""
-        player.hunger = min(player.hunger + self.item_stats.nutrition_value, player.max_hunger)
-        player.health = min(player.health + self.item_stats.health_value, player.max_health)
-        return f"You ate the {self.name}. You feel better."
-        
+        """Feed the player. Base stats + player CON modifier."""
+        con_mod = player.get_stat_mod("CON") if hasattr(player, 'get_stat_mod') else 0
+        base_hp = self.item_stats.health_value or 5
+        base_stam = self.item_stats.stamina_value or 15
+        hp_heal = max(1, base_hp + con_mod)
+        stam_heal = max(1, base_stam + 2 * con_mod)
+        player.health = min(player.health + hp_heal, player.max_health)
+        player.stamina = min(player.stamina + stam_heal, player.max_stamina)
+        return f"You ate the {self.name}. (+{hp_heal} HP, +{stam_heal} stamina)"
+
 
 class Drink(Item):
     """Represents drink items."""
+
     def use(self, player):
-        """Quench the player's thirst."""
-        player.thirst = min(player.thirst + self.item_stats.hydration_value, player.max_thirst)
-        player.health = min(player.health + self.item_stats.health_value, player.max_health)
-        return f"You drank the {self.name}. It quenches your thirst."
+        """Refresh the player. Base stats + player CON modifier."""
+        con_mod = player.get_stat_mod("CON") if hasattr(player, 'get_stat_mod') else 0
+        base_hp = self.item_stats.health_value or 5
+        base_stam = self.item_stats.stamina_value or 15
+        hp_heal = max(1, base_hp + con_mod)
+        stam_heal = max(1, base_stam + 2 * con_mod)
+        player.health = min(player.health + hp_heal, player.max_health)
+        player.stamina = min(player.stamina + stam_heal, player.max_stamina)
+        return f"You drank the {self.name}. (+{hp_heal} HP, +{stam_heal} stamina)"
     
 class Tool(Item):
     """Represents tool items.
     1. Types can be 'bludgeon', 'cutting', 'digging', 'climbing'
-    2. Use nutrition, thirst values to indicate costs of using tools - Note these should be negative
+    2. Negative stamina_value indicates a cost of using the tool
     3. Uses is the number of times the tool can be used before it breaks. 
     """
         
     def use(self, player):
-        """Use the tool. Tools can have negative nutrition/hydration values and a limited number of uses."""
-        # Apply costs:
-        player.hunger = max(0, player.hunger + self.item_stats.nutrition_value)
-        player.thirst = max(0, player.thirst + self.item_stats.hydration_value)
+        """Use the tool. Tools can have negative stamina values as a cost."""
+        player.stamina = max(0, player.stamina + self.item_stats.stamina_value)
 
         # Decrement uses
         self.item_stats.uses -= 1
@@ -146,8 +153,7 @@ class SpellScroll(Item):
     def use(self, player):
         """Use the spell scroll. Consumed on use."""
         player.health = min(player.health + self.item_stats.health_value, player.max_health)
-        player.hunger = min(player.hunger + self.item_stats.nutrition_value, player.max_hunger)
-        player.thirst = min(player.thirst + self.item_stats.hydration_value, player.max_thirst)
+        player.stamina = min(player.stamina + self.item_stats.stamina_value, player.max_stamina)
         return f"You cast {self.name}! The scroll crumbles to dust."
 
 

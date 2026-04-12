@@ -4,7 +4,8 @@ import pytest
 import pygame
 from unittest.mock import MagicMock
 
-from src.views.dialogue_view import _load_portrait, _portrait_cache, DialogueBoxView
+from src.views.portrait_utils import load_portrait as _load_portrait, _cache as _portrait_cache
+from src.views.dialogue_view import DialogueBoxView
 from config import SCREEN_WIDTH, SCREEN_HEIGHT
 
 
@@ -60,8 +61,9 @@ class TestLoadPortrait:
     def test_caches_none_for_missing_file(self):
         path = "/nonexistent/portrait.png"
         _load_portrait(path)
-        assert path in _portrait_cache
-        assert _portrait_cache[path] is None
+        key = f"{path}:64x64"
+        assert key in _portrait_cache
+        assert _portrait_cache[key] is None
 
     def test_loads_valid_image(self, tmp_path):
         path = _make_portrait_file(tmp_path)
@@ -98,7 +100,7 @@ class TestLoadPortrait:
         with open(path, "wb") as f:
             f.write(b"not-a-png")
         assert _load_portrait(path) is None
-        assert _portrait_cache[path] is None
+        assert _portrait_cache[f"{path}:64x64"] is None
 
 
 # ---------------------------------------------------------------------------

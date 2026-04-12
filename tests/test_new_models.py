@@ -48,9 +48,9 @@ def test_player_class_creation():
 
 
 def test_player_class_with_abilities():
-    ab = Ability(name="Bash", description="Smash a door.", stat="STR", cost_hunger=5)
+    ab = Ability(name="Bash", description="Smash a door.", stat="STR", stamina_cost=5)
     sp = Spell(name="Fireball", description="Fire!", element="fire",
-               stat="INT", damage_dice=6, spell_type="damage_single", hunger_cost=10)
+               stat="INT", damage_dice=6, spell_type="damage_single", stamina_cost=10)
     pc = PlayerClass(
         name="Battlemage",
         archetype="mage",

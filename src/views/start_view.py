@@ -1,12 +1,12 @@
 """Start screen — New Game, Load Game, Tutorial, Config, Quit."""
 
+import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
 
-MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Quit"]
+MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Credits", "Quit"]
 
-# Colors
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
 UNSELECTED_COLOR = (180, 180, 180)
@@ -16,24 +16,45 @@ DISABLED_COLOR = (80, 80, 80)
 class StartView:
     """Renders the start menu and handles selection state."""
 
-    def __init__(self, screen, font, has_saves=False):
+    def __init__(self, screen, font, has_saves=False, portrait_path=None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
         self.selected_index = 0
         self.has_saves = has_saves
+        self._portrait = None
+        self._load_portrait(portrait_path)
+
+    def _load_portrait(self, path):
+        if not path or not os.path.exists(path):
+            return
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            max_w, max_h = SCREEN_WIDTH - 100, SCREEN_HEIGHT // 3
+            scale = min(max_w / img.get_width(), max_h / img.get_height(), 1.0)
+            w = int(img.get_width() * scale)
+            h = int(img.get_height() * scale)
+            self._portrait = pygame.transform.scale(img, (w, h))
+        except Exception:
+            self._portrait = None
 
     def draw(self):
         self.screen.fill(BLACK)
 
-        # Title
+        y_offset = 0
+        if self._portrait:
+            px = (SCREEN_WIDTH - self._portrait.get_width()) // 2
+            py = 20
+            self.screen.blit(self._portrait, (px, py))
+            y_offset = self._portrait.get_height() + 10
+
         title_surface = self.title_font.render("MazeWorld", True, TITLE_COLOR)
         title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
-        self.screen.blit(title_surface, (title_x, SCREEN_HEIGHT // 4))
+        title_y = max(y_offset + 20, SCREEN_HEIGHT // 4 - 20) if self._portrait else SCREEN_HEIGHT // 4
+        self.screen.blit(title_surface, (title_x, title_y))
 
-        # Menu items
         line_height = self.font.get_linesize()
-        start_y = SCREEN_HEIGHT // 2
+        start_y = title_y + title_surface.get_height() + 25
         for i, item in enumerate(MENU_ITEMS):
             disabled = self._is_disabled(i)
             if disabled:
@@ -47,7 +68,6 @@ class StartView:
             text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
             self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
 
-        # Footer hint
         selected_item = MENU_ITEMS[self.selected_index]
         if self._is_disabled(self.selected_index):
             if selected_item == "Load Game":
@@ -60,6 +80,7 @@ class StartView:
                 "Load Game": "Continue a saved game",
                 "Tutorial": "View controls and mechanics",
                 "Config": "View and edit settings",
+                "Credits": "View credits and technology used",
                 "Quit": "Exit the game",
             }.get(selected_item, "")
 
@@ -75,10 +96,7 @@ class StartView:
         return False
 
     def handle_input(self, event) -> str | None:
-        """Process a keydown event. Returns an action string or None.
-
-        Actions: "new_game", "load_game", "tutorial", "config", "quit", or None.
-        """
+        """Process a keydown event. Returns an action string or None."""
         if event.key == pygame.K_UP:
             self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
         elif event.key == pygame.K_DOWN:
@@ -95,6 +113,8 @@ class StartView:
                 return "tutorial"
             elif selected == "Config":
                 return "config"
+            elif selected == "Credits":
+                return "credits"
             elif selected == "Quit":
                 return "quit"
         return None

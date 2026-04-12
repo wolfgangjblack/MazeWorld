@@ -2,7 +2,7 @@
 
 Time advances with movement, combat turns, and rest actions.
 Night reduces fog of war visibility. Torch/lantern negates this.
-Rest recovers HP with hunger/thirst caps.
+Rest recovers HP at the cost of stamina.
 Night encounters spawn randomly when the player moves at night.
 """
 
@@ -12,11 +12,10 @@ from typing import Optional
 from src.models.time import DayNightCycle, TimePeriod
 
 
-# Rest duration options (in-game hours) and their effects
 REST_OPTIONS = {
-    3:  {"hp_recovery": 15, "hunger_cost": 5,  "thirst_cost": 5},
-    6:  {"hp_recovery": 30, "hunger_cost": 10, "thirst_cost": 10},
-    12: {"hp_recovery": 50, "hunger_cost": 10, "thirst_cost": 10},
+    3:  {"hp_recovery": 15, "stamina_cost": 5},
+    6:  {"hp_recovery": 30, "stamina_cost": 8},
+    12: {"hp_recovery": 50, "stamina_cost": 8},
 }
 
 # Combat rest (skip turn): small recovery
@@ -26,8 +25,8 @@ COMBAT_REST_HP = 5
 def apply_rest(player, hours: int, cycle: DayNightCycle) -> str:
     """Apply rest effects and advance time.
 
-    HP recovery scales with duration. Hunger/thirst costs are capped
-    at 6hr level for 12hr rest (strategic trade-off: time vs resources).
+    HP recovery scales with duration. Stamina cost is capped at 6hr
+    level for 12hr rest (strategic trade-off: time vs resources).
     Returns a message describing the result.
     """
     if hours not in REST_OPTIONS:
@@ -35,18 +34,16 @@ def apply_rest(player, hours: int, cycle: DayNightCycle) -> str:
 
     effects = REST_OPTIONS[hours]
     hp_gain = effects["hp_recovery"]
-    hunger_cost = effects["hunger_cost"]
-    thirst_cost = effects["thirst_cost"]
+    stamina_cost = effects["stamina_cost"]
 
     player.health = min(player.max_health, player.health + hp_gain)
-    player.hunger = max(0, player.hunger - hunger_cost)
-    player.thirst = max(0, player.thirst - thirst_cost)
+    player.stamina = max(0, player.stamina - stamina_cost)
 
     cycle.advance_hours(hours)
 
     period = cycle.current_period.value
-    return (f"Rested {hours}h: +{hp_gain} HP, -{hunger_cost} hunger, "
-            f"-{thirst_cost} thirst. It is now {period}.")
+    return (f"Rested {hours}h: +{hp_gain} HP, -{stamina_cost} stamina. "
+            f"It is now {period}.")
 
 
 def apply_combat_rest(player) -> str:

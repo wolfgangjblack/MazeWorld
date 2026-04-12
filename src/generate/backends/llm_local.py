@@ -3,6 +3,14 @@ import os
 from src.generate.backends.base import LLMBackend
 from src.prompts.base import LLMRequest
 
+_active_stats = None
+
+
+def set_stats(stats) -> None:
+    """Wire a GenerationStats instance to count LLM calls from this backend."""
+    global _active_stats
+    _active_stats = stats
+
 
 class LocalLLMBackend(LLMBackend):
     """HuggingFace transformers backend for local text generation."""
@@ -73,4 +81,6 @@ class LocalLLMBackend(LLMBackend):
                 temperature=1.0,
             )
 
+        if _active_stats is not None:
+            _active_stats.record_llm_call()  # no token counts available for local inference
         return tokenizer.decode(outputs[0], skip_special_tokens=True)

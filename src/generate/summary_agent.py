@@ -207,6 +207,35 @@ def build_item_portrait_prompt(item_data: dict, bible: WorldBible,
     return ", ".join(parts)
 
 
+def build_event_portrait_prompt(event_data: dict, bible: WorldBible,
+                                room_id: str = "") -> str:
+    """Build a portrait prompt for a puzzle or event encounter."""
+    name = event_data.get("name", "encounter")
+    desc = event_data.get("description", "")
+    etype = event_data.get("type", "event")
+    room = bible.rooms.get(room_id)
+    env = room.environment if room else "dungeon"
+
+    if etype == "puzzle":
+        parts = [f"{name.lower()} blocking a {env} passage"]
+        if desc:
+            parts.append(desc[:80])
+        parts.append("environmental obstacle scene")
+    elif etype == "combat":
+        parts = [f"{name.lower()} in a {env} environment"]
+        if desc:
+            parts.append(desc[:80])
+        parts.append("fantasy combat scene")
+    else:
+        parts = [f"{name.lower()} in a {env} setting"]
+        if desc:
+            parts.append(desc[:80])
+        parts.append("tense narrative encounter")
+
+    parts.append(_PORTRAIT_STYLE)
+    return ", ".join(parts)
+
+
 def build_room_portrait_prompt(room_id: str, bible: WorldBible) -> str:
     """Build a portrait prompt for a room/environment using Bible context."""
     room = bible.rooms.get(room_id)

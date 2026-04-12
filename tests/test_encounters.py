@@ -21,7 +21,7 @@ from src.models.items import Tool, ItemStats
 # ─── Helpers ─────────────────────────────────────���─────────────────────
 
 def _make_player(**overrides):
-    defaults = {"x": 0, "y": 0, "health": 100, "hunger": 100, "thirst": 100}
+    defaults = {"x": 0, "y": 0, "health": 100, "stamina": 100}
     defaults.update(overrides)
     return PlayerCharacter(**defaults)
 
@@ -502,12 +502,12 @@ class TestCreateEventFromData:
                 {"text": "Investigate", "stat_check": "health", "dc": 10},
                 {"text": "Ignore", "auto_success": True},
             ],
-            "failure_damage_type": "hunger",
+            "failure_damage_type": "stamina",
             "failure_damage_range": [3, 8],
         }
         event = create_event_from_data(data)
         assert isinstance(event, EventEncounter)
-        assert event.failure_damage_type == "hunger"
+        assert event.failure_damage_type == "stamina"
 
 
 # ─── EncounterView Render Tests ──────────────────────────────────────
@@ -536,7 +536,8 @@ class TestEncounterViewRender:
 
     def test_render_combat_trigger(self):
         from src.views.encounter_view import EncounterView
-        screen = pygame.Surface((800, 700))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
@@ -552,7 +553,8 @@ class TestEncounterViewRender:
 
     def test_render_puzzle(self):
         from src.views.encounter_view import EncounterView
-        screen = pygame.Surface((800, 700))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
@@ -569,7 +571,8 @@ class TestEncounterViewRender:
 
     def test_render_event(self):
         from src.views.encounter_view import EncounterView
-        screen = pygame.Surface((800, 700))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
@@ -586,7 +589,8 @@ class TestEncounterViewRender:
 
     def test_render_puzzle_with_result(self):
         from src.views.encounter_view import EncounterView
-        screen = pygame.Surface((800, 700))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
@@ -604,7 +608,8 @@ class TestEncounterViewRender:
 
     def test_render_event_with_failure(self):
         from src.views.encounter_view import EncounterView
-        screen = pygame.Surface((800, 700))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 

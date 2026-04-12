@@ -93,10 +93,8 @@ class LevelUpView:
 
             # Cost info
             costs = []
-            if hasattr(choice, 'cost_hunger') and choice.cost_hunger:
-                costs.append(f"Hunger: {choice.cost_hunger}")
-            if hasattr(choice, 'cost_thirst') and choice.cost_thirst:
-                costs.append(f"Thirst: {choice.cost_thirst}")
+            if hasattr(choice, 'stamina_cost') and choice.stamina_cost:
+                costs.append(f"Stamina: {choice.stamina_cost}")
             if costs:
                 cost_text = self.small_font.render(" | ".join(costs), True, (180, 120, 80))
                 self.screen.blit(cost_text, (x + card_w - cost_text.get_width() - 10, cy + 5))

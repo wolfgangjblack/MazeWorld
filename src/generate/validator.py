@@ -347,10 +347,9 @@ class ItemValidator(BaseValidator):
                 reasons.append(f"Item {name}: tool must have uses > 0")
 
         elif category in ("food", "drink"):
-            nutrition = stats.get("nutrition_value", 0)
-            hydration = stats.get("hydration_value", 0)
+            stamina = stats.get("stamina_value", stats.get("nutrition_value", stats.get("hydration_value", 0)))
             health = stats.get("health_value", 0)
-            if nutrition == 0 and hydration == 0 and health == 0:
+            if stamina == 0 and health == 0:
                 reasons.append(
                     f"Item {name}: {category} restores nothing "
                     "(nutrition, hydration, health all 0)"

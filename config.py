@@ -6,8 +6,8 @@ load_dotenv()
 ### maze settings
 # ------------------------------------
 # Screen settings
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 700
+SCREEN_WIDTH = 500 #800
+SCREEN_HEIGHT = 400 #700
 HUD_HEIGHT = 100
 GRID_SIZE = 20
 
@@ -15,10 +15,10 @@ GRID_SIZE = 20
 MIN_HALLWAY_SIZE = 1
 MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
-MAZE_HEIGHT = (SCREEN_HEIGHT - 100- HUD_HEIGHT) // GRID_SIZE  # Leaving space for dialogue box
+MAZE_HEIGHT = (SCREEN_HEIGHT - HUD_HEIGHT) // GRID_SIZE  # Subtract HUD height only
 WORLD_SEED = 1234 # Set to -1 for random seed
-STORY_SEED = "A fire cult plans to infiltrate the castle nobility and take over the kingdom"  # 1-liner story prompt; empty = LLM generates freely
-NUM_ROOMS = 5
+STORY_SEED = "A local seaside village is under seige by a goblin horde" #"A fire cult plans to infiltrate the castle nobility and take over the kingdom"  # 1-liner story prompt; empty = LLM generates freely
+NUM_ROOMS = 2 #5 for base
 # Density parameters (% of OPEN/PATH cells, not total cells)
 EVENT_DENSITY = 0.10
 ITEM_DENSITY = 0.10
@@ -34,11 +34,6 @@ TIME_GATE_FRACTION = 0.25
 
 # Legacy aliases for backward compatibility (used by current pipeline.py, maze.py)
 EVENT_PERCENT = EVENT_DENSITY
-NUM_FOOD = 2
-NUM_DRINKS = 2
-NUM_TOOLS = 1
-NUM_WEAPONS = 2
-NUM_SPELL_SCROLLS = 1
 MAP_COLORS = {
     "wall": (40, 40, 40),
     "path": (200, 200, 200),
@@ -59,12 +54,18 @@ WHITE = (255, 255, 255)
 # Game mode
 GAME_MODE = os.getenv("GAME_MODE", "online")  # "online" | "offline_local" | "offline_static"
 
+# Post-generation guide
+GENERATE_GUIDE = os.getenv("GENERATE_GUIDE", "false").lower() in ("1", "true", "yes")
+
 
 STARTING_MONEY = 50
 
 ## Fog of War settings
 # ------------------------------------
 FOG_DEFAULT_RADIUS = 3
+FOG_DAWN_BONUS = 1
+FOG_DAY_BONUS = 2
+FOG_DUSK_PENALTY = 1
 FOG_NIGHT_PENALTY = 2
 FOG_DIM_EDGE = 1
 
@@ -82,7 +83,16 @@ NIGHT_ENCOUNTER_CHANCE = 0.08  # probability of a random night encounter per mov
 # ------------------------------------
 MASTER_VOLUME = max(0, min(100, int(os.getenv("MASTER_VOLUME", "80"))))
 MUSIC_VOLUME = max(0, min(100, int(os.getenv("MUSIC_VOLUME", "60"))))
-MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "none")  # "none" | "local" | "api"
+MUSIC_BACKEND = os.getenv("MUSIC_BACKEND", "none")  # "none" | "api"
+
+## SFX settings (ElevenLabs sound effects, generated when MUSIC_BACKEND=api)
+# ------------------------------------
+SFX_VOLUME = max(0, min(100, int(os.getenv("SFX_VOLUME", "70"))))
+ELEVENLABS_API_KEY_ENV = "ELEVENLABS_API_KEY"
+
+## Google GenAI / Lyria 3 (used when MUSIC_BACKEND == "api")
+# ------------------------------------
+GEMINI_API_KEY_ENV = "GOOGLE_API_KEY"
 
 ##GenAI Backend
 # ------------------------------------
@@ -98,12 +108,9 @@ ANTHROPIC_KEY_ENV = "ANTHROPIC_API_KEY"
 ##Image Generation Backend
 # ------------------------------------
 IMAGE_BACKEND = os.getenv("IMAGE_BACKEND", "local")  # "local" for diffusers pipeline, "api" for fal.ai API
+IMAGE_WIDTH = int(os.getenv("IMAGE_WIDTH", "1024"))
+IMAGE_HEIGHT = int(os.getenv("IMAGE_HEIGHT", "1024"))
 LOCAL_IMAGE_MODEL_MPS = "stabilityai/sdxl-turbo"
 LOCAL_IMAGE_MODEL_CUDA = "black-forest-labs/FLUX.1-schnell"
 FAL_MODEL = "fal-ai/nano-banana-pro"
 FAL_KEY_ENV = "FAL_KEY"
-FAL_SUPPORTED_MODELS = {
-    "flux-schnell": "fal-ai/flux/schnell",
-    "nano-banana-pro": "fal-ai/nano-banana-pro",
-    "flux-pro": "fal-ai/flux-pro/v1.1",
-}

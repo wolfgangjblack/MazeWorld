@@ -64,17 +64,23 @@ class LoadGameView:
             self.screen.blit(hint, (10, SCREEN_HEIGHT - 30))
             return
 
-        # Column header
-        header = "  Name              Class           Level   Time      Saved"
-        header_surface = self.small_font.render(header, True, HEADER_COLOR)
-        self.screen.blit(header_surface, (40, 80))
+        # Column positions (fixed pixel X for alignment with proportional fonts)
+        COL_NAME = 50
+        COL_CLASS = 195
+        COL_LEVEL = 365
+        COL_TIME = 445
+        COL_DATE = 560
 
-        # Draw separator
+        headers = [("Name", COL_NAME), ("Class", COL_CLASS),
+                    ("Level", COL_LEVEL), ("Time", COL_TIME), ("Saved", COL_DATE)]
+        for label, col_x in headers:
+            surf = self.small_font.render(label, True, HEADER_COLOR)
+            self.screen.blit(surf, (col_x, 80))
+
         pygame.draw.line(
             self.screen, HEADER_COLOR, (40, 100), (SCREEN_WIDTH - 40, 100),
         )
 
-        # Save entries
         line_height = 50
         start_y = 110
         visible_saves = self.saves[
@@ -85,28 +91,31 @@ class LoadGameView:
             actual_idx = i + self.scroll_offset
             selected = actual_idx == self.selected_index
             color = SELECTED_COLOR if selected else UNSELECTED_COLOR
-            prefix = "> " if selected else "  "
+            y = start_y + i * line_height
 
-            name = save["character_name"][:16].ljust(16)
-            cls = save["character_class"][:14].ljust(14)
-            level = f"Rm {save['room_level']}".ljust(8)
-            time_str = _format_time(save["time_played_seconds"]).ljust(10)
-            date = save["last_save_date"]
+            prefix = self.font.render("> " if selected else "  ", True, color)
+            self.screen.blit(prefix, (30, y))
 
-            line = f"{prefix}{name}  {cls}  {level}{time_str}{date}"
-            text_surface = self.font.render(line, True, color)
-            self.screen.blit(text_surface, (30, start_y + i * line_height))
+            name_s = self.font.render(save["character_name"][:16], True, color)
+            self.screen.blit(name_s, (COL_NAME, y))
 
-            # Seed info on second line if selected
+            cls_s = self.font.render(save["character_class"][:16], True, color)
+            self.screen.blit(cls_s, (COL_CLASS, y))
+
+            lvl_s = self.font.render(f"Rm {save['room_level']}", True, color)
+            self.screen.blit(lvl_s, (COL_LEVEL, y))
+
+            time_s = self.font.render(_format_time(save["time_played_seconds"]), True, color)
+            self.screen.blit(time_s, (COL_TIME, y))
+
+            date_s = self.font.render(save["last_save_date"], True, color)
+            self.screen.blit(date_s, (COL_DATE, y))
+
             if selected:
-                seed_text = f"   Seed: {save['seed']}"
                 seed_surface = self.small_font.render(
-                    seed_text, True, (100, 100, 100),
+                    f"Seed: {save['seed']}", True, (100, 100, 100),
                 )
-                self.screen.blit(
-                    seed_surface,
-                    (50, start_y + i * line_height + 25),
-                )
+                self.screen.blit(seed_surface, (COL_NAME, y + 25))
 
         # Scroll indicators
         if self.scroll_offset > 0:

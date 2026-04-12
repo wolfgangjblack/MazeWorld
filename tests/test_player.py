@@ -71,14 +71,11 @@ def test_move_blocked_by_wall(maze):
     assert player_on_edge.x == 0 and player_on_edge.y == 0
 
 
-def test_move_decrements_stats(maze):
+def test_move_changes_position(maze):
     player = PlayerCharacter(x=0, y=0)
     open_spaces = maze.find_open_spaces()
     px, py = open_spaces[0]
     player.x, player.y = px, py
-
-    initial_hunger = player.hunger
-    initial_thirst = player.thirst
 
     for y, row in enumerate(maze.grid):
         for x, cell in enumerate(row):
@@ -87,38 +84,38 @@ def test_move_decrements_stats(maze):
                 dy = y - py
                 if abs(dx) + abs(dy) == 1:
                     player.move(dx=dx, dy=dy, maze=maze)
-                    assert player.hunger < initial_hunger
-                    assert player.thirst < initial_thirst
+                    assert player.x == px + dx
+                    assert player.y == py + dy
                     return
 
     pytest.fail("Precondition not met: maze must contain adjacent open spaces")
 
 
-def _make_food(name="apple", nutrition=20, health=5, qty=1):
+def _make_food(name="apple", stamina=20, health=5, qty=1):
     return Food(
         category="food", name=name, desc="test",
-        quantity=qty, item_stats=ItemStats(nutrition_value=nutrition, health_value=health),
+        quantity=qty, item_stats=ItemStats(stamina_value=stamina, health_value=health),
     )
 
 
-def _make_drink(name="juice", hydration=20, health=5, qty=1):
+def _make_drink(name="juice", stamina=20, health=5, qty=1):
     return Drink(
         category="drink", name=name, desc="test",
-        quantity=qty, item_stats=ItemStats(hydration_value=hydration, health_value=health),
+        quantity=qty, item_stats=ItemStats(stamina_value=stamina, health_value=health),
     )
 
 
 def test_use_item_applies_effect():
     player = PlayerCharacter(x=0, y=0)
-    food = _make_food(nutrition=20, health=5)
+    food = _make_food(stamina=20, health=5)
     player.inventory = {"apple": food}
     player.selected_item_index = 0
-    player.hunger = 50
+    player.stamina = 50
     player.health = 80
 
     msg = player.use_item()
     assert "ate" in msg.lower()
-    assert player.hunger == 70
+    assert player.stamina == 70
     assert player.health == 85
 
 
@@ -184,46 +181,14 @@ def test_get_inventory_format():
     assert ("juice", 2) in inv
 
 
-def test_move_while_starving_costs_health():
-    """Moving when hunger reaches 0 costs 1 HP."""
+def test_move_does_not_drain_stamina():
     from unittest.mock import MagicMock
     maze = MagicMock()
     maze.is_wall.return_value = False
     player = PlayerCharacter(x=0, y=0)
-    player.hunger = 1  # drops to 0 after move
-    player.thirst = 50
-    initial_health = player.health
+    initial_stamina = player.stamina
     player.move(dx=1, dy=0, maze=maze)
-    assert player.hunger == 0
-    assert player.health == initial_health - 1
-
-
-def test_move_while_low_hunger_slows_player():
-    """Moving when hunger drops below 20 reduces speed to 80%."""
-    from unittest.mock import MagicMock
-    maze = MagicMock()
-    maze.is_wall.return_value = False
-    player = PlayerCharacter(x=0, y=0)
-    player.hunger = 16  # drops to 15 after move
-    player.thirst = 50
-    initial_speed = player.speed
-    player.move(dx=1, dy=0, maze=maze)
-    assert player.hunger == 15
-    assert player.speed == initial_speed * 0.8
-
-
-def test_move_while_dehydrated_costs_health():
-    """Moving when thirst reaches 0 costs 1 HP."""
-    from unittest.mock import MagicMock
-    maze = MagicMock()
-    maze.is_wall.return_value = False
-    player = PlayerCharacter(x=0, y=0)
-    player.hunger = 50
-    player.thirst = 1  # drops to 0 after move
-    initial_health = player.health
-    player.move(dx=1, dy=0, maze=maze)
-    assert player.thirst == 0
-    assert player.health == initial_health - 1
+    assert player.stamina == initial_stamina
 
 
 def test_get_nearby_npc_adjacent():

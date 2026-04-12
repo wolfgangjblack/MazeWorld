@@ -16,15 +16,12 @@ from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import Tool, ItemStats
 
 
-def _make_player(x=5, y=5, health=50, max_health=100,
-                 hunger=80, thirst=80):
+def _make_player(x=5, y=5, health=50, max_health=100, stamina=80):
     p = PlayerCharacter(x=x, y=y)
     p.health = health
     p.max_health = max_health
-    p.hunger = hunger
-    p.thirst = thirst
-    p.max_hunger = 100
-    p.max_thirst = 100
+    p.stamina = stamina
+    p.max_stamina = 100
     p.player_class = PlayerClass(
         name="Test",
         archetype="warrior",
@@ -155,36 +152,32 @@ class TestTimeAdvancesOnActions:
 
 class TestRestMechanic:
     def test_3hr_rest_recovery(self):
-        player = _make_player(health=50, hunger=80, thirst=80)
+        player = _make_player(health=50, stamina=80)
         cycle = DayNightCycle()
         msg = apply_rest(player, 3, cycle)
         assert player.health == 65  # 50 + 15
-        assert player.hunger == 75  # 80 - 5
-        assert player.thirst == 75  # 80 - 5
+        assert player.stamina == 75  # 80 - 5
         assert "3h" in msg
 
     def test_6hr_rest_recovery(self):
-        player = _make_player(health=50, hunger=80, thirst=80)
+        player = _make_player(health=50, stamina=80)
         cycle = DayNightCycle()
         apply_rest(player, 6, cycle)
         assert player.health == 80  # 50 + 30
-        assert player.hunger == 70  # 80 - 10
-        assert player.thirst == 70  # 80 - 10
+        assert player.stamina == 72  # 80 - 8
 
     def test_12hr_rest_capped_costs(self):
-        """12hr rest has same hunger/thirst cost as 6hr (capped)."""
-        player = _make_player(health=50, hunger=80, thirst=80)
+        player = _make_player(health=50, stamina=80)
         cycle = DayNightCycle()
         apply_rest(player, 12, cycle)
         assert player.health == 100  # 50 + 50, capped at max
-        assert player.hunger == 70  # Same cost as 6hr
-        assert player.thirst == 70
+        assert player.stamina == 72  # 80 - 8 (same as 6hr)
 
     def test_rest_caps_at_max_health(self):
         player = _make_player(health=95, max_health=100)
         cycle = DayNightCycle()
         apply_rest(player, 3, cycle)
-        assert player.health == 100  # Capped at max
+        assert player.health == 100
 
     def test_rest_advances_time(self):
         player = _make_player()
@@ -202,7 +195,7 @@ class TestRestMechanic:
     def test_invalid_rest_duration(self):
         player = _make_player()
         cycle = DayNightCycle()
-        msg = apply_rest(player, 4, cycle)  # Invalid
+        msg = apply_rest(player, 4, cycle)
         assert "Invalid" in msg
 
 

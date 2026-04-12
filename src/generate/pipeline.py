@@ -36,8 +36,8 @@ from src.models.story import (
 )
 from src.generate.validator import ValidationReport
 from src.generate.pipeline_utils import (
-    _retry_with_feedback, build_manifest, _build_items_json,
-    _validate_puzzle_tools, _event_fallback,
+    _retry_with_feedback, _build_items_json,
+    _validate_puzzle_tools, _validate_puzzle_abilities, _event_fallback,
     _generate_shop_inventory, _generate_loot_table,
     _consumable_mult, CONSUMABLE_SCALING, WEAPON_PRICE_BY_DICE,
     _validate_quest,
@@ -79,6 +79,7 @@ PHASE_NAMES = [
     "Narrative",
     "Portraits",
     "Manifest",
+    "Player Guide",
 ]
 
 
@@ -164,7 +165,7 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         try:
             from src.generate.generators.llm_primitives import generate_room_story_beat
             beat_data = generate_room_story_beat(
-                story_summary, environments[room_idx], room_idx, room_beats)
+                story_summary, environments[room_idx], room_idx, room_beats, num_rooms)
             if "error" not in beat_data:
                 room_beats.append(beat_data)
                 logger.info("Room %d beat: %s (escalation %d, boss: %s)",
@@ -177,7 +178,7 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         room_beats.append({
             "summary": f"The story continues in {environments[room_idx]['name']}.",
             "faction_presence": "The faction's influence grows.",
-            "escalation": min(5, room_idx + 1),
+            "escalation": min(num_rooms, room_idx + 1),
             "characters": [],
             "mini_boss": {"name": "Lieutenant", "description": "A faction enforcer."},
             "conflicts": [],
@@ -189,7 +190,7 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
             room_id=f"room_{ri}",
             summary=bd.get("summary", ""),
             faction_presence=bd.get("faction_presence"),
-            escalation=bd.get("escalation", min(5, ri + 1)),
+            escalation=bd.get("escalation", min(num_rooms, ri + 1)),
             boss_name=bd.get("mini_boss", {}).get("name", ""),
             boss_lore=bd.get("mini_boss", {}).get("description", ""),
         ))
@@ -232,8 +233,14 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
 # Phase 2: Room Layouts
 # ---------------------------------------------------------------------------
 
-def _phase2_layouts(environments: list[dict], bible: WorldBible) -> list[dict]:
-    """Generate mazes + TileMeta for all rooms. No LLM calls."""
+def _phase2_layouts(environments: list[dict], bible: WorldBible,
+                    story: "OverarchingStory") -> tuple[list[dict], dict, dict]:
+    """Generate mazes + TileMeta for all rooms.
+
+    Also generates music and SFX prompts at the end (two LLM calls) while all
+    environment types are freshly known.
+    Returns (layouts, music_prompts, sfx_prompts).
+    """
     layouts = []
     for room_idx, env in enumerate(environments):
         room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_idx}")
@@ -266,7 +273,61 @@ def _phase2_layouts(environments: list[dict], bible: WorldBible) -> list[dict]:
             "room_dir": room_dir,
         })
 
-    return layouts
+    # Generate music + SFX prompts immediately after layouts are done —
+    # this is the earliest point where both story and unique env types are known.
+    music_prompts: dict[str, str] = {}
+    sfx_prompts: dict[str, dict] = {}
+
+    unique_envs = list(dict.fromkeys(layout["environment"] for layout in layouts))
+    story_summary = {
+        "title": story.title,
+        "faction_name": story.faction.name if story.faction else "",
+        "faction_description": story.faction.description if story.faction else "",
+        "climax": story.climax,
+    }
+
+    try:
+        from src.generate.generators.llm_primitives import generate_music_prompts
+        from src.generate.music_client import build_full_prompt_dict
+
+        logger.info("Generating music prompts for envs: %s", unique_envs)
+        llm_prompts = generate_music_prompts(story_summary, unique_envs)
+        music_prompts = build_full_prompt_dict(llm_prompts)
+        logger.info("Music prompts ready: %d tracks", len(music_prompts))
+    except Exception as e:
+        logger.warning("Music prompt generation failed: %s", e)
+
+    try:
+        from src.generate.generators.llm_primitives import generate_sfx_prompts
+        from src.generate.sfx_client import build_full_sfx_prompt_dict
+
+        env_details = [
+            {"type": layout["environment"], "name": layout["environment_name"]}
+            for layout in layouts
+        ]
+        seen = set()
+        unique_env_details = []
+        for ed in env_details:
+            if ed["type"] not in seen:
+                seen.add(ed["type"])
+                unique_env_details.append(ed)
+
+        spell_elements = list({
+            rb.story_beat.split()[-1] if rb.story_beat else ""
+            for rb in bible.rooms.values()
+        } - {""})
+        if not spell_elements:
+            spell_elements = ["fire", "water", "forest"]
+
+        logger.info("Generating SFX prompts for envs=%s, elements=%s",
+                     unique_envs, spell_elements)
+        llm_sfx = generate_sfx_prompts(story_summary, unique_env_details, spell_elements)
+        sfx_prompts = build_full_sfx_prompt_dict(llm_sfx)
+        logger.info("SFX prompts ready: %d effects", len(sfx_prompts))
+    except Exception as e:
+        logger.warning("SFX prompt generation failed: %s", e)
+
+    return layouts, music_prompts, sfx_prompts
 
 
 # ---------------------------------------------------------------------------
@@ -351,13 +412,6 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
             x, y = tile.position
             maze.grid[y][x] = chosen_id
             item_placements.append({"x": x, "y": y, "item_id": chosen_id})
-    else:
-        from config import NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS
-        maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS)
-        for y, row in enumerate(maze.grid):
-            for x, cell in enumerate(row):
-                if registry.is_item(cell):
-                    item_placements.append({"x": x, "y": y, "item_id": cell})
 
     logger.info("Room %d: %d items (%d placements).",
                 room_idx, len(generated_items or {}), len(item_placements))
@@ -497,25 +551,83 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 4A helpers
+# Enrichment pass: assign real DB objects to TileMeta after Phase 3
 # ---------------------------------------------------------------------------
 
-# Build a position→event_id index for O(1) quest target lookup.
-def _build_event_pos_index(event_list: list[dict],
-                           event_tiles: list) -> dict:
-    """Return a dict mapping tile position tuples to event IDs."""
-    index: dict[tuple, str] = {}
-    for tile in event_tiles:
-        evt_id = None
-        for e in event_list:
-            # Match by checking if the tile's position was used to generate this event.
-            # Events are assigned IDs sequentially; we match on recorded tile position.
-            if e.get("_tile_pos") == list(tile.position):
-                evt_id = e["id"]
-                break
-        if evt_id:
-            index[tile.position] = evt_id
-    return index
+def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
+                      class_data_list: list[dict]):
+    """Fill TileMeta requirement slots and combat assignments from real DBs.
+
+    Called between Phase 3D and Phase 4A, after all databases are populated.
+    """
+    # Collect class ability/spell names across all archetypes
+    all_abilities = []
+    all_spells = []
+    for cd in class_data_list:
+        for ab in cd.get("abilities", []):
+            all_abilities.append(ab["name"] if isinstance(ab, dict) else ab.name)
+        for ab in cd.get("ability_pool", []):
+            all_abilities.append(ab["name"] if isinstance(ab, dict) else ab.name)
+        for sp in cd.get("spells", []):
+            all_spells.append(sp["name"] if isinstance(sp, dict) else sp.name)
+        for sp in cd.get("spell_pool", []):
+            all_spells.append(sp["name"] if isinstance(sp, dict) else sp.name)
+    all_abilities = list(dict.fromkeys(all_abilities))
+    all_spells = list(dict.fromkeys(all_spells))
+
+    # Tool attributes from item registry
+    from src.models.items import Tool
+    tool_attrs = list({
+        item.item_stats.attribute
+        for item in registry.item_registry.values()
+        if isinstance(item, Tool) and item.item_stats.attribute
+    }) or ["bludgeon", "cutting", "digging", "climbing"]
+
+    for layout, rr in zip(layouts, room_results):
+        maze = layout["maze"]
+        monster_db = rr["monster_db"]
+        regular_monsters = [m for m in monster_db if not m.get("is_boss")]
+        item_names = []
+        if rr.get("generated_items"):
+            item_names = [v.get("name", "") for v in rr["generated_items"].values() if v.get("name")]
+
+        tile_meta = maze.tile_meta
+        combat_tile_map: dict[tuple, 'TileMeta'] = {}
+
+        for tile in tile_meta:
+            if tile.tile_type != "event":
+                continue
+
+            if tile.event_type == "combat":
+                # Assign monsters from DB
+                count = tile.assigned_monster_count
+                if regular_monsters:
+                    chosen = random.choices(regular_monsters, k=min(count, len(regular_monsters)))
+                    tile.assigned_monsters = [m.get("name", "Unknown") for m in chosen]
+                else:
+                    tile.assigned_monsters = ["Unknown Creature"]
+                combat_tile_map[tile.position] = tile
+
+            elif tile.requires_type and not tile.requires_ref:
+                # Fill requirement ref from the appropriate pool
+                if tile.requires_type == "tool" and tool_attrs:
+                    tile.requires_ref = random.choice(tool_attrs)
+                elif tile.requires_type == "ability" and all_abilities:
+                    tile.requires_ref = random.choice(all_abilities)
+                elif tile.requires_type == "spell" and all_spells:
+                    tile.requires_ref = random.choice(all_spells)
+                elif tile.requires_type == "item" and item_names:
+                    tile.requires_ref = random.choice(item_names)
+
+        # Wire NPC quest tiles to their target combat tile's monsters
+        for tile in tile_meta:
+            if tile.tile_type != "npc" or not tile.quest_target_tile:
+                continue
+            target = combat_tile_map.get(tile.quest_target_tile)
+            if target and target.assigned_monsters:
+                tile.quest_target_monsters = list(target.assigned_monsters)
+
+    logger.info("Enrichment pass complete: assigned monsters and requirements to tiles.")
 
 
 # Quest success/failure templates — derived from quest type, no LLM call.
@@ -564,10 +676,110 @@ def _monster_dict_to_model(m: dict, room_level: int):
 # Phase 4A: Events & Quests (per room, batched by type)
 # ---------------------------------------------------------------------------
 
+EVENTS_PER_CHUNK = 10
+
+_COMBAT_NAME_TEMPLATES = [
+    "Ambush: {monsters}",
+    "Encounter: {monsters}",
+    "{monsters} Attack",
+    "Hostile {monsters}",
+]
+
+_COMBAT_STORY_TEMPLATES = [
+    "Faction Patrol: {monsters}",
+    "Cult Enforcers: {monsters}",
+    "{monsters} (faction scouts)",
+]
+
+
+_GENERIC_PORTRAIT_PREFIXES = ("a puzzle scene in", "a event scene in", "a combat scene in")
+
+
+def _is_generic_portrait_prompt(prompt: str) -> bool:
+    """Return True if the portrait prompt is a generic fallback template."""
+    lower = prompt.lower().strip()
+    return any(lower.startswith(p) for p in _GENERIC_PORTRAIT_PREFIXES)
+
+
+def _item_has_attr(item_id: int, attr: str) -> bool:
+    """Check if an item in the registry has a given tool attribute."""
+    try:
+        item = registry.get_item(item_id)
+        if item:
+            stats = getattr(item, 'item_stats', None)
+            if stats and getattr(stats, 'attribute', None) == attr:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _build_combat_event(tile, event_id, env_type, env_name, room_level,
+                        monster_db, story_related, faction_name=""):
+    """Build a combat event programmatically from tile.assigned_monsters."""
+    monster_names = tile.assigned_monsters or ["Unknown Creature"]
+    count = len(monster_names)
+
+    if count > 1:
+        monsters_str = f"{count} {monster_names[0]}s" if len(set(monster_names)) == 1 else ", ".join(dict.fromkeys(monster_names))
+    else:
+        monsters_str = monster_names[0]
+
+    if story_related and faction_name:
+        template = random.choice(_COMBAT_STORY_TEMPLATES)
+    else:
+        template = random.choice(_COMBAT_NAME_TEMPLATES)
+    name = template.format(monsters=monsters_str)
+
+    # Build monster models from DB by name
+    db_by_name = {m.get("name", ""): m for m in monster_db}
+    all_monsters = []
+    for mn in monster_names:
+        m_data = db_by_name.get(mn)
+        if m_data:
+            all_monsters.append(_monster_dict_to_model(m_data, room_level))
+        else:
+            from src.models.monster import generate_encounter_monsters
+            all_monsters.extend(generate_encounter_monsters(env_type, room_level))
+
+    first_desc = db_by_name.get(monster_names[0], {}).get("description", "")
+    description = first_desc or f"A hostile encounter in the {env_name}."
+
+    difficulty = min(5, max(1, room_level + (1 if tile.is_multi_combat else 0)))
+
+    event_data = {
+        "id": event_id,
+        "type": "combat",
+        "name": name,
+        "description": description,
+        "difficulty": difficulty,
+        "portrait_prompt": f"{monsters_str} in a {env_type} environment, fantasy pixel art, combat scene",
+        "profile_image": None,
+        "time_gate": tile.time_gate,
+        "x": tile.position[0],
+        "y": tile.position[1],
+        "_tile_pos": list(tile.position),
+        "monsters": [m.to_dict() for m in all_monsters],
+        "room_level": room_level,
+    }
+
+    all_item_ids = registry.item_ids()
+    if all_item_ids:
+        event_data["loot_table"] = _generate_loot_table(all_item_ids, difficulty)
+        event_data["money_drop"] = [difficulty * 2, difficulty * 8]
+
+    return event_data
+
+
 def _phase4a_events(layout: dict, bible: WorldBible,
                     monster_db: list[dict], npc_pool: list[dict],
-                    item_placements: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Generate events batched by type + reconcile NPC quest stubs."""
+                    item_placements: list[dict],
+                    class_data_list: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
+    """Generate events by type + reconcile NPC quest stubs.
+
+    Combat events are built programmatically from assigned monsters.
+    Puzzle and event encounters are chunked into groups of 10 for LLM calls.
+    """
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
     maze = layout["maze"]
@@ -579,92 +791,171 @@ def _phase4a_events(layout: dict, bible: WorldBible,
     room_story = bible.rooms.get(room_id, RoomBible(environment=env_type)).story_beat
     room_env = {"type": env_type, "name": env_name}
 
+    faction_name = ""
+    if bible.story and bible.story.faction:
+        faction_name = bible.story.faction.name
+
+    # Collect available databases for LLM context
+    all_abilities = []
+    all_spells = []
+    tool_attrs = ["bludgeon", "cutting", "digging", "climbing"]
+    if class_data_list:
+        for cd in class_data_list:
+            for ab in cd.get("abilities", []) + cd.get("ability_pool", []):
+                n = ab["name"] if isinstance(ab, dict) else ab.name
+                if n not in all_abilities:
+                    all_abilities.append(n)
+            for sp in cd.get("spells", []) + cd.get("spell_pool", []):
+                n = sp["name"] if isinstance(sp, dict) else sp.name
+                if n not in all_spells:
+                    all_spells.append(n)
+
+    from src.models.items import Tool
+    registry_tools = [
+        item.item_stats.attribute
+        for item in registry.item_registry.values()
+        if isinstance(item, Tool) and item.item_stats.attribute
+    ]
+    if registry_tools:
+        tool_attrs = list(dict.fromkeys(registry_tools))
+
     event_tiles = maze.get_tiles_by_type("event")
     event_list = []
     event_id_prefix = f"r{room_idx}_"
 
-    # Separate regular and boss monsters for combat assignment
-    regular_monsters = [m for m in monster_db if not m.get("is_boss")]
-    boss_monsters = [m for m in monster_db if m.get("is_boss")]
+    # --- Combat: build programmatically, no LLM ---
+    combat_tiles = [t for t in event_tiles if t.event_type == "combat"]
+    for tile in combat_tiles:
+        idx = len(event_list)
+        event_data = _build_combat_event(
+            tile, f"{event_id_prefix}evt_{idx:03d}",
+            env_type, env_name, room_level, monster_db,
+            tile.is_story_related, faction_name,
+        )
+        event_list.append(event_data)
 
-    for event_type in ["combat", "puzzle", "event"]:
+    # --- Puzzle & Event: chunked LLM generation with summaries ---
+    for event_type in ["puzzle", "event"]:
         typed_tiles = [t for t in event_tiles if t.event_type == event_type]
         if not typed_tiles:
             continue
 
-        event_slots = []
-        for t in typed_tiles:
-            event_slots.append({
-                "position": list(t.position),
-                "is_story_related": t.is_story_related,
-                "is_multi_combat": t.is_multi_combat,
-                "multi_combat_count": t.multi_combat_count,
-                "time_gate": t.time_gate,
-            })
+        accumulated_summaries: list[str] = []
 
-        llm_events = []
-        try:
-            from src.generate.generators.llm_primitives import generate_event_batch
-            llm_events = generate_event_batch(room_env, room_story, event_type,
-                                              event_slots, story_context)
-        except Exception as e:
-            logger.warning("Room %d %s event batch failed: %s", room_idx, event_type, e)
+        for chunk_start in range(0, len(typed_tiles), EVENTS_PER_CHUNK):
+            chunk_tiles = typed_tiles[chunk_start:chunk_start + EVENTS_PER_CHUNK]
+            chunk_slots = []
+            for t in chunk_tiles:
+                slot = {
+                    "position": list(t.position),
+                    "is_story_related": t.is_story_related,
+                    "time_gate": t.time_gate,
+                }
+                if t.requires_type and t.requires_ref:
+                    slot["requires_type"] = t.requires_type
+                    slot["requires_ref"] = t.requires_ref
+                chunk_slots.append(slot)
 
-        for i, tile in enumerate(typed_tiles):
-            idx = len(event_list)
-            llm_data = llm_events[i] if i < len(llm_events) else _event_fallback(event_type)
+            llm_events = []
+            try:
+                from src.generate.generators.llm_primitives import generate_event_batch
+                llm_events = generate_event_batch(
+                    room_env, room_story, event_type, chunk_slots,
+                    story_context, accumulated_summaries,
+                    all_abilities, all_spells, tool_attrs,
+                )
+            except Exception as e:
+                logger.warning("Room %d %s chunk %d failed: %s",
+                               room_idx, event_type, chunk_start // EVENTS_PER_CHUNK, e)
 
-            event_data = {
-                "id": f"{event_id_prefix}evt_{idx:03d}",
-                "type": event_type,
-                "name": llm_data.get("name", f"Event {idx}"),
-                "description": llm_data.get("description", "Something happens!"),
-                "difficulty": llm_data.get("difficulty", 3),
-                "portrait_prompt": llm_data.get("portrait_prompt",
-                                                f"a {event_type} scene in a {env_type}, pixel art"),
-                "profile_image": None,
-                "time_gate": tile.time_gate,
-                "_tile_pos": list(tile.position),  # used by quest reconciliation lookup
-            }
+            for i, tile in enumerate(chunk_tiles):
+                idx = len(event_list)
+                llm_data = llm_events[i] if i < len(llm_events) else _event_fallback(
+                    event_type, env_type, room_level, tool_attrs, all_abilities, all_spells)
 
-            if event_type == "combat":
-                count = tile.multi_combat_count if tile.is_multi_combat else 1
-                all_monsters = []
-                if regular_monsters:
-                    selected = random.choices(regular_monsters,
-                                              k=min(count, len(regular_monsters)))
-                    all_monsters = [_monster_dict_to_model(m, room_level) for m in selected]
-                else:
-                    from src.models.monster import generate_encounter_monsters
-                    for _ in range(count):
-                        all_monsters.extend(generate_encounter_monsters(env_type, room_level))
-                event_data["monsters"] = [m.to_dict() for m in all_monsters]
-                event_data["room_level"] = room_level
+                event_data = {
+                    "id": f"{event_id_prefix}evt_{idx:03d}",
+                    "type": event_type,
+                    "name": llm_data.get("name", f"Event {idx}"),
+                    "description": llm_data.get("description", "Something happens!"),
+                    "difficulty": llm_data.get("difficulty", 3),
+                    "portrait_prompt": llm_data.get("portrait_prompt",
+                                                    f"a {event_type} scene in a {env_type}, pixel art"),
+                    "profile_image": None,
+                    "time_gate": tile.time_gate,
+                    "x": tile.position[0],
+                    "y": tile.position[1],
+                    "_tile_pos": list(tile.position),
+                }
+
+                difficulty = event_data["difficulty"]
+                event_data["money_drop"] = [difficulty * 2, difficulty * 6]
+                event_data["reward_chance"] = min(0.8, 0.4 + difficulty * 0.1)
+
                 all_item_ids = registry.item_ids()
+                correct_tool_attr = None
+
+                if event_type == "puzzle":
+                    choices = llm_data.get("choices", [])
+                    if not any(c.get("auto_success") for c in choices):
+                        choices.append({"text": "Walk away", "auto_success": True})
+                    event_data["choices"] = choices
+                    event_data["correct_tool"] = llm_data.get("correct_tool") or (
+                        tile.requires_ref if tile.requires_type == "tool" else None)
+                    event_data["correct_ability"] = llm_data.get("correct_ability") or (
+                        tile.requires_ref if tile.requires_type == "ability" else None)
+                    correct_tool_attr = event_data.get("correct_tool")
+
+                elif event_type == "event":
+                    choices = llm_data.get("choices", [])
+                    if not any(c.get("auto_success") for c in choices):
+                        choices.append({"text": "Slip away quietly", "auto_success": True})
+                    event_data["choices"] = choices
+                    event_data["failure_damage_type"] = llm_data.get(
+                        "failure_damage_type", random.choice(["health", "stamina"]))
+                    event_data["failure_damage_range"] = llm_data.get(
+                        "failure_damage_range", [3 + room_level, 8 + room_level * 2])
+                    event_data["correct_ability"] = llm_data.get("correct_ability")
+                    event_data["correct_spell"] = llm_data.get("correct_spell")
+
                 if all_item_ids:
-                    diff = event_data["difficulty"]
-                    event_data["loot_table"] = _generate_loot_table(all_item_ids, diff)
-                    event_data["money_drop"] = [diff * 2, diff * 8]
+                    eligible_ids = all_item_ids
+                    if correct_tool_attr:
+                        from src.models.items import Tool
+                        eligible_ids = [
+                            iid for iid in all_item_ids
+                            if not _item_has_attr(iid, correct_tool_attr)
+                        ]
+                    if eligible_ids:
+                        num = min(random.randint(1, 2), len(eligible_ids))
+                        event_data["loot_table"] = [
+                            {"item_id": iid,
+                             "drop_chance": round(random.uniform(0.15, 0.35), 2)}
+                            for iid in random.sample(eligible_ids, num)
+                        ]
 
-            elif event_type == "puzzle":
-                choices = llm_data.get("choices", [])
-                if not any(c.get("auto_success") for c in choices):
-                    choices.append({"text": "Walk away", "auto_success": True})
-                event_data["choices"] = choices
-                event_data["correct_tool"] = llm_data.get("correct_tool")
-                event_data["correct_ability"] = llm_data.get("correct_ability")
+                # Accumulate summary for next chunk
+                summary = llm_data.get("summary") or f"{event_data['name']}: {event_data['description'][:60]}"
+                accumulated_summaries.append(summary)
 
-            elif event_type == "event":
-                choices = llm_data.get("choices", [])
-                if not any(c.get("auto_success") for c in choices):
-                    choices.append({"text": "Walk away", "auto_success": True})
-                event_data["choices"] = choices
-                event_data["failure_damage_type"] = llm_data.get(
-                    "failure_damage_type", random.choice(["health", "hunger", "thirst"]))
-                event_data["failure_damage_range"] = llm_data.get(
-                    "failure_damage_range", [3 + room_level, 8 + room_level * 2])
+                event_list.append(event_data)
 
-            event_list.append(event_data)
+    # Validate tool/ability references against real data
+    _validate_puzzle_tools(event_list, registry)
+    _validate_puzzle_abilities(event_list, all_abilities)
+
+    # Enforce event choice structure (ensure walk-away exists)
+    for e in event_list:
+        if e.get("type") == "event":
+            choices = e.get("choices", [])
+            if not any(c.get("auto_success") for c in choices):
+                choices.append({"text": "Slip away quietly", "auto_success": True})
+            e["choices"] = choices
+        if e.get("type") == "puzzle":
+            choices = e.get("choices", [])
+            if not any(c.get("auto_success") for c in choices):
+                choices.append({"text": "Turn back and find another route", "auto_success": True})
+            e["choices"] = choices
 
     # Build position→event lookup for quest reconciliation
     pos_to_event: dict[tuple, dict] = {}
@@ -875,58 +1166,255 @@ def _phase6_narrative(bible: WorldBible, room_results: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
-                      bible: WorldBible):
-    """Generate portrait images from all portrait_prompts."""
+                      bible: WorldBible,
+                      music_prompts: dict[str, str] | None = None,
+                      sfx_prompts: dict[str, dict] | None = None):
+    """Generate portrait images, music tracks, and SFX in a single event loop.
+
+    Phase A (sync): build all entity databases and prompt-enrich them.
+    Phase B (async): one asyncio.run() runs portraits + music + SFX concurrently
+                     via asyncio.gather, so fal_client never sees a closed loop.
+
+    Returns (portraits_generated, player_portrait_path, gameover_path, victory_path, music_paths, sfx_paths).
+    """
+    import asyncio as _asyncio
+    from src.generate.image_client import (
+        generate_portraits_parallel_async,
+        generate_player_portrait,
+        generate_and_save_image,
+    )
+    from src.generate.music_client import generate_all_music_async
+    from src.generate.sfx_client import generate_all_sfx_async
+    from src.generate.generators.llm_primitives import generate_player_image_description
+    from src.generate.summary_agent import (
+        build_npc_portrait_prompt, build_class_portrait_prompt,
+        build_room_portrait_prompt, build_game_over_portrait_prompt,
+        build_item_portrait_prompt, build_monster_portrait_prompt,
+        build_event_portrait_prompt,
+    )
+
+    portraits_generated = False
+    player_portrait_path = None
+    gameover_path = None
+    music_paths: dict[str, str] = {}
+    sfx_paths: dict[str, str] = {}
+
+    # -----------------------------------------------------------------------
+    # Phase A — sync: build all entity databases and enrich prompts
+    # -----------------------------------------------------------------------
+    npc_batches: list[tuple[dict, str, str]] = []
+    event_batches: list[tuple[dict, str, str]] = []
+
+    for rr in tqdm(room_results, desc="  Room Portraits", unit="room", leave=True):
+        rid = rr["room_id"]
+        npc_db = {str(n["id"]): n for n in rr["npc_pool"]}
+        for nd in npc_db.values():
+            if not nd.get("portrait_prompt"):
+                nd["portrait_prompt"] = build_npc_portrait_prompt(nd, bible, room_id=rid)
+        npc_batches.append((npc_db, "data/portraits/npcs", "npc_"))
+
+        event_db = {e["id"]: e for e in rr["event_list"]}
+        for ed in event_db.values():
+            if not ed.get("portrait_prompt") or _is_generic_portrait_prompt(ed["portrait_prompt"]):
+                ed["portrait_prompt"] = build_event_portrait_prompt(ed, bible, room_id=rid)
+        event_batches.append((event_db, "data/portraits/events", "evt_"))
+
+    # Monster portraits (deduplicate by name across rooms)
+    monster_batches: list[tuple[dict, str, str]] = []
+    seen_monster_names: set[str] = set()
+    monster_portrait_db: dict[str, dict] = {}
+    for rr in room_results:
+        rid = rr["room_id"]
+        for m in rr.get("monster_db", []):
+            name = m.get("name", "")
+            if name and name not in seen_monster_names:
+                seen_monster_names.add(name)
+                key = name.replace(" ", "_").lower()
+                prompt = m.get("portrait_prompt") or build_monster_portrait_prompt(m, bible, room_id=rid)
+                monster_portrait_db[key] = {
+                    "portrait_prompt": prompt,
+                    "name": name,
+                    "_source": m,
+                }
+    if monster_portrait_db:
+        monster_batches.append((monster_portrait_db, "data/portraits/monsters", "mon_"))
+
+    # Item portraits (deduplicate by name across rooms)
+    item_batches: list[tuple[dict, str, str]] = []
+    item_portrait_db: dict[str, dict] = {}
+    seen_item_names: set[str] = set()
+    for rr in room_results:
+        for item in rr.get("item_placements", []):
+            iname = item.get("name", "")
+            if iname and iname not in seen_item_names:
+                seen_item_names.add(iname)
+                ikey = iname.replace(" ", "_").lower()
+                prompt = item.get("portrait_prompt") or build_item_portrait_prompt(item, bible)
+                item_portrait_db[ikey] = {
+                    "portrait_prompt": prompt,
+                    "name": iname,
+                    "_source": item,
+                }
+    if item_portrait_db:
+        item_batches.append((item_portrait_db, "data/portraits/items", "item_"))
+
+    class_portrait_db: dict = {}
+    for i, cd in enumerate(class_data_list):
+        prompt = cd.get("portrait_prompt") or build_class_portrait_prompt(cd, bible)
+        class_portrait_db[str(i)] = {"portrait_prompt": prompt, "name": cd.get("name", "")}
+
+    # -----------------------------------------------------------------------
+    # Phase B — async: single event loop covers portraits + music + SFX
+    # -----------------------------------------------------------------------
+    async def _run_music():
+        if music_prompts:
+            return await generate_all_music_async(music_prompts)
+        return {}
+
+    async def _run_sfx():
+        if sfx_prompts:
+            return await generate_all_sfx_async(sfx_prompts)
+        return {}
+
+    async def _run_all_async():
+        tasks = []
+        # portrait tasks — one coroutine per room per entity type
+        for npc_db, save_dir, prefix in npc_batches:
+            tasks.append(generate_portraits_parallel_async(npc_db, save_dir, prefix))
+        for event_db, save_dir, prefix in event_batches:
+            tasks.append(generate_portraits_parallel_async(event_db, save_dir, prefix))
+        tasks.append(
+            generate_portraits_parallel_async(
+                class_portrait_db, "data/portraits/classes", "class_"
+            )
+        )
+        for mon_db, save_dir, prefix in monster_batches:
+            tasks.append(generate_portraits_parallel_async(mon_db, save_dir, prefix))
+        for item_db, save_dir, prefix in item_batches:
+            tasks.append(generate_portraits_parallel_async(item_db, save_dir, prefix))
+        # audio tasks (music + SFX already run correctly together)
+        music_idx = len(tasks)
+        tasks.append(_run_music())
+        sfx_idx = len(tasks)
+        tasks.append(_run_sfx())
+
+        results = await _asyncio.gather(*tasks, return_exceptions=True)
+
+        # log any portrait failures
+        for i, r in enumerate(results[:music_idx]):
+            if isinstance(r, Exception):
+                logger.warning("Portrait batch %d failed: %s", i, r)
+
+        m = results[music_idx] if not isinstance(results[music_idx], Exception) else {}
+        s = results[sfx_idx] if not isinstance(results[sfx_idx], Exception) else {}
+        if isinstance(results[music_idx], Exception):
+            logger.warning("Music generation failed: %s", results[music_idx])
+        if isinstance(results[sfx_idx], Exception):
+            logger.warning("SFX generation failed: %s", results[sfx_idx])
+        return m, s
+
     try:
-        from src.generate.image_client import (
-            generate_npc_portraits, generate_event_illustrations,
-            generate_item_portraits, generate_player_portrait,
-            generate_and_save_image, generate_class_portraits,
-        )
-        from src.generate.generators.llm_primitives import generate_player_image_description
-        from src.generate.summary_agent import (
-            build_npc_portrait_prompt, build_class_portrait_prompt,
-            build_room_portrait_prompt, build_game_over_portrait_prompt,
-        )
-
-        for rr in tqdm(room_results, desc="  Room Portraits", unit="room", leave=True):
-            rid = rr["room_id"]
-            npc_db = {str(n["id"]): n for n in rr["npc_pool"]}
-            for nd in npc_db.values():
-                if not nd.get("portrait_prompt"):
-                    nd["portrait_prompt"] = build_npc_portrait_prompt(nd, bible, room_id=rid)
-            generate_npc_portraits(npc_db)
-            event_db = {e["id"]: e for e in rr["event_list"]}
-            generate_event_illustrations(event_db)
-
-        try:
-            player_prompt = generate_player_image_description()
-        except Exception:
-            player_prompt = "a young adventurer, pixel art, fantasy portrait"
-        player_portrait_path = generate_player_portrait(player_prompt)
-
-        class_portrait_db = {}
-        for i, cd in enumerate(class_data_list):
-            prompt = cd.get("portrait_prompt") or build_class_portrait_prompt(cd, bible)
-            class_portrait_db[str(i)] = {"portrait_prompt": prompt, "name": cd.get("name", "")}
-        generate_class_portraits(class_portrait_db)
-        for i, cd in enumerate(class_data_list):
-            cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
-
-        for rr in room_results:
-            portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
-            room_prompt = build_room_portrait_prompt(rr["room_id"], bible)
-            generate_and_save_image(room_prompt, portrait_path)
-            rr["environment_portrait"] = portrait_path
-
-        gameover_path = os.path.join("data/portraits", "game_over.png")
-        generate_and_save_image(build_game_over_portrait_prompt(bible), gameover_path)
-
+        music_paths, sfx_paths = _asyncio.run(_run_all_async())
+        portraits_generated = True
         logger.info("Portraits generated successfully.")
-        return True, player_portrait_path, gameover_path
+        if music_paths:
+            logger.info("Music generation complete: %d tracks.", len(music_paths))
+        if sfx_paths:
+            logger.info("SFX generation complete: %d effects.", len(sfx_paths))
     except Exception as e:
-        logger.warning("Portrait generation skipped: %s", e)
-        return False, None, None
+        logger.warning("Phase 7 async generation failed: %s", e)
+
+    # Write back class portrait paths
+    for i, cd in enumerate(class_data_list):
+        cd["portrait_path"] = class_portrait_db[str(i)].get("profile_image")
+
+    # Write back monster portrait paths to monster_db entries
+    monster_name_to_image: dict[str, str] = {}
+    for key, entry in monster_portrait_db.items():
+        img = entry.get("profile_image")
+        if img:
+            monster_name_to_image[entry["name"]] = img
+            src_m = entry.get("_source")
+            if src_m:
+                src_m["profile_image"] = img
+
+    # Propagate monster portraits into combat event monster lists
+    for rr in room_results:
+        for evt in rr["event_list"]:
+            if evt.get("type") != "combat":
+                continue
+            for m_dict in evt.get("monsters", []):
+                mname = m_dict.get("name", "")
+                if mname and mname in monster_name_to_image and not m_dict.get("profile_image"):
+                    m_dict["profile_image"] = monster_name_to_image[mname]
+
+    # Write back item portrait paths to item_placements entries
+    item_name_to_image: dict[str, str] = {}
+    for key, entry in item_portrait_db.items():
+        img = entry.get("profile_image")
+        if img:
+            item_name_to_image[entry["name"]] = img
+            src_item = entry.get("_source")
+            if src_item:
+                src_item["profile_image"] = img
+
+    # Quest portrait reuse: link quest portraits to event/NPC portraits
+    for rr in room_results:
+        event_portraits = {e["id"]: e.get("profile_image") for e in rr["event_list"]}
+        npc_portraits = {str(n["id"]): n.get("profile_image") for n in rr["npc_pool"]}
+        for q in rr.get("quest_list", []):
+            if q.get("profile_image"):
+                continue
+            target_event = q.get("target_event_id")
+            if target_event and event_portraits.get(target_event):
+                q["profile_image"] = event_portraits[target_event]
+            elif q.get("escort_npc_id") and npc_portraits.get(str(q["escort_npc_id"])):
+                q["profile_image"] = npc_portraits[str(q["escort_npc_id"])]
+            elif q.get("target_npc_id") and npc_portraits.get(str(q["target_npc_id"])):
+                q["profile_image"] = npc_portraits[str(q["target_npc_id"])]
+            elif q.get("giver_npc_id") and npc_portraits.get(str(q["giver_npc_id"])):
+                q["profile_image"] = npc_portraits[str(q["giver_npc_id"])]
+
+    # -----------------------------------------------------------------------
+    # Sync-only portraits (player, room environments, game-over, victory)
+    # -----------------------------------------------------------------------
+    try:
+        player_prompt = generate_player_image_description()
+    except Exception:
+        player_prompt = "a young adventurer, pixel art, fantasy portrait"
+    player_portrait_path = generate_player_portrait(player_prompt)
+
+    for rr in room_results:
+        portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
+        room_prompt = build_room_portrait_prompt(rr["room_id"], bible)
+        generate_and_save_image(room_prompt, portrait_path)
+        rr["environment_portrait"] = portrait_path
+
+    gameover_path = os.path.join("data/portraits", "game_over.png")
+    generate_and_save_image(build_game_over_portrait_prompt(bible), gameover_path)
+
+    victory_path = os.path.join("data/portraits", "victory.png")
+    victory_prompt = (
+        "A triumphant hero standing victorious, golden light, fantasy pixel art, "
+        "celebration scene, epic achievement"
+    )
+    if bible.story and bible.story.synopsis:
+        victory_prompt = f"Victory scene: {bible.story.synopsis[:100]}, triumphant hero, golden light, fantasy pixel art"
+    generate_and_save_image(victory_prompt, victory_path)
+
+    # Start screen / cover portrait
+    start_portrait_path = os.path.join("data/portraits", "start_screen.png")
+    start_prompt = "A dark fantasy world, epic landscape, mysterious castle silhouette, pixel art, game cover art"
+    if bible.story:
+        parts = [bible.story.title]
+        if bible.story.synopsis:
+            parts.append(bible.story.synopsis[:120])
+        if bible.story.faction:
+            parts.append(f"faction: {bible.story.faction.name}")
+        start_prompt = f"{', '.join(parts)}, dark fantasy pixel art, epic game cover"
+    generate_and_save_image(start_prompt, start_portrait_path)
+
+    return portraits_generated, player_portrait_path, gameover_path, victory_path, start_portrait_path, music_paths, sfx_paths
 
 
 # ---------------------------------------------------------------------------
@@ -946,12 +1434,16 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list,
 
     event_position_map = []
     for e in event_list:
-        event_position_map.append({"event_id": e["id"]})
+        if "x" in e and "y" in e:
+            event_position_map.append({
+                "x": e["x"], "y": e["y"], "event_id": e["id"],
+            })
 
     maze.save_to_json(os.path.join(room_dir, "maze.json"), extra={
         "npc_positions": npc_positions,
         "player_start": list(player_start),
         "item_placements": item_placements,
+        "event_positions": event_position_map,
     })
     with open(os.path.join(room_dir, "npcs.json"), "w") as f:
         json.dump(npc_pool, f, indent=2)
@@ -967,6 +1459,24 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list,
 
 def generate_world():
     """Phased world generation pipeline with progress tracking."""
+    from config import LLM_BACKEND, IMAGE_BACKEND, MUSIC_BACKEND
+    import src.generate.backends.llm_api as _llm_api_mod
+    import src.generate.backends.llm_local as _llm_local_mod
+    import src.generate.image_client as _img_mod
+    import src.generate.music_client as _music_mod
+    import src.generate.sfx_client as _sfx_mod
+    from src.generate.generation_stats import GenerationStats
+
+    stats = GenerationStats(
+        llm_backend=LLM_BACKEND, image_backend=IMAGE_BACKEND,
+        music_backend=MUSIC_BACKEND,
+    )
+    _llm_api_mod.set_stats(stats)
+    _llm_local_mod.set_stats(stats)
+    _img_mod.set_stats(stats)
+    _music_mod.set_stats(stats)
+    _sfx_mod.set_stats(stats)
+
     logger.info("=== MazeWorld World Generator ===")
     logger.info("Seed: %s, Mode: %s, Rooms: %d", WORLD_SEED, GAME_MODE, NUM_ROOMS)
 
@@ -994,9 +1504,9 @@ def generate_world():
     story, bible = _phase1_story(story_seed, environments)
     phase_bar.update(1)
 
-    # --- Phase 2: Layouts ---
+    # --- Phase 2: Layouts + Music/SFX Prompts ---
     advance(PHASE_NAMES[2])
-    layouts = _phase2_layouts(environments, bible)
+    layouts, music_prompts, sfx_prompts = _phase2_layouts(environments, bible, story)
     phase_bar.update(1)
 
     # --- Phase 3A: Classes & Equipment ---
@@ -1031,12 +1541,16 @@ def generate_world():
         })
     phase_bar.update(1)
 
+    # --- Enrichment: assign real DB objects to TileMeta ---
+    _enrich_tile_meta(layouts, room_results, class_data_list)
+
     # --- Phase 4: Events, Quests, Dialogue (per room) ---
     advance(PHASE_NAMES[5])
     for rr in tqdm(room_results, desc="  Content", unit="room", position=1, leave=True):
         layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
         event_list, quest_list = _phase4a_events(
-            layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"])
+            layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"],
+            class_data_list=class_data_list)
         rr["event_list"] = event_list
         rr["quest_list"] = quest_list
         rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible)
@@ -1053,10 +1567,18 @@ def generate_world():
     narrative_data = _phase6_narrative(bible, room_results)
     phase_bar.update(1)
 
-    # --- Phase 7: Portraits ---
+    # --- Phase 7: Portraits + Music + SFX ---
     advance(PHASE_NAMES[8])
-    portraits_generated, player_portrait_path, gameover_path = _phase7_portraits(
-        room_results, class_data_list, bible)
+    portraits_generated, player_portrait_path, gameover_path, victory_path, start_portrait_path, music_paths, sfx_paths = (
+        _phase7_portraits(room_results, class_data_list, bible,
+                          music_prompts=music_prompts, sfx_prompts=sfx_prompts))
+
+    # Rewrite room files with updated profile_image paths from portrait generation
+    for rr in room_results:
+        layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
+        _write_room_files(layout, rr["npc_pool"], rr["event_list"],
+                          rr["quest_list"], rr["item_placements"])
+    logger.info("Room files rewritten with portrait paths.")
     phase_bar.update(1)
 
     # --- Phase 8: Manifest ---
@@ -1078,6 +1600,13 @@ def generate_world():
         with open(ITEM_ITEMS_PATH, "w") as f:
             json.dump(all_items, f, indent=2)
 
+    stats.finish()
+
+    stats_path = os.path.join(DATA_DIR, "generation_stats.json")
+    with open(stats_path, "w") as f:
+        json.dump(stats.to_dict(), f, indent=2)
+    logger.info("Generation stats written to %s", stats_path)
+
     manifest = {
         "world_seed": WORLD_SEED,
         "num_rooms": num_rooms,
@@ -1093,6 +1622,8 @@ def generate_world():
         "portraits_generated": portraits_generated,
         "player_portrait": player_portrait_path,
         "gameover_portrait": gameover_path,
+        "victory_portrait": victory_path,
+        "start_portrait": start_portrait_path,
         "game_mode": GAME_MODE,
         "story_title": story.title,
         "faction_name": story.faction.name if story.faction else "",
@@ -1105,15 +1636,31 @@ def generate_world():
                 "npc_count": len(rr["npc_pool"]),
                 "event_count": len(rr["event_list"]),
                 "quest_count": len(rr["quest_list"]),
+                "environment_portrait": rr.get("environment_portrait"),
             }
             for rr in room_results
         ],
         "validation_report": report.to_dict(),
+        "generation_stats": stats.to_dict(),
+        "music": music_paths,
+        "sfx": sfx_paths,
     }
     with open(MANIFEST_PATH, "w") as f:
         json.dump(manifest, f, indent=2)
 
     phase_bar.update(1)
+
+    # --- Phase 9: Player Guide (optional) ---
+    from config import GENERATE_GUIDE
+    if GENERATE_GUIDE:
+        advance(PHASE_NAMES[10])
+        try:
+            from src.generate.guide_builder import build_guide
+            build_guide(data_dir=DATA_DIR, generate_pdf=False)
+        except Exception as e:
+            logger.warning("Guide generation failed: %s", e)
+        phase_bar.update(1)
+
     phase_bar.close()
 
     logger.info("=== Generation Complete (%d rooms) ===", num_rooms)
@@ -1124,3 +1671,4 @@ def generate_world():
                      len(rr["quest_list"]))
     logger.info("  Manifest: %s", MANIFEST_PATH)
     logger.info("  World Bible: %s", BIBLE_PATH)
+    stats.log_summary(logger)

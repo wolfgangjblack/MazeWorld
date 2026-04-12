@@ -2,7 +2,6 @@ import json
 import math
 import random
 from dataclasses import dataclass, field
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll
 from src.registry import registry
 from src.data.world_data import ENVIRONMENT_TYPES
 from config import (
@@ -45,6 +44,9 @@ NPC_QUEST_TYPE_WEIGHTS = {
 }
 
 
+REQUIREMENT_TYPES = ["tool", "ability", "spell", "item"]
+
+
 @dataclass
 class TileMeta:
     """Metadata for a single tile on the maze, assigned during Phase 2 layout."""
@@ -56,12 +58,19 @@ class TileMeta:
     multi_combat_count: int = 1
     is_story_related: bool = False
     time_gate: str | None = None
+    # Requirement slots (Phase 2 rolls type, enrichment pass fills ref)
+    requires_type: str | None = None   # "tool" | "ability" | "spell" | "item"
+    requires_ref: str | None = None    # filled by enrichment: actual DB name
+    # Combat assignment (filled by enrichment pass from monster DB)
+    assigned_monsters: list | None = None
+    assigned_monster_count: int = 1
     # NPC-specific
     npc_role: str | None = None
     npc_max_exchanges: int = 5
     quest_type: str | None = None
     quest_target_tile: tuple[int, int] | None = None
-    is_story_npc: bool = False  # First quest NPC per room is flagged as story-relevant
+    quest_target_monsters: list | None = None  # filled by enrichment
+    is_story_npc: bool = False
     # Item-specific
     item_category: str | None = None
 
@@ -216,35 +225,6 @@ class Maze:
             self.grid[dy][dx] = self.door_tile_id
             self.door_revealed = True
 
-    def place_items(self, num_food: int = 1, num_drink: int = 1, num_tools: int = 1,
-                    num_weapons: int = 0, num_spell_scrolls: int = 0):
-        open_spaces = self.find_open_spaces()
-        random.shuffle(open_spaces)
-
-        item_ids = registry.item_ids()
-
-        def generate_items_by_class(cls, num_gens):
-            i = 0
-            attempts = 0
-            max_attempts = 1000
-            while i < num_gens and attempts < max_attempts:
-                attempts += 1
-                if not open_spaces:
-                    break
-                x, y = open_spaces.pop()
-                item_id = random.choice(item_ids)
-                item = registry.get_item(item_id)
-
-                if isinstance(item, cls):
-                    self.grid[y][x] = item_id
-                    i += 1
-
-        generate_items_by_class(Food, num_food)
-        generate_items_by_class(Drink, num_drink)
-        generate_items_by_class(Tool, num_tools)
-        generate_items_by_class(Weapon, num_weapons)
-        generate_items_by_class(SpellScroll, num_spell_scrolls)
-
     def count_open_cells(self) -> int:
         """Count all open/path cells (value == 0) in the grid."""
         return sum(1 for row in self.grid for cell in row if cell == 0)
@@ -300,6 +280,10 @@ class Maze:
             if idx in time_gated_indices:
                 tg = random.choice(["day", "night"])
 
+            req_type = None
+            if etype in ("puzzle", "event") and random.random() < 0.10:
+                req_type = random.choice(REQUIREMENT_TYPES)
+
             meta.append(TileMeta(
                 position=pos,
                 tile_type="event",
@@ -308,6 +292,8 @@ class Maze:
                 multi_combat_count=multi_count,
                 is_story_related=(random.random() < 0.10),
                 time_gate=tg,
+                requires_type=req_type,
+                assigned_monster_count=multi_count if etype == "combat" else 1,
             ))
             self.grid[pos[1]][pos[0]] = self.event_tile_id
 

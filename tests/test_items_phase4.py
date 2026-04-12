@@ -94,7 +94,7 @@ def test_player_equip_non_weapon():
     player = PlayerCharacter(x=0, y=0)
     food = Food(
         category="food", name="bread", desc="test",
-        item_stats=ItemStats(nutrition_value=20),
+        item_stats=ItemStats(stamina_value=20),
     )
     player.inventory = {"bread": food}
     msg = player.equip_weapon("bread")
@@ -211,7 +211,7 @@ def test_use_spell_scroll_missing():
 def test_use_spell_scroll_not_scroll():
     player = PlayerCharacter(x=0, y=0)
     food = Food(category="food", name="bread", desc="test",
-                item_stats=ItemStats(nutrition_value=20))
+                item_stats=ItemStats(stamina_value=20))
     player.inventory = {"bread": food}
     msg = player.use_spell_scroll("bread")
     assert "not a spell scroll" in msg.lower()
@@ -222,11 +222,11 @@ def test_use_spell_scroll_not_scroll():
 def _sample_llm_result():
     return {
         "food": [
-            {"name": "forest bread", "desc": "Hearty bread.", "nutrition_value": 20, "health_value": 0},
-            {"name": "berries", "desc": "Wild berries.", "nutrition_value": 10, "health_value": 5},
+            {"name": "forest bread", "desc": "Hearty bread.", "stamina_value": 20, "health_value": 0},
+            {"name": "berries", "desc": "Wild berries.", "stamina_value": 10, "health_value": 5},
         ],
         "drink": [
-            {"name": "spring water", "desc": "Cool water.", "hydration_value": 15, "health_value": 0},
+            {"name": "spring water", "desc": "Cool water.", "stamina_value": 15, "health_value": 0},
         ],
         "tools": [
             {"name": "hatchet", "desc": "A small hatchet.", "attribute": "cutting"},
@@ -304,8 +304,8 @@ def test_consumable_scaling_level_1_no_change():
     """At room_level 1 the multiplier is 1.0 so stats stay at base values."""
     from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=1)
-    assert items["200"]["item_stats"]["nutrition_value"] == 20
-    assert items["300"]["item_stats"]["hydration_value"] == 15
+    assert items["200"]["item_stats"]["stamina_value"] == 20
+    assert items["300"]["item_stats"]["stamina_value"] == 15
 
 
 def test_consumable_scaling_level_3():
@@ -314,10 +314,8 @@ def test_consumable_scaling_level_3():
     import random
     random.seed(42)
     items = _build_items_json(_sample_llm_result(), room_level=3)
-    # nutrition_value 20 * 1.6 = 32
-    assert items["200"]["item_stats"]["nutrition_value"] == 32
-    # hydration_value 15 * 1.6 = 24
-    assert items["300"]["item_stats"]["hydration_value"] == 24
+    assert items["200"]["item_stats"]["stamina_value"] == 32
+    assert items["300"]["item_stats"]["stamina_value"] == 24
     # prices should be > base (base range 5-15, scaled by 1.6)
     assert items["200"]["item_stats"]["price"] >= 8
 
@@ -326,15 +324,15 @@ def test_consumable_scaling_level_4():
     """At room_level 4 the multiplier is 2.0 — stats double."""
     from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=4)
-    assert items["200"]["item_stats"]["nutrition_value"] == 40  # 20 * 2.0
-    assert items["300"]["item_stats"]["hydration_value"] == 30  # 15 * 2.0
+    assert items["200"]["item_stats"]["stamina_value"] == 40
+    assert items["300"]["item_stats"]["stamina_value"] == 30
 
 
 def test_consumable_scaling_high_level_caps_at_4():
     """Room levels above 4 use the level-4 multiplier (2.0)."""
     from src.generate.pipeline_utils import _build_items_json
     items = _build_items_json(_sample_llm_result(), room_level=7)
-    assert items["200"]["item_stats"]["nutrition_value"] == 40  # same as level 4
+    assert items["200"]["item_stats"]["stamina_value"] == 40
 
 
 def test_tool_uses_not_scaled():

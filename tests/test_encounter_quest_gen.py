@@ -223,7 +223,7 @@ class TestItemChecker:
     def test_valid_food_passes(self):
         checker = ItemChecker()
         item = {"name": "Bread", "category": "food",
-                "item_stats": {"nutrition_value": 15}}
+                "item_stats": {"stamina_value": 15}}
         result = checker.check(item)
         assert result.passed
 
@@ -368,7 +368,7 @@ class TestItemValidator:
     def test_food_restores_nothing_fails(self):
         v = ItemValidator()
         item = {"name": "Stale Bread", "category": "food",
-                "item_stats": {"nutrition_value": 0, "hydration_value": 0, "health_value": 0}}
+                "item_stats": {"stamina_value": 0, "health_value": 0}}
         result = v.validate(item)
         assert not result.passed
 

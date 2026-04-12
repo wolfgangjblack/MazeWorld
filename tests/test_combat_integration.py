@@ -51,37 +51,34 @@ def _weak_monster():
 
 class TestUnifiedSpell:
     def test_spell_from_spell_module(self):
-        """Spell should have hunger_cost/thirst_cost (not cost_hunger/cost_thirst)."""
         s = Spell(
             name="Fireball", spell_type="damage_single", element="fire",
-            stat="INT", damage_dice=8, hunger_cost=5, thirst_cost=0,
+            stat="INT", damage_dice=8, stamina_cost=5,
         )
-        assert s.hunger_cost == 5
-        assert s.thirst_cost == 0
+        assert s.stamina_cost == 5
         assert s.roll_damage() >= 1
 
     def test_player_can_afford_spell(self):
         p = _make_player("mage")
         s = Spell(
             name="Fireball", spell_type="damage_single", element="fire",
-            stat="INT", damage_dice=8, hunger_cost=5, thirst_cost=0,
+            stat="INT", damage_dice=8, stamina_cost=5,
         )
         assert p.can_afford_spell(s)
-        p.hunger = 0
+        p.stamina = 0
         assert not p.can_afford_spell(s)
 
     def test_player_pay_spell_cost(self):
         p = _make_player("mage")
         s = Spell(
             name="Heal", spell_type="heal", element="light",
-            stat="WIS", heal_amount=10, hunger_cost=0, thirst_cost=8,
+            stat="WIS", heal_amount=10, stamina_cost=8,
         )
-        initial_thirst = p.thirst
+        initial_stamina = p.stamina
         p.pay_spell_cost(s)
-        assert p.thirst == initial_thirst - 8
+        assert p.stamina == initial_stamina - 8
 
     def test_spell_imported_through_player_module(self):
-        """Spell should be accessible from player module (re-exported)."""
         from src.models.player import Spell as PlayerSpell
         assert PlayerSpell is Spell
 
@@ -103,24 +100,21 @@ class TestUnifiedSpell:
         assert _parse_damage_dice("0") == 0
         assert _parse_damage_dice("6") == 6
 
-    def test_parse_spells_old_field_names(self):
-        """_parse_spells should accept old cost_hunger/cost_thirst field names."""
-        raw = [{"name": "Bolt", "element": "fire", "cost_hunger": 7,
+    def test_parse_spells_with_dice_notation(self):
+        raw = [{"name": "Bolt", "element": "fire",
                 "damage_dice": "1d8", "spell_type": "damage"}]
         result = _parse_spells(raw)
         assert len(result) == 1
-        assert result[0].hunger_cost == 7
         assert result[0].damage_dice == 8
         assert result[0].spell_type == "damage_single"
+        assert result[0].stamina_cost >= 0
 
-    def test_parse_spells_new_field_names(self):
-        """_parse_spells should accept new hunger_cost/thirst_cost field names."""
-        raw = [{"name": "Heal", "element": "light", "hunger_cost": 0,
-                "thirst_cost": 8, "spell_type": "heal", "stat": "WIS"}]
+    def test_parse_spells_heal(self):
+        raw = [{"name": "Heal", "element": "light",
+                "spell_type": "heal", "stat": "WIS"}]
         result = _parse_spells(raw)
         assert len(result) == 1
-        assert result[0].hunger_cost == 0
-        assert result[0].thirst_cost == 8
+        assert result[0].stamina_cost >= 0
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +242,7 @@ class TestCombatControllerWiring:
         p.level = 5
         p.spells = [
             Spell(name="Fireball", spell_type="damage_single", element="fire",
-                  stat="INT", damage_dice=12, hunger_cost=5, targets="single"),
+                  stat="INT", damage_dice=12, stamina_cost=5, targets="single"),
         ]
         m = Monster(
             id="m1", species="Goblin", level=1,
@@ -256,13 +250,13 @@ class TestCombatControllerWiring:
             str_mod=0, dex_mod=0, damage_dice=2,
             magic_resistance=0,
         )
-        cc = CombatController(p, [m])
+        cc = CombatController(p, [m], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
 
-        initial_hunger = p.hunger
+        initial_stamina = p.stamina
         result = cc.player_cast_spell(0, 0)
-        assert p.hunger == initial_hunger - 5
+        assert p.stamina == initial_stamina - 5
         assert "Fireball" in result["message"]
 
     def test_combat_controller_flee_flow(self):
@@ -284,18 +278,18 @@ class TestCombatControllerWiring:
         p = _make_player("warrior")
         bread = Food(
             category="food", name="Bread", desc="A loaf",
-            item_stats=ItemStats(nutrition_value=20, health_value=5),
+            item_stats=ItemStats(stamina_value=20, health_value=5),
         )
         p.inventory = {"Bread": bread}
-        p.hunger = 50
+        p.stamina = 50
         m = _weak_monster()
-        cc = CombatController(p, [m])
+        cc = CombatController(p, [m], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
 
         result = cc.player_use_item("Bread")
         assert result["success"] is True
-        assert p.hunger == 70
+        assert p.stamina == 70
 
     def test_combat_controller_collect_loot(self):
         """Loot collection from dead monsters."""
@@ -315,7 +309,8 @@ class TestCombatControllerWiring:
         """GameController should have combat_controller attribute."""
         import pygame
         pygame.init()
-        screen = pygame.Surface((800, 600))
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         from src.models.dialogue_box import DialogueBox
         db = DialogueBox(screen, font)

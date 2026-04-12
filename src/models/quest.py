@@ -12,8 +12,7 @@ class QuestReward(BaseModel):
 
 class QuestFailurePenalty(BaseModel):
     hp_damage: int = 0
-    hunger_damage: int = 0
-    thirst_damage: int = 0
+    stamina_damage: int = 0
 
 
 class Quest(BaseModel):
@@ -42,12 +41,9 @@ class Quest(BaseModel):
         if self.failure_penalty.hp_damage > 0:
             player.health = max(0, player.health - self.failure_penalty.hp_damage)
             msgs.append(f"Lost {self.failure_penalty.hp_damage} HP")
-        if self.failure_penalty.hunger_damage > 0:
-            player.hunger = max(0, player.hunger - self.failure_penalty.hunger_damage)
-            msgs.append(f"Lost {self.failure_penalty.hunger_damage} hunger")
-        if self.failure_penalty.thirst_damage > 0:
-            player.thirst = max(0, player.thirst - self.failure_penalty.thirst_damage)
-            msgs.append(f"Lost {self.failure_penalty.thirst_damage} thirst")
+        if self.failure_penalty.stamina_damage > 0:
+            player.stamina = max(0, player.stamina - self.failure_penalty.stamina_damage)
+            msgs.append(f"Lost {self.failure_penalty.stamina_damage} stamina")
         return ", ".join(msgs) if msgs else ""
 
 

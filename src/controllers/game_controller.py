@@ -29,7 +29,7 @@ PERIOD_TRANSITION_MESSAGES = {
 class GameController:
     def __init__(self, screen, font, maze, player, npcs, dialogue_box,
                  events=None, quests=None, fog=None, day_night=None,
-                 current_room=0, total_rooms=1):
+                 current_room=0, total_rooms=1, sfx=None):
         self.screen = screen
         self.font = font
         self.maze = maze
@@ -38,6 +38,9 @@ class GameController:
         self.dialogue_box = dialogue_box
         self.events = events or {}
         self.quests = quests or {}
+        self.sfx = sfx
+        self.current_room = current_room
+        self.total_rooms = total_rooms
 
         # Fog of War
         self.fog = fog or FogOfWar()
@@ -57,6 +60,13 @@ class GameController:
         # Build a lookup from grid position to event id
         self.event_position_map: dict[tuple[int, int], str] = {}
         self._build_event_position_map()
+
+        # Build event type map for debug color rendering
+        self._event_type_map: dict[tuple[int, int], str] = {}
+        for pos, eid in self.event_position_map.items():
+            evt = self.events.get(eid)
+            if evt:
+                self._event_type_map[pos] = getattr(evt, 'type', '')
 
         # Check for kill quests already cleared at startup
         self.quest_manager.check_kill_quests_already_cleared(self.player)
@@ -106,14 +116,13 @@ class GameController:
         self.combat_selecting_item = False
         self.combat_selected_item = 0
         self.combat_game_over_selection = 0
+        self.event_selected_choice = 0
 
         # Player menu / save-load state
         self.player_menu_active = False
         self.pending_action = None  # Signals main loop: "save", "load", "quit", "open_pause", "open_full_menu", "open_story", "game_over", "victory", "room_transition"
 
         # Room progression state
-        self.current_room = current_room
-        self.total_rooms = total_rooms
         self.gate_cleared = False
         self._count_total_encounters()
 
@@ -124,6 +133,7 @@ class GameController:
             "rooms_cleared": 0,
         }
 
+        self.dialogue_box.player = self.player
         self.game_view = GameView(screen, font, dialogue_box)
 
     @staticmethod
@@ -182,6 +192,8 @@ class GameController:
             self.dialogue_box.set_item_message(
                 "An exit door has appeared! A gate guardian blocks the way.")
             self.item_message_active = True
+            if self.sfx:
+                self.sfx.play("door_reveal")
 
     def reveal_door_from_quest(self):
         """Called when a quest reward reveals the door."""
@@ -190,20 +202,51 @@ class GameController:
             self.dialogue_box.set_item_message(
                 "A quest has revealed the exit door!")
             self.item_message_active = True
+            if self.sfx:
+                self.sfx.play("door_reveal")
 
     def _build_event_position_map(self):
         """Map event tile positions to event IDs using maze data."""
         if not self.events:
             return
+        import os
+        from src.utils.dataloader_utils import load_json_data
+
+        # Try room-specific maze.json first, then legacy path
+        room_maze = os.path.join("data", "rooms", f"room_{self.current_room}", "maze.json")
+        legacy_maze = "data/maze/maze.json"
+        maze_path = room_maze if os.path.exists(room_maze) else legacy_maze
+
         try:
-            from src.utils.dataloader_utils import load_json_data
-            import os
-            if os.path.exists("data/maze/maze.json"):
-                maze_data = load_json_data("data/maze/maze.json")
+            if os.path.exists(maze_path):
+                maze_data = load_json_data(maze_path)
                 for ep in maze_data.get("event_positions", []):
-                    self.event_position_map[(ep["x"], ep["y"])] = ep["event_id"]
+                    if "x" in ep and "y" in ep and "event_id" in ep:
+                        self.event_position_map[(ep["x"], ep["y"])] = ep["event_id"]
         except Exception:
             pass
+
+        if self.event_position_map:
+            return
+
+        # Fallback: build from event objects that have x,y coords
+        for eid, event in self.events.items():
+            ex = getattr(event, "x", None)
+            ey = getattr(event, "y", None)
+            if ex is not None and ey is not None:
+                self.event_position_map[(ex, ey)] = eid
+
+        if self.event_position_map:
+            return
+
+        # Last resort: scan grid for event tiles and match by index order
+        event_ids = list(self.events.keys())
+        idx = 0
+        for y, row in enumerate(self.maze.grid):
+            for x, cell in enumerate(row):
+                if cell == self.maze.event_tile_id and idx < len(event_ids):
+                    self.event_position_map[(x, y)] = event_ids[idx]
+                    idx += 1
 
     @property
     def has_active_overlay(self) -> bool:
@@ -218,11 +261,13 @@ class GameController:
     # --- Fog of War & Day/Night helpers ---
 
     def _get_visibility_radius(self) -> int:
-        """Calculate current visibility radius (fog + night + torch)."""
+        """Calculate current visibility radius based on time period."""
+        period = self.day_night.current_period
         return self.fog.get_visibility_radius(
             self.player,
             is_night=self.day_night.is_night,
             has_torch=player_has_torch(self.player),
+            time_period=period.value if hasattr(period, 'value') else str(period),
         )
 
     def _update_fog(self):
@@ -284,8 +329,17 @@ class GameController:
                     if event.type == "combat":
                         self._start_full_combat(event)
                     else:
+                        self.day_night.pause()
                         self.dialogue_box.start_event(event)
-                # Wrong time: silently pass over (event stays)
+                else:
+                    # Time-gated: tile preserved, show feedback
+                    time_gate = getattr(event, 'time_gate', 'always')
+                    if time_gate == 'day':
+                        self.dialogue_box.set_item_message("This area stirs only during daylight...")
+                        self.item_message_active = True
+                    elif time_gate == 'night':
+                        self.dialogue_box.set_item_message("Something lurks here... but only at night.")
+                        self.item_message_active = True
             else:
                 self.maze.grid[self.player.y][self.player.x] = 0
         elif self._is_on_door_tile():
@@ -329,6 +383,7 @@ class GameController:
             room_level = getattr(combat_event, 'room_level', 1)
             combat_event.monsters = generate_encounter_monsters(env, room_level)
 
+        self.day_night.pause()
         self.combat_event = combat_event
         self.combat_controller = CombatController(self.player, list(combat_event.monsters))
         self.combat_view = CombatView(self.screen, self.font)
@@ -368,6 +423,8 @@ class GameController:
 
     def _signal_room_transition(self):
         """Signal the main loop to transition to the next room."""
+        if self.sfx:
+            self.sfx.play("door_open")
         if self.current_room >= self.total_rooms - 1:
             self.pending_action = "victory"
             return
@@ -483,9 +540,10 @@ class GameController:
                 dx, dy = 0, -1
             elif event.key == pygame.K_DOWN:
                 dx, dy = 0, 1
-            self.player.move(dx=dx, dy=dy, maze=self.maze, survival_system=self.survival)
-            # Check for game over from starvation
+            self.player.move(dx=dx, dy=dy, maze=self.maze)
             if self.player.health <= 0:
+                if self.sfx:
+                    self.sfx.play("player_death")
                 self.pending_action = "game_over"
                 return
             self.after_move_check()
@@ -497,6 +555,8 @@ class GameController:
                 self.item_message_active = True
                 self.player_at_item = False
                 self.dialogue_box.set_item_message(item_message)
+                if self.sfx:
+                    self.sfx.play("item_pickup")
                 return
             if self.current_npc:
                 self._handle_npc_interaction(self.current_npc)
@@ -506,6 +566,8 @@ class GameController:
             if self.current_npc and isinstance(self.current_npc, MerchantNPC):
                 self._open_shop(self.current_npc)
                 return
+            self.pending_action = "open_spells"
+            return
 
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
@@ -546,9 +608,8 @@ class GameController:
             self.pending_action = "open_pause"
             return
 
-        # M key opens full tabbed menu
-        if event.key == pygame.K_m:
-            self.pending_action = "open_full_menu"
+        if event.key == pygame.K_p:
+            self.pending_action = "open_status"
             return
 
         # B key opens story recap
@@ -566,18 +627,27 @@ class GameController:
         if cc is None:
             return
 
+        # Page Up/Down scrolls combat log
+        if event.key == pygame.K_PAGEUP and self.combat_view:
+            self.combat_view.scroll_log(3)
+            return
+        if event.key == pygame.K_PAGEDOWN and self.combat_view:
+            self.combat_view.scroll_log(-3)
+            return
+
         # Combat is over — handle end-screen input
         if cc.state != CombatState.ONGOING:
             self._handle_combat_end_input(event)
             return
 
-        # Monster turn — auto-execute on any key
         if not cc.is_player_turn():
             if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                prev_hp = self.player.health
                 cc.execute_monster_turn()
-                # Continue executing monster turns until it's the player's turn or combat ends
                 while cc.state == CombatState.ONGOING and not cc.is_player_turn():
                     cc.execute_monster_turn()
+                if self.sfx and self.player.health < prev_hp:
+                    self.sfx.play("player_take_damage")
                 self.combat_selecting_target = False
                 self.combat_selecting_spell = False
                 self.combat_selecting_item = False
@@ -595,6 +665,8 @@ class GameController:
                 if spells:
                     spell = spells[self.combat_selected_spell]
                     if spell.targets == "self" or spell.spell_type in ("heal", "buff_stat", "buff_sustain"):
+                        if self.sfx:
+                            self.sfx.play_spell(spell.spell_type, "cast")
                         cc.player_cast_spell(self.combat_selected_spell, 0)
                         while cc.state == CombatState.ONGOING and not cc.is_player_turn():
                             cc.execute_monster_turn()
@@ -635,27 +707,43 @@ class GameController:
             elif event.key == pygame.K_DOWN:
                 self.combat_selected_target = (self.combat_selected_target + 1) % max(len(alive), 1)
             elif event.key == pygame.K_RETURN:
-                self._execute_player_combat_action(self.combat_selected_action,
-                                                   self.combat_selected_target)
+                action_name = self._grid_action_name(cc)
+                if action_name:
+                    self._execute_combat_by_name(action_name, self.combat_selected_target)
                 self.combat_selecting_target = False
                 self.combat_selected_action = 0
             elif event.key == pygame.K_ESCAPE:
                 self.combat_selecting_target = False
             return
 
-        # Player turn — action menu
-        actions = self._get_combat_actions()
+        # Player turn — action grid (3×2)
+        grid = CombatView.get_action_grid(cc)
+        total_slots = CombatView.GRID_COLS * CombatView.GRID_ROWS
+        cur = self.combat_selected_action
+        row = cur // CombatView.GRID_COLS
+        col = cur % CombatView.GRID_COLS
+
         if event.key == pygame.K_UP:
-            self.combat_selected_action = (self.combat_selected_action - 1) % len(actions)
+            row = (row - 1) % CombatView.GRID_ROWS
+            self.combat_selected_action = row * CombatView.GRID_COLS + col
         elif event.key == pygame.K_DOWN:
-            self.combat_selected_action = (self.combat_selected_action + 1) % len(actions)
+            row = (row + 1) % CombatView.GRID_ROWS
+            self.combat_selected_action = row * CombatView.GRID_COLS + col
+        elif event.key == pygame.K_LEFT:
+            col = (col - 1) % CombatView.GRID_COLS
+            self.combat_selected_action = row * CombatView.GRID_COLS + col
+        elif event.key == pygame.K_RIGHT:
+            col = (col + 1) % CombatView.GRID_COLS
+            self.combat_selected_action = row * CombatView.GRID_COLS + col
         elif event.key == pygame.K_RETURN:
-            action_name = actions[self.combat_selected_action]
+            action_name = self._grid_action_name(cc)
+            if not action_name:
+                return
             if action_name == "Cast Spell":
                 if cc.player.spells:
                     self.combat_selecting_spell = True
                     self.combat_selected_spell = 0
-            elif action_name == "Use Item":
+            elif action_name == "Item":
                 consumables = self._get_combat_consumables()
                 if consumables:
                     self.combat_selecting_item = True
@@ -663,16 +751,23 @@ class GameController:
             elif action_name == "Attack":
                 self.combat_selecting_target = True
                 self.combat_selected_target = 0
-            else:
-                self._execute_player_combat_action(self.combat_selected_action, 0)
+            elif action_name == "Multi-Attack":
+                self._execute_combat_by_name("Multi-Attack", 0)
+            elif action_name == "Weapons":
+                self._execute_combat_by_name("Swap Weapon", 0)
+            elif action_name == "Flee":
+                self._execute_combat_by_name("Flee", 0)
+            elif action_name == "Gamble":
+                self._execute_combat_by_name("Gamble", 0)
 
-    def _get_combat_actions(self) -> list[str]:
-        """Return the list of available combat actions for the current player."""
-        actions = list(CombatView.ACTIONS)  # ["Attack", "Multi-Attack", ...]
-        cc = self.combat_controller
-        if not cc or not cc.player.player_class or cc.player.player_class.archetype != "jester":
-            actions = [a for a in actions if a != "Gamble"]
-        return actions
+    def _grid_action_name(self, cc: CombatController) -> str | None:
+        """Return the action label at the current grid selection, or None."""
+        grid = CombatView.get_action_grid(cc)
+        row = self.combat_selected_action // CombatView.GRID_COLS
+        col = self.combat_selected_action % CombatView.GRID_COLS
+        if row < len(grid) and col < len(grid[row]):
+            return grid[row][col]
+        return None
 
     def _get_combat_consumables(self) -> list[str]:
         """Return names of consumable items usable in combat."""
@@ -685,36 +780,56 @@ class GameController:
             if isinstance(item, (Food, Drink))
         ]
 
-    def _execute_player_combat_action(self, action_index: int, target_index: int):
-        """Execute the selected player action through CombatController."""
+    def _execute_combat_by_name(self, action_name: str, target_index: int):
+        """Execute a combat action by name through CombatController."""
         cc = self.combat_controller
         if cc is None:
             return
 
-        actions = self._get_combat_actions()
-        action_name = actions[action_index] if action_index < len(actions) else "Attack"
+        prev_hp = self.player.health
 
         if action_name == "Attack":
-            cc.player_attack(target_index)
+            if self.sfx:
+                self.sfx.play("dice_roll")
+                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
+                self.sfx.play_weapon_swing(wt)
+            result = cc.player_attack(target_index)
+            if self.sfx and result.get("success"):
+                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
+                self.sfx.play_weapon_hit(wt)
         elif action_name == "Multi-Attack":
+            if self.sfx:
+                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
+                self.sfx.play_weapon_swing(wt)
             cc.player_multi_attack()
         elif action_name == "Cast Spell":
             if cc.player.spells:
-                cc.player_cast_spell(self.combat_selected_spell, target_index)
-        elif action_name == "Use Item":
+                spell = cc.player.spells[self.combat_selected_spell]
+                if self.sfx:
+                    self.sfx.play_spell(spell.spell_type, "cast")
+                result = cc.player_cast_spell(self.combat_selected_spell, target_index)
+                if self.sfx and result.get("total_damage", 0) > 0:
+                    self.sfx.play_spell(spell.spell_type, "impact")
+        elif action_name == "Item":
             consumables = self._get_combat_consumables()
             if consumables:
                 cc.player_use_item(consumables[self.combat_selected_item])
         elif action_name == "Flee":
+            if self.sfx:
+                self.sfx.play("dice_roll")
             cc.player_flee()
         elif action_name == "Gamble":
+            if self.sfx:
+                self.sfx.play("dice_roll")
             cc.player_gamble()
         elif action_name == "Swap Weapon":
             cc.player_swap_weapon()
 
-        # After player action, auto-execute monster turns
         while cc.state == CombatState.ONGOING and not cc.is_player_turn():
             cc.execute_monster_turn()
+
+        if self.sfx and self.player.health < prev_hp:
+            self.sfx.play("player_take_damage")
 
         self.combat_selected_action = 0
 
@@ -760,9 +875,10 @@ class GameController:
             # Clear tile
             self.maze.grid[self.player.y][self.player.x] = 0
 
-            # Stats tracking
-            self.stats["monsters_killed"] += sum(
-                1 for m in combat_event.monsters if not m.is_alive)
+            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
+            self.stats["monsters_killed"] += killed
+            self.player.combat_record["monsters_killed"] += killed
+            self.player.combat_record["combats_won"] += 1
 
             # Quest and encounter tracking
             is_gate = getattr(combat_event, 'is_gate', False)
@@ -788,6 +904,14 @@ class GameController:
         self.combat_controller = None
         self.combat_view = None
         self.combat_event = None
+        if hasattr(self, 'day_night'):
+            self.day_night.resume()
+
+    def _end_event(self):
+        """End the active event and resume time."""
+        self.dialogue_box.end_event()
+        if hasattr(self, 'day_night'):
+            self.day_night.resume()
 
     def _handle_event_input(self, event):
         """Handle keyboard input during an active event."""
@@ -803,6 +927,8 @@ class GameController:
         # Legacy/simple event handling
         if self.dialogue_box.awaiting_roll:
             if event.key == pygame.K_r:
+                if self.sfx:
+                    self.sfx.play("dice_roll")
                 dice_roll = random.randint(1, 20)
                 if current_event.type == "combat":
                     result = current_event.resolve(dice_roll, self.player)
@@ -815,55 +941,109 @@ class GameController:
                 else:
                     result = {"success": False, "message": "Unknown event type."}
 
-                self.dialogue_box.event_context["result"] = result
-                self.dialogue_box.event_context["dice_roll"] = dice_roll
-                self.dialogue_box.awaiting_roll = False
-
-                if result.get("success"):
-                    if result.get("reward_item_id"):
-                        reward_item = registry.get_item(result["reward_item_id"])
-                        if reward_item:
-                            self.player.add_to_inventory(reward_item.clone())
-                    # Handle loot drops from combat
-                    for loot_id in result.get("loot_item_ids", []):
-                        loot_item = registry.get_item(loot_id)
-                        if loot_item:
-                            self.player.add_to_inventory(loot_item.clone())
-
-                # Walk-away for event encounters: don't resolve
-                if result.get("walked_away"):
-                    pass  # Event stays active
-                elif current_event.resolved:
-                    self.maze.grid[self.player.y][self.player.x] = 0
-                    self.quest_manager.on_event_resolved(current_event.id, self.player)
-                    self.resolved_encounters += 1
-                    self._check_door_reveal()
+                self._apply_event_result(result, current_event)
                 return
 
             if event.key == pygame.K_ESCAPE:
-                self.dialogue_box.end_event()
+                self._end_event()
                 return
 
         elif current_event.type in ("puzzle", "event") and not self.dialogue_box.event_context.get("result"):
-            choices = getattr(current_event, 'choices', [])
-            if choices:
-                for i in range(len(choices)):
-                    if event.key == getattr(pygame, f'K_{i+1}', None):
-                        self.dialogue_box.event_context["selected_choice"] = i
+            rendered = self.dialogue_box.event_context.get("rendered_choices", [])
+            total_choices = len(rendered) if rendered else len(getattr(current_event, 'choices', []))
+
+            if event.key == pygame.K_UP:
+                self.event_selected_choice = (self.event_selected_choice - 1) % max(total_choices, 1)
+                self.dialogue_box.event_context["highlight"] = self.event_selected_choice
+                return
+            if event.key == pygame.K_DOWN:
+                self.event_selected_choice = (self.event_selected_choice + 1) % max(total_choices, 1)
+                self.dialogue_box.event_context["highlight"] = self.event_selected_choice
+                return
+
+            if event.key == pygame.K_RETURN:
+                idx = self.event_selected_choice
+                if rendered and 0 <= idx < len(rendered):
+                    rc = rendered[idx]
+                    if rc["kind"] == "tool":
+                        result = current_event.resolve_with_tool(self.player)
+                        self._apply_event_result(result, current_event)
+                    elif rc["kind"] == "ability":
+                        result = current_event.resolve_with_ability(self.player)
+                        self._apply_event_result(result, current_event)
+                    elif rc["kind"] == "spell":
+                        result = current_event.resolve_with_spell(self.player)
+                        self._apply_event_result(result, current_event)
+                    elif rc["kind"] == "walk_away":
+                        result = current_event.resolve(rc["choice_idx"], 0, self.player)
+                        self._apply_event_result(result, current_event)
+                    else:
+                        self.dialogue_box.event_context["selected_choice"] = rc["choice_idx"]
                         self.dialogue_box.awaiting_roll = True
-                        if choices[i].auto_success:
-                            result = current_event.resolve(i, 0, self.player)
-                            self.dialogue_box.event_context["result"] = result
-                            self.dialogue_box.awaiting_roll = False
+                    self.event_selected_choice = 0
+                    return
+                choices = getattr(current_event, 'choices', [])
+                if choices and 0 <= idx < len(choices):
+                    self.dialogue_box.event_context["selected_choice"] = idx
+                    self.dialogue_box.awaiting_roll = True
+                    if choices[idx].auto_success:
+                        result = current_event.resolve(idx, 0, self.player)
+                        self._apply_event_result(result, current_event)
+                    self.event_selected_choice = 0
+                    return
+
+            # Number keys still work as shortcuts
+            if rendered:
+                for i in range(min(len(rendered), 9)):
+                    if event.key == getattr(pygame, f'K_{i+1}', None):
+                        self.event_selected_choice = i
+                        self.dialogue_box.event_context["highlight"] = i
+                        # Simulate enter
+                        fake_event = type(event)
                         return
 
             if event.key == pygame.K_ESCAPE:
-                self.dialogue_box.end_event()
+                self.event_selected_choice = 0
+                self._end_event()
                 return
         else:
             if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                self.dialogue_box.end_event()
+                self._end_event()
                 return
+
+    def _apply_event_result(self, result: dict, current_event):
+        """Apply result from puzzle/event resolution — rewards, quest tracking, cleanup."""
+        self.dialogue_box.event_context["result"] = result
+        self.dialogue_box.event_context.setdefault("dice_roll", 0)
+        self.dialogue_box.awaiting_roll = False
+
+        if result.get("success"):
+            if self.sfx:
+                self.sfx.play("event_complete")
+            if result.get("reward_item_id"):
+                reward_item = registry.get_item(result["reward_item_id"])
+                if reward_item:
+                    self.player.add_to_inventory(reward_item.clone())
+            for loot_id in result.get("loot_item_ids", []):
+                loot_item = registry.get_item(loot_id)
+                if loot_item:
+                    self.player.add_to_inventory(loot_item.clone())
+            money = result.get("money_dropped", 0)
+            if money > 0:
+                self.player.add_money(money)
+                msg = result.get("message", "")
+                result["message"] = f"{msg} Found {money} gold."
+        else:
+            if self.sfx and result.get("damage"):
+                self.sfx.play("player_take_damage")
+
+        if result.get("walked_away"):
+            pass
+        elif current_event.resolved:
+            self.maze.grid[self.player.y][self.player.x] = 0
+            self.quest_manager.on_event_resolved(current_event.id, self.player)
+            self.resolved_encounters += 1
+            self._check_door_reveal()
 
     def _handle_combat_input(self, event):
         """Handle input during multi-turn combat."""
@@ -879,7 +1059,7 @@ class GameController:
                 self.combat_target_index = 0
                 self._advance_combat_to_next_turn(combat_event)
             elif event.key == pygame.K_ESCAPE:
-                self.dialogue_box.end_event()
+                self._end_event()
             return
 
         if phase == "player_turn":
@@ -1038,6 +1218,8 @@ class GameController:
         self.dialogue_box.set_combat_phase("victory")
         combat_event.resolved = True
         self.dialogue_box.add_combat_log("Victory!")
+        if self.sfx:
+            self.sfx.play("event_complete")
 
         # Track stats
         if hasattr(combat_event, 'monsters'):
@@ -1071,24 +1253,21 @@ class GameController:
             self.maze.grid[self.player.y][self.player.x] = 0
             self.quest_manager.on_event_resolved(combat_event.id, self.player)
         elif is_gate and getattr(combat_event, 'player_fled', False):
-            # Gate failure: player flees — pass through with heavy survival penalty
             penalty_hp = 20 + self.current_room * 10
-            penalty_hunger = 25
-            penalty_thirst = 25
+            penalty_stamina = 25
             self.player.health = max(1, self.player.health - penalty_hp)
-            self.player.hunger = max(0, self.player.hunger - penalty_hunger)
-            self.player.thirst = max(0, self.player.thirst - penalty_thirst)
+            self.player.stamina = max(0, self.player.stamina - penalty_stamina)
             self.gate_cleared = True
             self.dialogue_box.set_item_message(
                 f"You flee the gate guardian! Penalty: -{penalty_hp} HP, "
-                f"-{penalty_hunger} hunger, -{penalty_thirst} thirst. "
-                "The door is now open.")
+                f"-{penalty_stamina} stamina. The door is now open.")
             self.item_message_active = True
 
-        self.dialogue_box.end_event()
+        self._end_event()
 
-        # Check for player death after combat
         if self.player.health <= 0:
+            if self.sfx:
+                self.sfx.play("player_death")
             self.pending_action = "game_over"
 
     def _handle_npc_interaction(self, npc):
@@ -1149,7 +1328,11 @@ class GameController:
 
     def get_quest_log(self) -> dict:
         """Return quests organized by status for the quest log view."""
-        return self.quest_manager.get_quest_log()
+        log = self.quest_manager.get_quest_log()
+        log["combat_stats"] = dict(self.player.combat_record)
+        log["encounters_cleared"] = self.resolved_encounters
+        log["total_encounters"] = self.total_encounters
+        return log
 
     def get_follower_info(self) -> list[dict]:
         """Return follower info for the player menu."""
@@ -1188,13 +1371,13 @@ class GameController:
         inv_length = len(inventory)
         if event.key == pygame.K_UP:
             self.player.selected_item_index = (self.player.selected_item_index - 1) % inv_length
+            self._sync_inv_scroll(inv_length)
         elif event.key == pygame.K_DOWN:
             self.player.selected_item_index = (self.player.selected_item_index + 1) % inv_length
-        elif event.key == pygame.K_RETURN:
-            message = self.player.use_item()
-            self.item_message_active = True
-            self.dialogue_box.set_item_message(message)
-        elif event.key == pygame.K_u:
+            self._sync_inv_scroll(inv_length)
+        elif event.key in (pygame.K_RETURN, pygame.K_u):
+            if self.sfx:
+                self._play_item_use_sfx()
             message = self.player.use_item()
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
@@ -1208,8 +1391,18 @@ class GameController:
             # Show item detail
             self.item_detail_active = True
 
+    def _sync_inv_scroll(self, inv_length):
+        visible = 15
+        scroll = getattr(self.player, '_inv_scroll', 0)
+        idx = self.player.selected_item_index
+        if idx < scroll:
+            scroll = idx
+        elif idx >= scroll + visible:
+            scroll = idx - visible + 1
+        self.player._inv_scroll = max(0, min(scroll, inv_length - visible))
+
     def update(self, current_time):
-        """Update game logic (NPC movement, real-time day cycle, etc.)"""
+        """Update game logic (NPC movement, real-time day cycle, stamina drain, etc.)"""
         # Advance real-time day/night cycle
         self.day_night.update_realtime(current_time)
         prev_period = self.day_night.current_period
@@ -1225,6 +1418,19 @@ class GameController:
                     self.dialogue_box.set_item_message(msg)
                     self.item_message_active = True
 
+        # Stamina drain (real-time based)
+        if hasattr(self, '_last_survival_ms'):
+            delta = current_time - self._last_survival_ms
+        else:
+            delta = 0
+        self._last_survival_ms = current_time
+        if delta > 0:
+            warnings = self.survival.on_time_update(self.player, delta)
+            for w in warnings:
+                if not self.has_active_overlay and not self.item_message_active:
+                    self.dialogue_box.set_item_message(w)
+                    self.item_message_active = True
+
         if self.dialogue_box.generating:
             self.dialogue_box.check_generation()
 
@@ -1238,6 +1444,25 @@ class GameController:
         if not self.inventory_active and not self.dialogue_box.dialogue_active:
             self.current_npc = self.player.get_nearby_npc(self.npcs)
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
+
+    def _play_item_use_sfx(self):
+        """Play the appropriate SFX for the currently selected inventory item."""
+        if not self.sfx:
+            return
+        from src.models.items import Food, Drink
+        inv = self.player.get_inventory()
+        if not inv:
+            return
+        idx = self.player.selected_item_index
+        if idx >= len(inv):
+            return
+        _, item = inv[idx]
+        if isinstance(item, Food):
+            self.sfx.play("item_food")
+        elif isinstance(item, Drink):
+            self.sfx.play("item_drink")
+        else:
+            self.sfx.play("item_tool")
 
     def draw(self, current_time):
         """Draw the current game state."""
@@ -1286,5 +1511,7 @@ class GameController:
             night_alpha=night_alpha,
             time_period=period,
             day_number=self.day_night.day_number,
+            period_progress=self.day_night.period_progress,
             item_detail_active=self.item_detail_active,
+            event_type_map=self._event_type_map if self.debug_reveal else None,
         )

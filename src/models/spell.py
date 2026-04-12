@@ -28,15 +28,34 @@ def elemental_multiplier(attack_element: str, defender_element: Optional[str]) -
     return 1.0
 
 
+# Stamina cost derived from damage dice (explicit table + fallback)
+SPELL_STAMINA_BY_DICE = {4: 2, 6: 4, 8: 5, 10: 7}
+
+
+def compute_stamina_cost(spell_type: str, damage_dice: int = 0,
+                         targets: str = "single") -> int:
+    """Derive stamina cost from spell type and damage dice."""
+    if spell_type == "heal":
+        return 5
+    if spell_type == "buff_stat":
+        return 3
+    if spell_type == "buff_sustain":
+        return 2
+    base = SPELL_STAMINA_BY_DICE.get(damage_dice, max(2, damage_dice // 2))
+    if targets == "multi" or spell_type == "damage_multi":
+        return min(10, base * 2)
+    return base
+
+
 class Spell(BaseModel):
     """A spell that can be cast in combat.
 
     spell_type:
-      "damage_single"  - deal damage to 1 target   (costs 5 hunger)
-      "damage_multi"   - deal damage to all targets (costs 10 hunger)
-      "heal"           - restore HP to self          (costs 8 thirst)
-      "buff_stat"      - +2 to a stat for N turns    (costs 5 thirst)
-      "buff_sustain"   - restore hunger/thirst/turn   (costs 5 hunger)
+      "damage_single"  - deal damage to 1 target
+      "damage_multi"   - deal damage to all targets
+      "heal"           - restore HP to self
+      "buff_stat"      - +2 to a stat for N turns
+      "buff_sustain"   - restore stamina per turn
     """
 
     name: str
@@ -48,8 +67,7 @@ class Spell(BaseModel):
     buff_stat: Optional[str] = None  # which stat to buff
     buff_value: int = 2  # how much the buff adds
     buff_duration: int = 3  # turns
-    hunger_cost: int = 0
-    thirst_cost: int = 0
+    stamina_cost: int = 0
     targets: str = "single"  # "single" | "multi" | "self"
     description: str = ""
 
@@ -60,13 +78,12 @@ class Spell(BaseModel):
         return random.randint(1, self.damage_dice)
 
 
-# Default spell cost table (from PDR)
 SPELL_COSTS = {
-    "damage_single": {"hunger": 5, "thirst": 0},
-    "damage_multi": {"hunger": 10, "thirst": 0},
-    "heal": {"hunger": 0, "thirst": 8},
-    "buff_stat": {"hunger": 0, "thirst": 5},
-    "buff_sustain": {"hunger": 5, "thirst": 0},
-    "warrior_multi": {"hunger": 8, "thirst": 0},
-    "warrior_utility": {"hunger": 5, "thirst": 0},
+    "damage_single": 4,
+    "damage_multi": 8,
+    "heal": 5,
+    "buff_stat": 3,
+    "buff_sustain": 2,
+    "warrior_multi": 6,
+    "warrior_utility": 3,
 }

@@ -99,7 +99,11 @@ class GameRegistry:
     # -- npcs ----------------------------------------------------------------
 
     def _load_npcs(self):
-        self.npc_templates: list = load_json_data('data/npcs/npcs.json')
+        path = 'data/npcs/npcs.json'
+        if os.path.exists(path):
+            self.npc_templates: list = load_json_data(path)
+        else:
+            self.npc_templates: list = []
 
     def get_active_npcs(self) -> list[dict]:
         """Return only the NPC dicts that are selected (active) for this world."""
@@ -216,8 +220,11 @@ class GameRegistry:
     # -- starter inventory ---------------------------------------------------
 
     def _load_starter_inventory(self):
-        starter_data = load_json_data('data/player/starter_inventory.json')
+        path = 'data/player/starter_inventory.json'
         self.starter_inventory: dict = {}
+        if not os.path.exists(path):
+            return
+        starter_data = load_json_data(path)
         for item_name, data in starter_data.items():
             self.starter_inventory[item_name] = create_item_from_data(0, data)
 

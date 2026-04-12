@@ -15,8 +15,7 @@ import time
 import pygame
 
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS,
-    NUM_WEAPONS, NUM_SPELL_SCROLLS, WORLD_SEED, NUM_ROOMS,
+    SCREEN_WIDTH, SCREEN_HEIGHT, WORLD_SEED, NUM_ROOMS,
 )
 from src.registry import registry
 from src.models.maze import Maze
@@ -38,6 +37,7 @@ from src.views.gameover_view import GameOverView
 from src.views.menu_view import MenuView
 from src.views.tutorial_view import TutorialView
 from src.views.story_view import StoryView
+from src.views.credits_view import CreditsView
 from src.systems import save_manager
 from src.systems.fog_of_war import FogOfWar
 from src.models.time import DayNightCycle
@@ -69,7 +69,7 @@ def run_generation():
 
 
 def setup_game(screen, font, player_name="Adventurer", selected_class=None,
-               room_index=0, player=None):
+               room_index=0, player=None, sfx=None):
     """Load game data and create all game objects. Returns GameController.
 
     If ``player`` is provided (room transition), reuse it instead of creating new.
@@ -94,7 +94,6 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None,
         maze = Maze()
         maze.generate()
         maze.place_event_tiles()
-        maze.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS, NUM_WEAPONS, NUM_SPELL_SCROLLS)
         player_start = None
         npc_positions = {}
 
@@ -158,10 +157,10 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None,
     quests = registry.quest_registry
 
     return GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
-                          current_room=room_index, total_rooms=total_rooms)
+                          current_room=room_index, total_rooms=total_rooms, sfx=sfx)
 
 
-def setup_game_from_save(screen, font, save_state):
+def setup_game_from_save(screen, font, save_state, sfx=None):
     """Restore a full game from a SaveState. Returns GameController."""
     from src.models.follower import Follower
 
@@ -246,9 +245,8 @@ def setup_game_from_save(screen, font, save_state):
     if save_state.day_night_data:
         day_night = DayNightCycle.deserialize(save_state.day_night_data)
 
-    # --- Build controller ---
     gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
-                        fog=fog, day_night=day_night)
+                        fog=fog, day_night=day_night, sfx=sfx)
 
     # Restore event position map from save
     gc.event_position_map = {}
@@ -292,10 +290,21 @@ def main():
     font = pygame.font.Font(None, 32)
     clock = pygame.time.Clock()
 
+    # --- Music ---
+    from src.systems.music_controller import MusicController
+    music = MusicController(registry.manifest.get("music", {}) if registry.manifest else {})
+    music.play_start_screen()
+
+    # --- SFX ---
+    from src.systems.sfx_controller import SFXController
+    sfx = SFXController(registry.manifest.get("sfx", {}) if registry.manifest else {})
+
     # --- Screen state machine ---
     screen_ctrl = ScreenController(ScreenState.START)
     _cached_has_saves = save_manager.has_saves()
-    start_view = StartView(screen, font, has_saves=_cached_has_saves)
+    _start_portrait = registry.manifest.get("start_portrait") if registry.manifest else None
+    start_view = StartView(screen, font, has_saves=_cached_has_saves,
+                           portrait_path=_start_portrait)
     config_view = ConfigView(screen, font)
     class_select_view = None
     room_intro_view = None
@@ -325,9 +334,10 @@ def main():
     menu_view = None
     tutorial_view = None
     story_view = None
+    credits_view = None
 
     def _handle_start() -> str | None:
-        nonlocal class_select_view, load_game_view, load_source, tutorial_view
+        nonlocal class_select_view, load_game_view, load_source, tutorial_view, credits_view
         start_view.has_saves = _cached_has_saves
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -354,6 +364,10 @@ def main():
                     return None
                 if action == "config":
                     screen_ctrl.replace(ScreenState.CONFIG)
+                    return None
+                if action == "credits":
+                    credits_view = CreditsView(screen, font)
+                    screen_ctrl.push(ScreenState.CREDITS)
                     return None
                 if action == "quit":
                     return "quit"
@@ -401,7 +415,11 @@ def main():
                                 "The air hums with untold stories, and the path ahead "
                                 "promises both peril and wonder."
                             )
-                        env_portrait = registry.manifest.get("environment_portrait") if registry.manifest else None
+                        env_portrait = None
+                        if registry.manifest:
+                            rooms = registry.manifest.get("rooms", [])
+                            if rooms:
+                                env_portrait = rooms[0].get("environment_portrait")
                         room_intro_view = RoomIntroView(
                             screen, font, env_name, env_type, story_text,
                             portrait_path=env_portrait,
@@ -428,7 +446,10 @@ def main():
                         player = game_controller.player
                         game_controller = setup_game(
                             screen, font, room_index=current_room_index,
-                            player=player)
+                            player=player, sfx=sfx)
+                    if game_controller is not None:
+                        music.play_maze(game_controller.maze.environment)
+                        sfx.play_ambience(game_controller.maze.environment)
                     screen_ctrl.replace(ScreenState.GAMEPLAY)
                     return None
         if room_intro_view:
@@ -442,17 +463,37 @@ def main():
     victory_view = None
     # Accumulated stats across rooms
     game_stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
+    # Music state tracking for smooth transitions
+    _was_in_combat = False
+    _was_in_event = False
 
     def _handle_gameplay() -> str | None:
         nonlocal game_controller, gameplay_start_time, player_menu_view
         nonlocal load_game_view, load_source, current_room_index
         nonlocal pause_view, gameover_view, menu_view
         nonlocal room_intro_view, level_up_view, game_stats, victory_view, story_view
+        nonlocal _was_in_combat, _was_in_event
 
         if game_controller is None:
             game_controller = setup_game(screen, font, player_name, selected_class,
-                                         room_index=current_room_index)
+                                         room_index=current_room_index, sfx=sfx)
             gameplay_start_time = time.time()
+            music.play_maze(game_controller.maze.environment)
+            sfx.play_ambience(game_controller.maze.environment)
+
+        # --- Music: detect combat/event enter/exit ---
+        in_combat = game_controller.combat_controller is not None
+        in_event = game_controller.dialogue_box.event_active
+
+        if in_combat and not _was_in_combat:
+            music.play_combat()
+        elif in_event and not _was_in_event and not in_combat:
+            music.play_puzzle_event()
+        elif not in_combat and not in_event and (_was_in_combat or _was_in_event):
+            music.restore_maze()
+
+        _was_in_combat = in_combat
+        _was_in_event = in_event
 
         result = game_controller.run()
 
@@ -469,13 +510,28 @@ def main():
             return None
 
         if result == "open_pause":
+            game_controller.day_night.pause()
             can_save = not game_controller.has_active_overlay
-            pause_view = PauseView(screen, font, can_save=can_save)
+            pause_view = PauseView(screen, font, can_save=can_save,
+                                    has_saves=_cached_has_saves)
             screen_ctrl.push(ScreenState.PAUSE)
             return None
 
         if result == "open_full_menu":
+            game_controller.day_night.pause()
             menu_view = MenuView(screen, font, game_controller.player)
+            screen_ctrl.push(ScreenState.PLAYER_MENU)
+            return None
+
+        if result == "open_status":
+            game_controller.day_night.pause()
+            menu_view = MenuView(screen, font, game_controller.player, initial_tab="stats")
+            screen_ctrl.push(ScreenState.PLAYER_MENU)
+            return None
+
+        if result == "open_spells":
+            game_controller.day_night.pause()
+            menu_view = MenuView(screen, font, game_controller.player, initial_tab="spells")
             screen_ctrl.push(ScreenState.PLAYER_MENU)
             return None
 
@@ -499,6 +555,7 @@ def main():
             return None
 
         if result == "game_over":
+            music.play_game_over()
             go_portrait = None
             if registry.manifest:
                 go_portrait = registry.manifest.get("gameover_portrait")
@@ -524,10 +581,13 @@ def main():
             if current_room_index >= total_rooms:
                 # Final room cleared — victory!
                 game_stats["rooms_cleared"] += 1
+                music.play_victory()
                 player = game_controller.player
+                vic_portrait = registry.manifest.get("victory_portrait") if registry.manifest else None
                 victory_view = VictoryView(
                     screen, font, player, game_stats, total_rooms,
-                    story_paragraph=narrative.get("victory", ""))
+                    story_paragraph=narrative.get("victory", ""),
+                    portrait_path=vic_portrait)
                 screen_ctrl.replace(ScreenState.VICTORY)
                 return None
 
@@ -538,14 +598,16 @@ def main():
             return None
 
         if result == "victory":
-            # Direct victory signal (final boss defeated)
             for k in game_stats:
                 game_stats[k] += game_controller.stats.get(k, 0)
+            music.play_victory()
             player = game_controller.player
             total_rooms = game_controller.total_rooms
+            vic_portrait = registry.manifest.get("victory_portrait") if registry.manifest else None
             victory_view = VictoryView(
                 screen, font, player, game_stats, total_rooms,
-                story_paragraph=narrative.get("victory", ""))
+                story_paragraph=narrative.get("victory", ""),
+                portrait_path=vic_portrait)
             screen_ctrl.replace(ScreenState.VICTORY)
             return None
 
@@ -565,6 +627,8 @@ def main():
                     action = menu_view.handle_input(event)
                     if action == "close":
                         menu_view = None
+                        if game_controller:
+                            game_controller.day_night.resume()
                         screen_ctrl.pop()
                         return None
             menu_view.draw()
@@ -579,6 +643,8 @@ def main():
             if event.type == pygame.KEYDOWN:
                 action = player_menu_view.handle_input(event)
                 if action == "back":
+                    if game_controller:
+                        game_controller.day_night.resume()
                     screen_ctrl.pop()
                     return None
                 if action == "save":
@@ -621,6 +687,8 @@ def main():
     def _handle_pause() -> str | None:
         nonlocal pause_view, game_controller, gameplay_start_time
         nonlocal accumulated_play_time, _cached_has_saves
+        nonlocal menu_view, player_menu_view, story_view
+        nonlocal load_game_view, load_source
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -628,7 +696,52 @@ def main():
             if event.type == pygame.KEYDOWN:
                 action = pause_view.handle_input(event)
                 if action == "resume":
+                    game_controller.day_night.resume()
                     screen_ctrl.pop()
+                    return None
+                if action == "inventory":
+                    screen_ctrl.pop()
+                    game_controller.inventory_active = True
+                    return None
+                if action == "rest":
+                    screen_ctrl.pop()
+                    game_controller.rest_menu_active = True
+                    game_controller.dialogue_box.set_item_message(
+                        "Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
+                    game_controller.item_message_active = True
+                    return None
+                if action == "status":
+                    menu_view = MenuView(screen, font, game_controller.player, initial_tab="stats")
+                    screen_ctrl.pop()
+                    screen_ctrl.push(ScreenState.PLAYER_MENU)
+                    return None
+                if action == "spells":
+                    menu_view = MenuView(screen, font, game_controller.player, initial_tab="spells")
+                    screen_ctrl.pop()
+                    screen_ctrl.push(ScreenState.PLAYER_MENU)
+                    return None
+                if action == "quest_log":
+                    screen_ctrl.pop()
+                    game_controller.quest_log_active = True
+                    return None
+                if action == "story":
+                    story = registry.get_story()
+                    room_beat = ""
+                    room_name = ""
+                    if story:
+                        beat = next(
+                            (b for b in story.beats
+                             if b.room_id == f"room_{current_room_index}"), None)
+                        if beat:
+                            room_beat = beat.summary
+                    if game_controller:
+                        room_name = game_controller.maze.environment_name or ""
+                    story_view = StoryView(
+                        screen, font, story=story,
+                        room_story_beat=room_beat, room_name=room_name,
+                    )
+                    screen_ctrl.pop()
+                    screen_ctrl.push(ScreenState.STORY)
                     return None
                 if action == "save":
                     elapsed = time.time() - gameplay_start_time
@@ -638,12 +751,22 @@ def main():
                             game_controller, WORLD_SEED, total_time,
                         )
                         _cached_has_saves = True
+                        pause_view.has_saves = True
                         pause_view.set_status("Game saved!")
                     except Exception as e:
                         pause_view.set_status(f"Save failed: {e}", is_error=True)
                     return None
+                if action == "load":
+                    saves = save_manager.list_saves()
+                    load_game_view = LoadGameView(screen, font, saves)
+                    load_source = "gameplay"
+                    screen_ctrl.pop()
+                    screen_ctrl.push(ScreenState.LOAD_GAME)
+                    return None
                 if action == "quit_to_start":
                     game_controller = None
+                    music.play_start_screen()
+                    sfx.stop_ambience()
                     screen_ctrl.reset_to(ScreenState.START)
                     return None
                 if action == "exit_game":
@@ -676,6 +799,8 @@ def main():
                     return None
                 if action == "quit_to_start":
                     game_controller = None
+                    music.play_start_screen()
+                    sfx.stop_ambience()
                     screen_ctrl.reset_to(ScreenState.START)
                     return None
 
@@ -694,6 +819,8 @@ def main():
                 action = victory_view.handle_input(event)
                 if action == "new_game":
                     game_controller = None
+                    music.play_start_screen()
+                    sfx.stop_ambience()
                     screen_ctrl.reset_to(ScreenState.START)
                     return None
                 if action == "quit":
@@ -732,10 +859,12 @@ def main():
                     # Restore game from save
                     try:
                         game_controller = setup_game_from_save(
-                            screen, font, save_state,
+                            screen, font, save_state, sfx=sfx,
                         )
                         accumulated_play_time = save_state.time_played_seconds
                         gameplay_start_time = time.time()
+                        music.play_maze(game_controller.maze.environment)
+                        sfx.play_ambience(game_controller.maze.environment)
                         screen_ctrl.reset_to(ScreenState.GAMEPLAY)
                     except Exception as e:
                         load_game_view.error_message = f"Load failed: {e}"
@@ -835,7 +964,7 @@ def main():
                     player = game_controller.player
                     game_controller = setup_game(
                         screen, font, room_index=current_room_index,
-                        player=player)
+                        player=player, sfx=sfx)
                     # Transfer stats
                     game_controller.stats = dict(game_stats)
                     screen_ctrl.replace(ScreenState.GAMEPLAY)
@@ -856,6 +985,8 @@ def main():
                     if result == "quit":
                         return "quit"
                     if result == "menu":
+                        music.play_start_screen()
+                        sfx.stop_ambience()
                         screen_ctrl.reset_to(ScreenState.START)
                         return None
         if victory_view:
@@ -897,6 +1028,21 @@ def main():
         clock.tick(60)
         return None
 
+    def _handle_credits() -> str | None:
+        nonlocal credits_view
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            if event.type == pygame.KEYDOWN:
+                action = credits_view.handle_input(event)
+                if action == "back":
+                    screen_ctrl.pop()
+                    return None
+        credits_view.draw()
+        pygame.display.flip()
+        clock.tick(60)
+        return None
+
     screen_handlers: dict[ScreenState, callable] = {
         ScreenState.START: _handle_start,
         ScreenState.TUTORIAL: _handle_tutorial,
@@ -911,6 +1057,7 @@ def main():
         ScreenState.LEVEL_UP: _handle_level_up,
         ScreenState.VICTORY: _handle_victory,
         ScreenState.STORY: _handle_story,
+        ScreenState.CREDITS: _handle_credits,
     }
 
     running = True

@@ -149,7 +149,7 @@ class LlamaPromptSet(PromptSet):
                 system=(
                     "You generate combat encounters for a fantasy game. "
                     "Output a JSON object with: name, description, difficulty (1-5), "
-                    "damage_type (health|hunger|thirst), damage_range ([min,max]). "
+                    "damage_type (health|stamina), damage_range ([min,max]). "
                     "Name and describe encounters using the world's lore when provided — "
                     "faction creatures, story-relevant hazards."
                 ),
@@ -168,18 +168,22 @@ class LlamaPromptSet(PromptSet):
             return LLMRequest(
                 system=(
                     "You generate puzzle encounters for a fantasy game. "
+                    "Puzzles are ENVIRONMENTAL obstacles: ancient mechanisms, natural hazards, magical seals. "
                     "Output a JSON object with: name, description, difficulty (1-5), "
                     "choices (array with: text, stat_check, tool_attribute, dc, auto_success). "
-                    "Include 2-3 choices. One should be a safe walk-away option. "
-                    "Name and describe puzzles using the world's lore when provided — "
-                    "faction mechanisms, story-relevant obstacles."
+                    "Include 2-3 choices plus a walk-away option. "
+                    "Choice text must describe a NARRATIVE ACTION, not a stat label. "
+                    "GOOD: 'Shoulder the boulder aside' BAD: 'Attempt a STR check'. "
+                    "Descriptions must be vivid scenes, not generic placeholders."
                 ),
                 examples=[
                     ("environment: 'cave', env_name: 'Gloomhollow'",
-                     '{"name": "Locked Chest", "description": "A heavy chest with a strange mechanism...", '
+                     '{"name": "Collapsed Passage", "description": "Jagged rocks and shattered support beams block the narrow tunnel. '
+                     'Dust still settles from a recent cave-in, and faint air currents suggest open space beyond.", '
                      '"difficulty": 2, "choices": ['
-                     '{"text": "Force it open", "stat_check": "health", "tool_attribute": null, "dc": 12, "auto_success": false}, '
-                     '{"text": "Walk away", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}'),
+                     '{"text": "Heave the largest stones aside with raw strength", "stat_check": "STR", "tool_attribute": null, "dc": 12, "auto_success": false}, '
+                     '{"text": "Carefully pick your way through the gaps", "stat_check": "DEX", "tool_attribute": null, "dc": 14, "auto_success": false}, '
+                     '{"text": "Turn back and find another route", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}'),
                 ],
                 user_message=f"environment: '{env}', env_name: '{env_name}'{ctx_suffix}",
                 max_tokens=200,
@@ -249,8 +253,8 @@ class LlamaPromptSet(PromptSet):
                 "You generate environment-themed items for a fantasy game. "
                 "Output a JSON object with keys: food (4 items), drink (4 items), "
                 "tools (3 items), weapons (3 items), spell_scrolls (2 items). "
-                "Each food: {name, desc, nutrition_value, health_value}. "
-                "Each drink: {name, desc, hydration_value, health_value}. "
+                "Each food: {name, desc, stamina_value, health_value}. "
+                "Each drink: {name, desc, stamina_value, health_value}. "
                 "Each tool: {name, desc, attribute (bludgeon|cutting|digging|climbing)}. "
                 "Each weapon: {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}. "
                 "Each spell_scroll: {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}. "
@@ -260,17 +264,17 @@ class LlamaPromptSet(PromptSet):
                 (
                     "environment: 'forest', name: 'Whisperwood', room_level: 1",
                     '{"food": [{"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", '
-                    '"nutrition_value": 20, "health_value": 0}, {"name": "wild berries", '
-                    '"desc": "Sweet ripe berries.", "nutrition_value": 10, "health_value": 5}, '
+                    '"stamina_value": 20, "health_value": 0}, {"name": "wild berries", '
+                    '"desc": "Sweet ripe berries.", "stamina_value": 10, "health_value": 5}, '
                     '{"name": "roasted rabbit", "desc": "Campfire-roasted rabbit.", '
-                    '"nutrition_value": 25, "health_value": 10}, {"name": "honey cake", '
-                    '"desc": "Sticky-sweet cake with wild honey.", "nutrition_value": 15, "health_value": 5}], '
+                    '"stamina_value": 25, "health_value": 10}, {"name": "honey cake", '
+                    '"desc": "Sticky-sweet cake with wild honey.", "stamina_value": 15, "health_value": 5}], '
                     '"drink": [{"name": "spring water", "desc": "Cool forest spring water.", '
-                    '"hydration_value": 15, "health_value": 0}, {"name": "herbal tea", '
-                    '"desc": "Soothing forest herb tea.", "hydration_value": 20, "health_value": 10}, '
+                    '"stamina_value": 15, "health_value": 0}, {"name": "herbal tea", '
+                    '"desc": "Soothing forest herb tea.", "stamina_value": 20, "health_value": 10}, '
                     '{"name": "berry juice", "desc": "Fresh wild berry juice.", '
-                    '"hydration_value": 10, "health_value": 5}, {"name": "dew drops", '
-                    '"desc": "Morning dew from broad leaves.", "hydration_value": 10, "health_value": 0}], '
+                    '"stamina_value": 10, "health_value": 5}, {"name": "dew drops", '
+                    '"desc": "Morning dew from broad leaves.", "stamina_value": 10, "health_value": 0}], '
                     '"tools": [{"name": "hatchet", "desc": "A small hatchet.", "attribute": "cutting"}, '
                     '{"name": "climbing vines", "desc": "Strong woven vines.", "attribute": "climbing"}, '
                     '{"name": "root digger", "desc": "Curved digging tool.", "attribute": "digging"}], '
@@ -339,8 +343,9 @@ class LlamaPromptSet(PromptSet):
                 "You generate 4 player classes for a fantasy RPG. Output a JSON array of 4 objects. "
                 "Each: name, archetype (warrior|mage|healer|jester), flavor_text, starting_weapon, "
                 "stats ({STR,DEX,CON,INT,WIS,CHA,LUCK} totaling 72), "
-                "abilities [{name,description,stat,hunger_cost,thirst_cost}], "
-                "spells [{name,description,element,damage_dice,spell_type,hunger_cost,thirst_cost}], "
+                "abilities [{name,description,stat}], "
+                "spells [{name,description,element,spell_type,stat,targets (single|multi|self)}]. "
+                "Do NOT include damage_dice, hunger_cost, thirst_cost, or stamina_cost — the system assigns these. "
                 "portrait_prompt, ability_pool (4 extra abilities), spell_pool (4 extra spells). "
                 "Warrior: STR/CON 14-18, 4 abilities, no spells. "
                 "Mage: INT 14-18, 4 spells (2 damage, 2 utility). "
@@ -502,9 +507,10 @@ class LlamaPromptSet(PromptSet):
 
     def event_batch_generation(self, room_env: dict, room_story: str,
                                event_type: str, event_slots: list[dict],
-                               story_context: str) -> LLMRequest:
+                               story_context: str, **kwargs) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
-        return ClaudePromptSet().event_batch_generation(room_env, room_story, event_type, event_slots, story_context)
+        return ClaudePromptSet().event_batch_generation(
+            room_env, room_story, event_type, event_slots, story_context, **kwargs)
 
     def dialogue_context_generation(self, room_env: dict, room_story: str,
                                     npc_data: list[dict], story_context: str) -> LLMRequest:
@@ -539,10 +545,22 @@ class LlamaPromptSet(PromptSet):
 
     def room_story_beat_generation(self, overarching_story: dict,
                                    room_env: dict, room_index: int,
-                                   prior_beats: list[dict]) -> LLMRequest:
+                                   prior_beats: list[dict],
+                                   num_rooms: int = 5) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
         return ClaudePromptSet().room_story_beat_generation(
-            overarching_story, room_env, room_index, prior_beats)
+            overarching_story, room_env, room_index, prior_beats, num_rooms)
+
+    def music_prompt_generation(self, story_summary: dict,
+                                environments: list[str]) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().music_prompt_generation(story_summary, environments)
+
+    def sfx_prompt_generation(self, story_summary: dict,
+                              environments: list[dict],
+                              spell_elements: list[str]) -> LLMRequest:
+        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+        return ClaudePromptSet().sfx_prompt_generation(story_summary, environments, spell_elements)
 
 
 def _history_to_examples(history: list[dict]) -> list[tuple[str, str]]:

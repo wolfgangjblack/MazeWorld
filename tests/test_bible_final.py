@@ -87,30 +87,27 @@ class TestConsumableScaling:
         assert consumable_scale_factor(10) == 2.0  # 4+ default
 
     def test_scale_item_stats(self):
-        stats = ItemStats(nutrition_value=10, hydration_value=5,
-                          health_value=3, price=20)
+        stats = ItemStats(stamina_value=10, health_value=3, price=20)
         scaled = scale_item_stats(stats, 2)
-        assert scaled.nutrition_value == 13  # 10 * 1.3
-        assert scaled.hydration_value == 6   # 5 * 1.3 -> int(6.5) = 6
-        assert scaled.health_value == 3      # 3 * 1.3 -> int(3.9) = 3
-        assert scaled.price == 26            # 20 * 1.3
+        assert scaled.stamina_value == 13
+        assert scaled.health_value == 3
+        assert scaled.price == 26
 
     def test_scale_item_stats_level1_unchanged(self):
-        stats = ItemStats(nutrition_value=10, price=20)
+        stats = ItemStats(stamina_value=10, price=20)
         scaled = scale_item_stats(stats, 1)
-        assert scaled.nutrition_value == 10
+        assert scaled.stamina_value == 10
         assert scaled.price == 20
 
     def test_scaled_clone(self):
         food = Food(
             category="food", name="Bread", desc="Tasty",
-            item_stats=ItemStats(nutrition_value=10, price=5),
+            item_stats=ItemStats(stamina_value=10, price=5),
         )
         scaled = food.scaled_clone(3)
-        assert scaled.item_stats.nutrition_value == 16  # 10 * 1.6
+        assert scaled.item_stats.stamina_value == 16
         assert scaled.room_level == 3
-        # Original unchanged
-        assert food.item_stats.nutrition_value == 10
+        assert food.item_stats.stamina_value == 10
 
     def test_consumable_scaling_dict_keys(self):
         assert set(CONSUMABLE_SCALING.keys()) == {1, 2, 3}
@@ -369,8 +366,9 @@ class TestViewParams:
     def test_gameover_view_story_param(self):
         """GameOverView accepts story_paragraph param."""
         import pygame
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
         pygame.init()
-        screen = pygame.display.set_mode((800, 600), pygame.HIDDEN)
+        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.gameover_view import GameOverView
@@ -383,8 +381,9 @@ class TestViewParams:
     def test_victory_view_story_param(self):
         """VictoryView accepts story_paragraph param."""
         import pygame
+        from config import SCREEN_WIDTH, SCREEN_HEIGHT
         pygame.init()
-        screen = pygame.display.set_mode((800, 600), pygame.HIDDEN)
+        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.victory_view import VictoryView

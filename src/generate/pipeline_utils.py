@@ -196,15 +196,20 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
     mult = _consumable_mult(room_level)
 
     for raw in llm_result.get("food", [])[:4]:
+        stam_base = raw.get("stamina_value", raw.get("nutrition_value", 0))
+        if not stam_base:
+            stam_base = random.randint(1, 10) + random.randint(1, 10)
+        hp_base = raw.get("health_value", 0)
+        if not hp_base:
+            hp_base = random.randint(1, 6)
         items[str(item_id)] = {
             "category": "food",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
             "room_level": room_level,
             "item_stats": {
-                "nutrition_value": int(raw.get("nutrition_value", 15) * mult),
-                "hydration_value": 0,
-                "health_value": int(raw.get("health_value", 0) * mult),
+                "stamina_value": int(stam_base * mult),
+                "health_value": int(hp_base * mult),
                 "uses": 1,
                 "price": int(random.randint(5, 15) * mult),
             },
@@ -213,15 +218,20 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
 
     item_id = 300
     for raw in llm_result.get("drink", [])[:4]:
+        stam_base = raw.get("stamina_value", raw.get("hydration_value", 0))
+        if not stam_base:
+            stam_base = random.randint(1, 10) + random.randint(1, 10)
+        hp_base = raw.get("health_value", 0)
+        if not hp_base:
+            hp_base = random.randint(1, 6)
         items[str(item_id)] = {
             "category": "drink",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
             "room_level": room_level,
             "item_stats": {
-                "nutrition_value": 0,
-                "hydration_value": int(raw.get("hydration_value", 15) * mult),
-                "health_value": int(raw.get("health_value", 0) * mult),
+                "stamina_value": int(stam_base * mult),
+                "health_value": int(hp_base * mult),
                 "uses": 1,
                 "price": int(random.randint(5, 15) * mult),
             },
@@ -237,8 +247,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "room_level": room_level,
             "item_stats": {
                 "attribute": raw.get("attribute", "bludgeon"),
-                "nutrition_value": -5,
-                "hydration_value": -5,
+                "stamina_value": -5,
                 "health_value": 0,
                 "uses": 3,
                 "price": int(random.randint(10, 25) * mult),
@@ -275,8 +284,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
             "room_level": room_level,
             "item_stats": {
                 "health_value": int((25 if raw.get("spell_effect") == "heal" else 0) * scroll_mult),
-                "nutrition_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
-                "hydration_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
+                "stamina_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
                 "price": int(random.randint(20, 40) * mult),
             },
         }
@@ -317,24 +325,161 @@ def _validate_puzzle_tools(
                     choice["tool_attribute"] = None
 
 
-def _event_fallback(event_type: str) -> dict:
-    """Static fallback event when LLM generation fails."""
-    if event_type == "combat":
+def _validate_puzzle_abilities(
+    event_list: list[dict],
+    all_ability_names: list[str],
+) -> None:
+    """Ensure puzzle correct_ability references actual class abilities."""
+    name_set = set(all_ability_names)
+    for event in event_list:
+        if event.get("type") != "puzzle":
+            continue
+        ability = event.get("correct_ability")
+        if ability and ability not in name_set:
+            if all_ability_names:
+                event["correct_ability"] = random.choice(all_ability_names)
+            else:
+                event["correct_ability"] = None
+
+
+_PUZZLE_NAMES = {
+    "puzzle": [
+        "Ancient Lock", "Runic Seal", "Trapped Passage", "Hidden Mechanism",
+        "Collapsed Doorway", "Enchanted Barrier", "Puzzle Box", "Weighted Floor",
+        "Crystal Alignment", "Lever Puzzle", "Shifting Walls", "Mystic Ward",
+    ],
+    "event": [
+        "Cry for Help", "Suspicious Merchant", "Collapsed Tunnel", "Ritual Circle",
+        "Wounded Traveler", "Abandoned Camp", "Strange Statue", "Whispering Well",
+        "Overgrown Shrine", "Eerie Fog", "Crumbling Bridge", "Burning Cart",
+    ],
+}
+
+_PUZZLE_DESCRIPTIONS = {
+    "village": "Gnarled roots have buckled the cobblestones, blocking the narrow lane ahead.",
+    "cave": "A jagged rockfall seals the passage; dust still drifts from the fresh collapse.",
+    "dungeon": "Iron bars and a corroded mechanism block the archway deeper into the dungeon.",
+    "city": "A heavy iron gate, its winch mechanism jammed with rust, bars your path.",
+    "castle": "A ward-sealed door pulses with faint arcane light, refusing to budge.",
+}
+
+_EVENT_DESCRIPTIONS = {
+    "village": "A group of rough-looking strangers have cornered a local shopkeeper in the alley.",
+    "cave": "A wounded miner stumbles toward you, clutching a bloodied arm and gasping for help.",
+    "dungeon": "Two cloaked figures argue over a locked chest, neither noticing your approach.",
+    "city": "A street urchin tugs at your sleeve, pointing frantically toward a burning market stall.",
+    "castle": "A noble's attendant approaches you with a sealed letter and a desperate expression.",
+}
+
+_STAT_CHECKS = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+
+_STAT_ACTIONS = {
+    "STR": "Force your way through with brute strength",
+    "DEX": "Carefully navigate around the obstacle",
+    "CON": "Endure the hazard and push through",
+    "INT": "Study the mechanism and find the trick",
+    "WIS": "Sense the pattern and act on instinct",
+    "CHA": "Rally your nerve and press forward boldly",
+}
+
+_EVENT_STAT_ACTIONS = {
+    "STR": "Step forward and physically intervene",
+    "DEX": "Move quickly to defuse the situation",
+    "CON": "Stand your ground and weather the confrontation",
+    "INT": "Analyze the situation and find a clever angle",
+    "WIS": "Read the room and appeal to their better nature",
+    "CHA": "Talk your way through with persuasion",
+}
+
+
+def _event_fallback(event_type: str, env_type: str = "dungeon",
+                    room_level: int = 1, tool_attrs: list | None = None,
+                    ability_names: list | None = None,
+                    spell_names: list | None = None) -> dict:
+    """Fallback event when LLM generation fails, using real DB refs."""
+    names = _PUZZLE_NAMES.get(event_type, _PUZZLE_NAMES["event"])
+    name = random.choice(names)
+    base_dc = 8 + room_level
+    stat = random.choice(_STAT_CHECKS)
+    difficulty = min(5, max(1, room_level))
+
+    correct_tool = None
+    correct_ability = None
+    correct_spell = None
+    if tool_attrs and random.random() < 0.3:
+        correct_tool = random.choice(tool_attrs)
+    if ability_names and random.random() < 0.2:
+        correct_ability = random.choice(ability_names)
+    if spell_names and random.random() < 0.2:
+        correct_spell = random.choice(spell_names)
+
+    if event_type == "puzzle":
+        action = _STAT_ACTIONS.get(stat, f"Overcome it with {stat}")
+        choices = [
+            {"text": action, "stat_check": stat,
+             "dc": base_dc + random.randint(0, 3), "auto_success": False},
+        ]
+        alt_stat = random.choice([s for s in _STAT_CHECKS if s != stat])
+        alt_action = _STAT_ACTIONS.get(alt_stat, f"Try a different approach")
+        choices.append(
+            {"text": alt_action, "stat_check": alt_stat,
+             "dc": base_dc + random.randint(1, 4), "auto_success": False},
+        )
+        if correct_tool:
+            choices.insert(0, {
+                "text": f"Use your {correct_tool} equipment to clear the way",
+                "tool_attribute": correct_tool,
+                "dc": max(5, base_dc - 3), "auto_success": False,
+            })
+        choices.append({"text": "Turn back and find another route", "auto_success": True})
+        desc = _PUZZLE_DESCRIPTIONS.get(env_type,
+                                        f"An ancient obstacle blocks the way in this {env_type}.")
         return {
-            "name": random.choice(["Goblin", "Giant Rat", "Skeleton", "Slime", "Bandit"]),
-            "description": "A hostile creature attacks!",
-            "difficulty": random.randint(2, 4),
-            "damage_type": random.choice(["health", "hunger", "thirst"]),
-            "damage_range": [5, 15],
+            "name": name,
+            "description": desc,
+            "difficulty": difficulty,
+            "choices": choices,
+            "correct_tool": correct_tool,
+            "correct_ability": correct_ability,
+            "summary": f"{name}: {stat} check DC {base_dc}, tool={correct_tool}, ability={correct_ability}",
         }
+
+    # event type — 5 structured slots
+    dmg_type = random.choice(["health", "stamina"])
+    dmg_lo = 3 + room_level
+    dmg_hi = 8 + room_level * 2
+    stat_action = _EVENT_STAT_ACTIONS.get(stat, "Take action")
+    tool_attr = random.choice(tool_attrs) if tool_attrs else None
+
+    choices = [
+        {"text": stat_action, "stat_check": stat,
+         "dc": base_dc + random.randint(0, 3), "auto_success": False},
+        {"text": f"Use your training to handle this",
+         "stat_check": None, "dc": 0, "auto_success": False},
+        {"text": "Channel your power to resolve things",
+         "stat_check": None, "dc": 0, "auto_success": False},
+    ]
+    if tool_attr:
+        choices.append({"text": f"Put your {tool_attr} gear to use",
+                        "tool_attribute": tool_attr,
+                        "dc": max(5, base_dc - 2), "auto_success": False})
+    else:
+        choices.append({"text": "Improvise with what you have",
+                        "stat_check": "DEX", "dc": base_dc + 2, "auto_success": False})
+    choices.append({"text": "Back away before things escalate", "auto_success": True})
+
+    desc = _EVENT_DESCRIPTIONS.get(env_type,
+                                   f"A tense encounter unfolds in the {env_type}.")
     return {
-        "name": random.choice(["Locked Chest", "Crumbling Bridge", "Strange Rune", "Trapped Door"]),
-        "description": "A mysterious obstacle blocks your path...",
-        "difficulty": random.randint(1, 3),
-        "choices": [
-            {"text": "Try to force through", "stat_check": "health", "dc": 12, "auto_success": False},
-            {"text": "Walk away", "auto_success": True},
-        ],
+        "name": name,
+        "description": desc,
+        "difficulty": difficulty,
+        "choices": choices,
+        "correct_ability": correct_ability,
+        "correct_spell": correct_spell,
+        "failure_damage_type": dmg_type,
+        "failure_damage_range": [dmg_lo, dmg_hi],
+        "summary": f"{name}: {stat} DC {base_dc}, fail={dmg_type} {dmg_lo}-{dmg_hi}",
     }
 
 

@@ -47,7 +47,7 @@ class Monster(BaseModel):
     name: Optional[str] = None
     level: int = 1
     hp: int = 10
-    max_hp: int = 10
+    max_hp: int = 0
     ac: int = 10
     str_mod: int = 0
     dex_mod: int = 0

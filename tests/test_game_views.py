@@ -166,11 +166,9 @@ class TestGameViewDebugLabel:
         player.x = 1
         player.y = 1
         player.color = (0, 0, 255)
-        player.hunger = 100
-        player.thirst = 100
+        player.stamina = 100
         player.health = 100
-        player.max_hunger = 100
-        player.max_thirst = 100
+        player.max_stamina = 100
         player.max_health = 100
         player.inventory = {}
         player.active_quests = []

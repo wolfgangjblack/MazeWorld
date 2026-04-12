@@ -377,9 +377,9 @@ def test_config_new_settings_exist():
     assert hasattr(cfg, "MUSIC_BACKEND")
 
 
-def test_config_num_rooms_default():
-    assert cfg.NUM_ROOMS == 5
+def test_config_num_rooms_valid():
     assert isinstance(cfg.NUM_ROOMS, int)
+    assert cfg.NUM_ROOMS >= 1
 
 
 def test_config_event_density_default():

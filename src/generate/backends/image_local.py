@@ -65,9 +65,21 @@ class LocalImageBackend(ImageBackend):
                 ) from e
         return self._pipe
 
-    def generate_image(self, prompt: str, width: int = 256, height: int = 256):
-        """Returns a PIL Image."""
+    def generate_image(self, prompt: str, width: int | None = None,
+                       height: int | None = None):
+        """Returns a PIL Image at native resolution for the active model."""
+        from config import IMAGE_WIDTH, IMAGE_HEIGHT
         pipe = self._get_pipe()
+
+        if width is None:
+            width = IMAGE_WIDTH
+        if height is None:
+            height = IMAGE_HEIGHT
+
+        # SDXL Turbo is trained at 512x512 max; clamp to avoid artifacts
+        if self._pipe_type == "sdxl":
+            width = min(width, 512)
+            height = min(height, 512)
 
         if self._pipe_type == "flux":
             result = pipe(

@@ -1,9 +1,12 @@
 import ast
 import json
+import logging
 import re
 
 from src.prompts import get_prompt_set
 from src.generate.llm_client import generate
+
+_logger = logging.getLogger(__name__)
 
 
 def _strip_fences(raw: str) -> str:
@@ -151,12 +154,12 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
     return _parse_json_response(raw)
 
 
-WEAPON_DICE_BY_LEVEL = {
-    1: ["1d4", "1d6"],
-    2: ["1d6", "1d8"],
-    3: ["1d8", "1d10"],
-    4: ["1d10", "1d12"],
-}
+from src.models.weapon import WEAPON_DICE_BY_ROOM
+
+
+def _weapon_dice_for_level(room_level: int) -> list[str]:
+    capped = min(room_level, max(WEAPON_DICE_BY_ROOM.keys()))
+    return list(set(WEAPON_DICE_BY_ROOM.get(capped, WEAPON_DICE_BY_ROOM[1]).values()))
 
 
 def generate_item_primitive(environment: dict, room_level: int = 1,
@@ -177,7 +180,7 @@ def generate_item_primitive(environment: dict, room_level: int = 1,
         return result
 
     # Post-process: assign weapon dice scaled to room_level
-    dice_pool = WEAPON_DICE_BY_LEVEL.get(room_level, WEAPON_DICE_BY_LEVEL[1])
+    dice_pool = _weapon_dice_for_level(room_level)
     for weapon in result.get("weapons", []):
         weapon["attack_dice"] = _rng.choice(dice_pool)
 
@@ -284,13 +287,29 @@ def generate_npc_batch(room_env: dict, room_story: str,
 
 def generate_event_batch(room_env: dict, room_story: str,
                          event_type: str, event_slots: list[dict],
-                         story_context: str) -> list[dict]:
+                         story_context: str,
+                         previous_summaries: list[str] | None = None,
+                         available_abilities: list[str] | None = None,
+                         available_spells: list[str] | None = None,
+                         available_tools: list[str] | None = None) -> list[dict]:
     """Generate a batch of events of the same type for a room."""
+    import logging
+    _logger = logging.getLogger(__name__)
+
     prompts = get_prompt_set()
-    request = prompts.event_batch_generation(room_env, room_story, event_type,
-                                             event_slots, story_context)
+    request = prompts.event_batch_generation(
+        room_env, room_story, event_type, event_slots, story_context,
+        previous_summaries=previous_summaries,
+        available_abilities=available_abilities,
+        available_spells=available_spells,
+        available_tools=available_tools,
+    )
     raw = generate(request)
-    return _parse_json_array(raw)
+    results = _parse_json_array(raw)
+    if len(results) < len(event_slots):
+        _logger.warning("Event batch returned %d/%d events for type '%s'",
+                        len(results), len(event_slots), event_type)
+    return results
 
 
 def generate_dialogue_context(room_env: dict, room_story: str,
@@ -353,13 +372,48 @@ def generate_overarching_story(story_seed: str,
 
 def generate_room_story_beat(overarching_story: dict, room_env: dict,
                              room_index: int,
-                             prior_beats: list[dict]) -> dict:
+                             prior_beats: list[dict],
+                             num_rooms: int = 5) -> dict:
     """Generate a detailed story beat for a single room."""
     prompts = get_prompt_set()
     request = prompts.room_story_beat_generation(
-        overarching_story, room_env, room_index, prior_beats)
+        overarching_story, room_env, room_index, prior_beats, num_rooms)
     raw = generate(request)
     return _parse_json_response(raw)
+
+
+def generate_music_prompts(story_summary: dict,
+                           environments: list[str]) -> dict[str, str | None]:
+    """Generate Lyra 3 music prompts for combat + one maze track per environment.
+
+    Returns a dict keyed by track name (e.g. 'combat', 'maze_village') with
+    prompt strings. Fixed tracks (puzzle_event, start_screen, victory, game_over)
+    are returned as None — callers should fill those from FIXED_PROMPTS.
+    """
+    prompts = get_prompt_set()
+    request = prompts.music_prompt_generation(story_summary, environments)
+    raw = generate(request)
+    result = _parse_json_response(raw)
+    if "error" in result:
+        return {}
+    return result
+
+
+def generate_sfx_prompts(story_summary: dict,
+                         environments: list[dict],
+                         spell_elements: list[str]) -> dict[str, dict]:
+    """Generate ElevenLabs SFX prompts for weapons, spells, and ambience.
+
+    Returns a dict keyed by sfx name with {prompt, duration, loop} specs.
+    Fixed SFX (UI, dice, items) are NOT included — callers merge those separately.
+    """
+    prompts = get_prompt_set()
+    request = prompts.sfx_prompt_generation(story_summary, environments, spell_elements)
+    raw = generate(request)
+    result = _parse_json_response(raw)
+    if "error" in result:
+        return {}
+    return result
 
 
 def generate_full_story_primitive(story_seed: str, room_count: int,
@@ -391,7 +445,7 @@ def generate_npc_backstory(npc_data: dict, story_context: str) -> str:
 
 
 def _parse_json_array(raw: str) -> list[dict]:
-    """Parse a JSON array from LLM output."""
+    """Parse a JSON array from LLM output. Logs warning on failure."""
     stripped = _strip_fences(raw)
     for candidate in [stripped, raw]:
         start = candidate.find("[")
@@ -409,6 +463,8 @@ def _parse_json_array(raw: str) -> list[dict]:
                         return result
                 except Exception:
                     pass
+    _logger.warning("Failed to parse JSON array from LLM response (%d chars): %.200s",
+                    len(raw), raw)
     return []
 
 
