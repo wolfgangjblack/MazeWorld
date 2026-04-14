@@ -28,6 +28,7 @@ def set_stats(stats) -> None:
     global _active_stats
     _active_stats = stats
 
+
 _LYRA_PRO = "lyria-3-pro-preview"
 _LYRA_CLIP = "lyria-3-clip-preview"
 
@@ -76,6 +77,7 @@ FIXED_PROMPTS: dict[str, str] = {
 # Async generation core
 # ---------------------------------------------------------------------------
 
+
 async def _generate_track_async(
     client,
     prompt: str,
@@ -104,11 +106,9 @@ async def _generate_track_async(
                         f.write(part.inline_data.data)
                     logger.info("Music track saved: %s", filepath)
                     return track_name, filepath
-            logger.warning("Lyria track '%s' attempt %d/%d: no audio in response",
-                           track_name, attempt + 1, 3)
+            logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, 3)
         except Exception as e:
-            logger.warning("Lyria track '%s' attempt %d/%d failed: %s",
-                           track_name, attempt + 1, 3, e)
+            logger.warning("Lyria track '%s' attempt %d/%d failed: %s", track_name, attempt + 1, 3, e)
         if attempt < 2:
             await asyncio.sleep(3 * (attempt + 1))
     return track_name, None
@@ -135,16 +135,21 @@ async def generate_all_music_async(
         return {}
 
     from config import MUSIC_BACKEND
+
     if MUSIC_BACKEND != "api":
         logger.info("MUSIC_BACKEND=%s — skipping Lyria music generation.", MUSIC_BACKEND)
         return {}
 
     from google import genai
+
     client = genai.Client(api_key=key)
 
     tasks = [
         _generate_track_async(
-            client, prompt, name, save_dir,
+            client,
+            prompt,
+            name,
+            save_dir,
             use_clip=(name == "game_over"),
         )
         for name, prompt in prompts.items()
@@ -162,8 +167,7 @@ async def generate_all_music_async(
             name, fp = result
             music_paths[name] = fp
 
-    logger.info("Music generation complete: %d/%d tracks saved.",
-                len(music_paths), len(tasks))
+    logger.info("Music generation complete: %d/%d tracks saved.", len(music_paths), len(tasks))
     if _active_stats is not None:
         clip_count = 1 if "game_over" in music_paths else 0
         _active_stats.record_music(
