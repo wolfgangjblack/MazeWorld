@@ -40,9 +40,13 @@ def check_quest_references(
         issues.append(f"{prefix}giver NPC {quest.get('giver_npc_id')} not found")
 
     if qtype == "fetch":
-        for ti in quest.get("target_items", []):
-            if item_ids is not None and ti.get("item_id") not in item_ids:
-                issues.append(f"{prefix}fetch item {ti.get('item_id')} not on map")
+        target_items = quest.get("target_items", [])
+        if target_items:
+            for ti in target_items:
+                if item_ids is not None and ti.get("item_id") not in item_ids:
+                    issues.append(f"{prefix}fetch item {ti.get('item_id')} not on map")
+        elif not quest.get("target_tile") and not quest.get("item_category"):
+            issues.append(f"{prefix}fetch quest has no target_items, target_tile, or item_category")
     elif qtype == "escort":
         if npc_ids is not None and quest.get("escort_npc_id") not in npc_ids:
             issues.append(f"{prefix}escort NPC {quest.get('escort_npc_id')} not found")
@@ -51,7 +55,7 @@ def check_quest_references(
             issues.append(f"{prefix}delivery item {quest.get('delivery_item_id')} not on map")
         if npc_ids is not None and quest.get("target_npc_id") not in npc_ids:
             issues.append(f"{prefix}target NPC {quest.get('target_npc_id')} not found")
-    elif qtype == "combat":
+    elif qtype in ("combat", "solve"):
         if event_ids is not None and quest.get("target_event_id") not in event_ids:
             issues.append(f"{prefix}target event {quest.get('target_event_id')} not found")
 

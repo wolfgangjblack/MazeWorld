@@ -9,9 +9,18 @@ import asyncio
 import logging
 import os
 
+from config import DATA_DIR
 from src.generate.backends.registry import get_image_backend
 
 logger = logging.getLogger(__name__)
+
+_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits")
+_NPC_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "npcs")
+_ITEM_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "items")
+_EVENT_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "events")
+_CLASS_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "classes")
+_MONSTER_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "monsters")
+_ROOM_PORTRAITS_DIR = os.path.join(DATA_DIR, "portraits", "rooms")
 
 _active_stats = None
 
@@ -26,7 +35,7 @@ def set_stats(stats) -> None:
 # Sequential fallback (local backend or single images)
 # ---------------------------------------------------------------------------
 
-def generate_portraits(entity_database: dict, save_dir: str = "data/portraits",
+def generate_portraits(entity_database: dict, save_dir: str = _PORTRAITS_DIR,
                        prefix: str = ""):
     """Generate and save a portrait for each entity. Updates profile_image in-place.
     Sequential — used for local backend or when parallelism is not available.
@@ -58,30 +67,38 @@ def generate_portraits(entity_database: dict, save_dir: str = "data/portraits",
 
 async def _generate_one_async(fal_model: str, prompt: str, filepath: str,
                                entity: dict) -> None:
-    """Single async portrait job via fal_client.subscribe_async."""
-    try:
-        import fal_client
-        import aiohttp
-        from config import IMAGE_WIDTH, IMAGE_HEIGHT
-        result = await fal_client.subscribe_async(
-            fal_model,
-            arguments={
-                "prompt": prompt,
-                "image_size": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT},
-                "num_images": 1,
-            },
-        )
-        url = result["images"][0]["url"]
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                    with open(filepath, "wb") as f:
-                        f.write(await resp.read())
-                    entity["profile_image"] = filepath
-                    return
-    except Exception as e:
-        logger.warning("Portrait failed for %s: %s", filepath, e)
+    """Single async portrait job via fal_client.subscribe_async with retries."""
+    import asyncio as _aio
+    import fal_client
+    import aiohttp
+    from config import IMAGE_WIDTH, IMAGE_HEIGHT
+
+    for attempt in range(3):
+        try:
+            result = await fal_client.subscribe_async(
+                fal_model,
+                arguments={
+                    "prompt": prompt,
+                    "negative_prompt": "text, words, letters, watermark, signature, banana, fruit",
+                    "image_size": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT},
+                    "num_images": 1,
+                },
+            )
+            url = result["images"][0]["url"]
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                        with open(filepath, "wb") as f:
+                            f.write(await resp.read())
+                        entity["profile_image"] = filepath
+                        return
+        except Exception as e:
+            logger.warning("Portrait '%s' attempt %d/%d failed: %s",
+                           filepath, attempt + 1, 3, e)
+        if attempt < 2:
+            await _aio.sleep(2 * (attempt + 1))
+
     entity["profile_image"] = None
 
 
@@ -104,7 +121,7 @@ def generate_portraits_parallel(entity_database: dict, save_dir: str,
     async def _run_all():
         sem = asyncio.Semaphore(max_concurrent)
 
-        async def _bounded(entity_id: str, entity: dict):
+        async def _bounded(entity_id: str | int, entity: dict):
             async with sem:
                 prompt = entity.get("portrait_prompt") or entity.get(
                     "description", "a fantasy character portrait, pixel art"
@@ -148,7 +165,7 @@ async def generate_portraits_parallel_async(
     os.makedirs(save_dir, exist_ok=True)
     sem = asyncio.Semaphore(max_concurrent)
 
-    async def _bounded(entity_id: str, entity: dict):
+    async def _bounded(entity_id: str | int, entity: dict):
         async with sem:
             prompt = entity.get("portrait_prompt") or entity.get(
                 "description", "a fantasy character portrait, pixel art"
@@ -169,27 +186,27 @@ async def generate_portraits_parallel_async(
 # ---------------------------------------------------------------------------
 
 def generate_npc_portraits(npc_database: dict,
-                            save_dir: str = "data/portraits/npcs"):
+                            save_dir: str = _NPC_PORTRAITS_DIR):
     generate_portraits_parallel(npc_database, save_dir, prefix="npc_")
 
 
 def generate_item_portraits(item_database: dict,
-                             save_dir: str = "data/portraits/items"):
+                             save_dir: str = _ITEM_PORTRAITS_DIR):
     generate_portraits_parallel(item_database, save_dir, prefix="item_")
 
 
 def generate_event_illustrations(event_database: dict,
-                                  save_dir: str = "data/portraits/events"):
+                                  save_dir: str = _EVENT_PORTRAITS_DIR):
     generate_portraits_parallel(event_database, save_dir, prefix="evt_")
 
 
 def generate_class_portraits(class_database: dict,
-                              save_dir: str = "data/portraits/classes"):
+                              save_dir: str = _CLASS_PORTRAITS_DIR):
     generate_portraits_parallel(class_database, save_dir, prefix="class_")
 
 
 def generate_monster_portraits(monster_database: dict,
-                                save_dir: str = "data/portraits/monsters"):
+                                save_dir: str = _MONSTER_PORTRAITS_DIR):
     generate_portraits_parallel(monster_database, save_dir, prefix="mon_")
 
 
@@ -203,7 +220,7 @@ def generate_and_save_image(prompt: str, filepath: str) -> bool:
 
 
 def generate_player_portrait(portrait_prompt: str,
-                              save_dir: str = "data/portraits") -> str | None:
+                              save_dir: str = _PORTRAITS_DIR) -> str | None:
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, "player.png")
     ok = get_image_backend().generate_and_save(portrait_prompt, filepath)
@@ -213,7 +230,7 @@ def generate_player_portrait(portrait_prompt: str,
 
 
 def generate_room_portrait(prompt: str, room_id: str,
-                            save_dir: str = "data/portraits/rooms") -> str | None:
+                            save_dir: str = _ROOM_PORTRAITS_DIR) -> str | None:
     """Generate a room/environment portrait. Returns filepath or None."""
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, f"{room_id}.png")
@@ -224,7 +241,7 @@ def generate_room_portrait(prompt: str, room_id: str,
 
 
 def generate_game_over_portrait(prompt: str,
-                                 save_dir: str = "data/portraits") -> str | None:
+                                 save_dir: str = _PORTRAITS_DIR) -> str | None:
     """Generate a game-over portrait. Returns filepath or None."""
     os.makedirs(save_dir, exist_ok=True)
     filepath = os.path.join(save_dir, "game_over.png")

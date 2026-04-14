@@ -28,6 +28,30 @@ def elemental_multiplier(attack_element: str, defender_element: Optional[str]) -
     return 1.0
 
 
+# Physical damage type triangle
+# slashing > piercing > bludgeoning > slashing
+PHYSICAL_TYPES = ["slashing", "piercing", "bludgeoning"]
+
+PHYSICAL_ADVANTAGE = {
+    "slashing": "piercing",
+    "piercing": "bludgeoning",
+    "bludgeoning": "slashing",
+}
+
+
+def physical_multiplier(attack_type: str, defender_type: Optional[str]) -> float:
+    """Return the damage multiplier for physical attack_type vs defender_type."""
+    if not defender_type or not attack_type:
+        return 1.0
+    if attack_type == "physical" or defender_type == "physical":
+        return 1.0
+    if PHYSICAL_ADVANTAGE.get(attack_type) == defender_type:
+        return SUPER_EFFECTIVE_MULT
+    if PHYSICAL_ADVANTAGE.get(defender_type) == attack_type:
+        return RESISTED_MULT
+    return 1.0
+
+
 # Stamina cost derived from damage dice (explicit table + fallback)
 SPELL_STAMINA_BY_DICE = {4: 2, 6: 4, 8: 5, 10: 7}
 

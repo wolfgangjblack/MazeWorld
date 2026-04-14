@@ -176,12 +176,12 @@ class GameView:
                 portrait_w = 0
 
                 portrait_surf = load_portrait(
-                    getattr(item_obj, 'profile_image', None), (72, 72))
+                    getattr(item_obj, 'profile_image', None), (80, 80))
                 if portrait_surf:
-                    px = SCREEN_WIDTH - M - 90
+                    px = SCREEN_WIDTH - M - 95
                     self.screen.blit(portrait_surf, (px, cy))
-                    pygame.draw.rect(self.screen, (100, 100, 130), (px, cy, 72, 72), 1)
-                    portrait_w = 85
+                    pygame.draw.rect(self.screen, (100, 100, 130), (px, cy, 80, 80), 1)
+                    portrait_w = 92
 
                 desc_max_w = panel_w - 40 - portrait_w
 
@@ -425,9 +425,12 @@ class GameView:
                 self.screen.blit(surf, (90, y))
                 y += 22
 
-        exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (180, 180, 180))
+        exit_bg = pygame.Rect(0, SCREEN_HEIGHT - 80, SCREEN_WIDTH, 40)
+        pygame.draw.rect(self.screen, (30, 30, 50), exit_bg)
+        pygame.draw.line(self.screen, (80, 80, 100), (50, SCREEN_HEIGHT - 80), (SCREEN_WIDTH - 50, SCREEN_HEIGHT - 80))
+        exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (200, 200, 210))
         self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2,
-                                     SCREEN_HEIGHT - 60))
+                                     SCREEN_HEIGHT - 72))
 
     def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
         if self.dialogue_box.event_active:

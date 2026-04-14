@@ -34,7 +34,7 @@ def _make_player(archetype="mage"):
 
 def _weak_monster():
     return Monster(
-        id="m1", species="Goblin", level=1,
+        id=5000, species="Goblin", level=1,
         hp=10, max_hp=10, ac=10,
         str_mod=0, dex_mod=0,
         damage_dice=4, damage_type="physical",

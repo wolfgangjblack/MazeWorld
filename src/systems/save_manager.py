@@ -10,9 +10,10 @@ import re
 from datetime import datetime
 from typing import Optional
 
+from config import DATA_DIR
 from src.models.save import SaveState, SaveMetadata
 
-SAVE_DIR = os.path.join("data", "saves")
+SAVE_DIR = os.path.join(DATA_DIR, "saves")
 
 
 def _ensure_save_dir():
@@ -20,10 +21,11 @@ def _ensure_save_dir():
 
 
 def _save_filename(seed: int, character_name: str, character_class: str) -> str:
-    """Generate save filename: save_{seed}_{name}_{class}.json"""
+    """Generate a unique save filename with timestamp."""
     safe_name = re.sub(r'[^a-zA-Z0-9_]', '_', character_name.lower())
     safe_class = re.sub(r'[^a-zA-Z0-9_]', '_', character_class.lower())
-    return f"save_{seed}_{safe_name}_{safe_class}.json"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"save_{seed}_{safe_name}_{safe_class}_{ts}.json"
 
 
 def _save_path(seed: int, character_name: str, character_class: str) -> str:
@@ -57,6 +59,7 @@ def serialize_player(player) -> dict:
         "learned_spells": list(player.learned_spells),
         "profile_image": player.profile_image,
         "combat_record": dict(player.combat_record),
+        "encounter_record": dict(player.encounter_record),
         "title": player.title,
     }
 
@@ -141,6 +144,10 @@ def deserialize_player(data: dict):
             "monsters_killed": 0, "damage_dealt": 0, "damage_taken": 0,
             "combats_won": 0, "combats_fled": 0,
         }),
+        encounter_record=data.get("encounter_record", {
+            "puzzles_solved": 0, "puzzles_failed": 0,
+            "events_resolved": 0, "events_failed": 0,
+        }),
         title=data.get("title", ""),
         inventory=inventory,
         abilities=abilities,
@@ -199,6 +206,18 @@ def serialize_npc(npc) -> dict:
     if hasattr(npc, 'home_x'):
         data["home_x"] = npc.home_x
         data["home_y"] = npc.home_y
+    # Dialogue state
+    data["dialogue_exhausted"] = npc.dialogue_exhausted
+    data["finished_dialogue"] = npc.finished_dialogue
+    data["current_dc"] = getattr(npc, "current_dc", 10)
+    if getattr(npc, 'dialogue_tree_incomplete', None):
+        data["_active_tree"] = (
+            "complete" if npc.dialogue_tree is npc.dialogue_tree_complete
+            else "failed" if npc.dialogue_tree is npc.dialogue_tree_failed
+            else "incomplete"
+        )
+    if npc.dialogue_tree and "_current" in npc.dialogue_tree:
+        data["_dialogue_current"] = npc.dialogue_tree["_current"]
     return data
 
 
@@ -254,7 +273,7 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
     metadata = SaveMetadata(
         character_name=char_name,
         character_class=char_class,
-        room_level=getattr(game_controller, 'current_room_level', 1),
+        room_level=game_controller.current_room + 1,
         time_played_seconds=time_played_seconds,
         last_save_date=datetime.now().strftime("%Y-%m-%d %H:%M"),
         seed=seed,
@@ -273,15 +292,22 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
     if hasattr(game_controller, 'day_night') and game_controller.day_night:
         day_night_data = game_controller.day_night.serialize()
 
+    # Serialize maze door/gate state
+    door_pos = list(maze.door_position) if maze.door_position else None
+
     state = SaveState(
         version=1,
         metadata=metadata,
         seed=seed,
-        room_id="room_1",
+        current_room=game_controller.current_room,
+        total_rooms=game_controller.total_rooms,
         player_data=serialize_player(player),
         maze_grid=[list(row) for row in maze.grid],
         maze_environment=maze.environment,
         maze_environment_name=getattr(maze, 'environment_name', ''),
+        maze_door_position=door_pos,
+        maze_door_revealed=maze.door_revealed,
+        maze_gate_encounter_id=maze.gate_encounter_id,
         npc_states=[serialize_npc(npc) for npc in game_controller.npcs],
         event_states={
             eid: serialize_event(evt)
@@ -295,13 +321,91 @@ def save_game(game_controller, seed: int, time_played_seconds: float = 0.0) -> s
         event_position_map=epm,
         fog_data=fog_data,
         day_night_data=day_night_data,
+        gate_cleared=game_controller.gate_cleared,
+        gc_stats=dict(game_controller.stats),
         time_played_seconds=time_played_seconds,
     )
 
+    return _write_save(state, seed, char_name, char_class)
+
+
+def save_game_to_path(
+    game_controller, seed: int,
+    time_played_seconds: float, filepath: str,
+) -> str:
+    """Save full game state to a specific file path (for overwriting)."""
+    _ensure_save_dir()
+    player = game_controller.player
+    maze = game_controller.maze
+    char_name = player.name
+    char_class = (
+        player.player_class.name if player.player_class else "unknown"
+    )
+
+    metadata = SaveMetadata(
+        character_name=char_name,
+        character_class=char_class,
+        room_level=game_controller.current_room + 1,
+        time_played_seconds=time_played_seconds,
+        last_save_date=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        seed=seed,
+    )
+
+    epm = {}
+    for (x, y), eid in game_controller.event_position_map.items():
+        epm[f"{x},{y}"] = eid
+
+    fog_data = {}
+    if hasattr(game_controller, 'fog') and game_controller.fog:
+        fog_data = game_controller.fog.serialize()
+    day_night_data = {}
+    if hasattr(game_controller, 'day_night') and game_controller.day_night:
+        day_night_data = game_controller.day_night.serialize()
+
+    door_pos = list(maze.door_position) if maze.door_position else None
+
+    state = SaveState(
+        version=1,
+        metadata=metadata,
+        seed=seed,
+        current_room=game_controller.current_room,
+        total_rooms=game_controller.total_rooms,
+        player_data=serialize_player(player),
+        maze_grid=[list(row) for row in maze.grid],
+        maze_environment=maze.environment,
+        maze_environment_name=getattr(maze, 'environment_name', ''),
+        maze_door_position=door_pos,
+        maze_door_revealed=maze.door_revealed,
+        maze_gate_encounter_id=maze.gate_encounter_id,
+        npc_states=[serialize_npc(npc) for npc in game_controller.npcs],
+        event_states={
+            eid: serialize_event(evt)
+            for eid, evt in game_controller.events.items()
+        },
+        quest_states={
+            qid: serialize_quest(q)
+            for qid, q in game_controller.quests.items()
+        },
+        follower_data=[serialize_follower(f) for f in player.followers],
+        event_position_map=epm,
+        fog_data=fog_data,
+        day_night_data=day_night_data,
+        gate_cleared=game_controller.gate_cleared,
+        gc_stats=dict(game_controller.stats),
+        time_played_seconds=time_played_seconds,
+    )
+
+    with open(filepath, 'w') as f:
+        json.dump(state.model_dump(), f, indent=2, default=str)
+    return filepath
+
+
+def _write_save(state: SaveState, seed: int, char_name: str, char_class: str) -> str:
+    """Write a SaveState to a new timestamped file."""
+    _ensure_save_dir()
     filepath = _save_path(seed, char_name, char_class)
     with open(filepath, 'w') as f:
         json.dump(state.model_dump(), f, indent=2, default=str)
-
     return filepath
 
 

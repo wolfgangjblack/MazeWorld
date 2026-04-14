@@ -211,7 +211,9 @@ class ClassSelectView:
         starter = STARTER_WEAPONS.get(pc.archetype)
         weapon_info = ""
         if starter:
-            weapon_info = f"{starter.weapon_type.title()}  |  1d{starter.damage_dice}  |  {starter.stat}"
+            dt = starter.damage_type if starter.damage_type != "physical" else ""
+            dt_str = f"  |  {dt}" if dt else ""
+            weapon_info = f"{starter.weapon_type.title()}  |  1d{starter.damage_dice}  |  {starter.stat}{dt_str}"
 
         content_h = estimate_status_height(
             pc.stats, pc.flavor_text, pc.starting_weapon,

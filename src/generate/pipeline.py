@@ -43,6 +43,7 @@ from src.generate.pipeline_utils import (
     _validate_quest,
 )
 from src.registry import registry
+from src.utils.dataloader_utils import load_json_data
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -1078,8 +1079,13 @@ def _phase4a_events(layout: dict, bible: WorldBible,
 # ---------------------------------------------------------------------------
 
 def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
-                      bible: WorldBible) -> list[dict]:
-    """Generate dialogue context (online) or full trees (offline-static)."""
+                      bible: WorldBible,
+                      quest_list: list[dict] | None = None) -> list[dict]:
+    """Generate dialogue context and dialogue trees for all NPCs.
+
+    Both steps always run regardless of GAME_MODE — the pipeline generates
+    all data; GAME_MODE only controls which data is used at runtime.
+    """
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
     env_type = layout["environment"]
@@ -1087,42 +1093,70 @@ def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
     room_env = {"type": env_type, "name": env_name}
     room_story = bible.rooms.get(room_id, RoomBible(environment=env_type)).story_beat
     story_context = bible.get_cumulative_context(room_id)
+    quest_list = quest_list or []
 
-    if GAME_MODE == "online":
-        try:
-            from src.generate.generators.llm_primitives import generate_dialogue_context
-            npc_data_for_llm = [{"npc_name": n["name"], "job": n["job"],
-                                 "personality": n["personality"],
-                                 "quest_type": n.get("quest_type"),
-                                 "max_exchanges": n.get("max_exchanges", 5)}
-                                for n in npc_pool]
-            dialogue_data = generate_dialogue_context(
-                room_env, room_story, npc_data_for_llm, story_context)
-            for i, npc in enumerate(npc_pool):
-                if i < len(dialogue_data):
-                    d = dialogue_data[i]
-                    npc["opening_greeting"] = d.get("greeting", npc.get("opening_greeting", ""))
-                    npc["exhausted_dialogue"] = d.get("exhausted_dialogue", "I have nothing more to say.")
-                    npc["personality_notes"] = d.get("personality_notes", [])
-        except Exception as e:
-            logger.warning("Room %d dialogue context generation failed: %s", room_idx, e)
-            for npc in npc_pool:
-                npc["exhausted_dialogue"] = "I have nothing more to say."
-                npc["personality_notes"] = []
-    elif GAME_MODE == "offline_static":
-        from src.generate.generators.llm_primitives import generate_dialogue_tree
+    # Step A: dialogue context (greetings, personality notes, exhausted text)
+    try:
+        from src.generate.generators.llm_primitives import generate_dialogue_context
+        npc_data_for_llm = [{"npc_name": n["name"], "job": n["job"],
+                             "personality": n["personality"],
+                             "quest_type": n.get("quest_type"),
+                             "max_exchanges": n.get("max_exchanges", 5)}
+                            for n in npc_pool]
+        dialogue_data = generate_dialogue_context(
+            room_env, room_story, npc_data_for_llm, story_context)
+        for i, npc in enumerate(npc_pool):
+            if i < len(dialogue_data):
+                d = dialogue_data[i]
+                npc["opening_greeting"] = d.get("greeting", npc.get("opening_greeting", ""))
+                npc["exhausted_dialogue"] = d.get("exhausted_dialogue", "I have nothing more to say.")
+                npc["personality_notes"] = d.get("personality_notes", [])
+    except Exception as e:
+        logger.warning("Room %d dialogue context generation failed: %s", room_idx, e)
         for npc in npc_pool:
-            try:
-                quest_ctx = {"quest_id": npc.get("quest_id"), "quest_type": npc.get("quest_type")}
-                tree = generate_dialogue_tree(npc, quest_ctx if npc.get("quest_id") else None)
-                if "error" not in tree and "nodes" in tree:
-                    npc["dialogue_tree"] = tree
-            except Exception as e:
-                logger.warning("Room %d NPC %s dialogue tree failed: %s",
-                               room_idx, npc.get("name"), e)
+            npc.setdefault("exhausted_dialogue", "I have nothing more to say.")
+            npc.setdefault("personality_notes", [])
 
-    logger.info("Room %d: Dialogue generated for %d NPCs (%s mode).",
-                room_idx, len(npc_pool), GAME_MODE)
+    # Step B: dialogue trees (pre-generated for offline_static; stored for all modes)
+    from src.generate.generators.llm_primitives import generate_dialogue_tree
+    for npc in npc_pool:
+        try:
+            quest_ctx = None
+            if npc.get("quest_id"):
+                quest_obj = next(
+                    (q for q in quest_list if q["id"] == npc["quest_id"]), None)
+                if quest_obj:
+                    quest_ctx = {
+                        "quest_id": quest_obj["id"],
+                        "quest_type": quest_obj["type"],
+                        "title": quest_obj.get("title", ""),
+                        "description": quest_obj.get("description", ""),
+                        "success_dialogue": quest_obj.get("success_dialogue", ""),
+                        "failure_dialogue": quest_obj.get("failure_dialogue", ""),
+                        "room_story": room_story,
+                        "story_context": story_context[:1000],
+                    }
+            tree = generate_dialogue_tree(npc, quest_ctx)
+            if "error" in tree:
+                continue
+            if "incomplete" in tree:
+                inc = tree["incomplete"]
+                if isinstance(inc, dict) and "nodes" in inc:
+                    npc["dialogue_tree"] = inc
+                    npc["dialogue_tree_incomplete"] = inc
+                comp = tree.get("complete_success")
+                if isinstance(comp, dict) and "nodes" in comp:
+                    npc["dialogue_tree_complete"] = comp
+                fail = tree.get("complete_failure")
+                if isinstance(fail, dict) and "nodes" in fail:
+                    npc["dialogue_tree_failed"] = fail
+            elif "nodes" in tree:
+                npc["dialogue_tree"] = tree
+        except Exception as e:
+            logger.warning("Room %d NPC %s dialogue tree failed: %s",
+                           room_idx, npc.get("name"), e)
+
+    logger.info("Room %d: Dialogue generated for %d NPCs.", room_idx, len(npc_pool))
     return npc_pool
 
 
@@ -1457,6 +1491,14 @@ def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
 # Phase 8: Write Files & Manifest
 # ---------------------------------------------------------------------------
 
+def _flush_entity_db(room_results: list[dict], key: str, path: str):
+    """Collect entities from all rooms by key and write to a global DB file."""
+    all_entities = [e for rr in room_results for e in rr.get(key, [])]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(all_entities, f, indent=2)
+
+
 def _write_room_files(layout: dict, npc_pool: list, event_list: list,
                       quest_list: list, item_placements: list):
     """Write per-room JSON files."""
@@ -1480,6 +1522,7 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list,
         "player_start": list(player_start),
         "item_placements": item_placements,
         "event_positions": event_position_map,
+        "quest_ids": [q["id"] for q in quest_list],
     })
     with open(os.path.join(room_dir, "npcs.json"), "w") as f:
         json.dump(npc_pool, f, indent=2)
@@ -1589,7 +1632,8 @@ def generate_world():
             class_data_list=class_data_list)
         rr["event_list"] = event_list
         rr["quest_list"] = quest_list
-        rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible)
+        rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible,
+                                              quest_list=rr["quest_list"])
         _write_room_files(layout, rr["npc_pool"], event_list, quest_list, rr["item_placements"])
     phase_bar.update(1)
 
@@ -1626,6 +1670,45 @@ def generate_world():
     os.makedirs(os.path.dirname(CLASS_PATH), exist_ok=True)
     with open(CLASS_PATH, "w") as f:
         json.dump(class_data_list, f, indent=2)
+
+    # Flush room-collected entities to global DBs (with portrait paths from phase 7)
+    _flush_entity_db(room_results, "npc_pool", os.path.join(DATA_DIR, "npcs", "npcs.json"))
+    _flush_entity_db(room_results, "event_list", os.path.join(DATA_DIR, "events", "events.json"))
+    _flush_entity_db(room_results, "quest_list", os.path.join(DATA_DIR, "quests", "quests.json"))
+
+    # Rebuild monster name-to-image map from room_results
+    monster_name_to_image = {}
+    for rr in room_results:
+        for m in rr.get("monster_db", []):
+            img = m.get("profile_image")
+            if img and m.get("name"):
+                monster_name_to_image[m["name"]] = img
+
+    monster_path = os.path.join(DATA_DIR, "monsters", "monsters.json")
+    if os.path.exists(monster_path):
+        monster_db_global = load_json_data(monster_path)
+        for mid, mdata in monster_db_global.items():
+            img = monster_name_to_image.get(mdata.get("name", ""))
+            if img:
+                mdata["profile_image"] = img
+        with open(monster_path, "w") as f:
+            json.dump(monster_db_global, f, indent=2)
+
+    # Rebuild item id-to-image map from item_placements
+    item_id_to_image = {}
+    for rr in room_results:
+        for item in rr.get("item_placements", []):
+            img = item.get("profile_image")
+            item_id = item.get("item_id")
+            if img and item_id is not None:
+                item_id_to_image[str(item_id)] = img
+
+    for rr in room_results:
+        if rr.get("generated_items"):
+            for iid, idata in rr["generated_items"].items():
+                img = item_id_to_image.get(iid)
+                if img:
+                    idata["profile_image"] = img
 
     all_items = {}
     for rr in room_results:

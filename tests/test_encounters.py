@@ -3,18 +3,17 @@
 import random
 import pytest
 import pygame
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from src.models.monster import (
     Monster, MonsterAbility, LootEntry,
-    generate_monster, generate_encounter_monsters,
-    _roll_dice, LEVEL_SCALING, MONSTER_POOLS,
+    _roll_dice,
 )
 from src.models.encounter import (
     CombatEvent, PuzzleEvent, EventEncounter, EventChoice,
     create_event_from_data,
 )
-from src.models.player import PlayerCharacter
+from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import Tool, ItemStats
 
 
@@ -23,7 +22,14 @@ from src.models.items import Tool, ItemStats
 def _make_player(**overrides):
     defaults = {"x": 0, "y": 0, "health": 100, "stamina": 100}
     defaults.update(overrides)
-    return PlayerCharacter(**defaults)
+    player = PlayerCharacter(**defaults)
+    if player.player_class is None:
+        player.player_class = PlayerClass(
+            name="TestClass", archetype="warrior", environment="dungeon",
+            starting_weapon="Sword", flavor_text="",
+            stats=Stats(STR=20, DEX=14, CON=12, INT=10, WIS=10, CHA=10, LUCK=10),
+        )
+    return player
 
 
 def _make_tool(name="hammer", attribute="bludgeon"):
@@ -102,88 +108,30 @@ class TestMonster:
 
     def test_roll_loot(self):
         m = _make_monster()
-        m.loot_table = [LootEntry(item_id=200, probability=1.0)]
+        m.loot_table = [LootEntry(item_id=2000, probability=1.0)]
         loot = m.roll_loot()
-        assert 200 in loot
+        assert 2000 in loot
 
     def test_roll_loot_no_drop(self):
         m = _make_monster()
-        m.loot_table = [LootEntry(item_id=200, probability=0.0)]
+        m.loot_table = [LootEntry(item_id=2000, probability=0.0)]
         loot = m.roll_loot()
-        assert 200 not in loot
+        assert 2000 not in loot
 
     def test_serialization_round_trip(self):
         m = _make_monster()
         m.abilities = [MonsterAbility(name="Poison", effect_type="poison", damage_dice="1d4")]
-        m.loot_table = [LootEntry(item_id=200, probability=0.5)]
+        m.loot_table = [LootEntry(item_id=2000, probability=0.5)]
         d = m.to_dict()
         m2 = Monster.from_dict(d)
         assert m2.name == m.name
         assert m2.abilities[0].name == "Poison"
-        assert m2.loot_table[0].item_id == 200
+        assert m2.loot_table[0].item_id == 2000
 
     def test_choose_action_basic(self):
         m = _make_monster()  # No abilities
         action = m.choose_action()
         assert action["type"] == "attack"
-
-
-# ─── Monster Generation Tests ─────────────────────────────────────────
-
-class TestMonsterGeneration:
-    def test_generate_monster_level_scaling(self):
-        """Monster stats should be within level scaling guardrails."""
-        for level in [1, 2, 3, 4]:
-            scaling = LEVEL_SCALING[level]
-            m = generate_monster("forest", level)
-            assert scaling["hp"][0] <= m.hp <= scaling["hp"][1]
-            assert scaling["ac"][0] <= m.ac <= scaling["ac"][1]
-            assert m.level == level
-
-    def test_generate_monster_environment_themed(self):
-        """Monster names should come from environment pool."""
-        for env in MONSTER_POOLS:
-            m = generate_monster(env, 1)
-            assert m.name in MONSTER_POOLS[env]
-
-    def test_encounter_composition_solo(self):
-        """Roll < 0.4 triggers solo: exactly 1 monster at room level."""
-        with patch('random.random', return_value=0.1):
-            monsters = generate_encounter_monsters("forest", 2)
-        assert len(monsters) == 1
-        assert monsters[0].level == 2
-
-    def test_encounter_composition_pack(self):
-        """Roll between 0.4 and 0.75 triggers pack: 2-4 weaker monsters."""
-        with patch('random.random', return_value=0.5):
-            monsters = generate_encounter_monsters("cave", 2)
-        assert 2 <= len(monsters) <= 4
-        for m in monsters:
-            assert m.level == 1  # max(1, room_level - 1)
-
-    def test_encounter_composition_mixed(self):
-        random.seed(7)
-        found_mixed = False
-        for _ in range(200):
-            monsters = generate_encounter_monsters("dungeon", 3)
-            levels = [m.level for m in monsters]
-            if len(monsters) >= 3 and max(levels) > min(levels):
-                found_mixed = True
-                break
-        assert found_mixed, "Mixed composition (strong + weak) should appear"
-
-    def test_encounter_scales_with_room(self):
-        """Higher room levels should produce tougher monsters."""
-        assert LEVEL_SCALING[4]["hp"][0] > LEVEL_SCALING[1]["hp"][0]
-
-    def test_monster_abilities_battle_scoped(self):
-        """Monster status effects should not carry between separate encounters."""
-        m = generate_monster("forest", 2)
-        m.apply_status("stun", 2)
-        assert m.is_stunned()
-        # Simulate end of combat: create fresh monster from dict (as world_gen does)
-        m2 = Monster.from_dict(m.to_dict())
-        assert not m2.is_stunned(), "Status effects should not persist through serialization"
 
 
 # ─── Dice Roller Tests ────────────────────────────────────────────────
@@ -202,7 +150,7 @@ class TestCombatEvent:
     def _make_combat_event(self, num_monsters=1, level=1):
         monsters = [_make_monster(hp=10, ac=10, level=level) for _ in range(num_monsters)]
         return CombatEvent(
-            id="evt_001", name="Test Fight",
+            id=3000, name="Test Fight",
             description="A test combat encounter",
             monsters=monsters, room_level=level,
         )
@@ -218,7 +166,7 @@ class TestCombatEvent:
     def test_player_attack_hit(self):
         monsters = [_make_monster(hp=10, ac=2, dex_mod=0, level=1)]
         event = CombatEvent(
-            id="evt_hit", name="Easy Fight",
+            id=3001, name="Easy Fight",
             description="A weak foe",
             monsters=monsters, room_level=1,
         )
@@ -294,15 +242,15 @@ class TestCombatEvent:
 
     def test_collect_loot_from_dead(self):
         event = self._make_combat_event()
-        event.monsters[0].loot_table = [LootEntry(item_id=200, probability=1.0)]
+        event.monsters[0].loot_table = [LootEntry(item_id=2000, probability=1.0)]
         event.monsters[0].take_damage(event.monsters[0].hp)
         loot = event.collect_loot()
-        assert 200 in loot
+        assert 2000 in loot
 
     def test_legacy_single_roll_resolve(self):
         """Old CombatEvent without monsters should use legacy resolve."""
         event = CombatEvent(
-            id="evt_old", name="Old Goblin",
+            id=3002, name="Old Goblin",
             description="A goblin attacks!",
             difficulty=3, damage_type="health",
             damage_range=[5, 10],
@@ -318,14 +266,14 @@ class TestCombatEvent:
 class TestPuzzleEvent:
     def _make_puzzle_event(self):
         return PuzzleEvent(
-            id="evt_p01", name="Locked Chest",
+            id=3003, name="Locked Chest",
             description="A locked chest blocks your path.",
             choices=[
-                EventChoice(text="Force it open", stat_check="health", dc=12),
+                EventChoice(text="Force it open", stat_check="STR", dc=12),
                 EventChoice(text="Use a bludgeon tool", tool_attribute="bludgeon", dc=8),
                 EventChoice(text="Walk away", auto_success=True),
             ],
-            reward_item_id=200,
+            reward_item_id=2000,
         )
 
     def test_walk_away_safe(self):
@@ -339,7 +287,7 @@ class TestPuzzleEvent:
     def test_stat_check_success(self):
         event = self._make_puzzle_event()
         player = _make_player(health=100)
-        # health//20 = 5, roll needs >= 12-5 = 7
+        # STR=20 -> modifier (20-10)//2 = 5, roll needs >= 12-5 = 7
         result = event.resolve(0, 15, player)
         assert result["success"]
         assert event.resolved
@@ -388,14 +336,14 @@ class TestPuzzleEvent:
 class TestEventEncounter:
     def _make_event_encounter(self):
         return EventEncounter(
-            id="evt_e01", name="Strange Shrine",
+            id=3004, name="Strange Shrine",
             description="A strange shrine glows in the darkness.",
             choices=[
-                EventChoice(text="Pray at the shrine", stat_check="health", dc=12),
+                EventChoice(text="Pray at the shrine", stat_check="STR", dc=12),
                 EventChoice(text="Smash it with a tool", tool_attribute="bludgeon", dc=10),
                 EventChoice(text="Walk away", auto_success=True),
             ],
-            reward_item_id=201,
+            reward_item_id=2001,
             failure_damage_type="health",
             failure_damage_range=[5, 10],
         )
@@ -428,7 +376,7 @@ class TestEventEncounter:
     def test_dice_plus_modifier(self):
         event = self._make_event_encounter()
         player = _make_player(health=100)
-        # health//20 = 5, so roll 7 + 5 = 12 >= dc 12
+        # STR=20 → modifier (20-10)//2 = 5, so roll 7 + 5 = 12 >= dc 12
         result = event.resolve(0, 7, player)
         assert result["success"]
 
@@ -463,7 +411,7 @@ class TestEncounterTileTrigger:
 class TestCreateEventFromData:
     def test_combat_with_monsters(self):
         data = {
-            "id": "evt_001",
+            "id": 3000,
             "type": "combat",
             "name": "Wolf Pack",
             "description": "Wolves attack!",
@@ -479,7 +427,7 @@ class TestCreateEventFromData:
 
     def test_puzzle_event(self):
         data = {
-            "id": "evt_002",
+            "id": 3010,
             "type": "puzzle",
             "name": "Locked Door",
             "description": "A locked door.",
@@ -494,12 +442,12 @@ class TestCreateEventFromData:
 
     def test_event_encounter(self):
         data = {
-            "id": "evt_003",
+            "id": 3011,
             "type": "event",
             "name": "Mysterious Light",
             "description": "A light appears.",
             "choices": [
-                {"text": "Investigate", "stat_check": "health", "dc": 10},
+                {"text": "Investigate", "stat_check": "STR", "dc": 10},
                 {"text": "Ignore", "auto_success": True},
             ],
             "failure_damage_type": "stamina",
@@ -543,7 +491,7 @@ class TestEncounterViewRender:
 
         monsters = [_make_monster()]
         event = CombatEvent(
-            id="evt_c", name="Wolf Pack", description="Wolves attack!",
+            id=3005, name="Wolf Pack", description="Wolves attack!",
             monsters=monsters, room_level=1,
         )
         db = self._make_dialogue_box(event)
@@ -559,10 +507,10 @@ class TestEncounterViewRender:
         view = EncounterView(screen, font)
 
         event = PuzzleEvent(
-            id="evt_p", name="Locked Chest",
+            id=3006, name="Locked Chest",
             description="A locked chest blocks your path.",
             choices=[
-                EventChoice(text="Force it", stat_check="health", dc=12),
+                EventChoice(text="Force it", stat_check="STR", dc=12),
                 EventChoice(text="Walk away", auto_success=True),
             ],
         )
@@ -577,10 +525,10 @@ class TestEncounterViewRender:
         view = EncounterView(screen, font)
 
         event = EventEncounter(
-            id="evt_e", name="Strange Shrine",
+            id=3007, name="Strange Shrine",
             description="A shrine glows.",
             choices=[
-                EventChoice(text="Pray", stat_check="health", dc=10),
+                EventChoice(text="Pray", stat_check="STR", dc=10),
                 EventChoice(text="Leave", auto_success=True),
             ],
         )
@@ -595,7 +543,7 @@ class TestEncounterViewRender:
         view = EncounterView(screen, font)
 
         event = PuzzleEvent(
-            id="evt_pr", name="Lock",
+            id=3008, name="Lock",
             description="A lock.",
             choices=[EventChoice(text="Pick", dc=10)],
         )
@@ -614,7 +562,7 @@ class TestEncounterViewRender:
         view = EncounterView(screen, font)
 
         event = EventEncounter(
-            id="evt_ef", name="Trap",
+            id=3009, name="Trap",
             description="A trap!",
             choices=[EventChoice(text="Jump", dc=15)],
         )

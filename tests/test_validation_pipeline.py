@@ -75,11 +75,11 @@ class TestQuestChecker:
     def test_valid_quest_passes(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "fetch", "title": "Get Mushrooms",
-            "description": "Find mushrooms.", "giver_npc_id": 100,
-            "target_items": [{"item_id": 200}],
+            "id": 4001, "type": "fetch", "title": "Get Mushrooms",
+            "description": "Find mushrooms.", "giver_npc_id": 1000,
+            "target_items": [{"item_id": 2000}],
         }
-        ctx = {"npc_ids": {100}, "item_ids": {200}}
+        ctx = {"npc_ids": {1000}, "item_ids": {2000}}
         result = checker.check(quest, ctx)
         assert result.passed, result.issues
 
@@ -92,51 +92,51 @@ class TestQuestChecker:
     def test_bad_giver_npc_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "fetch", "title": "Get it",
-            "description": "Do it.", "giver_npc_id": 999,
+            "id": 4001, "type": "fetch", "title": "Get it",
+            "description": "Do it.", "giver_npc_id": 1999,
         }
-        result = checker.check(quest, {"npc_ids": {100}})
+        result = checker.check(quest, {"npc_ids": {1000}})
         assert not result.passed
         assert any("giver NPC" in i for i in result.issues)
 
     def test_bad_fetch_item_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "fetch", "title": "Get it",
-            "description": "Do it.", "giver_npc_id": 100,
-            "target_items": [{"item_id": 999}],
+            "id": 4001, "type": "fetch", "title": "Get it",
+            "description": "Do it.", "giver_npc_id": 1000,
+            "target_items": [{"item_id": 2999}],
         }
-        result = checker.check(quest, {"npc_ids": {100}, "item_ids": {200}})
+        result = checker.check(quest, {"npc_ids": {1000}, "item_ids": {2000}})
         assert not result.passed
 
     def test_bad_combat_event_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "combat", "title": "Kill it",
-            "description": "Kill.", "giver_npc_id": 100,
-            "target_event_id": "evt_999",
+            "id": 4001, "type": "combat", "title": "Kill it",
+            "description": "Kill.", "giver_npc_id": 1000,
+            "target_event_id": 3999,
         }
-        result = checker.check(quest, {"npc_ids": {100}, "event_ids": {"evt_001"}})
+        result = checker.check(quest, {"npc_ids": {1000}, "event_ids": {3001}})
         assert not result.passed
 
     def test_escort_bad_npc_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "escort", "title": "Escort",
-            "description": "Go.", "giver_npc_id": 100,
-            "escort_npc_id": 999,
+            "id": 4001, "type": "escort", "title": "Escort",
+            "description": "Go.", "giver_npc_id": 1000,
+            "escort_npc_id": 1999,
         }
-        result = checker.check(quest, {"npc_ids": {100}})
+        result = checker.check(quest, {"npc_ids": {1000}})
         assert not result.passed
 
     def test_delivery_bad_item_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": "q_001", "type": "delivery", "title": "Deliver",
-            "description": "Bring.", "giver_npc_id": 100,
-            "delivery_item_id": 999, "target_npc_id": 101,
+            "id": 4001, "type": "delivery", "title": "Deliver",
+            "description": "Bring.", "giver_npc_id": 1000,
+            "delivery_item_id": 2999, "target_npc_id": 1001,
         }
-        result = checker.check(quest, {"npc_ids": {100, 101}, "item_ids": {200}})
+        result = checker.check(quest, {"npc_ids": {1000, 1001}, "item_ids": {2000}})
         assert not result.passed
 
 
@@ -233,23 +233,23 @@ class TestQuestValidator:
     def test_valid_fetch_quest(self):
         v = QuestValidator()
         quest = {
-            "type": "fetch", "giver_npc_id": 100,
-            "target_items": [{"item_id": 200}],
+            "type": "fetch", "giver_npc_id": 1000,
+            "target_items": [{"item_id": 2000}],
         }
-        ctx = {"npc_ids": {100}, "item_ids": {200}}
+        ctx = {"npc_ids": {1000}, "item_ids": {2000}}
         result = v.validate(quest, ctx)
         assert result.passed
 
     def test_missing_giver(self):
         v = QuestValidator()
-        quest = {"type": "fetch", "giver_npc_id": 999}
-        result = v.validate(quest, {"npc_ids": {100}})
+        quest = {"type": "fetch", "giver_npc_id": 1999}
+        result = v.validate(quest, {"npc_ids": {1000}})
         assert not result.passed
 
     def test_combat_missing_event(self):
         v = QuestValidator()
-        quest = {"type": "combat", "giver_npc_id": 100, "target_event_id": "evt_999"}
-        result = v.validate(quest, {"npc_ids": {100}, "event_ids": {"evt_001"}})
+        quest = {"type": "combat", "giver_npc_id": 1000, "target_event_id": 3999}
+        result = v.validate(quest, {"npc_ids": {1000}, "event_ids": {3001}})
         assert not result.passed
 
 
@@ -289,28 +289,28 @@ class TestBuildWorldBible:
             beats=[RoomStoryBeat(room_id="room_0", summary="Darkness gathers")],
         )
         npc_pool = [
-            {"id": 100, "name": "Alice", "selected": True},
-            {"id": 101, "name": "Bob", "selected": True},
-            {"id": 102, "name": "Unselected", "selected": False},
+            {"id": 1000, "name": "Alice", "selected": True},
+            {"id": 1001, "name": "Bob", "selected": True},
+            {"id": 1002, "name": "Unselected", "selected": False},
         ]
         event_list = [
-            {"id": "evt_000", "type": "combat", "name": "Rat",
+            {"id": 3000, "type": "combat", "name": "Rat",
              "monsters": [{"name": "Rat"}, {"name": "Rat"}]},
-            {"id": "evt_001", "type": "puzzle", "name": "Lock"},
+            {"id": 3001, "type": "puzzle", "name": "Lock"},
         ]
         quest_list = [
-            {"id": "q_000", "type": "fetch", "giver_npc_id": 100,
-             "target_items": [{"item_id": 200}]},
-            {"id": "q_001", "type": "combat", "giver_npc_id": 101,
-             "target_event_id": "evt_000"},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
+             "target_items": [{"item_id": 2000}]},
+            {"id": 4001, "type": "combat", "giver_npc_id": 1001,
+             "target_event_id": 3000},
         ]
         item_placements = [
-            {"x": 1, "y": 1, "item_id": 200},
-            {"x": 2, "y": 2, "item_id": 201},
+            {"x": 1, "y": 1, "item_id": 2000},
+            {"x": 2, "y": 2, "item_id": 2001},
         ]
         event_position_map = [
-            {"x": 3, "y": 3, "event_id": "evt_000"},
-            {"x": 5, "y": 5, "event_id": "evt_001"},
+            {"x": 3, "y": 3, "event_id": 3000},
+            {"x": 5, "y": 5, "event_id": 3001},
         ]
         return {
             "story": story, "npc_pool": npc_pool, "event_list": event_list,
@@ -333,14 +333,14 @@ class TestBuildWorldBible:
         # 2 quests
         assert len(room.quests) == 2
         # Entity index includes all refs
-        assert "npc:100" in bible.entity_index
-        assert "item:200" in bible.entity_index
-        assert "quest:q_000" in bible.entity_index
-        assert "encounter:evt_000" in bible.entity_index
+        assert "npc:1000" in bible.entity_index
+        assert "item:2000" in bible.entity_index
+        assert "quest:4000" in bible.entity_index
+        assert "encounter:3000" in bible.entity_index
 
     def test_unselected_npcs_excluded(self, world_data):
         bible = build_world_bible(**world_data)
-        assert "npc:102" not in bible.entity_index
+        assert "npc:1002" not in bible.entity_index
 
     def test_story_beat_propagated(self, world_data):
         bible = build_world_bible(**world_data)
@@ -354,41 +354,41 @@ class TestBuildWorldBible:
 class TestCrossValidate:
     def test_valid_world_no_issues(self):
         npc_pool = [
-            {"id": 100, "selected": True},
-            {"id": 101, "selected": True},
+            {"id": 1000, "selected": True},
+            {"id": 1001, "selected": True},
         ]
-        event_list = [{"id": "evt_000", "type": "combat"}]
+        event_list = [{"id": 3000, "type": "combat"}]
         quest_list = [
-            {"id": "q_000", "type": "fetch", "giver_npc_id": 100,
-             "target_items": [{"item_id": 200}]},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
+             "target_items": [{"item_id": 2000}]},
         ]
-        item_placements = [{"item_id": 200}]
-        bible = WorldBible()  # Doesn't matter for cross_validate
+        item_placements = [{"item_id": 2000}]
+        bible = WorldBible()
         issues = cross_validate(bible, npc_pool, event_list, quest_list, item_placements)
         assert issues == []
 
     def test_missing_giver_npc(self):
-        npc_pool = [{"id": 100, "selected": True}]
-        quest_list = [{"id": "q_000", "type": "fetch", "giver_npc_id": 999}]
+        npc_pool = [{"id": 1000, "selected": True}]
+        quest_list = [{"id": 4000, "type": "fetch", "giver_npc_id": 1999}]
         issues = cross_validate(WorldBible(), npc_pool, [], quest_list, [])
         assert any("giver NPC" in i for i in issues)
 
     def test_missing_fetch_item(self):
-        npc_pool = [{"id": 100, "selected": True}]
+        npc_pool = [{"id": 1000, "selected": True}]
         quest_list = [
-            {"id": "q_000", "type": "fetch", "giver_npc_id": 100,
-             "target_items": [{"item_id": 999}]},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
+             "target_items": [{"item_id": 2999}]},
         ]
-        issues = cross_validate(WorldBible(), npc_pool, [], quest_list, [{"item_id": 200}])
+        issues = cross_validate(WorldBible(), npc_pool, [], quest_list, [{"item_id": 2000}])
         assert any("fetch item" in i for i in issues)
 
     def test_missing_combat_event(self):
-        npc_pool = [{"id": 100, "selected": True}]
+        npc_pool = [{"id": 1000, "selected": True}]
         quest_list = [
-            {"id": "q_000", "type": "combat", "giver_npc_id": 100,
-             "target_event_id": "evt_999"},
+            {"id": 4000, "type": "combat", "giver_npc_id": 1000,
+             "target_event_id": 3999},
         ]
-        issues = cross_validate(WorldBible(), npc_pool, [{"id": "evt_000"}], quest_list, [])
+        issues = cross_validate(WorldBible(), npc_pool, [{"id": 3000}], quest_list, [])
         assert any("target event" in i for i in issues)
 
 
@@ -397,8 +397,8 @@ class TestWriteWorldBible:
         story = OverarchingStory(title="T", synopsis="S")
         bible = WorldBible(story=story)
         bible.rooms["room_0"] = RoomBible(environment="forest")
-        bible.entity_index["npc:100"] = EntityRef(
-            entity_type="npc", room_id="room_0", entity_id="100",
+        bible.entity_index["npc:1000"] = EntityRef(
+            entity_type="npc", room_id="room_0", entity_id="1000",
         )
         out_path = str(tmp_path / "world_bible.json")
         result = write_world_bible(bible, out_path)
@@ -407,7 +407,7 @@ class TestWriteWorldBible:
         with open(out_path) as f:
             data = json.load(f)
         assert data["story"]["title"] == "T"
-        assert "npc:100" in data["entity_index"]
+        assert "npc:1000" in data["entity_index"]
         assert data["rooms"]["room_0"]["environment"] == "forest"
 
 

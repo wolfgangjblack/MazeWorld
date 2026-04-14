@@ -2,6 +2,7 @@
 
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from src.views.save_load_panel import SaveLoadPanel
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
@@ -55,13 +56,21 @@ class PauseView:
         self.has_saves = has_saves
         self.showing_controls = False
         self.showing_save_load = False
-        self.save_load_index = 0
+        self.save_load_panel: SaveLoadPanel | None = None
         self.status_message = ""
         self.status_is_error = False
 
     def set_status(self, message: str, is_error: bool = False):
         self.status_message = message
         self.status_is_error = is_error
+
+    def open_save_load(self, saves: list[dict]):
+        """Open the save/load panel with current save list."""
+        self.save_load_panel = SaveLoadPanel(
+            self.screen, self.font, saves,
+            can_save=self.can_save,
+        )
+        self.showing_save_load = True
 
     def draw(self):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -73,8 +82,8 @@ class PauseView:
             self._draw_controls()
             return
 
-        if self.showing_save_load:
-            self._draw_save_load()
+        if self.showing_save_load and self.save_load_panel:
+            self.save_load_panel.draw()
             return
 
         title = self.title_font.render("PAUSED", True, TITLE_COLOR)
@@ -128,33 +137,22 @@ class PauseView:
         hint = self.small_font.render("Press Esc to go back", True, (120, 120, 120))
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 40))
 
-    def _draw_save_load(self):
-        title = self.title_font.render("SAVE / LOAD", True, TITLE_COLOR)
-        self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 60))
-
-        options = []
-        if self.can_save:
-            options.append(("Save Game", "save"))
-        if self.has_saves:
-            options.append(("Load Game", "load"))
-        options.append(("Back", "back"))
-
-        y = SCREEN_HEIGHT // 2 - len(options) * 15
-        for i, (label, _) in enumerate(options):
-            color = SELECTED_COLOR if i == self.save_load_index else UNSELECTED_COLOR
-            prefix = "> " if i == self.save_load_index else "  "
-            surf = self.small_font.render(f"{prefix}{label}", True, color)
-            self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, y + i * 30))
-
-    def handle_input(self, event) -> str | None:
-        """Returns action string or None."""
+    def handle_input(self, event) -> str | dict | None:
+        """Returns action string, panel action dict, or None."""
         if self.showing_controls:
             if event.key == pygame.K_ESCAPE:
                 self.showing_controls = False
             return None
 
-        if self.showing_save_load:
-            return self._handle_save_load_input(event)
+        if self.showing_save_load and self.save_load_panel:
+            result = self.save_load_panel.handle_input(event)
+            if result is None:
+                return None
+            if result["action"] == "back":
+                self.showing_save_load = False
+                self.save_load_panel = None
+                return None
+            return result
 
         if event.key == pygame.K_ESCAPE:
             return "resume"
@@ -178,9 +176,7 @@ class PauseView:
             if selected == "Story Recap":
                 return "story"
             if selected == "Save/Load":
-                self.showing_save_load = True
-                self.save_load_index = 0
-                return None
+                return "open_save_load"
             if selected == "Controls":
                 self.showing_controls = True
                 return None
@@ -188,28 +184,4 @@ class PauseView:
                 return "quit_to_start"
             if selected == "Exit Game":
                 return "exit_game"
-        return None
-
-    def _handle_save_load_input(self, event) -> str | None:
-        options = []
-        if self.can_save:
-            options.append("save")
-        if self.has_saves:
-            options.append("load")
-        options.append("back")
-
-        if event.key == pygame.K_ESCAPE:
-            self.showing_save_load = False
-            return None
-        if event.key == pygame.K_UP:
-            self.save_load_index = (self.save_load_index - 1) % len(options)
-        elif event.key == pygame.K_DOWN:
-            self.save_load_index = (self.save_load_index + 1) % len(options)
-        elif event.key == pygame.K_RETURN:
-            action = options[self.save_load_index]
-            if action == "back":
-                self.showing_save_load = False
-                return None
-            self.showing_save_load = False
-            return action
         return None

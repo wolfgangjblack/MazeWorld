@@ -21,7 +21,7 @@ def init_pygame():
 
 def _make_merchant(shop_inventory=None):
     return MerchantNPC(
-        x=5, y=5, id=999, name="Test Merchant",
+        x=5, y=5, id=1999, name="Test Merchant",
         job="merchant", environment="city",
         shop_inventory=shop_inventory or [],
     )
@@ -70,8 +70,8 @@ class TestShopViewNavigation:
 
     def test_navigate_buy_items(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-            {"item_id": 201, "price": 15, "stock": 1},
+            {"item_id": 2000, "price": 10, "stock": 2},
+            {"item_id": 2001, "price": 15, "stock": 1},
         ])
         player = _make_player()
         screen = pygame.display.get_surface()
@@ -104,7 +104,7 @@ class TestShopViewConfirm:
     @requires_data
     def test_buy_triggers_confirm(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
+            {"item_id": 2000, "price": 10, "stock": 2},
         ])
         player = _make_player()
         screen = pygame.display.get_surface()
@@ -119,7 +119,7 @@ class TestShopViewConfirm:
     @requires_data
     def test_confirm_buy(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
+            {"item_id": 2000, "price": 10, "stock": 2},
         ])
         player = _make_player()
         screen = pygame.display.get_surface()
@@ -133,7 +133,7 @@ class TestShopViewConfirm:
     @requires_data
     def test_cancel_confirm(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
+            {"item_id": 2000, "price": 10, "stock": 2},
         ])
         player = _make_player()
         screen = pygame.display.get_surface()
@@ -201,7 +201,7 @@ class TestShopViewEdgeCases:
 
     def test_draw_does_not_crash(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
+            {"item_id": 2000, "price": 10, "stock": 2},
         ])
         player = _make_player()
         food = Food(category="food", name="bread", desc="a tasty loaf",
@@ -214,7 +214,7 @@ class TestShopViewEdgeCases:
 
     def test_navigate_past_bounds(self, reg):
         merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 1},
+            {"item_id": 2000, "price": 10, "stock": 1},
         ])
         player = _make_player()
         screen = pygame.display.get_surface()

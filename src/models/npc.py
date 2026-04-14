@@ -24,7 +24,11 @@ class NPC(BaseModel):
     identity: Optional[str] = None
     opening_greeting: Optional[str] = None
     dialogue_tree: Optional[dict] = None
-    quest_id: Optional[str] = None
+    dialogue_tree_incomplete: Optional[dict] = None
+    dialogue_tree_complete: Optional[dict] = None
+    dialogue_tree_failed: Optional[dict] = None
+    quest_id: Optional[int] = None
+    current_dc: int = 10
     zone: Optional[List[int]] = None
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
@@ -189,9 +193,11 @@ class MerchantNPC(NPC):
 
 
 class AggressiveNPC(NPC):
-    """NPC that moves randomly until the player is within 5 squares and in line of sight."""
+    """NPC that moves randomly until the player is within 5 squares and in line of sight.
+    After combat_defeated is set, reverts to random wandering."""
     color: Tuple[int, int, int] = (255, 0, 0)
     dist: int = 5
+    combat_defeated: bool = False
 
     def prepare(self, maze_environment: str | None = None):
         self.generate_personality_document(maze_environment)
@@ -203,7 +209,7 @@ class AggressiveNPC(NPC):
 
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
-        if self.in_line_of_sight(maze, player_pos):
+        if not self.combat_defeated and self.in_line_of_sight(maze, player_pos):
             if player_pos[0] > self.x and not maze.is_wall(self.x + 1, self.y):
                 self.x += 1
             elif player_pos[0] < self.x and not maze.is_wall(self.x - 1, self.y):

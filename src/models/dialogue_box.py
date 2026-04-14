@@ -35,6 +35,12 @@ class DialogueBox:
         # Story context for NPC dialogue flavoring
         self.story_context = ""
 
+        # Quest context for quest-aware dialogue
+        self.quest_context = None
+
+        # Player reference (set by GameController for CHA checks)
+        self.player = None
+
         # Async generation state
         self.generating = False
         self._generation_thread = None
@@ -82,11 +88,14 @@ class DialogueBox:
     def _start_generation(self, npc, user_input):
         """Launch LLM response generation on a background thread."""
         ctx = self.story_context
+        qctx = self.quest_context
+        player = self.player
 
         def _run():
             try:
                 self._generation_result = generate_npc_response(
-                    npc, user_input, story_context=ctx)
+                    npc, user_input, story_context=ctx,
+                    quest_context=qctx, player=player)
             except Exception:
                 self._generation_result = f"{npc.name}: [Unable to generate response]"
         self._generation_thread = threading.Thread(target=_run, daemon=True)
@@ -134,6 +143,7 @@ class DialogueBox:
         self.scroll_position = 0
         self.auto_scroll = False
         self.generating = False
+        self.quest_context = None
 
     def start_event(self, event):
         """Activate an event in the dialogue box."""

@@ -8,12 +8,13 @@ import json
 import logging
 import os
 
+from config import DATA_DIR
 from src.models.story import OverarchingStory
 from src.models.world_bible import EntityRef, RoomBible, WorldBible
 
 logger = logging.getLogger(__name__)
 
-WORLD_BIBLE_PATH = os.path.join("data", "world_bible.json")
+WORLD_BIBLE_PATH = os.path.join(DATA_DIR, "world_bible.json")
 
 
 def build_world_bible(
@@ -26,6 +27,9 @@ def build_world_bible(
     maze_environment: str,
 ) -> WorldBible:
     """Assemble the WorldBible cross-reference index from generated pools.
+
+    **Test-only helper.** The production pipeline builds the bible
+    incrementally in ``_phase1_story`` / entity-generation phases.
 
     Parameters
     ----------
@@ -86,17 +90,18 @@ def build_world_bible(
     # --- Index events (encounters) ---
     for event in event_list:
         eid = event["id"]
-        room.encounters.append(eid)
-        entity_index[f"encounter:{eid}"] = EntityRef(
+        eid_str = str(eid)
+        room.encounters.append(eid_str)
+        entity_index[f"encounter:{eid_str}"] = EntityRef(
             entity_type="encounter",
             room_id=room_id,
-            entity_id=eid,
+            entity_id=eid_str,
         )
 
         # Index monsters within combat events
         if event.get("type") == "combat":
             for midx, monster in enumerate(event.get("monsters", [])):
-                monster_id = f"{eid}_m{midx}"
+                monster_id = f"{eid_str}_m{midx}"
                 room.monsters.append(monster_id)
                 entity_index[f"monster:{monster_id}"] = EntityRef(
                     entity_type="monster",
@@ -107,11 +112,12 @@ def build_world_bible(
     # --- Index quests ---
     for quest in quest_list:
         qid = quest["id"]
-        room.quests.append(qid)
-        entity_index[f"quest:{qid}"] = EntityRef(
+        qid_str = str(qid)
+        room.quests.append(qid_str)
+        entity_index[f"quest:{qid_str}"] = EntityRef(
             entity_type="quest",
             room_id=room_id,
-            entity_id=qid,
+            entity_id=qid_str,
         )
 
     bible.rooms[room_id] = room
@@ -126,20 +132,15 @@ def cross_validate(bible: WorldBible, npc_pool: list[dict],
     """Run cross-content validation checks. Returns list of issues found."""
     from src.generate.checker import check_quest_references
 
-    npc_ids = {str(n["id"]) for n in npc_pool if n.get("selected")}
+    # Entity IDs are int (XYYY ranges); keep types aligned with quest JSON and pools.
+    npc_ids = {n["id"] for n in npc_pool if n.get("selected")}
     event_ids = {e["id"] for e in event_list}
     item_ids = {p["item_id"] for p in item_placements}
 
     issues: list[str] = []
     for quest in quest_list:
-        # Normalize NPC ID fields to strings for comparison
-        normalized = dict(quest)
-        for key in ("giver_npc_id", "escort_npc_id", "target_npc_id"):
-            if key in normalized:
-                normalized[key] = str(normalized[key])
-
         issues.extend(check_quest_references(
-            normalized,
+            quest,
             npc_ids=npc_ids,
             item_ids=item_ids,
             event_ids=event_ids,
@@ -150,7 +151,11 @@ def cross_validate(bible: WorldBible, npc_pool: list[dict],
 
 
 def write_world_bible(bible: WorldBible, path: str = WORLD_BIBLE_PATH) -> str:
-    """Serialise the WorldBible to JSON. Returns the path written."""
+    """Serialise the WorldBible to JSON. Returns the path written.
+
+    **Test-only helper.** The production pipeline persists the bible
+    directly via ``bible.persist()``.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(bible.model_dump(), f, indent=2)

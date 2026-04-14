@@ -33,8 +33,8 @@ def test_generate_npc_portraits_delegates(tmp_path):
     mock_backend.generate_and_save.return_value = True
 
     npc_db = {
-        "100": {"description": "a warrior"},
-        "101": {"description": "an elf"},
+        "1000": {"description": "a warrior"},
+        "1001": {"description": "an elf"},
     }
 
     # Patch both get_image_backend AND IMAGE_BACKEND so the parallel path
@@ -45,8 +45,8 @@ def test_generate_npc_portraits_delegates(tmp_path):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
     assert mock_backend.generate_and_save.call_count == 2
-    assert npc_db["100"]["profile_image"].endswith("npc_100.png")
-    assert npc_db["101"]["profile_image"].endswith("npc_101.png")
+    assert npc_db["1000"]["profile_image"].endswith("npc_1000.png")
+    assert npc_db["1001"]["profile_image"].endswith("npc_1001.png")
 
 
 def test_generate_npc_portraits_handles_failure(tmp_path):
@@ -54,10 +54,10 @@ def test_generate_npc_portraits_handles_failure(tmp_path):
     mock_backend = MagicMock()
     mock_backend.generate_and_save.return_value = False
 
-    npc_db = {"101": {"description": "an elf"}}
+    npc_db = {"1001": {"description": "an elf"}}
 
     with patch("src.generate.image_client.get_image_backend", return_value=mock_backend), \
          patch("config.IMAGE_BACKEND", "local"):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
-    assert npc_db["101"]["profile_image"] is None
+    assert npc_db["1001"]["profile_image"] is None

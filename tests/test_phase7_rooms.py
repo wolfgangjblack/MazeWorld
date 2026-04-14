@@ -88,7 +88,7 @@ def player_with_class(warrior_class):
     return p
 
 
-def _make_mock_event(event_id="evt_001", resolved=False, is_gate=False,
+def _make_mock_event(event_id=3000, resolved=False, is_gate=False,
                      is_climax_boss=False):
     """Create a mock event object for testing."""
     evt = MagicMock()
@@ -139,7 +139,7 @@ class TestDoorReveal:
         # Create 10 mock events, 0 resolved
         events = {}
         for i in range(10):
-            events[f"evt_{i}"] = _make_mock_event(f"evt_{i}", resolved=False)
+            events[3000 + i] = _make_mock_event(3000 + i, resolved=False)
 
         gc = GameController.__new__(GameController)
         gc.maze = maze
@@ -159,13 +159,13 @@ class TestDoorReveal:
 
         # Resolve 3/10 = 30% — not enough
         for i in range(3):
-            events[f"evt_{i}"].resolved = True
+            events[3000 + i].resolved = True
         gc._count_total_encounters()
         gc._check_door_reveal()
         assert not maze.door_revealed
 
         # Resolve 4/10 = 40% — threshold met
-        events["evt_3"].resolved = True
+        events[3003].resolved = True
         gc.resolved_encounters = 4
         gc._check_door_reveal()
         assert maze.door_revealed
@@ -207,13 +207,13 @@ class TestGateEncounter:
         maze.generate()
         maze.place_door((1, 1))
         maze.reveal_door()
-        gate_evt = _make_mock_event("gate_001", resolved=False, is_gate=True)
-        maze.gate_encounter_id = "gate_001"
+        gate_evt = _make_mock_event(3100, resolved=False, is_gate=True)
+        maze.gate_encounter_id = 3100
 
         gc = GameController.__new__(GameController)
         gc.maze = maze
         gc.player = PlayerCharacter(x=1, y=1)
-        gc.events = {"gate_001": gate_evt}
+        gc.events = {3100: gate_evt}
         gc.quests = {}
         gc.dialogue_box = MagicMock()
         gc.gate_cleared = False
@@ -223,12 +223,13 @@ class TestGateEncounter:
         gc.item_message_active = False
         gc.stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
         gc.sfx = None
+        gc.combat_handler = MagicMock()
 
         # Player steps on door — gate should trigger, not transition
         gc.player.x, gc.player.y = maze.door_position
         gc._handle_door_interaction()
         assert gc.pending_action is None  # No room transition yet
-        gc.dialogue_box.start_event.assert_called_once_with(gate_evt)
+        gc.combat_handler.start.assert_called_once_with(gate_evt)
 
     def test_gate_cleared_allows_transition(self):
         """After gate is resolved, stepping on door triggers room transition."""
@@ -238,14 +239,14 @@ class TestGateEncounter:
         maze.generate()
         maze.place_door((1, 1))
         maze.reveal_door()
-        maze.gate_encounter_id = "gate_001"
+        maze.gate_encounter_id = 3100
 
-        gate_evt = _make_mock_event("gate_001", resolved=True, is_gate=True)
+        gate_evt = _make_mock_event(3100, resolved=True, is_gate=True)
 
         gc = GameController.__new__(GameController)
         gc.maze = maze
         gc.player = PlayerCharacter(x=1, y=1)
-        gc.events = {"gate_001": gate_evt}
+        gc.events = {3100: gate_evt}
         gc.quests = {}
         gc.dialogue_box = MagicMock()
         gc.gate_cleared = False
@@ -274,7 +275,7 @@ class TestGateFailurePenalty:
         combat_event.resolved = False
         combat_event.is_gate = True
         combat_event.player_fled = True
-        combat_event.id = "gate_001"
+        combat_event.id = 3100
 
         gc = GameController.__new__(GameController)
         gc.maze = MagicMock()
@@ -287,8 +288,10 @@ class TestGateFailurePenalty:
         gc.current_room = 0
         gc.item_message_active = False
         gc.sfx = None
+        from src.controllers.event_input_handler import EventInputHandler
+        gc.event_handler = EventInputHandler(gc)
 
-        gc._finalize_combat(combat_event)
+        gc.event_handler._finalize_combat(combat_event)
 
         assert gc.player.health == 100
         assert gc.player.stamina == 100
@@ -302,7 +305,7 @@ class TestGateFailurePenalty:
         combat_event.resolved = True
         combat_event.is_gate = True
         combat_event.player_fled = False
-        combat_event.id = "gate_001"
+        combat_event.id = 3100
 
         gc = GameController.__new__(GameController)
         gc.maze = MagicMock()
@@ -316,8 +319,10 @@ class TestGateFailurePenalty:
         gc.item_message_active = False
         gc.sfx = None
         gc.quest_manager = MagicMock()
+        from src.controllers.event_input_handler import EventInputHandler
+        gc.event_handler = EventInputHandler(gc)
 
-        gc._finalize_combat(combat_event)
+        gc.event_handler._finalize_combat(combat_event)
 
         gc.quest_manager.on_event_resolved.assert_called_once()
 
@@ -429,8 +434,8 @@ class TestVictoryScreen:
         font.render = MagicMock(return_value=MagicMock(get_width=lambda: 100))
 
         player = PlayerCharacter(x=0, y=0, name="Hero")
-        player.completed_quests = ["q1", "q2", "q3"]
-        player.failed_quests = ["q4"]
+        player.completed_quests = [4010, 4011, 4012]
+        player.failed_quests = [4013]
         stats = {"monsters_killed": 15, "items_used": 3, "rooms_cleared": 3}
 
         with patch("pygame.font.Font", return_value=font):
@@ -442,8 +447,8 @@ class TestVictoryScreen:
     def test_victory_stats_accurate(self):
         """Stats in victory view match what was tracked."""
         player = PlayerCharacter(x=0, y=0, name="Hero")
-        player.completed_quests = ["q1", "q2"]
-        player.failed_quests = ["q3"]
+        player.completed_quests = [4010, 4011]
+        player.failed_quests = [4012]
 
         stats = {"monsters_killed": 10, "items_used": 5, "rooms_cleared": 3}
 
@@ -483,7 +488,7 @@ class TestDoorPlacement:
         m = Maze()
         m.generate()
         m.place_door((1, 1))
-        m.gate_encounter_id = "gate_test"
+        m.gate_encounter_id = 3101
 
         path = str(tmp_path / "maze.json")
         m.save_to_json(path)
@@ -491,7 +496,7 @@ class TestDoorPlacement:
 
         assert loaded.door_position == m.door_position
         assert loaded.door_revealed == m.door_revealed
-        assert loaded.gate_encounter_id == "gate_test"
+        assert loaded.gate_encounter_id == 3101
 
 
 class TestClimaxBossVictory:
@@ -517,11 +522,15 @@ class TestClimaxBossVictory:
         gc.quest_manager = MagicMock()
         gc.sfx = None
         gc.quests = {}
+        from src.controllers.event_input_handler import EventInputHandler
+        from src.controllers.combat_input_handler import CombatInputHandler
+        gc.event_handler = EventInputHandler(gc)
+        gc.combat_handler = CombatInputHandler(gc)
         return gc
 
     def _make_climax_event(self):
         evt = MagicMock()
-        evt.id = "climax_boss_001"
+        evt.id = 3102
         evt.resolved = False
         evt.is_climax_boss = True
         evt.is_gate = False
@@ -531,33 +540,33 @@ class TestClimaxBossVictory:
 
     def test_climax_boss_defeat_sets_victory(self):
         combat_event = self._make_climax_event()
-        gc = self._make_gc({"climax_boss_001": combat_event})
-        gc._handle_combat_victory(combat_event)
+        gc = self._make_gc({3102: combat_event})
+        gc.event_handler._handle_combat_victory(combat_event)
         assert gc.pending_action == "victory"
 
     def test_climax_boss_increments_resolved_encounters(self):
         combat_event = self._make_climax_event()
-        gc = self._make_gc({"climax_boss_001": combat_event})
-        gc._handle_combat_victory(combat_event)
+        gc = self._make_gc({3102: combat_event})
+        gc.event_handler._handle_combat_victory(combat_event)
         assert gc.resolved_encounters == 1
 
     def test_climax_boss_sets_gate_cleared(self):
         combat_event = self._make_climax_event()
-        gc = self._make_gc({"climax_boss_001": combat_event})
-        gc._handle_combat_victory(combat_event)
+        gc = self._make_gc({3102: combat_event})
+        gc.event_handler._handle_combat_victory(combat_event)
         assert gc.gate_cleared is True
 
     def test_regular_combat_does_not_set_victory(self):
         combat_event = MagicMock()
-        combat_event.id = "evt_001"
+        combat_event.id = 3000
         combat_event.resolved = False
         combat_event.is_climax_boss = False
         combat_event.is_gate = False
         combat_event.monsters = []
         combat_event.collect_loot = MagicMock(return_value=[])
 
-        gc = self._make_gc({"evt_001": combat_event})
-        gc._handle_combat_victory(combat_event)
+        gc = self._make_gc({3000: combat_event})
+        gc.event_handler._handle_combat_victory(combat_event)
         assert gc.pending_action is None
 
     def test_climax_boss_excluded_from_total_encounters(self):
@@ -574,7 +583,7 @@ class TestClimaxBossVictory:
         boss.resolved = False
 
         gc = self._make_gc()
-        gc.events = {"e1": regular, "e2": regular, "boss": boss}
+        gc.events = {3000: regular, 3001: regular, 3102: boss}
         gc._count_total_encounters()
 
         assert gc.total_encounters == 2
@@ -602,17 +611,17 @@ class TestQuestDoorReveal:
         from src.models.quest import Quest, QuestReward
 
         quest = Quest(
-            id="q_dr",
+            id=4000,
             type="combat",
             title="Clear the Path",
             description="Defeat the monster",
-            giver_npc_id=100,
+            giver_npc_id=1000,
             reward=QuestReward(door_reveal=True, story_info="Path revealed!"),
         )
         player = PlayerCharacter(x=1, y=1)
-        player.active_quests.append("q_dr")
+        player.active_quests.append(4000)
 
-        qm = QuestManager({"q_dr": quest}, {})
+        qm = QuestManager({4000: quest}, {})
         callback = MagicMock()
         qm.door_reveal_callback = callback
 
@@ -626,17 +635,17 @@ class TestQuestDoorReveal:
         from src.models.quest import Quest, QuestReward
 
         quest = Quest(
-            id="q_no_dr",
+            id=4001,
             type="combat",
             title="Just Kill",
             description="Defeat the monster",
-            giver_npc_id=100,
+            giver_npc_id=1000,
             reward=QuestReward(door_reveal=False),
         )
         player = PlayerCharacter(x=1, y=1)
-        player.active_quests.append("q_no_dr")
+        player.active_quests.append(4001)
 
-        qm = QuestManager({"q_no_dr": quest}, {})
+        qm = QuestManager({4001: quest}, {})
         callback = MagicMock()
         qm.door_reveal_callback = callback
 

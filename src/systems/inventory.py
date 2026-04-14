@@ -43,11 +43,17 @@ class InventoryManager:
         if not items or selected_index >= len(items):
             return "No item to use."
         item = items[selected_index]
-        from src.models.items import EscortItem
+        from src.models.items import EscortItem, Weapon, Tool
         if isinstance(item, EscortItem):
             return item.use(self._player)
+        if isinstance(item, Weapon):
+            return self.equip_weapon(item.name)
         message = item.use(self._player)
-        self.remove(item.name)
+        if isinstance(item, Tool):
+            if item.item_stats.uses <= 0:
+                self.remove(item.name)
+        else:
+            self.remove(item.name)
         return message
 
     def give_selected(self, selected_index: int) -> str:
@@ -66,6 +72,7 @@ class InventoryManager:
     def equip_weapon(self, weapon_name: str) -> str:
         """Equip or unequip a weapon. Returns message."""
         from src.models.items import Weapon
+        from src.models.weapon import WEAPON_CATEGORY_ACCESS
         if weapon_name not in self._inventory:
             return "You don't have that weapon."
         item = self._inventory[weapon_name]
@@ -74,6 +81,13 @@ class InventoryManager:
         if self._player.equipped_weapon == weapon_name:
             self._player.equipped_weapon = None
             return f"You unequipped the {weapon_name}."
+        archetype = (
+            self._player.player_class.archetype
+            if self._player.player_class else "warrior"
+        )
+        allowed = WEAPON_CATEGORY_ACCESS.get(archetype, {"simple"})
+        if getattr(item, 'weapon_category', 'simple') not in allowed:
+            return "Only warriors and jesters can wield martial weapons."
         self._player.equipped_weapon = weapon_name
         return f"You equipped the {weapon_name}."
 

@@ -6,7 +6,7 @@ from tests.conftest import requires_data
 
 def _make_merchant(shop_inventory=None):
     return MerchantNPC(
-        x=5, y=5, id=999,
+        x=5, y=5, id=1999,
         name="Test Merchant",
         job="merchant",
         environment="city",
@@ -26,28 +26,29 @@ class TestMerchantNPC:
 
     def test_get_shop_items_filters_zero_stock(self):
         m = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 0},
-            {"item_id": 201, "price": 15, "stock": 2},
+            {"item_id": 2000, "price": 10, "stock": 0},
+            {"item_id": 2001, "price": 15, "stock": 2},
         ])
         available = m.get_shop_items()
         assert len(available) == 1
-        assert available[0]["item_id"] == 201
+        assert available[0]["item_id"] == 2001
 
     @requires_data
     def test_buy_from_success(self, reg):
         m = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 3},  # bread
+            {"item_id": 2000, "price": 10, "stock": 3},
         ])
         player = _make_player(money=50)
+        expected_name = reg.get_item_name(2000)
         msg = m.buy_from(0, player)
         assert "Bought" in msg
         assert player.money == 40
-        assert "bread" in player.inventory
+        assert expected_name in player.inventory
         assert m.shop_inventory[0]["stock"] == 2
 
     def test_buy_from_insufficient_funds(self, reg):
         m = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 100, "stock": 1},
+            {"item_id": 2000, "price": 100, "stock": 1},
         ])
         player = _make_player(money=10)
         msg = m.buy_from(0, player)
@@ -56,7 +57,7 @@ class TestMerchantNPC:
 
     def test_buy_from_invalid_index(self, reg):
         m = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 1},
+            {"item_id": 2000, "price": 10, "stock": 1},
         ])
         player = _make_player()
         msg = m.buy_from(5, player)
@@ -109,7 +110,7 @@ class TestMerchantNPC:
     @requires_data
     def test_buy_reduces_stock(self, reg):
         m = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 5, "stock": 1},
+            {"item_id": 2000, "price": 5, "stock": 1},
         ])
         player = _make_player(money=100)
         m.buy_from(0, player)

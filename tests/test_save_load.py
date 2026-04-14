@@ -41,9 +41,9 @@ def player_with_class():
     p.money = 100
     p.health = 80
     p.stamina = 60
-    p.active_quests = ["q1", "q2"]
-    p.completed_quests = ["q0"]
-    p.failed_quests = ["q_fail"]
+    p.active_quests = [4000, 4001]
+    p.completed_quests = [4002]
+    p.failed_quests = [4003]
     p.learned_spells = ["fireball"]
 
     # Add items to inventory
@@ -78,9 +78,9 @@ class TestPlayerSerialization:
         assert restored.money == 100
         assert restored.level == 1
         assert restored.equipped_weapon == "Longsword"
-        assert restored.active_quests == ["q1", "q2"]
-        assert restored.completed_quests == ["q0"]
-        assert restored.failed_quests == ["q_fail"]
+        assert restored.active_quests == [4000, 4001]
+        assert restored.completed_quests == [4002]
+        assert restored.failed_quests == [4003]
         assert restored.learned_spells == ["fireball"]
 
     def test_inventory_preserved(self, player_with_class):
@@ -127,11 +127,13 @@ class TestPlayerSerialization:
 class TestSaveMetadata:
     def test_save_filename_generation(self):
         filename = save_manager._save_filename(1234, "Gandalf", "Knight")
-        assert filename == "save_1234_gandalf_knight.json"
+        assert filename.startswith("save_1234_gandalf_knight_")
+        assert filename.endswith(".json")
 
     def test_save_filename_special_chars(self):
         filename = save_manager._save_filename(42, "Sir Lancelot", "Holy Knight")
-        assert filename == "save_42_sir_lancelot_holy_knight.json"
+        assert filename.startswith("save_42_sir_lancelot_holy_knight_")
+        assert filename.endswith(".json")
 
 
 class TestSaveState:
@@ -240,16 +242,16 @@ class TestDeleteSave:
 class TestNpcSerialization:
     def test_serialize_npc_basic(self):
         from src.models.npc import StaticNPC
-        npc = StaticNPC(x=3, y=7, id=1)
+        npc = StaticNPC(x=3, y=7, id=1000)
         data = save_manager.serialize_npc(npc)
-        assert data["id"] == 1
+        assert data["id"] == 1000
         assert data["x"] == 3
         assert data["y"] == 7
         assert data["_npc_type"] == "StaticNPC"
 
     def test_serialize_npc_with_history(self):
         from src.models.npc import StaticNPC
-        npc = StaticNPC(x=0, y=0, id=2)
+        npc = StaticNPC(x=0, y=0, id=1001)
         npc.add_turn("user", "Hello")
         npc.add_turn("assistant", "Hi there!")
         npc.has_met_player = True
@@ -262,7 +264,7 @@ class TestEventSerialization:
     def test_serialize_resolved_event(self):
         from src.models.encounter import PuzzleEvent, EventChoice
         evt = PuzzleEvent(
-            id="p1", name="Boulder", description="A boulder blocks the path",
+            id=3000, name="Boulder", description="A boulder blocks the path",
             choices=[EventChoice(text="Push it", dc=12)],
         )
         evt.resolved = True
@@ -272,9 +274,9 @@ class TestEventSerialization:
     def test_serialize_combat_event(self):
         from src.models.encounter import CombatEvent
         from src.models.monster import Monster
-        m = Monster(id="m1", species="Goblin", hp=5, max_hp=10)
+        m = Monster(id=5000, species="Goblin", hp=5, max_hp=10)
         evt = CombatEvent(
-            id="c1", name="Goblin fight", description="Goblins!",
+            id=3001, name="Goblin fight", description="Goblins!",
             monsters=[m],
         )
         data = save_manager.serialize_event(evt)
@@ -285,8 +287,8 @@ class TestQuestSerialization:
     def test_serialize_quest(self):
         from src.models.quest import FetchQuest, QuestReward
         q = FetchQuest(
-            id="q1", title="Find herbs", description="Get herbs",
-            giver_npc_id=1, target_items=[{"item_id": 101, "count": 2}],
+            id=4000, title="Find herbs", description="Get herbs",
+            giver_npc_id=1000, target_items=[{"item_id": 2000, "count": 2}],
             reward=QuestReward(money=50),
         )
         q.status = "active"
@@ -296,8 +298,8 @@ class TestQuestSerialization:
     def test_serialize_multistep_quest(self):
         from src.models.quest import MultiStepQuest, QuestReward
         q = MultiStepQuest(
-            id="ms1", title="Epic chain", description="Do things",
-            giver_npc_id=1, sub_quest_ids=["s1", "s2", "s3"],
+            id=4001, title="Epic chain", description="Do things",
+            giver_npc_id=1000, sub_quest_ids=[4010, 4011, 4012],
             reward=QuestReward(),
         )
         q.current_step = 1
@@ -309,15 +311,15 @@ class TestQuestSerialization:
 class TestFollowerSerialization:
     def test_serialize_follower(self):
         f = Follower(
-            npc_id=5, name="Bob", quest_id="q1",
+            npc_id=1005, name="Bob", quest_id=4000,
             joined_in_room=1, destination_room=2,
             personality="friendly",
             dialogue_hints=["Stay close.", "Almost there."],
         )
         data = save_manager.serialize_follower(f)
-        assert data["npc_id"] == 5
+        assert data["npc_id"] == 1005
         assert data["name"] == "Bob"
-        assert data["quest_id"] == "q1"
+        assert data["quest_id"] == 4000
         assert len(data["dialogue_hints"]) == 2
 
 

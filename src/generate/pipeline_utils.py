@@ -143,8 +143,9 @@ def _validate_quest(quest: dict, npc_pool: list, item_placements: list,
             return False
         if quest.get("target_npc_id") not in npc_ids:
             return False
-    elif qtype == "combat":
-        if quest.get("target_event_id") not in event_ids:
+    elif qtype in ("combat", "solve"):
+        target = quest.get("target_event_id")
+        if target and target not in event_ids:
             return False
     elif qtype == "dialogue_gated":
         prereq = quest.get("prerequisite_quest_id")
@@ -189,10 +190,12 @@ def _consumable_mult(room_level: int) -> float:
     return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
 
 
-def _build_items_json(llm_result: dict, room_level: int) -> dict:
-    """Convert LLM-generated item pools into the items.json format keyed by ID."""
-    items = {}
-    item_id = 200
+def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
+    """Convert LLM-generated item pools into a flat list of item dicts (no IDs).
+
+    The caller assigns XYYY IDs from the global item DB counter.
+    """
+    items: list[dict] = []
     mult = _consumable_mult(room_level)
 
     for raw in llm_result.get("food", [])[:4]:
@@ -202,7 +205,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
         hp_base = raw.get("health_value", 0)
         if not hp_base:
             hp_base = random.randint(1, 6)
-        items[str(item_id)] = {
+        items.append({
             "category": "food",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
@@ -213,10 +216,8 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "uses": 1,
                 "price": int(random.randint(5, 15) * mult),
             },
-        }
-        item_id += 1
+        })
 
-    item_id = 300
     for raw in llm_result.get("drink", [])[:4]:
         stam_base = raw.get("stamina_value", raw.get("hydration_value", 0))
         if not stam_base:
@@ -224,7 +225,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
         hp_base = raw.get("health_value", 0)
         if not hp_base:
             hp_base = random.randint(1, 6)
-        items[str(item_id)] = {
+        items.append({
             "category": "drink",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
@@ -235,12 +236,10 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "uses": 1,
                 "price": int(random.randint(5, 15) * mult),
             },
-        }
-        item_id += 1
+        })
 
-    item_id = 400
     for raw in llm_result.get("tools", [])[:3]:
-        items[str(item_id)] = {
+        items.append({
             "category": "tool",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
@@ -252,18 +251,18 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "uses": 3,
                 "price": int(random.randint(10, 25) * mult),
             },
-        }
-        item_id += 1
+        })
 
-    item_id = 500
     for raw in llm_result.get("weapons", [])[:3]:
         dice = raw.get("attack_dice", "1d4")
         lo, hi = WEAPON_PRICE_BY_DICE.get(dice, (10, 30))
-        items[str(item_id)] = {
+        weapon_entry = {
             "category": "weapon",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
             "weapon_type": raw.get("weapon_type", "simple"),
+            "damage_type": raw.get("damage_type", "physical"),
+            "weapon_category": raw.get("weapon_category", "simple"),
             "room_level": room_level,
             "item_stats": {
                 "attack_dice": dice,
@@ -271,12 +270,13 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "price": random.randint(lo, hi),
             },
         }
-        item_id += 1
+        if raw.get("magic_element"):
+            weapon_entry["magic_element"] = raw["magic_element"]
+        items.append(weapon_entry)
 
-    item_id = 600
     scroll_mult = 1.0 + (mult - 1.0) * 0.5
     for raw in llm_result.get("spell_scrolls", [])[:2]:
-        items[str(item_id)] = {
+        items.append({
             "category": "spell_scroll",
             "name": raw["name"],
             "desc": raw.get("desc", ""),
@@ -287,8 +287,7 @@ def _build_items_json(llm_result: dict, room_level: int) -> dict:
                 "stamina_value": int((30 if raw.get("spell_effect") == "sustain" else 0) * scroll_mult),
                 "price": int(random.randint(20, 40) * mult),
             },
-        }
-        item_id += 1
+        })
 
     return items
 

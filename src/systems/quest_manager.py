@@ -13,9 +13,11 @@ from src.registry import registry
 class QuestManager:
     """Centralizes quest lifecycle: offer, accept, progress, complete, fail."""
 
-    def __init__(self, quests: dict[str, Quest], events: dict | None = None):
+    def __init__(self, quests: dict[int, Quest], events: dict | None = None,
+                 npcs: list | None = None):
         self.quests = quests
         self.events = events or {}
+        self.npcs = npcs or []
         self.door_reveal_callback = None
 
     # ------------------------------------------------------------------
@@ -25,16 +27,16 @@ class QuestManager:
     def check_kill_quests_already_cleared(self, player: PlayerCharacter):
         """Complete combat quests whose target event was already resolved."""
         for qid, quest in self.quests.items():
-            if quest.type != "combat" or quest.status != "not_started":
+            if quest.type not in ("combat", "solve") or quest.status != "not_started":
                 continue
-            target_eid = getattr(quest, "target_event_id", "")
+            target_eid = getattr(quest, "target_event_id", 0)
             if target_eid:
                 event = self.events.get(target_eid)
                 if event and getattr(event, "resolved", False):
                     quest.status = "completed"
-                    # Directly add to completed since quest was never active
                     if qid not in player.completed_quests:
                         player.completed_quests.append(qid)
+                    self._swap_npc_dialogue_tree(quest, "completed")
 
     # ------------------------------------------------------------------
     # Offering quests (NPC interaction)
@@ -68,8 +70,8 @@ class QuestManager:
                     player.accept_quest(sub.id)
 
         # Check if kill-quest target already cleared
-        if quest.type == "combat":
-            target_eid = getattr(quest, "target_event_id", "")
+        if quest.type in ("combat", "solve"):
+            target_eid = getattr(quest, "target_event_id", 0)
             event = self.events.get(target_eid)
             if event and getattr(event, "resolved", False):
                 self.complete_quest(quest, player)
@@ -105,16 +107,24 @@ class QuestManager:
         return None
 
     # ------------------------------------------------------------------
-    # Completion on event resolution (combat)
+    # Completion on event resolution
     # ------------------------------------------------------------------
 
-    def on_event_resolved(self, event_id: str, player: PlayerCharacter) -> Quest | None:
-        """Called when a combat event is resolved. Completes matching combat quests."""
+    def on_event_resolved(self, event_id: int, player: PlayerCharacter) -> Quest | None:
+        """Called when any event is resolved. Completes matching quests by target_event_id."""
         for qid, quest in self.quests.items():
-            if (quest.type == "combat"
-                    and getattr(quest, "target_event_id", "") == event_id
+            if (getattr(quest, "target_event_id", 0) == event_id
                     and quest.status == "active"):
                 self.complete_quest(quest, player)
+                return quest
+        return None
+
+    def on_event_failed(self, event_id: int, player: PlayerCharacter) -> Quest | None:
+        """Called when a puzzle/event is failed. Fails matching active quests."""
+        for qid, quest in self.quests.items():
+            if (getattr(quest, "target_event_id", 0) == event_id
+                    and quest.status == "active"):
+                self.fail_quest(quest, player)
                 return quest
         return None
 
@@ -127,15 +137,14 @@ class QuestManager:
         from src.models.items import EscortItem
         for item_name, item in list(player.inventory.items()):
             if isinstance(item, EscortItem):
-                tx, ty = item.target_zone
-                if abs(player.x - tx) <= 2 and abs(player.y - ty) <= 2:
-                    player.remove_from_inventory(item_name)
-                    for qid, quest in self.quests.items():
-                        if (quest.type == "escort"
-                                and getattr(quest, "escort_npc_id", None) == item.npc_id
-                                and quest.status == "active"):
-                            self.complete_quest(quest, player)
-                            return quest
+                for qid, quest in self.quests.items():
+                    if (quest.type == "escort"
+                            and getattr(quest, "escort_npc_id", None) == item.npc_id
+                            and quest.status == "active"
+                            and quest.check_completion(player.x, player.y)):
+                        player.remove_from_inventory(item_name)
+                        self.complete_quest(quest, player)
+                        return quest
         return None
 
     # ------------------------------------------------------------------
@@ -166,6 +175,7 @@ class QuestManager:
                 self.door_reveal_callback()
 
         self._advance_multi_step(quest.id, player)
+        self._swap_npc_dialogue_tree(quest, "completed")
         return msg
 
     # ------------------------------------------------------------------
@@ -180,6 +190,7 @@ class QuestManager:
         msg = f"Quest failed: {quest.title}!"
         if penalty_msg:
             msg += f" ({penalty_msg})"
+        self._swap_npc_dialogue_tree(quest, "failed")
         return msg
 
     def check_room_quest_failures(self, player: PlayerCharacter, current_room: int) -> list[str]:
@@ -208,7 +219,7 @@ class QuestManager:
     # Multi-step advancement
     # ------------------------------------------------------------------
 
-    def _advance_multi_step(self, completed_quest_id: str, player: PlayerCharacter) -> str | None:
+    def _advance_multi_step(self, completed_quest_id: int, player: PlayerCharacter) -> str | None:
         """If completing a sub-quest advances a multi-step parent, do so.
 
         Returns a progress message or None.
@@ -276,6 +287,35 @@ class QuestManager:
                 failed.append(entry)
 
         return {"active": active, "completed": completed, "failed": failed}
+
+    # ------------------------------------------------------------------
+    # Dialogue tree swap
+    # ------------------------------------------------------------------
+
+    def _swap_npc_dialogue_tree(self, quest: Quest, outcome: str):
+        """Swap the quest-giver NPC's dialogue tree after quest resolution.
+
+        outcome: "completed" or "failed"
+        """
+        for npc in self.npcs:
+            if getattr(npc, "quest_id", None) != quest.id:
+                continue
+
+            if outcome == "completed" and getattr(npc, "dialogue_tree_complete", None):
+                npc.dialogue_tree = npc.dialogue_tree_complete
+                end_node = npc.dialogue_tree_complete.get("nodes", {}).get("end", {})
+                npc.finished_dialogue = end_node.get("prompt", "Thank you, adventurer.")
+            elif outcome == "failed" and getattr(npc, "dialogue_tree_failed", None):
+                npc.dialogue_tree = npc.dialogue_tree_failed
+                end_node = npc.dialogue_tree_failed.get("nodes", {}).get("end", {})
+                npc.finished_dialogue = end_node.get("prompt", "Perhaps next time...")
+            else:
+                return
+
+            npc.dialogue_tree["_current"] = "start"
+            npc.dialogue_exhausted = False
+            npc.has_met_player = False
+            break
 
     # ------------------------------------------------------------------
     # Helpers

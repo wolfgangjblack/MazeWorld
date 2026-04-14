@@ -61,7 +61,8 @@ class LlamaPromptSet(PromptSet):
 
     def npc_response(self, identity: str, history: list[dict],
                      npc_name: str, player_input: str,
-                     story_context: str = "") -> LLMRequest:
+                     story_context: str = "",
+                     quest_context: dict | None = None) -> LLMRequest:
         examples = _history_to_examples(history)
         system = identity
         if story_context:
@@ -71,11 +72,31 @@ class LlamaPromptSet(PromptSet):
                 "rumors about events — but keep each response to 1-3 sentences. "
                 "Reference specifics (names, places, events) rather than vague allusions."
             )
+        max_tokens = 150
+        if quest_context:
+            dc = quest_context.get("dc", 10)
+            title = quest_context.get("title", "unknown")
+            desc = quest_context.get("description", "")
+            system += (
+                "\n\nYou are also evaluating the player's social behavior. "
+                "After your in-character response, output a JSON line on a NEW line "
+                "in this exact format:\n"
+                '{"dc_next": <8-20>, "tone": "<friendly|neutral|rude|threatening|off_topic>"}\n\n'
+                f"dc_next: difficulty class for the NEXT interaction. Start at {dc}.\n"
+                "- If the player was friendly/charming/on-topic: lower by 1-3\n"
+                "- If the player was neutral: keep the same\n"
+                "- If the player was rude/aggressive/off-topic: raise by 2-5\n"
+                "- Clamp between 8 and 20\n\n"
+                "Your personality affects tolerance: a gruff NPC raises DC slower on "
+                "rudeness; a shy NPC raises it faster.\n\n"
+                f'Active quest: "{title}" — {desc}'
+            )
+            max_tokens = 200
         return LLMRequest(
             system=system,
             examples=examples,
             user_message=player_input,
-            max_tokens=150,
+            max_tokens=max_tokens,
         )
 
     def image_description(self, personality_doc: dict) -> LLMRequest:
@@ -226,15 +247,32 @@ class LlamaPromptSet(PromptSet):
     def dialogue_tree_generation(self, npc_personality: dict,
                                  quest_context: dict | None = None) -> LLMRequest:
         context = str({"npc": npc_personality, "quest": quest_context})
-        return LLMRequest(
-            system=(
+
+        if quest_context:
+            system = (
+                "You generate dialogue trees for a quest NPC. Output JSON with THREE trees:\n"
+                "1. \"incomplete\" — while quest is active (3-5 nodes). Introduce NPC, describe quest.\n"
+                "2. \"complete_success\" — after success (2-3 nodes). Thank player, grateful farewell.\n"
+                "3. \"complete_failure\" — after failure (2-3 nodes). Acknowledge attempt, resigned farewell.\n"
+                "Format: {\"incomplete\": {\"nodes\": {\"start\": {\"prompt\": ..., \"choices\": [...]}, "
+                "\"end\": {\"prompt\": ..., \"choices\": []}}}, "
+                "\"complete_success\": {\"nodes\": {...}}, \"complete_failure\": {\"nodes\": {...}}}. "
+                "Stay in character."
+            )
+            max_tokens = 1000
+        else:
+            system = (
                 "You generate dialogue trees for fantasy game NPCs. "
                 "Output a JSON: {nodes: {start: {prompt, choices: [{text, next_node_id}]}, ...}}. "
                 "3-5 nodes. Stay in character."
-            ),
+            )
+            max_tokens = 400
+
+        return LLMRequest(
+            system=system,
             examples=[],
             user_message=context,
-            max_tokens=400,
+            max_tokens=max_tokens,
         )
 
     def item_generation(self, env: str, env_name: str, room_level: int,
@@ -253,8 +291,8 @@ class LlamaPromptSet(PromptSet):
                 "You generate environment-themed items for a fantasy game. "
                 "Output a JSON object with keys: food (4 items), drink (4 items), "
                 "tools (3 items), weapons (3 items), spell_scrolls (2 items). "
-                "Each food: {name, desc, stamina_value, health_value}. "
-                "Each drink: {name, desc, stamina_value, health_value}. "
+                "Each food: {name, desc}. "
+                "Each drink: {name, desc}. "
                 "Each tool: {name, desc, attribute (bludgeon|cutting|digging|climbing)}. "
                 "Each weapon: {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}. "
                 "Each spell_scroll: {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}. "
@@ -263,18 +301,14 @@ class LlamaPromptSet(PromptSet):
             examples=[
                 (
                     "environment: 'forest', name: 'Whisperwood', room_level: 1",
-                    '{"food": [{"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", '
-                    '"stamina_value": 20, "health_value": 0}, {"name": "wild berries", '
-                    '"desc": "Sweet ripe berries.", "stamina_value": 10, "health_value": 5}, '
-                    '{"name": "roasted rabbit", "desc": "Campfire-roasted rabbit.", '
-                    '"stamina_value": 25, "health_value": 10}, {"name": "honey cake", '
-                    '"desc": "Sticky-sweet cake with wild honey.", "stamina_value": 15, "health_value": 5}], '
-                    '"drink": [{"name": "spring water", "desc": "Cool forest spring water.", '
-                    '"stamina_value": 15, "health_value": 0}, {"name": "herbal tea", '
-                    '"desc": "Soothing forest herb tea.", "stamina_value": 20, "health_value": 10}, '
-                    '{"name": "berry juice", "desc": "Fresh wild berry juice.", '
-                    '"stamina_value": 10, "health_value": 5}, {"name": "dew drops", '
-                    '"desc": "Morning dew from broad leaves.", "stamina_value": 10, "health_value": 0}], '
+                    '{"food": [{"name": "forest bread", "desc": "Hearty bread baked with acorn flour."}, '
+                    '{"name": "wild berries", "desc": "Sweet ripe berries."}, '
+                    '{"name": "roasted rabbit", "desc": "Campfire-roasted rabbit."}, '
+                    '{"name": "honey cake", "desc": "Sticky-sweet cake with wild honey."}], '
+                    '"drink": [{"name": "spring water", "desc": "Cool forest spring water."}, '
+                    '{"name": "herbal tea", "desc": "Soothing forest herb tea."}, '
+                    '{"name": "berry juice", "desc": "Fresh wild berry juice."}, '
+                    '{"name": "dew drops", "desc": "Morning dew from broad leaves."}], '
                     '"tools": [{"name": "hatchet", "desc": "A small hatchet.", "attribute": "cutting"}, '
                     '{"name": "climbing vines", "desc": "Strong woven vines.", "attribute": "climbing"}, '
                     '{"name": "root digger", "desc": "Curved digging tool.", "attribute": "digging"}], '
@@ -450,7 +484,12 @@ class LlamaPromptSet(PromptSet):
         )
 
     def monster_generation(self, env: str, env_name: str, room_level: int,
-                           story_context: str) -> LLMRequest:
+                           story_context: str, total_rooms: int = 1) -> LLMRequest:
+        scale_stats_line = (
+            f"Scale stats to room_level (1=easy, {total_rooms}=hard). "
+            if total_rooms > 1
+            else "Scale stats so the mix includes easy fodder monsters and one challenging boss for a single-room dungeon. "
+        )
         context = str({
             "environment": env,
             "environment_name": env_name,
@@ -468,7 +507,7 @@ class LlamaPromptSet(PromptSet):
                 "abilities: [{name, effect_type, damage_dice, chance}], portrait_prompt}]\n\n"
                 "Each monster's description and backstory should tie to the faction or "
                 "environment. Scale lore depth to room_level. At least 1 monster should be "
-                "night_only. Scale stats to room_level (1=easy, 4=hard). "
+                "night_only. " + scale_stats_line +
                 "Be information-dense: every name and backstory should reinforce the world's "
                 "lore. Do not pad or ramble."
             ),

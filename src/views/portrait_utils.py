@@ -5,8 +5,11 @@ so every view (combat, dialogue, encounter, class select, victory)
 uses the same loader and shares cached surfaces.
 """
 
+import logging
 import os
 import pygame
+
+logger = logging.getLogger(__name__)
 
 _CACHE_MAX = 64
 _cache: dict[str, pygame.Surface | None] = {}
@@ -14,7 +17,7 @@ _cache: dict[str, pygame.Surface | None] = {}
 
 def load_portrait(
     path: str | None,
-    size: tuple[int, int] = (64, 64),
+    size: tuple[int, int] = (128, 128),
 ) -> pygame.Surface | None:
     """Load, scale, and cache a portrait image. Returns None on failure."""
     if not path:
@@ -33,7 +36,7 @@ def load_portrait(
             _cache[key] = img
             return img
         except Exception:
-            pass
+            logger.debug("Failed to load portrait: %s", path, exc_info=True)
 
     _cache[key] = None
     return None

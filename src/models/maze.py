@@ -34,13 +34,10 @@ WALL_COLORS = {
 }
 
 NPC_QUEST_TYPE_WEIGHTS = {
-    "follower_same": 0.10,
-    "follower_next": 0.05,
-    "combat_npc": 0.10,
-    "fetch_item": 0.10,
-    "solve_puzzle": 0.10,
-    "solve_event": 0.10,
-    "combat_event": 0.45,
+    "fetch": 0.30,
+    "combat": 0.25,
+    "solve": 0.30,
+    "escort": 0.15,
 }
 
 
@@ -100,7 +97,7 @@ class Maze:
         self.grid = self.initialize_maze()
         self.door_position: tuple[int, int] | None = None
         self.door_revealed: bool = False
-        self.gate_encounter_id: str | None = None
+        self.gate_encounter_id: int | None = None
         self.tile_meta: list[TileMeta] = []
 
     def initialize_maze(self):
@@ -276,7 +273,7 @@ class Maze:
             multi_count = 1
             if etype == "combat" and random.random() < 0.10:
                 is_multi = True
-                multi_count = random.randint(1, 4)
+                multi_count = random.randint(2, 4)
 
             tg = None
             if idx in time_gated_indices:
@@ -308,13 +305,14 @@ class Maze:
 
         quest_types = list(NPC_QUEST_TYPE_WEIGHTS.keys())
         quest_weights = list(NPC_QUEST_TYPE_WEIGHTS.values())
+        assigned_solve_tiles: set[tuple] = set()
 
         for pos in npc_positions:
             role_roll = random.random()
-            if role_roll < 0.25:
+            if role_roll < 0.40:
                 role = "quest"
                 qt = random.choices(quest_types, weights=quest_weights, k=1)[0]
-            elif role_roll < 0.35:
+            elif role_roll < 0.50:
                 role = "merchant"
                 qt = None
             else:
@@ -324,15 +322,18 @@ class Maze:
             max_ex = random.randint(3, 10)
 
             target_tile = None
-            if qt in ("combat_event", "solve_puzzle", "solve_event"):
-                matching = [m for m in meta if m.tile_type == "event"
-                            and ((qt == "combat_event" and m.event_type == "combat")
-                                 or (qt == "solve_puzzle" and m.event_type == "puzzle")
-                                 or (qt == "solve_event" and m.event_type == "event"))]
-                if matching:
-                    target_tile = random.choice(matching).position
-            elif qt == "fetch_item":
-                pass  # target resolved after items are placed
+            if qt == "solve":
+                event_tiles = [m for m in meta if m.tile_type == "event"
+                               and m.position not in assigned_solve_tiles]
+                if event_tiles:
+                    chosen = random.choice(event_tiles)
+                    target_tile = chosen.position
+                    assigned_solve_tiles.add(target_tile)
+            elif qt == "escort":
+                far_tiles = [p for p in open_cells if p not in used
+                             and abs(p[0] - pos[0]) + abs(p[1] - pos[1]) > 10]
+                if far_tiles:
+                    target_tile = random.choice(far_tiles[:max(1, len(far_tiles) // 3)])
 
             meta.append(TileMeta(
                 position=pos,
@@ -343,11 +344,11 @@ class Maze:
                 quest_target_tile=target_tile,
             ))
 
-        # Mark the first quest NPC tile as a story NPC so at least 1 story quest
-        # is guaranteed per room regardless of LLM output.
+        # Mark 2-5 random quest NPCs as story NPCs
         quest_npc_tiles = [t for t in meta if t.tile_type == "npc" and t.quest_type]
-        if quest_npc_tiles:
-            quest_npc_tiles[0].is_story_npc = True
+        num_story = min(len(quest_npc_tiles), random.randint(2, 5))
+        for t in random.sample(quest_npc_tiles, num_story) if quest_npc_tiles else []:
+            t.is_story_npc = True
 
         # -- Items: ITEM_DENSITY of open cells --
         remaining = [p for p in open_cells if p not in used]
@@ -403,7 +404,7 @@ class Maze:
             json.dump(data, f)
 
     @classmethod
-    def load_from_json(cls, path: str) -> "Maze":
+    def load_from_json(cls, path: str) -> tuple["Maze", dict]:
         """Reconstruct a Maze from a previously saved JSON file."""
         with open(path, "r") as f:
             data = json.load(f)
@@ -412,6 +413,7 @@ class Maze:
         maze.event_tile_id = -1
         maze.door_tile_id = DOOR_TILE_ID
         maze.wall_tile_id = 1
+        maze.tile_meta = []
         maze.environment = data["environment"]
         maze.environment_name = data.get("environment_name", "")
         maze.grid = data["grid"]

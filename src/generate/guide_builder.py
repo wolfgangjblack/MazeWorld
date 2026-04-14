@@ -15,19 +15,23 @@ import glob
 import json
 import logging
 import os
+import re
 import textwrap
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from config import DATA_DIR, WORLD_SEED
 
-DATA_DIR = "data"
-GUIDE_OUTPUT_DIR = os.path.join(DATA_DIR, "guide")
-GUIDE_MD_PATH = os.path.join(GUIDE_OUTPUT_DIR, "PLAYER_GUIDE.md")
-GUIDE_PDF_PATH = os.path.join(GUIDE_OUTPUT_DIR, "PLAYER_GUIDE.pdf")
+logger = logging.getLogger(__name__)
+GUIDE_OUTPUT_DIR = "docs"
 MAP_OUTPUT_DIR = os.path.join(DATA_DIR, "portraits", "maps")
 
-# Relative prefix from guide output dir to project root for image paths
-_IMG_PREFIX = "../.."
+_IMG_PREFIX = ".."
+
+
+def _safe_filename(title: str) -> str:
+    """Sanitize a title for use in filenames."""
+    clean = re.sub(r'[^\w\s-]', '', title).strip()
+    return re.sub(r'[\s]+', '_', clean)
 
 # Map renderer constants
 TILE_SIZE = 16
@@ -207,7 +211,6 @@ def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
     for ip in maze_data.get("item_placements", []):
         item_positions.add((int(ip["x"]), int(ip["y"])))
 
-    # Build boss/gate position lookup from events
     event_flag_pos: dict[tuple[int, int], str] = {}
     for ep in maze_data.get("event_positions", []):
         eid = ep.get("event_id", "")
@@ -291,12 +294,12 @@ def _render_maze_png(maze_data: dict, room_id: str, room_idx: int,
 
 
 # ---------------------------------------------------------------------------
-# HTML card renderers (match wireframe layouts)
+# HTML card renderers
 # ---------------------------------------------------------------------------
 
 def _card_class(cls: dict, idx: int) -> str:
-    """Wireframe 1: portrait + stats side-by-side, desc below, then abilities/spells."""
-    portrait = cls.get("portrait_path", f"data/portraits/classes/class_{idx}.png")
+    """Portrait + stats side-by-side, desc below, then abilities/spells."""
+    portrait = cls.get("portrait_path", f"{DATA_DIR}/portraits/classes/class_{idx}.png")
     stats = cls.get("stats", {})
     stat_cells = " | ".join(f"**{k}** {v}" for k, v in stats.items())
 
@@ -305,13 +308,22 @@ def _card_class(cls: dict, idx: int) -> str:
     ability_pool = cls.get("ability_pool", [])
     spell_pool = cls.get("spell_pool", [])
 
+    archetype = cls.get("archetype", "?")
+    weapon_access = {
+        "warrior": "simple + martial",
+        "jester": "simple + martial",
+        "mage": "simple only",
+        "healer": "simple only",
+    }.get(archetype, "simple only")
+
     lines = [
         '<table><tr>',
         f'<td width="220"><img src="{_img(portrait)}" width="200"/></td>',
         '<td>',
         f'<h3>{cls.get("name", "Unknown Class")}</h3>',
-        f'<b>Archetype:</b> {cls.get("archetype", "?")}<br/>',
-        f'<b>Starting Weapon:</b> {cls.get("starting_weapon", "Fists")}<br/><br/>',
+        f'<b>Archetype:</b> {archetype}<br/>',
+        f'<b>Starting Weapon:</b> {cls.get("starting_weapon", "Fists")}<br/>',
+        f'<b>Weapon Access:</b> {weapon_access}<br/><br/>',
         f'{stat_cells}',
         '</td>',
         '</tr></table>',
@@ -376,12 +388,8 @@ def _card_class(cls: dict, idx: int) -> str:
 
 
 def _card_monster(mon: dict) -> str:
-    """Wireframe 1 adapted: portrait + stats side-by-side for a monster."""
+    """Portrait + stats side-by-side for a monster, including abilities."""
     portrait = mon.get("profile_image") or ""
-    if not portrait:
-        portrait_prompt = mon.get("portrait_prompt", "")
-    else:
-        portrait_prompt = ""
 
     rooms = mon.get("_rooms", set())
     room_str = ", ".join(sorted(rooms)) if isinstance(rooms, set) else str(rooms)
@@ -392,6 +400,8 @@ def _card_monster(mon: dict) -> str:
         if portrait and os.path.exists(portrait)
         else '<em>No portrait</em>'
     )
+
+    phys_type = mon.get("physical_type", "physical")
 
     lines = [
         '<table><tr>',
@@ -404,6 +414,7 @@ def _card_monster(mon: dict) -> str:
         f'&nbsp; <b>AC:</b> {mon.get("ac", "?")}<br/>',
         f'<b>Damage:</b> {mon.get("damage_dice_expr", "1d6")} '
         f'{mon.get("damage_type", "physical")}<br/>',
+        f'<b>Physical Type:</b> {phys_type}<br/>',
         f'<b>Element:</b> {mon.get("elemental_affinity", "none")}<br/>',
         f'<b>Magic Resist:</b> {mon.get("magic_resistance", 0)}<br/>',
         f'<b>Encounters:</b> {count} &nbsp; <b>Rooms:</b> {room_str}',
@@ -412,14 +423,33 @@ def _card_monster(mon: dict) -> str:
         '',
         f'> *{mon.get("description", "")}*',
         '',
-        '---',
-        '',
     ]
+
+    abilities = mon.get("abilities", [])
+    if abilities:
+        lines.append('**Abilities:**')
+        lines.append('')
+        for ab in abilities:
+            effect = ab.get("effect_type", "damage")
+            dice = ab.get("damage_dice", "?")
+            chance = ab.get("chance", 0)
+            chance_pct = int(chance * 100) if chance <= 1 else int(chance)
+            duration = ab.get("duration", 0)
+            ab_name = ab.get("name", effect.title())
+            dur_str = f", {duration} turns" if duration else ""
+            lines.append(
+                f'- **{ab_name}** ({effect}) — '
+                f'{dice} dmg, {chance_pct}% chance{dur_str}'
+            )
+        lines.append('')
+
+    lines.append('---')
+    lines.append('')
     return "\n".join(lines)
 
 
 def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
-    """Wireframe 2: centered portrait, description, choices/monsters."""
+    """Centered portrait, description, choices/monsters with physical types."""
     evt_type = evt.get("type", "event")
     portrait = evt.get("profile_image") or ""
     count = evt.get("_occurrence_count", 1)
@@ -456,10 +486,14 @@ def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
             lines.append('**Monster Lineup:**')
             lines.append('')
             for m in monsters:
+                phys = m.get("physical_type", "physical")
+                elem = m.get("elemental_affinity", "none")
+                elem_str = f", element: {elem}" if elem and elem != "none" else ""
                 lines.append(
                     f'- **{m.get("name", "?")}** — '
                     f'HP {m.get("hp", "?")}, AC {m.get("ac", "?")}, '
-                    f'{m.get("damage_dice_expr", "1d6")} {m.get("damage_type", "")}'
+                    f'{m.get("damage_dice_expr", "1d6")} {m.get("damage_type", "")}, '
+                    f'weakness: {phys}{elem_str}'
                 )
             lines.append('')
 
@@ -521,9 +555,9 @@ def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
 
 
 def _card_npc(npc: dict, room_id: str, items_lookup: dict | None = None) -> str:
-    """Wireframe 3: centered portrait, description, dialogue/quest info."""
+    """Centered portrait, description, dialogue/quest info."""
     npc_id = npc.get("id", 0)
-    portrait = f"data/portraits/npcs/npc_{npc_id}.png"
+    portrait = f"{DATA_DIR}/portraits/npcs/npc_{npc_id}.png"
     has_portrait = os.path.exists(portrait)
 
     lines = [
@@ -544,6 +578,11 @@ def _card_npc(npc: dict, room_id: str, items_lookup: dict | None = None) -> str:
     lines.append('')
     lines.append(f'> *{npc.get("backstory", "")}*')
     lines.append('')
+
+    avail = npc.get("availability", "always")
+    if avail != "always":
+        lines.append(f'**Available:** {avail} only')
+        lines.append('')
 
     greeting = npc.get("opening_greeting", "")
     if greeting:
@@ -574,18 +613,145 @@ def _card_npc(npc: dict, room_id: str, items_lookup: dict | None = None) -> str:
     return "\n".join(lines)
 
 
+def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
+    """Render a single quest entry with walkthrough for all quest types."""
+    quest_id = quest.get("id", "")
+    qtype = quest.get("type", "unknown")
+    npc_id = quest.get("giver_npc_id")
+    giver_name = "Unknown"
+    for n in npcs:
+        if n.get("id") == npc_id:
+            giver_name = n.get("name", "Unknown")
+            break
+
+    reward = quest.get("reward", {})
+    penalty = quest.get("failure_penalty", {})
+
+    lines = [
+        f'<a id="{quest_id}"></a>',
+        '',
+        f'#### {quest.get("title", "Quest")}',
+        f'**Type:** `{qtype}` &nbsp; **Story Quest:** '
+        f'{"Yes" if quest.get("is_story_quest") else "No"}',
+        '',
+        f'**Quest Giver:** [{giver_name}](#npc-{npc_id})',
+        '',
+        f'> *{quest.get("description", "")}*',
+        '',
+    ]
+
+    prereq = quest.get("prerequisite_quest_id")
+    if prereq:
+        lines.append(f'**Prerequisite:** Complete quest `{prereq}` first.')
+        lines.append('')
+
+    time_gate = quest.get("time_gate")
+    if time_gate:
+        lines.append(f'**Time Gate:** {time_gate} only')
+        lines.append('')
+
+    lines.append('**Walkthrough:**')
+    lines.append('')
+
+    if qtype == "combat_npc":
+        target = quest.get("target_npc_id")
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Challenge NPC #{target} to combat.')
+        lines.append(f'3. Defeat them to complete the quest.')
+    elif qtype in ("combat_event", "combat"):
+        target_evt = quest.get("target_event_id", "?")
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Find and complete combat event `{target_evt}`.')
+    elif qtype in ("solve_puzzle", "solve", "solve_event"):
+        target_evt = quest.get("target_event_id", "?")
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Solve event `{target_evt}`.')
+    elif qtype in ("fetch_item", "fetch"):
+        target_tile = quest.get("target_tile", [])
+        cat = quest.get("item_category", "item")
+        tile_str = f"({target_tile[0]}, {target_tile[1]})" if target_tile else "unknown"
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Find a **{cat}** item at tile {tile_str}.')
+        lines.append(f'3. Return to **{giver_name}** with the item.')
+    elif qtype == "delivery":
+        target_npc = quest.get("target_npc_id", "?")
+        item_id = quest.get("delivery_item_id", "?")
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Obtain item #{item_id} if you don\'t have it.')
+        lines.append(f'3. Deliver the item to NPC #{target_npc}.')
+    elif qtype in ("follower_same", "follower_next", "escort"):
+        target_pos = quest.get("target_position", [])
+        pos_str = f"({target_pos[0]}, {target_pos[1]})" if target_pos else "the target zone"
+        crosses = " (crosses to next room)" if quest.get("crosses_room") else ""
+        lines.append(f'1. Speak to **{giver_name}** to accept the escort quest.')
+        lines.append(f'2. The escort NPC will join as a follower (max 2 followers).')
+        lines.append(f'3. Escort them safely to {pos_str}{crosses}.')
+        lines.append(f'4. Stay within 2 tiles of the target zone to complete.')
+    elif qtype in ("dialogue", "dialogue_gated"):
+        dc = quest.get("dc", "?")
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
+        lines.append(f'2. Navigate the conversation successfully (CHA check, DC {dc}).')
+        if quest.get("can_retry"):
+            lines.append(f'3. You can retry if you fail.')
+        elif quest.get("can_fail"):
+            lines.append(f'3. Failure is permanent — choose your words carefully.')
+    elif qtype == "multi_step":
+        sub_ids = quest.get("sub_quest_ids", [])
+        lines.append(f'1. Speak to **{giver_name}** to accept the quest chain.')
+        for i, sid in enumerate(sub_ids, 1):
+            lines.append(f'{i + 1}. Complete sub-quest `{sid}`.')
+    else:
+        lines.append(f'1. Speak to **{giver_name}** and follow their instructions.')
+
+    lines.append('')
+
+    reward_parts = []
+    if reward.get("money"):
+        reward_parts.append(f'{reward["money"]}g')
+    if reward.get("item_id"):
+        reward_parts.append(f'Item #{reward["item_id"]}')
+    if reward.get("door_reveal"):
+        reward_parts.append('Reveals exit door')
+    if reward.get("story_info"):
+        reward_parts.append(f'Story: "{reward["story_info"]}"')
+    lines.append(f'**Reward:** {", ".join(reward_parts) if reward_parts else "None"}')
+    lines.append('')
+
+    penalty_parts = []
+    if penalty.get("hp_damage"):
+        penalty_parts.append(f'{penalty["hp_damage"]} HP damage')
+    if penalty.get("stamina_damage"):
+        penalty_parts.append(f'{penalty["stamina_damage"]} stamina damage')
+    if penalty_parts:
+        lines.append(f'**Failure Penalty:** {", ".join(penalty_parts)}')
+        lines.append('')
+
+    success = quest.get("success_dialogue", "")
+    failure = quest.get("failure_dialogue", "")
+    if success:
+        lines.append(f'**On Success:** "{success}"')
+        lines.append('')
+    if failure:
+        lines.append(f'**On Failure:** "{failure}"')
+        lines.append('')
+
+    lines.append('---')
+    lines.append('')
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Section builders
 # ---------------------------------------------------------------------------
 
 def _section_title(story: dict, narrative: dict) -> str:
-    """Section 1: Title Page & Introduction."""
+    """Title Page & Introduction."""
     title = story.get("title", "MazeWorld")
     synopsis = narrative.get("synopsis", story.get("synopsis", ""))
     seed = story.get("seed", "")
 
-    player_img = "data/portraits/player.png"
-    has_player = os.path.exists(player_img)
+    cover_img = f"{DATA_DIR}/portraits/start_screen.png"
+    has_cover = os.path.exists(cover_img)
 
     lines = [
         f'# {title}',
@@ -593,8 +759,8 @@ def _section_title(story: dict, narrative: dict) -> str:
         '## Official Player Guide',
         '',
     ]
-    if has_player:
-        lines.append(f'<p align="center"><img src="{_img(player_img)}" width="300"/></p>')
+    if has_cover:
+        lines.append(f'<p align="center"><img src="{_img(cover_img)}" width="300"/></p>')
         lines.append('')
 
     lines.append('---')
@@ -608,7 +774,7 @@ def _section_title(story: dict, narrative: dict) -> str:
         lines.append(f'*Story Seed: {seed}*')
         lines.append('')
 
-    gameover_img = "data/portraits/game_over.png"
+    gameover_img = f"{DATA_DIR}/portraits/game_over.png"
     if os.path.exists(gameover_img):
         lines.append('---')
         lines.append('')
@@ -620,10 +786,440 @@ def _section_title(story: dict, narrative: dict) -> str:
     return "\n".join(lines)
 
 
-def _section_classes(classes: list[dict]) -> str:
-    """Section 2: Character Classes."""
+def _section_toc(rooms: list[str], classes: list[dict], story: dict) -> str:
+    """Table of Contents with anchor links."""
     lines = [
+        '## Table of Contents',
+        '',
+        '1. [How to Play](#how-to-play)',
+        '2. [Combat Guide](#combat-guide)',
+        '3. [Character Classes](#character-classes)',
+        '4. [Quest Guide](#quest-guide)',
+    ]
+
+    offset = 5
+    for i, room_id in enumerate(rooms):
+        room_idx = int(room_id.split("_")[1])
+        lines.append(f'{offset + i}. [Room {room_idx}](#room-{room_idx})')
+
+    offset += len(rooms)
+    lines.append(f'{offset}. [Appendices](#appendices)')
+    lines.append(f'{offset + 1}. [Technical Details](#technical-details)')
+    lines.append(f'{offset + 2}. [Credits](#credits)')
+
+    lines.append('')
+    lines.append('---')
+    lines.append('')
+    return "\n".join(lines)
+
+
+def _section_how_to_play() -> str:
+    """Gameplay manual: controls, exploration, day/night, items, save/load."""
+    from config import (
+        FOG_DEFAULT_RADIUS, FOG_DAWN_BONUS, FOG_DAY_BONUS,
+        FOG_DUSK_PENALTY, FOG_NIGHT_PENALTY,
+        DOOR_REVEAL_THRESHOLD,
+        NIGHT_ENCOUNTER_CHANCE,
+    )
+    threshold_pct = int(DOOR_REVEAL_THRESHOLD * 100)
+    night_pct = int(NIGHT_ENCOUNTER_CHANCE * 100)
+
+    lines = [
+        '<a id="how-to-play"></a>',
+        '',
+        '## How to Play',
+        '',
+        '### Controls',
+        '',
+        '#### Exploration',
+        '',
+        '| Key | Action |',
+        '|-----|--------|',
+        '| Arrow Keys | Move through the maze |',
+        '| Enter | Pick up item / Talk to NPC |',
+        '| S | Open shop (when adjacent to a merchant) |',
+        '| I | Toggle inventory |',
+        '| Q | Toggle quest log |',
+        '| R | Open rest menu |',
+        '| T | Talk to follower |',
+        '| P | Open status screen |',
+        '| B | Story recap |',
+        '| Tab | Player menu (save/load/quests/followers) |',
+        '| Esc | Pause menu / Close overlay |',
+        '| F1 | Debug: reveal entire maze |',
+        '',
+        '#### Combat',
+        '',
+        '| Key | Action |',
+        '|-----|--------|',
+        '| Up / Down | Navigate menu options |',
+        '| Left / Right | Switch target |',
+        '| Enter | Confirm action |',
+        '| Esc | Back / Cancel sub-menu |',
+        '| Space | Advance after enemy turn |',
+        '| Tab | Toggle combat log |',
+        '',
+        '#### Inventory',
+        '',
+        '| Key | Action |',
+        '|-----|--------|',
+        '| Up / Down | Select item |',
+        '| Enter / U | Use item |',
+        '| E | Equip weapon |',
+        '| D | Item detail |',
+        '| Esc | Close inventory |',
+        '',
+        '### Exploration & Fog of War',
+        '',
+        'The maze is hidden under fog of war. As you move, nearby tiles are revealed '
+        'and stay visible (but dimmed) when you move away. Your visibility radius '
+        'depends on your WIS stat and the time of day:',
+        '',
+        f'- **Base radius:** {FOG_DEFAULT_RADIUS} tiles + WIS modifier / 2',
+        f'- **Dawn:** +{FOG_DAWN_BONUS} bonus',
+        f'- **Day:** +{FOG_DAY_BONUS} bonus',
+        f'- **Dusk:** -{FOG_DUSK_PENALTY} penalty (negated by torch)',
+        f'- **Night:** -{FOG_NIGHT_PENALTY} penalty (negated by torch)',
+        '',
+        '### Day/Night Cycle',
+        '',
+        'The world cycles through four time periods:',
+        '',
+        '| Period | Duration | Visibility | Notes |',
+        '|--------|----------|------------|-------|',
+        '| Dawn | 15% of cycle | +1 bonus | Transition period |',
+        '| Day | 35% of cycle | +2 bonus | Full visibility |',
+        '| Dusk | 15% of cycle | -1 penalty | Torch negates |',
+        '| Night | 35% of cycle | -2 penalty | Torch negates |',
+        '',
+        'Time advances with each move and when resting. Some events and NPCs are '
+        '**time-gated** — they only appear during the day or at night. '
+        f'There is a {night_pct}% chance of a random encounter per move at night.',
+        '',
+        '### Torches',
+        '',
+        'Any item with a **light** attribute acts as a torch. While you carry a lit '
+        'torch, night and dusk visibility penalties are negated. Torches consume one '
+        'use per move at night — keep spares in your inventory.',
+        '',
+        '### Resting',
+        '',
+        'Press **R** to open the rest menu:',
+        '',
+        '| Duration | Effect |',
+        '|----------|--------|',
+        '| 3 hours | Small HP recovery, low stamina cost |',
+        '| 6 hours | Moderate HP recovery, moderate stamina cost |',
+        '| 12 hours | Large HP recovery, high stamina cost |',
+        '',
+        'Resting advances the day/night clock. Combat also grants a small +5 HP '
+        'rest without advancing time.',
+        '',
+        '### Interacting with NPCs',
+        '',
+        '- Walk adjacent to an NPC and press **Enter** to talk.',
+        '- NPCs have **day/night availability** — some only appear at certain times.',
+        '- Quest-giving NPCs will offer their quest during dialogue.',
+        '- Merchants: press **S** when adjacent to open the shop (buy/sell items).',
+        '- You cannot sell escort items to merchants.',
+        '',
+        '### Items & Inventory',
+        '',
+        'Items are found on the maze floor (press **Enter** to pick up) or bought '
+        'from merchants. Item types:',
+        '',
+        '| Type | Effect |',
+        '|------|--------|',
+        '| **Food** | Restores HP (base + CON mod) and stamina (base + 2×CON mod) |',
+        '| **Drink** | Same restoration formula as food |',
+        '| **Tool** | Applies a stamina effect; limited uses, breaks at 0 |',
+        '| **Weapon** | Equip to change your attack; see Combat Guide for categories |',
+        '| **Spell Scroll** | Jesters learn the spell permanently; others get a heal/stamina boost |',
+        '| **Escort Item** | Represents a follower NPC during escort quests (not consumable) |',
+        '',
+        'Consumable items (food, drink, tools) scale in power by room level: '
+        '1.0x → 1.3x → 1.6x → 2.0x (rooms 1–4+).',
+        '',
+        '### Room Progression & The Exit Door',
+        '',
+        f'Each room has a hidden exit door. It is revealed once you clear '
+        f'**{threshold_pct}%** of the room\'s encounters (or a quest reward reveals '
+        f'it). The door may be guarded by a **gate encounter** — a mandatory fight '
+        f'you must win before proceeding.',
+        '',
+        'Completing all rooms wins the game. Between rooms you get a **level up**, '
+        'where you choose a new ability or spell from your class\'s unlock pool.',
+        '',
+        'Story quests will warn you at the door if they\'re still incomplete.',
+        '',
+        '### Save & Load',
+        '',
+        'Open the **Tab** menu or **Pause** menu (Esc) to access Save/Load. '
+        'Saves preserve your full game state: player, inventory, maze, fog, '
+        'day/night cycle, quests, NPCs, events, and followers.',
+        '',
+        '---',
+        '',
+    ]
+    return "\n".join(lines)
+
+
+def _section_combat_guide() -> str:
+    """Full combat mechanics reference."""
+    lines = [
+        '<a id="combat-guide"></a>',
+        '',
+        '## Combat Guide',
+        '',
+        '### Initiative & Turn Order',
+        '',
+        'When combat begins, each combatant rolls initiative:',
+        '',
+        '- **Player:** `1d20 + DEX modifier`',
+        '- **Monsters:** `1d20 + dex_mod`',
+        '',
+        'Combatants are sorted highest to lowest. Ties favor the player. '
+        'The turn order is shown in the top-right of the combat screen.',
+        '',
+        '### Melee Attacks',
+        '',
+        '**To-hit roll:** `1d20 + weapon_stat_bonus + (level - 1)` '
+        'vs **DC:** `target AC + target DEX modifier`',
+        '',
+        '- The stat used depends on weapon type (see Weapon Types below).',
+        '- On hit: `1d{weapon_dice} + stat_bonus` base damage.',
+        '- Physical and elemental multipliers are then applied (see below).',
+        '- Minimum 1 damage on a hit.',
+        '',
+        '**Stat bonuses by archetype:**',
+        '',
+        '| Archetype | Weapon Category Access | Stat Bonus Rule |',
+        '|-----------|----------------------|-----------------|',
+        '| Warrior | simple + martial | Full stat modifier |',
+        '| Mage | simple only | Full stat modifier (0 on martial) |',
+        '| Healer | simple only | Full stat modifier (0 on martial) |',
+        '| Jester | simple + martial | Average of LUCK mod and weapon stat mod |',
+        '',
+        'Mages and healers **cannot equip** martial weapons at all.',
+        '',
+        '### Physical Damage Triangle',
+        '',
+        'Every weapon has a physical damage type, and every monster has a physical '
+        'type. Damage is multiplied based on the matchup:',
+        '',
+        '```',
+        '  Slashing  →  Piercing  →  Bludgeoning  →  Slashing',
+        '     ↑              ↑              ↑',
+        '   1.5x           1.5x           1.5x        (super effective)',
+        '   0.5x ←         0.5x ←         0.5x ←      (resisted)',
+        '```',
+        '',
+        '| Attack Type | Strong Against | Weak Against |',
+        '|-------------|---------------|--------------|',
+        '| Slashing | Piercing (1.5x) | Bludgeoning (0.5x) |',
+        '| Piercing | Bludgeoning (1.5x) | Slashing (0.5x) |',
+        '| Bludgeoning | Slashing (1.5x) | Piercing (0.5x) |',
+        '',
+        'Monsters also attack the player using this triangle — a monster\'s '
+        'physical type is compared against your weapon\'s damage type to determine '
+        'damage dealt to you.',
+        '',
+        '### Elemental Advantage Chart',
+        '',
+        'Spells and magic weapons have an element. Elemental matchups use the same '
+        '1.5x / 0.5x multipliers:',
+        '',
+        '```',
+        '  Fire  →  Forest  →  Water  →  Fire',
+        '',
+        '  Light  ↔  Dark   (mutual advantage: both deal 1.5x to each other)',
+        '```',
+        '',
+        '| Attack Element | Strong Against | Weak Against |',
+        '|---------------|---------------|--------------|',
+        '| Fire | Forest (1.5x) | Water (0.5x) |',
+        '| Forest | Water (1.5x) | Fire (0.5x) |',
+        '| Water | Fire (1.5x) | Forest (0.5x) |',
+        '| Light | Dark (1.5x) | Dark (1.5x) |',
+        '| Dark | Light (1.5x) | Light (1.5x) |',
+        '',
+        'Weapons with a `magic_element` apply **both** the physical and elemental '
+        'multipliers on a single attack.',
+        '',
+        '### Weapon Types',
+        '',
+        '| Type | Scaling Stat | Notes |',
+        '|------|-------------|-------|',
+        '| Heavy | STR | Warrior primary; high dice (1d8–1d10) |',
+        '| Light | DEX | Fast; lower dice (1d4–1d6) |',
+        '| Simple | STR or INT | Mage/healer weapons (1d4–1d6) |',
+        '| Wild | Random (STR/DEX/INT) | Jester weapons; stat re-rolls each attack |',
+        '',
+        '**Weapon categories:** `simple` (any class) vs `martial` (warrior/jester only). '
+        'Mages and healers get **0 stat bonus** and cannot equip martial weapons.',
+        '',
+        'Combat UI shows weapon tags like `[slashing]` or `[slashing + fire]` on '
+        'attack previews so you can see your damage types at a glance.',
+        '',
+        '### Spells',
+        '',
+        '| Spell Type | Effect | Cost |',
+        '|------------|--------|------|',
+        '| `heal` | Restores HP (heal_amount or random 4–12) | 5 stamina |',
+        '| `buff_stat` | Buffs a stat for 1d4 + INT_mod/2 turns (min 1) | 3 stamina |',
+        '| `buff_sustain` | Restores +3 stamina immediately | 2 stamina |',
+        '| `damage_single` | Magic damage to one target | Varies by dice |',
+        '| `damage_multi` | Magic damage to all targets | 2x single cost (max 10) |',
+        '',
+        '**Damage spell cost by dice:** d4 = 2, d6 = 4, d8 = 5, d10 = 7 stamina.',
+        '',
+        '**Magic attack roll:** Player rolls `magic attack` vs DC `10 + target magic_resistance`. '
+        'Damage is `1d{spell_dice}` × elemental multiplier.',
+        '',
+        '### Class-Specific Combat Actions',
+        '',
+        '#### Warrior: Multi-Attack',
+        '',
+        '- Costs **6 stamina**.',
+        '- Rolls one attack against **every living monster**.',
+        '- Uses stepped-down weapon dice (e.g. 1d8 → 1d6) for balance.',
+        '- Physical and elemental multipliers still apply to each hit.',
+        '',
+        '#### Jester: Gamble',
+        '',
+        'A LUCK-weighted random outcome. Higher LUCK shifts odds toward good results:',
+        '',
+        '- Random damage to a monster',
+        '- Self-heal',
+        '- Random stat buff',
+        '- Self-damage (bad luck!)',
+        '- Enemy AC debuff (−2 for 3 turns)',
+        '- Nothing happens',
+        '- Wild elemental damage',
+        '',
+        '#### Weapon Swap',
+        '',
+        'Uses your turn. Swaps to the first other weapon in your inventory. '
+        'Category restrictions apply (mages/healers cannot swap to martial weapons).',
+        '',
+        '### Fleeing',
+        '',
+        '- Roll: `1d20 + DEX` vs `12 + highest monster level`',
+        '- **Success:** You escape combat.',
+        '- **Failure:** The strongest monster gets a **free attack** on you.',
+        '- You **cannot flee** from gate encounters or climax bosses.',
+        '',
+        '### Items in Combat',
+        '',
+        'Only **food** and **drink** can be used during combat. Using an item '
+        'consumes your turn.',
+        '',
+        '### Monster Abilities',
+        '',
+        'Some monsters (especially in gate encounters) have special abilities:',
+        '',
+        '| Ability Type | Effect |',
+        '|-------------|--------|',
+        '| Damage | Extra damage on top of normal attack |',
+        '| Poison | Damage over time for several turns |',
+        '| Stun | Skip the player\'s next turn |',
+        '',
+        'Each ability has a **chance** to activate and a **duration** for '
+        'ongoing effects. Check the Bestiary for each monster\'s abilities.',
+        '',
+        '### Player AC',
+        '',
+        'Your armor class: `10 + armor + DEX modifier`. Buffs to DEX from '
+        'spells are included. Monsters must beat your AC to hit you.',
+        '',
+        '---',
+        '',
+    ]
+    return "\n".join(lines)
+
+
+def _section_quest_guide() -> str:
+    """Quest types, followers, and progression mechanics."""
+    lines = [
+        '<a id="quest-guide"></a>',
+        '',
+        '## Quest Guide',
+        '',
+        '### Quest Types',
+        '',
+        '| Type | Objective |',
+        '|------|-----------|',
+        '| Fetch | Find an item at a specific tile and return it to the quest giver |',
+        '| Delivery | Carry a specific item to a target NPC |',
+        '| Escort | Escort a follower NPC safely to a target zone |',
+        '| Combat | Defeat a specific combat encounter |',
+        '| Solve | Complete a specific puzzle or event |',
+        '| Dialogue | Pass a CHA-based conversation challenge |',
+        '| Multi-Step | Complete an ordered chain of sub-quests |',
+        '',
+        '### Accepting & Completing Quests',
+        '',
+        '1. Walk to the quest-giving NPC and press **Enter** to talk.',
+        '2. The quest is offered during dialogue — accept to activate it.',
+        '3. Complete the objective (see type-specific details in each room\'s '
+        'Quest Walkthrough section).',
+        '4. For fetch and delivery quests, return to the appropriate NPC to turn in.',
+        '5. Combat and solve quests complete automatically when the linked event resolves.',
+        '',
+        '### Prerequisites',
+        '',
+        'Some quests require completing a previous quest before they become available. '
+        'The quest giver won\'t offer the quest until the prerequisite is done.',
+        '',
+        '### Story Quests',
+        '',
+        'Quests marked as **story quests** are tied to the overarching narrative. '
+        'If you try to leave a room with an incomplete story quest, you\'ll get a '
+        'warning at the exit door.',
+        '',
+        '### Followers & Escort Quests',
+        '',
+        '- You can have up to **2 followers** at a time.',
+        '- When you accept an escort quest, the NPC joins as a follower and an '
+        '**escort item** is added to your inventory.',
+        '- Guide the follower to within **2 tiles** of the target zone to complete.',
+        '- Press **T** at any time to talk to your follower for a hint.',
+        '- **Warning:** If you advance past a follower\'s destination room, '
+        'they leave and the quest **fails** with a penalty.',
+        '',
+        '### Rewards & Penalties',
+        '',
+        '**Possible rewards:**',
+        '',
+        '- Items (added to inventory)',
+        '- Gold',
+        '- Story information',
+        '- Exit door reveal',
+        '',
+        '**Failure penalties:**',
+        '',
+        '- HP damage',
+        '- Stamina damage',
+        '',
+        'Completing or failing a quest changes the giver NPC\'s dialogue to reflect '
+        'the outcome.',
+        '',
+        '---',
+        '',
+    ]
+    return "\n".join(lines)
+
+
+def _section_classes(classes: list[dict]) -> str:
+    """Character Classes section."""
+    lines = [
+        '<a id="character-classes"></a>',
+        '',
         '## Character Classes',
+        '',
+        'There are four archetypes, each with a 95-point stat budget distributed '
+        'across STR, DEX, CON, INT, WIS, CHA, and LUCK. At level up (between rooms), '
+        'you choose a new ability or spell from your class\'s unlock pool.',
         '',
     ]
     for i, cls in enumerate(classes):
@@ -634,7 +1230,7 @@ def _section_classes(classes: list[dict]) -> str:
 def _section_room(room_id: str, room_idx: int, room_data: dict,
                   story: dict, narrative: dict,
                   all_items_lookup: dict) -> str:
-    """Section 3: Per-room chapter."""
+    """Per-room chapter."""
     maze = room_data["maze"]
     npcs = room_data["npcs"]
     events = room_data["events"]
@@ -651,13 +1247,14 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
     intro_text = narrative.get(room_intro_key, "")
 
     lines = [
+        f'<a id="room-{room_idx}"></a>',
+        '',
         f'## Room {room_idx}: {env_name}',
         f'*Environment: {env_type} — Level {room_idx + 1}*',
         '',
     ]
 
-    # a) Overview
-    env_portrait = f"data/portraits/environment_{room_idx}.png"
+    env_portrait = f"{DATA_DIR}/portraits/environment_{room_idx}.png"
     if os.path.exists(env_portrait):
         lines.append(f'<p align="center"><img src="{_img(env_portrait)}" width="500"/></p>')
         lines.append('')
@@ -687,7 +1284,6 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
             lines.append(f'> *{beat["boss_lore"]}*')
             lines.append('')
 
-    # b) Map
     map_path = _render_maze_png(maze, room_id, room_idx, npcs, events=events)
     if map_path:
         lines.append('### Level Map')
@@ -695,7 +1291,6 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
         lines.append(f'<p align="center"><img src="{_img(map_path)}" /></p>')
         lines.append('')
 
-    # c) Items
     if items:
         lines.append('### Item Catalog')
         lines.append('')
@@ -704,13 +1299,14 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
         for item_id, item in sorted(items.items(), key=lambda x: int(x[0])):
             st = item.get("item_stats", {})
             stat_parts = []
-            if st.get("stamina_value", st.get("nutrition_value", st.get("hydration_value"))):
-                val = st.get("stamina_value", st.get("nutrition_value", st.get("hydration_value", 0)))
-                stat_parts.append(f'+{val} stamina')
+            if st.get("stamina_value"):
+                stat_parts.append(f'+{st["stamina_value"]} stamina')
             if st.get("health_value"):
                 stat_parts.append(f'+{st["health_value"]} HP')
             if st.get("uses"):
-                stat_parts.append(f'{st["uses"]} use')
+                stat_parts.append(f'{st["uses"]} uses')
+            if st.get("attack_dice"):
+                stat_parts.append(f'{st["attack_dice"]} dmg')
             if st.get("price"):
                 stat_parts.append(f'{st["price"]}g')
             stat_str = ", ".join(stat_parts) if stat_parts else "—"
@@ -721,14 +1317,12 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
             )
         lines.append('')
 
-    # d) NPC Directory
     if npcs:
         lines.append('### NPC Directory')
         lines.append('')
         for npc in npcs:
             lines.append(_card_npc(npc, room_id, items_lookup=all_items_lookup))
 
-    # e) Monster Bestiary
     room_monsters = _dedup_monsters(events, room_id)
     if room_monsters:
         lines.append('### Monster Bestiary')
@@ -736,7 +1330,6 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
         for mon in sorted(room_monsters, key=lambda m: m.get("name", "")):
             lines.append(_card_monster(mon))
 
-    # f) Event Guide
     deduped_events = _dedup_events(events, room_id)
     puzzles = [e for e in deduped_events if e.get("type") == "puzzle"]
     env_events = [e for e in deduped_events if e.get("type") == "event"]
@@ -766,99 +1359,16 @@ def _section_room(room_id: str, room_idx: int, room_data: dict,
         for evt in sorted(combats, key=lambda e: e.get("difficulty", 0)):
             lines.append(_card_event(evt, all_items_lookup))
 
-    # g) Quest Walkthrough
     if quests:
         lines.append('### Quest Walkthrough')
         lines.append('')
         for quest in quests:
             lines.append(_card_quest(quest, npcs, room_id))
 
-    lines.append('---')
-    lines.append('')
-    return "\n".join(lines)
-
-
-def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
-    """Render a single quest entry."""
-    quest_id = quest.get("id", "")
-    qtype = quest.get("type", "unknown")
-    npc_id = quest.get("giver_npc_id")
-    giver_name = "Unknown"
-    for n in npcs:
-        if n.get("id") == npc_id:
-            giver_name = n.get("name", "Unknown")
-            break
-
-    reward = quest.get("reward", {})
-    penalty = quest.get("failure_penalty", {})
-
-    lines = [
-        f'<a id="{quest_id}"></a>',
-        '',
-        f'#### {quest.get("title", "Quest")}',
-        f'**Type:** `{qtype}` &nbsp; **Story Quest:** '
-        f'{"Yes" if quest.get("is_story_quest") else "No"}',
-        '',
-        f'**Quest Giver:** [{giver_name}](#npc-{npc_id})',
-        '',
-        f'> *{quest.get("description", "")}*',
-        '',
-    ]
-
-    # Walkthrough based on quest type
-    lines.append('**Walkthrough:**')
-    lines.append('')
-
-    if qtype == "combat_npc":
-        target = quest.get("target_npc_id")
-        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
-        lines.append(f'2. Challenge NPC #{target} to combat.')
-        lines.append(f'3. Defeat them to complete the quest.')
-    elif qtype == "combat_event":
-        target_evt = quest.get("target_event_id", "?")
-        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
-        lines.append(f'2. Find and complete combat event `{target_evt}`.')
-    elif qtype == "solve_puzzle":
-        target_evt = quest.get("target_event_id", "?")
-        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
-        lines.append(f'2. Solve puzzle event `{target_evt}`.')
-    elif qtype == "solve_event":
-        target_evt = quest.get("target_event_id", "?")
-        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
-        lines.append(f'2. Complete event `{target_evt}`.')
-    elif qtype == "fetch_item":
-        target_tile = quest.get("target_tile", [])
-        cat = quest.get("item_category", "item")
-        tile_str = f"({target_tile[0]}, {target_tile[1]})" if target_tile else "unknown"
-        lines.append(f'1. Speak to **{giver_name}** to accept the quest.')
-        lines.append(f'2. Find a **{cat}** item at tile {tile_str}.')
-        lines.append(f'3. Return to **{giver_name}** with the item.')
-    elif qtype in ("follower_same", "follower_next"):
-        target_pos = quest.get("target_position", [])
-        pos_str = f"({target_pos[0]}, {target_pos[1]})" if target_pos else "the exit"
-        crosses = " (crosses to next room)" if quest.get("crosses_room") else ""
-        lines.append(f'1. Speak to **{giver_name}** to accept the escort quest.')
-        lines.append(f'2. Escort them safely to {pos_str}{crosses}.')
-    else:
-        lines.append(f'1. Speak to **{giver_name}** and follow their instructions.')
-
-    lines.append('')
-    lines.append(f'**Reward:** {reward.get("xp", 0)} XP')
-    if reward.get("item_id"):
-        lines.append(f', Item #{reward["item_id"]}')
-    lines.append('')
-
-    if penalty.get("hp_damage"):
-        lines.append(f'**Failure Penalty:** {penalty["hp_damage"]} HP damage')
-        lines.append('')
-
-    success = quest.get("success_dialogue", "")
-    failure = quest.get("failure_dialogue", "")
-    if success:
-        lines.append(f'**On Success:** "{success}"')
-        lines.append('')
-    if failure:
-        lines.append(f'**On Failure:** "{failure}"')
+    gate_id = maze.get("gate_encounter_id")
+    if gate_id:
+        lines.append(f'> **Gate Encounter:** This room\'s exit is guarded by '
+                      f'event `{gate_id}`. You must defeat it to proceed.')
         lines.append('')
 
     lines.append('---')
@@ -868,17 +1378,18 @@ def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
 
 def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
                         all_items: dict, story: dict, narrative: dict) -> str:
-    """Section 4: Appendices."""
+    """Appendices with full indexes."""
     lines = [
+        '<a id="appendices"></a>',
+        '',
         '## Appendices',
         '',
     ]
 
-    # a) Full Monster Index
     lines.append('### A. Monster Index')
     lines.append('')
-    lines.append('| Name | Species | Level | HP | AC | Damage | Element | Rooms |')
-    lines.append('|------|---------|-------|----|----|--------|---------|-------|')
+    lines.append('| Name | Species | Level | HP | AC | Damage | Phys. Type | Element | Rooms |')
+    lines.append('|------|---------|-------|----|----|--------|-----------|---------|-------|')
     for mon in sorted(all_monsters, key=lambda m: m.get("name", "")):
         rooms = mon.get("_rooms", set())
         room_str = ", ".join(sorted(rooms)) if isinstance(rooms, set) else str(rooms)
@@ -887,25 +1398,25 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
             f'| {mon.get("level", "?")} | {mon.get("hp", "?")} '
             f'| {mon.get("ac", "?")} '
             f'| {mon.get("damage_dice_expr", "1d6")} {mon.get("damage_type", "")} '
+            f'| {mon.get("physical_type", "physical")} '
             f'| {mon.get("elemental_affinity", "none")} | {room_str} |'
         )
     lines.append('')
 
-    # b) Full NPC List
     lines.append('### B. NPC Directory')
     lines.append('')
-    lines.append('| Name | Job | Type | Room | Quest |')
-    lines.append('|------|-----|------|------|-------|')
+    lines.append('| Name | Job | Type | Room | Quest | Available |')
+    lines.append('|------|-----|------|------|-------|-----------|')
     for npc in sorted(all_npcs, key=lambda n: n.get("name", "")):
         quest = npc.get("quest_id", "—") or "—"
         room = npc.get("_room_id", "?")
+        avail = npc.get("availability", "always")
         lines.append(
             f'| {npc.get("name", "?")} | {npc.get("job", "?")} '
-            f'| {npc.get("type", "?")} | {room} | {quest} |'
+            f'| {npc.get("type", "?")} | {room} | {quest} | {avail} |'
         )
     lines.append('')
 
-    # c) Master Item List
     lines.append('### C. Master Item List')
     lines.append('')
     lines.append('| ID | Name | Category | Description | Stats | Rooms |')
@@ -915,11 +1426,12 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
     for item_id, item in sorted_items:
         st = item.get("item_stats", {})
         stat_parts = []
-        if st.get("stamina_value", st.get("nutrition_value", st.get("hydration_value"))):
-            val = st.get("stamina_value", st.get("nutrition_value", st.get("hydration_value", 0)))
-            stat_parts.append(f'+{val} stam')
+        if st.get("stamina_value"):
+            stat_parts.append(f'+{st["stamina_value"]} stam')
         if st.get("health_value"):
             stat_parts.append(f'+{st["health_value"]} HP')
+        if st.get("attack_dice"):
+            stat_parts.append(f'{st["attack_dice"]} dmg')
         if st.get("price"):
             stat_parts.append(f'{st["price"]}g')
         stat_str = ", ".join(stat_parts) if stat_parts else "—"
@@ -932,10 +1444,20 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
         )
     lines.append('')
 
-    # d) Faction Dossier
+    lines.append('### D. Damage Type Quick Reference')
+    lines.append('')
+    lines.append('**Physical Triangle** (1.5x super effective / 0.5x resisted):')
+    lines.append('')
+    lines.append('`Slashing → Piercing → Bludgeoning → Slashing`')
+    lines.append('')
+    lines.append('**Elemental Triangle** (1.5x / 0.5x):')
+    lines.append('')
+    lines.append('`Fire → Forest → Water → Fire` &nbsp; | &nbsp; `Light ↔ Dark` (mutual 1.5x)')
+    lines.append('')
+
     faction = story.get("faction")
     if faction:
-        lines.append('### D. Faction Dossier')
+        lines.append('### E. Faction Dossier')
         lines.append('')
         lines.append(f'**{faction.get("name", "Unknown Faction")}**')
         lines.append('')
@@ -950,8 +1472,7 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
             lines.append(f'**Leader:** {faction["leader"]}')
             lines.append('')
 
-    # e) Game Over / Victory
-    lines.append('### E. Game Over & Victory')
+    lines.append('### F. Game Over & Victory')
     lines.append('')
     gameover = narrative.get("game_over", "")
     victory = narrative.get("victory", "")
@@ -966,7 +1487,6 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
         lines.append(f'> *{victory}*')
         lines.append('')
 
-    # Climax
     climax = story.get("climax", "")
     if climax:
         lines.append('**Climax:**')
@@ -980,7 +1500,7 @@ def _section_appendices(all_monsters: list[dict], all_npcs: list[dict],
 
 
 def _section_technical(gen_stats: dict | None) -> str:
-    """Section 5: Technical Details."""
+    """Technical Details — world config and generation stats (no controls)."""
     from config import (
         WORLD_SEED, STORY_SEED, GAME_MODE, NUM_ROOMS,
         LLM_BACKEND, IMAGE_BACKEND, MUSIC_BACKEND,
@@ -991,50 +1511,15 @@ def _section_technical(gen_stats: dict | None) -> str:
     )
 
     lines = [
+        '<a id="technical-details"></a>',
+        '',
         '## Technical Details',
-        '',
-        '### Controls',
-        '',
-        '#### Exploration',
-        '',
-        '| Key | Action |',
-        '|-----|--------|',
-        '| Arrow Keys | Move |',
-        '| Enter | Pick up item / Talk to NPC |',
-        '| S | Open shop (near merchant) |',
-        '| I | Toggle inventory |',
-        '| Q | Toggle quest log |',
-        '| R | Rest (1/2/3 = 3h/6h/12h) |',
-        '| P / M | Open full menu |',
-        '| B | Story recap |',
-        '| Tab | Player menu (save/load/quests) |',
-        '| Esc | Pause / Close overlay |',
-        '| F1 | Debug: reveal maze |',
-        '',
-        '#### Combat',
-        '',
-        '| Key | Action |',
-        '|-----|--------|',
-        '| Up / Down | Navigate menu / Select target |',
-        '| Enter | Confirm action |',
-        '| Esc | Back / Cancel |',
-        '| Space | Advance enemy turn |',
-        '',
-        '#### Inventory',
-        '',
-        '| Key | Action |',
-        '|-----|--------|',
-        '| Up / Down | Select item |',
-        '| Enter / U | Use item |',
-        '| E | Equip weapon |',
-        '| D | Item detail / Drop (in full menu) |',
-        '| Esc | Close |',
         '',
         '### Running the Game',
         '',
         '```bash',
         '# Generate a new world',
-        'python world_gen.py',
+        'python -m src.generate.pipeline',
         '',
         '# Play the game',
         'python main.py',
@@ -1115,11 +1600,13 @@ def _section_technical(gen_stats: dict | None) -> str:
 
 
 def _section_credits() -> str:
-    """Section 6: Credits."""
+    """Credits section."""
     from src.views.credits_view import build_credits_lines
 
     credit_lines = build_credits_lines()
     lines = [
+        '<a id="credits"></a>',
+        '',
         '## Credits',
         '',
     ]
@@ -1155,6 +1642,12 @@ def _convert_to_pdf(md_path: str, pdf_path: str) -> bool:
         logger.warning(
             "PDF conversion requires 'markdown' and 'weasyprint': %s. "
             "Install with: pip install markdown weasyprint", e
+        )
+        return False
+    except OSError as e:
+        logger.warning(
+            "PDF conversion unavailable: %s. "
+            "On macOS run with: DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib", e
         )
         return False
 
@@ -1244,7 +1737,6 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR,
 
     os.makedirs(output_dir, exist_ok=True)
 
-    # Load global data
     story = _load_json(os.path.join(data_dir, "story", "story.json")) or {}
     narrative = _load_json(os.path.join(data_dir, "narrative.json")) or {}
     classes = _load_json(os.path.join(data_dir, "classes", "classes.json")) or []
@@ -1253,7 +1745,6 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR,
     rooms = _discover_rooms(data_dir)
     logger.info("Found %d rooms: %s", len(rooms), rooms)
 
-    # Build a global items lookup across all rooms for cross-referencing
     all_items_lookup: dict[str, dict] = {}
     all_npcs: list[dict] = []
     all_monsters: list[dict] = []
@@ -1263,7 +1754,6 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR,
         rd = _load_room_data(room_id, data_dir)
         room_data_cache[room_id] = rd
 
-        # Collect items with room tracking
         for item_id, item in rd["items"].items():
             if item_id not in all_items_lookup:
                 entry = dict(item)
@@ -1272,27 +1762,37 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR,
             else:
                 all_items_lookup[item_id]["_rooms"].add(room_id)
 
-        # Collect NPCs with room tracking
         for npc in rd["npcs"]:
             npc_copy = dict(npc)
             npc_copy["_room_id"] = room_id
             all_npcs.append(npc_copy)
 
-        # Collect deduped monsters
         room_monsters = _dedup_monsters(rd["events"], room_id)
         all_monsters = _merge_deduped(all_monsters, room_monsters)
 
-    # Assemble the guide
+    # Assemble guide sections in order
     sections: list[str] = []
 
     # 1. Title
     sections.append(_section_title(story, narrative))
 
-    # 2. Classes
+    # 2. Table of Contents
+    sections.append(_section_toc(rooms, classes, story))
+
+    # 3. How to Play
+    sections.append(_section_how_to_play())
+
+    # 4. Combat Guide
+    sections.append(_section_combat_guide())
+
+    # 5. Character Classes
     if classes:
         sections.append(_section_classes(classes))
 
-    # 3. Room chapters
+    # 6. Quest Guide
+    sections.append(_section_quest_guide())
+
+    # 7. Room chapters
     for room_id in rooms:
         room_idx = int(room_id.split("_")[1])
         sections.append(
@@ -1300,26 +1800,27 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR,
                           story, narrative, all_items_lookup)
         )
 
-    # 4. Appendices
+    # 8. Appendices
     sections.append(_section_appendices(all_monsters, all_npcs, all_items_lookup,
                                         story, narrative))
 
-    # 5. Technical
+    # 9. Technical
     sections.append(_section_technical(gen_stats))
 
-    # 6. Credits
+    # 10. Credits
     sections.append(_section_credits())
 
-    # Write markdown
-    md_path = os.path.join(output_dir, "PLAYER_GUIDE.md")
+    title = story.get("title", "Untitled")
+    base_name = f"PLAYER_GUIDE_{_safe_filename(title)}_{WORLD_SEED}"
+
+    md_path = os.path.join(output_dir, f"{base_name}.md")
     full_md = "\n".join(sections)
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(full_md)
     logger.info("Guide written: %s (%d characters)", md_path, len(full_md))
 
-    # Optional PDF
     if generate_pdf:
-        pdf_path = os.path.join(output_dir, "PLAYER_GUIDE.pdf")
+        pdf_path = os.path.join(output_dir, f"{base_name}.pdf")
         _convert_to_pdf(md_path, pdf_path)
 
     logger.info("=== Guide Complete ===")

@@ -4,6 +4,8 @@ from typing import Optional, List
 
 class QuestReward(BaseModel):
     item_id: Optional[int] = None
+    # TODO: No XP/level-progression system exists yet. Level-ups happen
+    # automatically on room transitions. Wire this up if an XP system is added.
     xp: int = 0
     money: int = 0
     story_info: Optional[str] = None
@@ -17,7 +19,7 @@ class QuestFailurePenalty(BaseModel):
 
 class Quest(BaseModel):
     """Base quest model."""
-    id: str
+    id: int
     type: str  # "fetch" | "escort" | "delivery" | "dialogue" | "combat" | "multi_step"
     title: str
     description: str
@@ -26,7 +28,7 @@ class Quest(BaseModel):
     is_story_quest: bool = False
     reward: QuestReward = Field(default_factory=QuestReward)
     failure_penalty: QuestFailurePenalty = Field(default_factory=QuestFailurePenalty)
-    prerequisite_quest_id: Optional[str] = None
+    prerequisite_quest_id: Optional[int] = None
     status: str = "not_started"  # "not_started" | "active" | "completed" | "failed"
     time_gate: Optional[str] = None  # "night" | "day" | None
     portrait_prompt: Optional[str] = None
@@ -114,7 +116,7 @@ class DialogueQuest(Quest):
 
 class CombatQuest(Quest):
     type: str = "combat"
-    target_event_id: str = ""
+    target_event_id: int = 0
     target_monster_name: Optional[str] = None
 
     def check_completion(self, event_resolved: bool) -> bool:
@@ -130,10 +132,10 @@ class CombatQuest(Quest):
 
 class MultiStepQuest(Quest):
     type: str = "multi_step"
-    sub_quest_ids: List[str] = Field(default_factory=list)  # ordered list of sub-quest IDs
+    sub_quest_ids: List[int] = Field(default_factory=list)
     current_step: int = 0
 
-    def get_current_sub_quest_id(self) -> Optional[str]:
+    def get_current_sub_quest_id(self) -> Optional[int]:
         if self.current_step < len(self.sub_quest_ids):
             return self.sub_quest_ids[self.current_step]
         return None
@@ -152,9 +154,18 @@ QUEST_TYPE_MAP = {
     "escort": EscortQuest,
     "delivery": DeliveryQuest,
     "dialogue": DialogueQuest,
-    "dialogue_gated": DialogueQuest,  # backward compat alias
+    "dialogue_gated": DialogueQuest,
     "combat": CombatQuest,
+    "solve": CombatQuest,
     "multi_step": MultiStepQuest,
+    # Legacy aliases
+    "fetch_item": FetchQuest,
+    "combat_event": CombatQuest,
+    "combat_npc": CombatQuest,
+    "solve_puzzle": CombatQuest,
+    "solve_event": CombatQuest,
+    "follower_same": EscortQuest,
+    "follower_next": EscortQuest,
 }
 
 

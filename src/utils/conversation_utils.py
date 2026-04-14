@@ -1,4 +1,6 @@
+import json
 import logging
+import random
 
 from config import GAME_MODE
 from src.prompts import get_prompt_set
@@ -106,7 +108,8 @@ def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None
 
 
 def generate_npc_response(npc, player_input: str, story_context: str = "",
-                          quest_context: dict | None = None) -> str:
+                          quest_context: dict | None = None,
+                          player=None) -> str:
     """Generate an NPC response.
 
     - First meeting: uses pre-generated opening_greeting if available.
@@ -160,6 +163,7 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
             npc_name=npc.name,
             player_input="The player returns to speak with you.",
             story_context=story_context,
+            quest_context=quest_context,
         )
         try:
             raw = generate(request)
@@ -178,14 +182,28 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
             npc_name=npc.name,
             player_input=player_input,
             story_context=story_context,
+            quest_context=quest_context,
         )
         try:
             raw = generate(request)
-            response = _extract_response(raw)
+            response, cha_data = _extract_response_with_cha(raw)
         except Exception:
             response = _LLM_FAILURE_RESPONSE
+            cha_data = None
         if not response:
             response = _LLM_FAILURE_RESPONSE
+
+        # CHA check: d20 + CHA mod vs NPC's current DC (online mode only)
+        if cha_data and quest_context and player:
+            npc.current_dc = max(8, min(20, cha_data.get("dc_next", npc.current_dc)))
+            cha_mod = player.get_stat_modifier("CHA") if hasattr(player, 'get_stat_modifier') else 0
+            roll = random.randint(1, 20) + cha_mod
+            if roll < npc.current_dc:
+                npc.dialogue_exhausted = True
+                dismissal = _generate_dismissal(npc, cha_data.get("tone", "rude"))
+                npc.add_turn("npc", dismissal)
+                return f"{npc.name}: {dismissal}"
+
         npc.add_turn("npc", response)
 
     # Check exhaustion after LLM response
@@ -243,3 +261,36 @@ def _extract_response(raw: str) -> str:
     else:
         response = raw.strip()
     return response.split("\n")[0].strip()
+
+
+def _extract_response_with_cha(raw: str) -> tuple[str, dict | None]:
+    """Extract NPC response text and optional CHA evaluation JSON from last line."""
+    lines = raw.strip().split("\n")
+    cha_data = None
+    if lines:
+        last = lines[-1].strip()
+        if last.startswith("{") and "dc_next" in last:
+            try:
+                cha_data = json.loads(last)
+                lines = lines[:-1]
+            except json.JSONDecodeError:
+                pass
+    response_text = _extract_response("\n".join(lines))
+    return response_text, cha_data
+
+
+def _generate_dismissal(npc, tone: str) -> str:
+    """Generate a personality-appropriate dismissal when CHA check fails."""
+    request = LLMRequest(
+        system=npc.identity or f"You are {npc.name}, a fantasy NPC.",
+        user_message=(
+            f"The player has been {tone}. End the conversation with a brief, "
+            "in-character dismissal (1 sentence). You don't want to talk anymore."
+        ),
+        max_tokens=60,
+    )
+    try:
+        raw = generate(request)
+        return _extract_response(raw)
+    except Exception:
+        return "I don't think I want to talk anymore."

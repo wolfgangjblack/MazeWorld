@@ -198,7 +198,7 @@ def _parse_abilities(raw_list: list) -> list[Ability]:
                     stamina_cost=a.get("stamina_cost", a.get("hunger_cost", 0) + a.get("thirst_cost", 0)),
                 ))
             except Exception:
-                pass
+                logger.warning("Skipping malformed ability: %s", a, exc_info=True)
     return abilities
 
 
@@ -249,7 +249,7 @@ def _parse_spells(raw_list: list) -> list[Spell]:
                     buff_value=s.get("buff_value", 2),
                 ))
             except Exception:
-                pass
+                logger.warning("Skipping malformed spell: %s", s, exc_info=True)
     return spells
 
 

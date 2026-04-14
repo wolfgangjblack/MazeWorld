@@ -1,14 +1,18 @@
+import logging
 import os
 import warnings
+from config import DATA_DIR
 from src.utils.dataloader_utils import load_json_data, create_item_from_data
+
+_log = logging.getLogger(__name__)
 
 
 class GameRegistry:
-    """Singleton registry for all game data -- items, NPCs, starter inventory,
-    plus pre-generated events, quests, and manifest from world_gen.
+    """Singleton registry for all game data -- items, NPCs, monsters, events,
+    quests, classes, story, and manifest.
 
-    Loads once from JSON files and provides lookup methods so no other module
-    needs to touch the raw data files directly.
+    All entity databases are loaded once from global JSON files at startup.
+    Room-specific filtering is done by setup_game using maze.json position maps.
     """
     _instance = None
 
@@ -23,6 +27,7 @@ class GameRegistry:
             return
         self._load_items()
         self._load_npcs()
+        self._load_monsters()
         self._load_starter_inventory()
         self._load_manifest()
         self._load_events()
@@ -40,7 +45,7 @@ class GameRegistry:
 
     def _load_manifest(self):
         self.manifest = None
-        path = "data/manifest.json"
+        path = os.path.join(DATA_DIR, "manifest.json")
         if os.path.exists(path):
             self.manifest = load_json_data(path)
 
@@ -65,7 +70,7 @@ class GameRegistry:
     # -- items ---------------------------------------------------------------
 
     def _load_items(self):
-        self._load_items_from('data/items/items.json')
+        self._load_items_from(os.path.join(DATA_DIR, 'items', 'items.json'))
 
     def _load_items_from(self, path: str):
         """Load items from a specific JSON file, merging into the existing registry."""
@@ -87,6 +92,13 @@ class GameRegistry:
         item = self.item_registry.get(item_id)
         return item.name if item else ""
 
+    def get_item_by_name(self, name: str):
+        """Look up an item by its display name. Returns the first match or None."""
+        for item in self.item_registry.values():
+            if item.name == name:
+                return item
+        return None
+
     def is_item(self, cell_value: int) -> bool:
         return cell_value in self.item_registry
 
@@ -99,7 +111,7 @@ class GameRegistry:
     # -- npcs ----------------------------------------------------------------
 
     def _load_npcs(self):
-        path = 'data/npcs/npcs.json'
+        path = os.path.join(DATA_DIR, 'npcs', 'npcs.json')
         if os.path.exists(path):
             self.npc_templates: list = load_json_data(path)
         else:
@@ -109,11 +121,28 @@ class GameRegistry:
         """Return only the NPC dicts that are selected (active) for this world."""
         return [n for n in self.npc_templates if n.get("selected", True)]
 
+    def get_npcs_by_ids(self, npc_ids: set[int]) -> list[dict]:
+        """Return NPC templates whose id is in npc_ids."""
+        return [n for n in self.npc_templates if n.get("id") in npc_ids]
+
+    # -- monsters ------------------------------------------------------------
+
+    def _load_monsters(self):
+        self.monster_registry: dict[int, dict] = {}
+        path = os.path.join(DATA_DIR, "monsters", "monsters.json")
+        if os.path.exists(path):
+            data = load_json_data(path)
+            for k, v in data.items():
+                self.monster_registry[int(k)] = v
+
+    def get_monster_template(self, monster_id: int) -> dict | None:
+        return self.monster_registry.get(monster_id)
+
     # -- events --------------------------------------------------------------
 
     def _load_events(self):
         self.event_registry: dict = {}
-        path = "data/events/events.json"
+        path = os.path.join(DATA_DIR, "events", "events.json")
         if os.path.exists(path):
             from src.models.encounter import create_event_from_data
             events_data = load_json_data(path)
@@ -121,14 +150,18 @@ class GameRegistry:
                 event_obj = create_event_from_data(evt)
                 self.event_registry[event_obj.id] = event_obj
 
-    def get_event(self, event_id: str):
+    def get_event(self, event_id: int):
         return self.event_registry.get(event_id)
+
+    def get_events_by_ids(self, event_ids: set[int]) -> dict:
+        """Return event registry filtered to given IDs."""
+        return {eid: evt for eid, evt in self.event_registry.items() if eid in event_ids}
 
     # -- quests --------------------------------------------------------------
 
     def _load_quests(self):
         self.quest_registry: dict = {}
-        path = "data/quests/quests.json"
+        path = os.path.join(DATA_DIR, "quests", "quests.json")
         if os.path.exists(path):
             from src.models.quest import create_quest_from_data
             quests_data = load_json_data(path)
@@ -136,14 +169,18 @@ class GameRegistry:
                 quest_obj = create_quest_from_data(qd)
                 self.quest_registry[quest_obj.id] = quest_obj
 
-    def get_quest(self, quest_id: str):
+    def get_quest(self, quest_id: int):
         return self.quest_registry.get(quest_id)
+
+    def get_quests_by_ids(self, quest_ids: set[int]) -> dict:
+        """Return quest registry filtered to given IDs."""
+        return {qid: q for qid, q in self.quest_registry.items() if qid in quest_ids}
 
     # -- classes -------------------------------------------------------------
 
     def _load_classes(self):
         self.class_options: list = []
-        path = "data/classes/classes.json"
+        path = os.path.join(DATA_DIR, "classes", "classes.json")
         if os.path.exists(path):
             from src.models.player import PlayerClass
             classes_data = load_json_data(path)
@@ -151,8 +188,8 @@ class GameRegistry:
                 for cd in classes_data:
                     try:
                         self.class_options.append(PlayerClass(**cd))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        _log.warning("Failed to load class data: %s", exc)
 
     def get_class_options(self):
         return self.class_options
@@ -161,15 +198,15 @@ class GameRegistry:
 
     def _load_story(self):
         self.story = None
-        path = "data/story/story.json"
+        path = os.path.join(DATA_DIR, "story", "story.json")
         if os.path.exists(path):
             from src.models.story import OverarchingStory
             story_data = load_json_data(path)
             if isinstance(story_data, dict):
                 try:
                     self.story = OverarchingStory(**story_data)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    _log.warning("Failed to load story data: %s", exc)
 
     def get_story(self):
         return self.story
@@ -177,50 +214,19 @@ class GameRegistry:
     # -- room loading --------------------------------------------------------
 
     def load_room(self, room_index: int):
-        """Load room-specific data (NPCs, events, quests) from data/rooms/room_N/."""
-        room_dir = os.path.join("data", "rooms", f"room_{room_index}")
+        """Verify room directory exists. Entity data is loaded globally, not per-room."""
+        room_dir = os.path.join(DATA_DIR, "rooms", f"room_{room_index}")
         if not os.path.isdir(room_dir):
             return False
-
-        # Load room NPCs
-        npc_path = os.path.join(room_dir, "npcs.json")
-        if os.path.exists(npc_path):
-            self.npc_templates = load_json_data(npc_path)
-
-        # Load room events
-        event_path = os.path.join(room_dir, "events.json")
-        if os.path.exists(event_path):
-            from src.models.encounter import create_event_from_data
-            events_data = load_json_data(event_path)
-            self.event_registry = {}
-            for evt in events_data:
-                event_obj = create_event_from_data(evt)
-                self.event_registry[event_obj.id] = event_obj
-
-        # Load room quests
-        quest_path = os.path.join(room_dir, "quests.json")
-        if os.path.exists(quest_path):
-            from src.models.quest import create_quest_from_data
-            quests_data = load_json_data(quest_path)
-            self.quest_registry = {}
-            for qd in quests_data:
-                quest_obj = create_quest_from_data(qd)
-                self.quest_registry[quest_obj.id] = quest_obj
-
-        # Merge room items into item registry (additive — player carries items across rooms)
-        items_path = os.path.join(room_dir, "items.json")
-        if os.path.exists(items_path):
-            self._load_items_from(items_path)
-
         return True
 
     def get_room_dir(self, room_index: int) -> str:
-        return os.path.join("data", "rooms", f"room_{room_index}")
+        return os.path.join(DATA_DIR, "rooms", f"room_{room_index}")
 
     # -- starter inventory ---------------------------------------------------
 
     def _load_starter_inventory(self):
-        path = 'data/player/starter_inventory.json'
+        path = os.path.join(DATA_DIR, 'player', 'starter_inventory.json')
         self.starter_inventory: dict = {}
         if not os.path.exists(path):
             return

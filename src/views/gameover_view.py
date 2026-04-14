@@ -1,8 +1,11 @@
 """Game over screen — displays death message, brief stats, and options."""
 
+import logging
 import os
 import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+logger = logging.getLogger(__name__)
 from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (200, 50, 50)
@@ -33,7 +36,7 @@ class GameOverView:
                 img = pygame.image.load(portrait_path)
                 self.bg_image = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
             except Exception:
-                pass
+                logger.debug("Failed to load gameover portrait: %s", portrait_path, exc_info=True)
 
     def draw(self):
         if self.bg_image:

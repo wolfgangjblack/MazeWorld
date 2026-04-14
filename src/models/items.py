@@ -119,11 +119,13 @@ class Tool(Item):
 class Weapon(Item):
     """Represents weapon items. Determines attack dice + stat modifier.
     Types: heavy (STR), light (DEX), simple (STR/INT).
+    Categories: simple (any class) or martial (warrior/jester only).
     """
     weapon_type: str = "simple"  # "heavy", "light", "simple"
-    class_restriction: str = ""  # "warrior", "mage", "healer", "" = any
+    damage_type: str = "physical"  # "slashing", "piercing", "bludgeoning"
+    weapon_category: str = "simple"  # "simple", "martial"
+    magic_element: Optional[str] = None  # "fire", "water", "forest", "light", "dark"
     rarity: str = "common"  # "common", "uncommon", "rare", "legendary"
-    available_at_room: int = 0  # room index where this weapon becomes available
 
     def use(self, player):
         """Equip or unequip the weapon."""

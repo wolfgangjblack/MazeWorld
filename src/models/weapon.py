@@ -6,11 +6,15 @@ from pydantic import BaseModel
 class Weapon(BaseModel):
     """A weapon used in combat.
 
-    Types:
+    Types (weapon_type — governs stat scaling):
       heavy  - STR-based, 1d8-1d10 (warrior primary)
       light  - DEX-based, 1d4-1d6 (fast, lower damage)
       simple - STR or INT, 1d4-1d6 (mage/healer weapons)
       wild   - varies (wild card / jester)
+
+    Categories (weapon_category — governs equip restrictions):
+      simple  - any class can equip
+      martial - warrior and jester only
     """
 
     name: str
@@ -18,6 +22,9 @@ class Weapon(BaseModel):
     stat: str  # "STR" | "DEX" | "INT" — which stat drives attack/damage
     damage_dice: int  # number of sides on the damage die (e.g. 6 = 1d6)
     damage_bonus: int = 0  # flat bonus added to damage
+    damage_type: str = "physical"  # "slashing" | "piercing" | "bludgeoning"
+    weapon_category: str = "simple"  # "simple" | "martial"
+    magic_element: Optional[str] = None  # None | "fire" | "water" | "forest" | "light" | "dark"
     description: str = ""
     profile_image: Optional[str] = None
     portrait_prompt: Optional[str] = None
@@ -27,13 +34,14 @@ class Weapon(BaseModel):
         return random.randint(1, self.damage_dice) + self.damage_bonus
 
 
-# Starter weapons for quick prototyping / tests
 STARTER_WEAPONS = {
     "warrior": Weapon(
         name="Iron Sword",
         weapon_type="heavy",
         stat="STR",
         damage_dice=8,
+        damage_type="slashing",
+        weapon_category="martial",
         description="A sturdy iron sword.",
     ),
     "mage": Weapon(
@@ -41,6 +49,8 @@ STARTER_WEAPONS = {
         weapon_type="simple",
         stat="INT",
         damage_dice=4,
+        damage_type="bludgeoning",
+        weapon_category="simple",
         description="A gnarled oak staff that hums with energy.",
     ),
     "healer": Weapon(
@@ -48,6 +58,8 @@ STARTER_WEAPONS = {
         weapon_type="simple",
         stat="STR",
         damage_dice=6,
+        damage_type="bludgeoning",
+        weapon_category="simple",
         description="A heavy mace favored by clerics.",
     ),
     "jester": Weapon(
@@ -55,14 +67,9 @@ STARTER_WEAPONS = {
         weapon_type="wild",
         stat="DEX",
         damage_dice=6,
+        damage_type="slashing",
+        weapon_category="martial",
         description="A blade that seems to change shape when you're not looking.",
-    ),
-    "rogue": Weapon(
-        name="Short Dagger",
-        weapon_type="light",
-        stat="DEX",
-        damage_dice=4,
-        description="A quick, light dagger favored by agile fighters.",
     ),
 }
 
@@ -140,12 +147,12 @@ def roll_dice_expr(dice_expr: str) -> int:
     except (ValueError, TypeError):
         return random.randint(1, 6)
 
-# Weapon type -> archetypes that get the full stat bonus
-WEAPON_CLASS_AFFINITY: dict[str, list[str]] = {
-    "heavy": ["warrior"],
-    "light": ["rogue"],
-    "simple": ["mage", "healer", "warrior"],
-    "wild": ["jester"],
+# Weapon category -> archetypes that can equip and get the full stat bonus
+WEAPON_CATEGORY_ACCESS: dict[str, set[str]] = {
+    "warrior": {"simple", "martial"},
+    "jester":  {"simple", "martial"},
+    "mage":    {"simple"},
+    "healer":  {"simple"},
 }
 
 
@@ -162,9 +169,9 @@ def weapon_stat_bonus(player, weapon: Weapon | None,
                       resolved_stat: str | None = None) -> int:
     """Compute the stat bonus a player gets from their weapon.
 
-    - Matching class: full stat modifier from weapon.stat
+    - Matching category: full stat modifier from weapon.stat
     - Jester: (stat_mod + LUCK mod) // 2 for any weapon
-    - Mismatched class: 0 (can still use the weapon, just no stat bonus)
+    - Mismatched category: 0 (can still use the weapon, just no stat bonus)
 
     Pass *resolved_stat* to avoid re-rolling random weapons.
     """
@@ -178,14 +185,25 @@ def weapon_stat_bonus(player, weapon: Weapon | None,
     stat_name = resolved_stat or resolve_weapon_stat(weapon)
 
     if archetype == "jester":
-        # Jester uses average of normal stat mod and LUCK mod
         luck_mod = player.get_stat_mod("LUCK")
         normal_mod = player.get_stat_mod(stat_name)
         return (luck_mod + normal_mod) // 2
 
-    affinities = WEAPON_CLASS_AFFINITY.get(weapon.weapon_type, [])
-    if archetype in affinities:
+    allowed = WEAPON_CATEGORY_ACCESS.get(archetype, {"simple"})
+    if weapon.weapon_category in allowed:
         return player.get_stat_mod(stat_name)
 
-    # Mismatched class: no stat bonus
     return 0
+
+
+def weapon_from_inventory_item(item) -> Weapon:
+    """Convert an items.py::Weapon into a weapon.py::Weapon for combat use."""
+    return Weapon(
+        name=item.name,
+        weapon_type=getattr(item, 'weapon_type', 'simple'),
+        stat=item.item_stats.stat_modifier or "STR",
+        damage_dice=getattr(item.item_stats, 'damage_dice', 6),
+        damage_type=getattr(item, 'damage_type', 'physical'),
+        weapon_category=getattr(item, 'weapon_category', 'simple'),
+        magic_element=getattr(item, 'magic_element', None),
+    )

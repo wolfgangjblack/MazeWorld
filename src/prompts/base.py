@@ -34,7 +34,8 @@ class PromptSet(ABC):
     @abstractmethod
     def npc_response(self, identity: str, history: list[dict],
                      npc_name: str, player_input: str,
-                     story_context: str = "") -> LLMRequest: ...
+                     story_context: str = "",
+                     quest_context: dict | None = None) -> LLMRequest: ...
 
     @abstractmethod
     def image_description(self, personality_doc: dict) -> LLMRequest: ...
@@ -94,7 +95,7 @@ class PromptSet(ABC):
 
     @abstractmethod
     def monster_generation(self, env: str, env_name: str, room_level: int,
-                           story_context: str) -> LLMRequest: ...
+                           story_context: str, total_rooms: int = 1) -> LLMRequest: ...
 
     @abstractmethod
     def npc_backstory_generation(self, npc_data: dict,

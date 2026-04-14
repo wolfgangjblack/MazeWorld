@@ -9,7 +9,7 @@ def _make_player(**kwargs):
 
 def _make_combat_event(loot_table=None, money_drop=None, difficulty=2):
     return CombatEvent(
-        id="evt_test",
+        id=3000,
         name="Test Monster",
         description="A test monster",
         difficulty=difficulty,
@@ -21,19 +21,19 @@ def _make_combat_event(loot_table=None, money_drop=None, difficulty=2):
 
 class TestLootTable:
     def test_loot_entry_model(self):
-        entry = LootEntry(item_id=200, drop_chance=0.5)
-        assert entry.item_id == 200
+        entry = LootEntry(item_id=2000, drop_chance=0.5)
+        assert entry.item_id == 2000
         assert entry.drop_chance == 0.5
 
     def test_combat_victory_drops_loot(self):
         """On a high roll, loot should drop based on probability."""
-        loot = [LootEntry(item_id=200, drop_chance=1.0)]  # 100% drop
+        loot = [LootEntry(item_id=2000, drop_chance=1.0)]  # 100% drop
         event = _make_combat_event(loot_table=loot, difficulty=1)
         player = _make_player()
         # Roll high enough to always win (difficulty=1, threshold=3)
         result = event.resolve(20, player)
         assert result["success"] is True
-        assert 200 in result.get("loot_item_ids", [])
+        assert 2000 in result.get("loot_item_ids", [])
 
     def test_combat_victory_money_drop(self):
         event = _make_combat_event(money_drop=[10, 10], difficulty=1)
@@ -44,7 +44,7 @@ class TestLootTable:
         assert player.money == 10
 
     def test_combat_failure_no_loot(self):
-        loot = [LootEntry(item_id=200, drop_chance=1.0)]
+        loot = [LootEntry(item_id=2000, drop_chance=1.0)]
         event = _make_combat_event(loot_table=loot, money_drop=[10, 10], difficulty=5)
         player = _make_player()
         player.health = 100
@@ -55,12 +55,12 @@ class TestLootTable:
         assert player.money == 0
 
     def test_combat_zero_chance_no_loot(self):
-        loot = [LootEntry(item_id=200, drop_chance=0.0)]
+        loot = [LootEntry(item_id=2000, drop_chance=0.0)]
         event = _make_combat_event(loot_table=loot, difficulty=1)
         player = _make_player()
         result = event.resolve(20, player)
         assert result["success"] is True
-        assert 200 not in result.get("loot_item_ids", [])
+        assert 2000 not in result.get("loot_item_ids", [])
 
     def test_weapon_stat_modifier_in_combat(self):
         """Equipped weapon's stat modifier adds to the combat check."""

@@ -138,7 +138,7 @@ class TestInventoryManagerUseGive:
         mgr = InventoryManager(player.inventory, player)
         escort = EscortItem(
             category="escort", name="Bob (escort)", desc="test",
-            item_stats=ItemStats(), npc_id=1, target_zone=(5, 5),
+            item_stats=ItemStats(), npc_id=1000, target_zone=(5, 5),
         )
         mgr.add(escort)
         mgr.use_selected(0)

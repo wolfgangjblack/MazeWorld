@@ -75,7 +75,7 @@ def test_monster_creation():
     assert m.display_name == "Dire Wolf"
     assert m.level == 2
     assert m.loot_table == []
-    assert len(m.id) == 36  # UUID format
+    assert isinstance(m.id, int)
 
 
 def test_monster_named_boss():
@@ -91,7 +91,7 @@ def test_monster_named_boss():
 def test_monster_with_loot():
     m = Monster(
         species="Goblin",
-        loot_table=[LootDrop(item_id=201, probability=0.6)],
+        loot_table=[LootDrop(item_id=2001, probability=0.6)],
     )
     assert len(m.loot_table) == 1
     assert m.loot_table[0].probability == 0.6
@@ -120,9 +120,9 @@ def test_world_bible():
     assert wb.entity_index == {}
 
     wb.rooms["room_1"] = RoomBible(environment="forest", level=1, story_beat="intro")
-    wb.entity_index["npc_100"] = EntityRef(entity_type="npc", room_id="room_1", entity_id="100")
+    wb.entity_index["npc_1000"] = EntityRef(entity_type="npc", room_id="room_1", entity_id="1000")
     assert wb.rooms["room_1"].environment == "forest"
-    assert wb.entity_index["npc_100"].entity_type == "npc"
+    assert wb.entity_index["npc_1000"].entity_type == "npc"
 
 
 # --- SaveState ---
@@ -130,18 +130,21 @@ def test_world_bible():
 def test_save_state_defaults():
     ss = SaveState()
     assert ss.seed == -1
-    assert ss.room_id == "room_1"
+    assert ss.current_room == 0
+    assert ss.total_rooms == 1
     assert ss.version == 1
 
 
 def test_save_state_with_data():
     ss = SaveState(
         seed=1234,
-        room_id="room_3",
+        current_room=2,
+        total_rooms=5,
         player_data={"x": 5, "y": 10, "health": 80},
-        quest_states={"q1": {"status": "active"}, "q2": {"status": "completed"}},
+        quest_states={"4000": {"status": "active"}, "4001": {"status": "completed"}},
     )
     assert ss.seed == 1234
+    assert ss.current_room == 2
     assert len(ss.quest_states) == 2
 
 
@@ -201,6 +204,6 @@ def test_combat_actions():
 # --- Follower ---
 
 def test_follower():
-    f = Follower(npc_id=100, name="Arin", quest_id="q_001")
-    assert f.npc_id == 100
+    f = Follower(npc_id=1000, name="Arin", quest_id=4001)
+    assert f.npc_id == 1000
     assert f.joined_in_room == 1

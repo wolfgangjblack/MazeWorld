@@ -54,7 +54,8 @@ class ClaudePromptSet(PromptSet):
 
     def npc_response(self, identity: str, history: list[dict],
                      npc_name: str, player_input: str,
-                     story_context: str = "") -> LLMRequest:
+                     story_context: str = "",
+                     quest_context: dict | None = None) -> LLMRequest:
         examples = _history_to_examples(history)
         system = identity
         if story_context:
@@ -64,11 +65,31 @@ class ClaudePromptSet(PromptSet):
                 "rumors about events — but keep each response to 1-3 sentences. "
                 "Reference specifics (names, places, events) rather than vague allusions."
             )
+        max_tokens = 150
+        if quest_context:
+            dc = quest_context.get("dc", 10)
+            title = quest_context.get("title", "unknown")
+            desc = quest_context.get("description", "")
+            system += (
+                "\n\nYou are also evaluating the player's social behavior. "
+                "After your in-character response, output a JSON line on a NEW line "
+                "in this exact format:\n"
+                '{"dc_next": <8-20>, "tone": "<friendly|neutral|rude|threatening|off_topic>"}\n\n'
+                f"dc_next: difficulty class for the NEXT interaction. Start at {dc}.\n"
+                "- If the player was friendly/charming/on-topic: lower by 1-3\n"
+                "- If the player was neutral: keep the same\n"
+                "- If the player was rude/aggressive/off-topic: raise by 2-5\n"
+                "- Clamp between 8 and 20\n\n"
+                "Your personality affects tolerance: a gruff NPC raises DC slower on "
+                "rudeness; a shy NPC raises it faster.\n\n"
+                f'Active quest: "{title}" — {desc}'
+            )
+            max_tokens = 200
         return LLMRequest(
             system=system,
             examples=examples,
             user_message=player_input,
-            max_tokens=150,
+            max_tokens=max_tokens,
         )
 
     def image_description(self, personality_doc: dict) -> LLMRequest:
@@ -211,8 +232,31 @@ class ClaudePromptSet(PromptSet):
     def dialogue_tree_generation(self, npc_personality: dict,
                                  quest_context: dict | None = None) -> LLMRequest:
         context = json.dumps({"npc": npc_personality, "quest": quest_context})
-        return LLMRequest(
-            system=(
+
+        if quest_context:
+            system = (
+                "You generate dialogue trees for a fantasy game NPC who has a quest. "
+                "Respond with ONLY a JSON object containing THREE dialogue trees:\n\n"
+                "1. \"incomplete\" — shown while the quest is active (3-5 nodes). "
+                "Introduce the NPC, describe the quest and why it matters to them. "
+                "End node: urge the player to complete the quest.\n\n"
+                "2. \"complete_success\" — shown after quest success (2-3 nodes). "
+                "Thank the player, explain what changed, give a grateful farewell. "
+                "Use the success_dialogue hint from quest context as a tone guide.\n\n"
+                "3. \"complete_failure\" — shown after quest failure (2-3 nodes). "
+                "Acknowledge the attempt, reflect with semi-disappointment, give a resigned farewell. "
+                "Use the failure_dialogue hint from quest context as a tone guide.\n\n"
+                "Format: {\"incomplete\": {\"nodes\": {\"start\": {\"prompt\": \"...\", "
+                "\"choices\": [{\"text\": \"...\", \"next_node_id\": \"...\"}]}, ..., "
+                "\"end\": {\"prompt\": \"...\", \"choices\": []}}}, "
+                "\"complete_success\": {\"nodes\": {...}}, "
+                "\"complete_failure\": {\"nodes\": {...}}}.\n\n"
+                "Stay in character. Reference the quest title and story context."
+                + _NO_FENCES
+            )
+            max_tokens = 1000
+        else:
+            system = (
                 "You generate dialogue trees for a fantasy game NPC. "
                 "Respond with ONLY a JSON object representing a dialogue tree. Format: "
                 '{"nodes": {"start": {"prompt": "NPC says...", '
@@ -221,10 +265,14 @@ class ClaudePromptSet(PromptSet):
                 '"end": {"prompt": "Farewell!", "choices": []}}}. '
                 "Keep it 3-5 nodes deep. Stay in character."
                 + _NO_FENCES
-            ),
+            )
+            max_tokens = 400
+
+        return LLMRequest(
+            system=system,
             examples=[],
             user_message=context,
-            max_tokens=400,
+            max_tokens=max_tokens,
         )
 
     def item_generation(self, env: str, env_name: str, room_level: int,
@@ -244,8 +292,8 @@ class ClaudePromptSet(PromptSet):
                 "environment name, and room level, generate a JSON object with item pools. "
                 "Items MUST be thematic to the environment and world lore.\n\n"
                 "Return ONLY a JSON object with these keys:\n"
-                "- food: array of 4 items, each {name, desc, stamina_value (10-30), health_value (0-15)}\n"
-                "- drink: array of 4 items, each {name, desc, stamina_value (10-30), health_value (0-15)}\n"
+                "- food: array of 4 items, each {name, desc}\n"
+                "- drink: array of 4 items, each {name, desc}\n"
                 "- tools: array of 3 items, each {name, desc, attribute (bludgeon|cutting|digging|climbing)}\n"
                 "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}\n"
                 "- spell_scrolls: array of 2 items, each {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}\n\n"
@@ -262,16 +310,16 @@ class ClaudePromptSet(PromptSet):
                     "environment: 'forest', name: 'Whisperwood', room_level: 1",
                     json.dumps({
                         "food": [
-                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour.", "stamina_value": 20, "health_value": 0},
-                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries.", "stamina_value": 10, "health_value": 5},
-                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire.", "stamina_value": 25, "health_value": 10},
-                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey.", "stamina_value": 15, "health_value": 5},
+                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour."},
+                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries."},
+                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire."},
+                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey."},
                         ],
                         "drink": [
-                            {"name": "spring water", "desc": "Cool, clear water from a forest spring.", "stamina_value": 15, "health_value": 0},
-                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs.", "stamina_value": 20, "health_value": 10},
-                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries.", "stamina_value": 10, "health_value": 5},
-                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves.", "stamina_value": 10, "health_value": 0},
+                            {"name": "spring water", "desc": "Cool, clear water from a forest spring."},
+                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs."},
+                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries."},
+                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves."},
                         ],
                         "tools": [
                             {"name": "woodcutter's hatchet", "desc": "A small hatchet for chopping branches.", "attribute": "cutting"},
@@ -513,7 +561,12 @@ class ClaudePromptSet(PromptSet):
         )
 
     def monster_generation(self, env: str, env_name: str, room_level: int,
-                           story_context: str) -> LLMRequest:
+                           story_context: str, total_rooms: int = 1) -> LLMRequest:
+        scale_stats_line = (
+            f"Scale stats to room_level (1=easy, {total_rooms}=hard).\n"
+            if total_rooms > 1
+            else "Scale stats so the mix includes easy fodder monsters and one challenging boss for a single-room dungeon.\n"
+        )
         context = json.dumps({
             "environment": env,
             "environment_name": env_name,
@@ -531,7 +584,7 @@ class ClaudePromptSet(PromptSet):
                 "a unique proper name and title — NEVER 'Boss', 'Lieutenant', or a generic rank. "
                 "Their motivation must connect to the faction's goal in story_context.\n"
                 "- At least 1 monster should be night_only.\n"
-                "- Scale stats to room_level (1=easy, 4=hard).\n"
+                "- " + scale_stats_line +
                 "- Use hp_range [min, max] and ac_range [min, max] instead of fixed values — "
                 "actual stats will be rolled from these ranges at combat time.\n"
                 "- Include a weakness field — the element this monster is vulnerable to "
@@ -703,61 +756,37 @@ class ClaudePromptSet(PromptSet):
 
         type_guidance = {
             "puzzle": (
-                "Generate PUZZLE encounters — environmental/physical obstacles that block the player's path.\n"
-                "Puzzles are about interacting with the WORLD: ancient mechanisms, natural hazards, magical seals, "
-                "structural collapses, trapped passages. NOT about people.\n\n"
-                "Each puzzle needs: name, description, difficulty (1-5), "
-                f"correct_tool (one of: {tool_list}, or null), "
-                f"correct_ability (one of: {ability_list}, or null — pick ONLY from this list), "
-                f"correct_spell (one of: {spell_list}, or null — pick ONLY from this list), "
-                "choices (array of {{text, stat_check, tool_attribute, dc, auto_success}}), "
-                "summary (1-2 line description of the puzzle + how to solve it), "
-                "portrait_prompt.\n\n"
-                "CRITICAL RULES for choice text:\n"
-                "- The `text` field is what the PLAYER reads. It must describe a NARRATIVE ACTION, not a stat label.\n"
-                "- The `stat_check` and `tool_attribute` fields are behind-the-scenes metadata.\n"
-                '- GOOD: {{"text": "Shoulder the boulder aside with brute force", "stat_check": "STR", "dc": 14}}\n'
-                '- BAD:  {{"text": "Attempt a STR check", "stat_check": "STR", "dc": 14}}\n'
-                '- GOOD: {{"text": "Wedge your pickaxe under the stone and lever it free", "tool_attribute": "digging"}}\n'
-                '- BAD:  {{"text": "Use a digging tool", "tool_attribute": "digging"}}\n\n'
+                "Generate PUZZLE encounters — environmental/physical obstacles.\n"
+                "Puzzles are about interacting with the WORLD: mechanisms, hazards, seals, collapses.\n\n"
+                "Each event slot has pre_built_choices with mechanics already set (stat_check, dc, tool_attribute).\n"
+                "You generate ONLY narrative content for each puzzle:\n"
+                "- name: creative encounter name\n"
+                "- description: vivid scene description (2-3 sentences, specific to environment)\n"
+                "- summary: 1-2 line description of the puzzle\n"
+                "- portrait_prompt: scene description for image generation (pixel art style)\n"
+                "- success_texts: array of 1-2 sentence flavor texts, one per non-walk-away choice, "
+                "describing what happens when the player SUCCEEDS at that action\n\n"
                 "DESCRIPTION RULES:\n"
                 "- Each description must be a vivid, specific scene tied to the environment.\n"
                 "- Include a narrative hook: who built it, why it exists, what's at stake.\n"
-                "- Do NOT write generic text like 'A puzzle blocks your path' or 'A runic seal blocks the way.'\n\n"
-                "If an event_slot has requires_type and requires_ref, that MUST be the "
-                "auto-solve option (correct_tool, correct_ability, or correct_spell).\n"
-                "Include a walk-away option with contextual text (not just 'Walk away')."
+                "- Do NOT write generic text like 'A puzzle blocks your path'.\n"
+                "Do NOT output choices, dc, stat_check, tool_attribute, or any mechanical fields."
             ),
             "event": (
                 "Generate EVENT encounters — people/narrative-driven social situations.\n"
-                "Events are about interacting with PEOPLE: faction encounters, moral dilemmas, "
-                "cultural moments, social confrontations, story scenes. NOT about environmental obstacles.\n\n"
-                "Each event needs: name, description, difficulty (1-5), "
-                "choices (EXACTLY 5 choices — see structure below), "
-                f"correct_ability (one of: {ability_list}, or null), "
-                f"correct_spell (one of: {spell_list}, or null), "
-                "failure_damage_type (health|stamina), failure_damage_range ([min, max]), "
-                "summary (1-2 line description of the event + consequences), "
-                "portrait_prompt.\n\n"
-                "EXACTLY 5 CHOICES with this structure:\n"
-                "1. Stat check: {text, stat_check, dc} — a physical/mental action\n"
-                "2. Ability slot: {text, stat_check: null, dc: 0} — text describes using an ability narratively\n"
-                "3. Spell slot: {text, stat_check: null, dc: 0} — text describes casting a spell narratively\n"
-                "4. Item/tool slot: {text, tool_attribute, dc} — text describes using an item\n"
-                "5. Walk away: {text, auto_success: true} — contextual exit\n\n"
-                "CRITICAL RULES for choice text:\n"
-                "- The `text` field is what the PLAYER reads. Describe WHAT THEY DO, not what stat they roll.\n"
-                "- `stat_check`, `tool_attribute` are behind-the-scenes metadata, never exposed to the player.\n"
-                '- GOOD: "Step between the thugs and stare them down" (stat_check: CHA)\n'
-                '- BAD:  "Attempt a CHA check"\n'
-                '- GOOD: "Cut the ropes binding the prisoner" (tool_attribute: cutting)\n'
-                '- BAD:  "Use cutting tool"\n'
-                '- GOOD: "Slip away before they notice you" (auto_success: true)\n'
-                '- BAD:  "Walk away"\n\n'
+                "Events are about PEOPLE: faction encounters, moral dilemmas, social confrontations.\n\n"
+                "Each event slot has pre_built_choices with mechanics already set.\n"
+                "You generate ONLY narrative content for each event:\n"
+                "- name: creative encounter name\n"
+                "- description: vivid scene with NAMED characters and clear stakes (2-3 sentences)\n"
+                "- summary: 1-2 line description of the event and consequences\n"
+                "- portrait_prompt: scene description for image generation (pixel art style)\n"
+                "- success_texts: array of 1-2 sentence flavor texts, one per non-walk-away choice, "
+                "describing what happens when the player SUCCEEDS at that action\n\n"
                 "DESCRIPTION RULES:\n"
                 "- Paint a specific scene with NAMED characters or groups and clear stakes.\n"
                 "- Do NOT write 'Something unexpected happens' or any generic placeholder.\n"
-                "- Each event must feel like a unique narrative moment."
+                "Do NOT output choices, dc, stat_check, tool_attribute, or any mechanical fields."
             ),
         }
 
@@ -786,7 +815,7 @@ class ClaudePromptSet(PromptSet):
                 + "\n".join(f"- {s}" for s in previous_summaries[-15:])
             )
 
-        max_tokens = max(2000, len(event_slots) * 300)
+        max_tokens = max(4000, len(event_slots) * 500)
 
         return LLMRequest(
             system=(
@@ -855,8 +884,7 @@ class ClaudePromptSet(PromptSet):
                 "Scaling: room 0 = common (1d4-1d6), higher rooms = stronger "
                 "(up to legendary 1d10-1d12).\n"
                 "Generate ~3 weapons per room (1 heavy, 1 light, 1 simple).\n\n"
-                "Each weapon: {name, class_restriction (warrior|mage|healer|''), "
-                "weapon_type (heavy|light|simple), available_at_room (int), "
+                "Each weapon: {name, weapon_type (heavy|light|simple), "
                 "rarity (common|uncommon|rare|legendary), attack_dice (e.g. '1d6'), "
                 "stat_modifier (STR|DEX|INT|WIS), flavor_text, portrait_prompt}\n\n"
                 "Respond with ONLY a JSON array of weapon objects. "
@@ -1185,7 +1213,8 @@ class ClaudePromptSet(PromptSet):
                 "  forest=rustling, light=chiming, dark=whispering)\n"
                 "- Keep prompts concise (1-3 sentences each)\n"
                 "- All durations in seconds\n"
-                "- Only ambience tracks get loop=true; all others loop=false"
+                "- Only ambience tracks get loop=true; all others loop=false\n"
+                "- No screaming, yelling, or vocal sounds. Chatter/murmurs are OK for ambience only."
                 + _NO_FENCES
             ),
             examples=[

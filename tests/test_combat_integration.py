@@ -38,7 +38,7 @@ def _make_player(archetype="warrior", armor=0):
 
 def _weak_monster():
     return Monster(
-        id="m1", species="Goblin", level=1,
+        id=5000, species="Goblin", level=1,
         hp=10, max_hp=10, ac=10,
         str_mod=0, dex_mod=0,
         damage_dice=4, damage_type="physical",
@@ -214,7 +214,7 @@ class TestCombatControllerWiring:
         p.player_class.stats.STR = 30
         p.level = 5
         m = Monster(
-            id="m1", species="Goblin", level=1,
+            id=5000, species="Goblin", level=1,
             hp=5, max_hp=5, ac=8,
             str_mod=0, dex_mod=0,
             damage_dice=2, damage_type="physical",
@@ -245,7 +245,7 @@ class TestCombatControllerWiring:
                   stat="INT", damage_dice=12, stamina_cost=5, targets="single"),
         ]
         m = Monster(
-            id="m1", species="Goblin", level=1,
+            id=5000, species="Goblin", level=1,
             hp=5, max_hp=5, ac=8,
             str_mod=0, dex_mod=0, damage_dice=2,
             magic_resistance=0,
@@ -298,14 +298,14 @@ class TestCombatControllerWiring:
         from src.models.monster import LootDrop
         p = _make_player("warrior")
         m = Monster(
-            id="m1", species="Rat", level=1,
+            id=5000, species="Rat", level=1,
             hp=0, max_hp=5, ac=8,
             str_mod=0, dex_mod=0, damage_dice=2,
-            loot_table=[LootDrop(item_id=100, probability=1.0)],
+            loot_table=[LootDrop(item_id=2000, probability=1.0)],
         )
         cc = CombatController(p, [m])
         loot = cc.collect_loot()
-        assert 100 in loot
+        assert 2000 in loot
 
     def test_game_controller_has_combat_state(self):
         """GameController should have combat_controller attribute."""
@@ -326,7 +326,7 @@ class TestCombatControllerWiring:
         from src.controllers.game_controller import GameController
         p = _make_player()
         gc = GameController(screen, font, FakeMaze(), p, [], db)
-        assert gc.combat_controller is None
-        assert gc.combat_view is None
-        assert gc._in_full_combat is False
+        assert gc.combat_handler.combat_controller is None
+        assert gc.combat_handler.combat_view is None
+        assert gc.combat_handler.active is False
         pygame.quit()

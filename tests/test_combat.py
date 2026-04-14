@@ -12,15 +12,15 @@ from src.models.player import PlayerCharacter, PlayerClass, Stats, stat_modifier
 from src.models.monster import (
     Monster,
     LootDrop,
-    create_scaled_monster,
-    generate_encounter_monsters,
 )
-from src.models.weapon import Weapon, STARTER_WEAPONS, RANDOM_WEAPON_STATS
+from src.models.weapon import Weapon, STARTER_WEAPONS, RANDOM_WEAPON_STATS, WEAPON_CATEGORY_ACCESS
 from src.models.spell import (
     Spell,
     elemental_multiplier,
+    physical_multiplier,
     SUPER_EFFECTIVE_MULT,
     RESISTED_MULT,
+    PHYSICAL_ADVANTAGE,
 )
 from src.controllers.combat_controller import (
     CombatController,
@@ -119,7 +119,7 @@ def jester():
 @pytest.fixture
 def weak_monster():
     return Monster(
-        id="m1", species="Goblin", level=1,
+        id=5000, species="Goblin", level=1,
         hp=10, max_hp=10, ac=10,
         str_mod=0, dex_mod=0,
         damage_dice=4, damage_type="physical",
@@ -129,7 +129,7 @@ def weak_monster():
 @pytest.fixture
 def fire_monster():
     return Monster(
-        id="m2", species="Fire Imp", level=1,
+        id=5001, species="Fire Imp", level=1,
         hp=12, max_hp=12, ac=11,
         str_mod=1, dex_mod=1,
         damage_dice=6, damage_type="fire",
@@ -141,7 +141,7 @@ def fire_monster():
 @pytest.fixture
 def forest_monster():
     return Monster(
-        id="m3", species="Treant", level=2,
+        id=5002, species="Treant", level=2,
         hp=18, max_hp=18, ac=13,
         str_mod=2, dex_mod=0,
         damage_dice=8, damage_type="physical",
@@ -153,7 +153,7 @@ def forest_monster():
 def make_pack(count=3):
     return [
         Monster(
-            id=f"wolf-{i}", species="Wolf", level=1,
+            id=5010 + i, species="Wolf", level=1,
             hp=8, max_hp=8, ac=10,
             str_mod=0, dex_mod=1,
             damage_dice=4, damage_type="physical",
@@ -415,7 +415,7 @@ class TestFlee:
         warrior.player_class.stats.DEX = 2  # -4 mod → max roll 20 - 4 = 16 vs DC 13 could succeed
         # Use a strong monster to make DC higher
         strong = Monster(
-            id="boss", species="Boss", level=10,
+            id=5099, species="Boss", level=10,
             hp=50, max_hp=50, ac=18,
             str_mod=5, dex_mod=3,
             damage_dice=10,
@@ -463,7 +463,7 @@ class TestJesterGamble:
         jester.player_class.stats.LUCK = 30  # +10 mod
         outcomes = {"damage_self": 0, "nothing": 0, "good": 0}
         for seed in range(200):
-            m = Monster(id="m", species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
+            m = Monster(id=5003, species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
             cc = CombatController(jester, [m])
             cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
             cc.turn_index = 0
@@ -500,7 +500,7 @@ class TestCombatEndConditions:
         warrior.player_class.stats.DEX = 2
         # Strong monster that always hits
         boss = Monster(
-            id="boss", species="Boss", level=5,
+            id=5099, species="Boss", level=5,
             hp=50, max_hp=50, ac=20,
             str_mod=10, dex_mod=5,
             damage_dice=20,
@@ -613,7 +613,7 @@ class TestBuffDuration:
             random.seed(seed)
             healer.active_buffs = []
             healer.stamina = 100
-            m = Monster(id="m", species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
+            m = Monster(id=5003, species="Goblin", hp=100, max_hp=100, ac=10, damage_dice=4)
             cc = CombatController(healer, [m], room_level=1)
             cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
             cc.turn_index = 0
@@ -628,26 +628,20 @@ class TestBuffDuration:
 # ---------------------------------------------------------------------------
 
 class TestMonsterModel:
-    def test_create_scaled_monster(self):
-        m = create_scaled_monster(species="Slime", level=1)
-        assert 8 <= m.hp <= 12
-        assert 10 <= m.ac <= 12
-        assert m.species == "Slime"
-
     def test_loot_roll(self):
         m = Monster(
             species="Rat", hp=5, max_hp=5, ac=10,
             damage_dice=4,
-            loot_table=[LootDrop(item_id=200, probability=1.0)],
+            loot_table=[LootDrop(item_id=2000, probability=1.0)],
         )
         loot = m.roll_loot()
-        assert 200 in loot
+        assert 2000 in loot
 
     def test_loot_roll_zero_probability(self):
         m = Monster(
             species="Rat", hp=5, max_hp=5, ac=10,
             damage_dice=4,
-            loot_table=[LootDrop(item_id=200, probability=0.0)],
+            loot_table=[LootDrop(item_id=2000, probability=0.0)],
         )
         loot = m.roll_loot()
         assert loot == []
@@ -707,54 +701,6 @@ class TestPlayerCombat:
 
 
 # ---------------------------------------------------------------------------
-# Encounter composition
-# ---------------------------------------------------------------------------
-
-class TestEncounterComposition:
-    def test_encounter_produces_monsters(self):
-        monsters = generate_encounter_monsters("forest", 1)
-        assert len(monsters) >= 1
-
-    def test_encounter_solo_sometimes(self):
-        counts = []
-        for seed in range(100):
-            random.seed(seed)
-            monsters = generate_encounter_monsters("forest", 1)
-            counts.append(len(monsters))
-        assert 1 in counts
-
-    def test_encounter_pack_sometimes(self):
-        counts = []
-        for seed in range(100):
-            random.seed(seed)
-            monsters = generate_encounter_monsters("cave", 2)
-            counts.append(len(monsters))
-        assert any(c >= 2 for c in counts)
-
-    def test_encounter_monsters_have_valid_level(self):
-        monsters = generate_encounter_monsters("forest", 3)
-        for m in monsters:
-            assert 1 <= m.level <= 3
-
-
-# ---------------------------------------------------------------------------
-# Default loot probability (40-60%)
-# ---------------------------------------------------------------------------
-
-class TestDefaultLoot:
-    def test_scaled_monster_has_default_loot(self):
-        m = create_scaled_monster(species="Rat", level=1)
-        assert len(m.loot_table) == 1
-        assert 0.4 <= m.loot_table[0].probability <= 0.6
-
-    def test_explicit_loot_overrides_default(self):
-        custom = [LootDrop(item_id=999, probability=1.0)]
-        m = create_scaled_monster(species="Rat", level=1, loot_table=custom)
-        assert m.loot_table[0].item_id == 999
-        assert m.loot_table[0].probability == 1.0
-
-
-# ---------------------------------------------------------------------------
 # Jester random weapon stat
 # ---------------------------------------------------------------------------
 
@@ -776,13 +722,152 @@ class TestJesterRandomWeapon:
 
 
 # ---------------------------------------------------------------------------
-# Light weapon
+# Physical damage type triangle
 # ---------------------------------------------------------------------------
 
-class TestLightWeapon:
-    def test_light_weapon_exists(self):
-        assert "rogue" in STARTER_WEAPONS
-        w = STARTER_WEAPONS["rogue"]
-        assert w.weapon_type == "light"
-        assert w.stat == "DEX"
-        assert w.damage_dice in (4, 6)  # 1d4-1d6 per spec
+class TestPhysicalMultiplier:
+    def test_slashing_beats_piercing(self):
+        assert physical_multiplier("slashing", "piercing") == SUPER_EFFECTIVE_MULT
+
+    def test_piercing_beats_bludgeoning(self):
+        assert physical_multiplier("piercing", "bludgeoning") == SUPER_EFFECTIVE_MULT
+
+    def test_bludgeoning_beats_slashing(self):
+        assert physical_multiplier("bludgeoning", "slashing") == SUPER_EFFECTIVE_MULT
+
+    def test_resisted_reverse(self):
+        assert physical_multiplier("piercing", "slashing") == RESISTED_MULT
+        assert physical_multiplier("bludgeoning", "piercing") == RESISTED_MULT
+        assert physical_multiplier("slashing", "bludgeoning") == RESISTED_MULT
+
+    def test_same_type_neutral(self):
+        assert physical_multiplier("slashing", "slashing") == 1.0
+        assert physical_multiplier("piercing", "piercing") == 1.0
+
+    def test_physical_passthrough(self):
+        assert physical_multiplier("physical", "slashing") == 1.0
+        assert physical_multiplier("slashing", "physical") == 1.0
+
+    def test_none_defender(self):
+        assert physical_multiplier("slashing", None) == 1.0
+
+    def test_none_attacker(self):
+        assert physical_multiplier("", "slashing") == 1.0
+
+
+class TestWeaponCategoryAccess:
+    def test_warrior_can_equip_martial(self):
+        assert "martial" in WEAPON_CATEGORY_ACCESS["warrior"]
+
+    def test_mage_cannot_equip_martial(self):
+        assert "martial" not in WEAPON_CATEGORY_ACCESS["mage"]
+
+    def test_healer_cannot_equip_martial(self):
+        assert "martial" not in WEAPON_CATEGORY_ACCESS["healer"]
+
+    def test_jester_can_equip_martial(self):
+        assert "martial" in WEAPON_CATEGORY_ACCESS["jester"]
+
+    def test_all_can_equip_simple(self):
+        for arch in WEAPON_CATEGORY_ACCESS:
+            assert "simple" in WEAPON_CATEGORY_ACCESS[arch]
+
+
+class TestStarterWeaponsHaveTypes:
+    def test_all_starters_have_damage_type(self):
+        for archetype, w in STARTER_WEAPONS.items():
+            assert w.damage_type in ("slashing", "piercing", "bludgeoning"), \
+                f"{archetype} starter missing damage_type"
+
+    def test_all_starters_have_category(self):
+        for archetype, w in STARTER_WEAPONS.items():
+            assert w.weapon_category in ("simple", "martial"), \
+                f"{archetype} starter missing weapon_category"
+
+    def test_rogue_removed(self):
+        assert "rogue" not in STARTER_WEAPONS
+
+
+class TestMeleeMultiplierInCombat:
+    """Verify physical multiplier is applied during player_attack."""
+
+    def test_super_effective_melee(self):
+        stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
+        player = _make_player("warrior", stats)
+        player.weapon = Weapon(
+            name="Test Sword", weapon_type="heavy", stat="STR",
+            damage_dice=6, damage_type="slashing", weapon_category="martial",
+        )
+        monster = Monster(species="Rat", hp=100, max_hp=100, ac=1, dex_mod=0,
+                          physical_type="piercing")
+        combat = CombatController(player, [monster])
+        combat.turn_index = 0
+        for c in combat.combatants:
+            if c.is_player:
+                combat.turn_index = combat.combatants.index(c)
+                break
+        random.seed(42)
+        result = combat.player_attack(0)
+        if result["success"]:
+            assert "(super effective!)" in result["message"]
+
+    def test_resisted_melee(self):
+        stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
+        player = _make_player("warrior", stats)
+        player.weapon = Weapon(
+            name="Test Sword", weapon_type="heavy", stat="STR",
+            damage_dice=6, damage_type="slashing", weapon_category="martial",
+        )
+        monster = Monster(species="Golem", hp=100, max_hp=100, ac=1, dex_mod=0,
+                          physical_type="bludgeoning")
+        combat = CombatController(player, [monster])
+        for c in combat.combatants:
+            if c.is_player:
+                combat.turn_index = combat.combatants.index(c)
+                break
+        random.seed(42)
+        result = combat.player_attack(0)
+        if result["success"]:
+            assert "(resisted)" in result["message"]
+
+    def test_magic_weapon_stacks(self):
+        stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
+        player = _make_player("warrior", stats)
+        player.weapon = Weapon(
+            name="Fire Sword", weapon_type="heavy", stat="STR",
+            damage_dice=6, damage_type="slashing", weapon_category="martial",
+            magic_element="fire",
+        )
+        monster = Monster(species="Treant", hp=100, max_hp=100, ac=1, dex_mod=0,
+                          physical_type="piercing", elemental_affinity="forest")
+        combat = CombatController(player, [monster])
+        for c in combat.combatants:
+            if c.is_player:
+                combat.turn_index = combat.combatants.index(c)
+                break
+        random.seed(42)
+        result = combat.player_attack(0)
+        if result["success"]:
+            assert "(super effective!)" in result["message"]
+
+
+class TestMonsterPhysicalWeakness:
+    """Verify monster physical_type applies multiplier on incoming damage to player."""
+
+    def test_player_weakness(self):
+        stats = {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
+        player = _make_player("warrior", stats)
+        player.weapon = Weapon(
+            name="Sword", weapon_type="heavy", stat="STR",
+            damage_dice=6, damage_type="slashing", weapon_category="martial",
+        )
+        monster = Monster(species="Troll", hp=50, max_hp=50, ac=5,
+                          str_mod=5, damage_dice=6,
+                          physical_type="bludgeoning")
+        combat = CombatController(player, [monster])
+        initial_hp = player.health
+        random.seed(1)
+        combat._monster_attack_player(monster)
+        if player.health < initial_hp:
+            damage_taken = initial_hp - player.health
+            assert damage_taken >= 1

@@ -8,13 +8,10 @@ from src.models.items import (
     ItemStats, Food,
 )
 from src.models.weapon import (
-    STARTER_WEAPONS, WEAPON_CLASS_AFFINITY, weapon_stat_bonus,
+    STARTER_WEAPONS, WEAPON_CATEGORY_ACCESS, weapon_stat_bonus,
 )
 from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.time import DayNightCycle, TimePeriod, FULL_CYCLE_MS
-from src.models.monster import (
-    generate_night_monster, NIGHT_MONSTER_POOLS, generate_monster,
-)
 from src.models.world_bible import WorldBible, RoomBible
 from src.models.story import OverarchingStory, Faction
 from src.generate.summary_agent import (
@@ -37,7 +34,6 @@ def _make_player(archetype="warrior"):
         "warrior": dict(STR=16, DEX=14, CON=14, INT=8, WIS=8, CHA=10, LUCK=10),
         "mage": dict(STR=8, DEX=12, CON=10, INT=16, WIS=12, CHA=10, LUCK=10),
         "jester": dict(STR=10, DEX=10, CON=10, INT=10, WIS=10, CHA=10, LUCK=16),
-        "rogue": dict(STR=10, DEX=16, CON=10, INT=10, WIS=10, CHA=10, LUCK=10),
         "healer": dict(STR=8, DEX=10, CON=10, INT=10, WIS=16, CHA=12, LUCK=10),
     }
     pc = PlayerClass(
@@ -148,12 +144,6 @@ class TestWeaponSoftRestriction:
         player = _make_player("warrior")
         assert weapon_stat_bonus(player, None) == player.get_stat_mod("STR")
 
-    def test_rogue_with_light_weapon(self):
-        player = _make_player("rogue")
-        bonus = weapon_stat_bonus(player, player.weapon)
-        expected = player.get_stat_mod("DEX")
-        assert bonus == expected
-
     def test_player_roll_attack_uses_restriction(self):
         """Player.roll_attack should use weapon_stat_bonus."""
         player = _make_player("warrior")
@@ -164,11 +154,11 @@ class TestWeaponSoftRestriction:
         assert isinstance(roll, int)
         assert roll >= 1
 
-    def test_weapon_class_affinity_structure(self):
-        for wtype, archetypes in WEAPON_CLASS_AFFINITY.items():
-            assert isinstance(archetypes, list)
-            for a in archetypes:
-                assert isinstance(a, str)
+    def test_weapon_category_access_structure(self):
+        for archetype, categories in WEAPON_CATEGORY_ACCESS.items():
+            assert isinstance(categories, set)
+            for c in categories:
+                assert c in ("simple", "martial")
 
 
 # ===========================================================================
@@ -241,32 +231,9 @@ class TestRealTimeDayNight:
 
 
 # ===========================================================================
-# Night Monsters
+# Night Monsters (roaming system removed; night combat uses LLM-generated
+# time-gated events only)
 # ===========================================================================
-
-class TestNightMonsters:
-    def test_night_monster_has_dark_affinity(self):
-        monster = generate_night_monster("forest", 1)
-        assert monster.elemental_affinity == "dark"
-        assert monster.damage_type == "dark"
-
-    def test_night_monster_pools_exist(self):
-        for env in ["forest", "cave", "dungeon", "castle", "house", "city"]:
-            assert env in NIGHT_MONSTER_POOLS
-            assert len(NIGHT_MONSTER_POOLS[env]) > 0
-
-    def test_night_monster_name_from_pool(self):
-        monster = generate_night_monster("dungeon", 2)
-        assert monster.species in NIGHT_MONSTER_POOLS["dungeon"]
-
-    def test_night_monster_higher_level(self):
-        """Night monsters should be generated at effective level + 1."""
-        random.seed(42)
-        night = generate_night_monster("forest", 1)
-        random.seed(42)
-        normal = generate_monster("forest", 1)
-        # Night monster's level should be >= normal's since it's +1 effective
-        assert night.level >= normal.level
 
 
 # ===========================================================================
@@ -365,10 +332,11 @@ class TestStoryContext:
 class TestViewParams:
     def test_gameover_view_story_param(self):
         """GameOverView accepts story_paragraph param."""
-        import pygame
+        import os, pygame
         from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
         pygame.init()
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
+        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.gameover_view import GameOverView
@@ -380,10 +348,11 @@ class TestViewParams:
 
     def test_victory_view_story_param(self):
         """VictoryView accepts story_paragraph param."""
-        import pygame
+        import os, pygame
         from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
         pygame.init()
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
+        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.victory_view import VictoryView

@@ -4,7 +4,7 @@ from src.models.dialogue_box import DialogueBox
 
 
 def _make_npc(**overrides):
-    defaults = dict(x=0, y=0, id=1, name="Arin", job="hunter",
+    defaults = dict(x=0, y=0, id=1000, name="Arin", job="hunter",
                     personality="cheerful", hobby="tracking",
                     environment="forest")
     defaults.update(overrides)

@@ -16,11 +16,11 @@ ARCHETYPE_STAT_ROLES = {
     "jester":  {"primary": ["LUCK"],       "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
 }
 
-# Weapon soft-restriction: only matching archetypes get the stat bonus.
-# Any class CAN equip any weapon, but mismatched classes get 0 stat bonus.
+# Weapon category soft-restriction: only matching archetypes get the stat bonus.
+# Any class CAN equip any weapon in an allowed category, but mismatched = 0 stat bonus.
 # Jester uses avg(LUCK mod, weapon stat mod) for any weapon instead.
-ARCHETYPE_WEAPON_TYPES: dict[str, set[str]] = {
-    "warrior": {"heavy", "light"},
+ARCHETYPE_WEAPON_CATEGORIES: dict[str, set[str]] = {
+    "warrior": {"simple", "martial"},
     "mage":    {"simple"},
     "healer":  {"simple"},
     "jester":  set(),  # jester uses luck rule for all weapons
@@ -122,20 +122,19 @@ class PlayerCharacter(BaseModel):
     selected_item_index: int = 0
     inventory: Dict[str, object] = Field(default_factory=dict)
     profile_image: Optional[str] = None
-    active_quests: List[str] = Field(default_factory=list)
-    completed_quests: List[str] = Field(default_factory=list)
-    failed_quests: List[str] = Field(default_factory=list)
+    active_quests: List[int] = Field(default_factory=list)
+    completed_quests: List[int] = Field(default_factory=list)
+    failed_quests: List[int] = Field(default_factory=list)
     followers: List[Any] = Field(default_factory=list)  # List[Follower]
     abilities: List[Any] = Field(default_factory=list)
     spells: List[Any] = Field(default_factory=list)
-    equipped_weapon: str = ""
+    equipped_weapon: Optional[str] = None
     armor: int = 0  # flat armor value added to AC
     weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)
     active_buffs: List[ActiveBuff] = Field(default_factory=list)
 
     # --- Phase 4: Items, Inventory & Shops ---
     money: int = 0
-    equipped_weapon: Optional[str] = None
     learned_spells: List[str] = Field(default_factory=list)
 
     # --- Combat record ---
@@ -145,6 +144,12 @@ class PlayerCharacter(BaseModel):
         "damage_taken": 0,
         "combats_won": 0,
         "combats_fled": 0,
+    })
+    encounter_record: Dict[str, int] = Field(default_factory=lambda: {
+        "puzzles_solved": 0,
+        "puzzles_failed": 0,
+        "events_resolved": 0,
+        "events_failed": 0,
     })
     title: str = ""
 
@@ -206,6 +211,10 @@ class PlayerCharacter(BaseModel):
             for name, item in registry.starter_inventory.items()
         }
         self.money = STARTING_MONEY
+        if self.equipped_weapon and self.equipped_weapon not in self.inventory:
+            template = registry.get_item_by_name(self.equipped_weapon)
+            if template:
+                self.inventory[self.equipped_weapon] = template.clone()
         
     def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
@@ -264,19 +273,19 @@ class PlayerCharacter(BaseModel):
                 return npc
         return None
 
-    def accept_quest(self, quest_id: str):
+    def accept_quest(self, quest_id: int):
         if quest_id not in self.active_quests:
             self.active_quests.append(quest_id)
 
-    def complete_quest(self, quest_id: str):
+    def complete_quest(self, quest_id: int):
         if quest_id in self.active_quests:
             self.active_quests.remove(quest_id)
             self.completed_quests.append(quest_id)
 
-    def has_completed(self, quest_id: str) -> bool:
+    def has_completed(self, quest_id: int) -> bool:
         return quest_id in self.completed_quests
 
-    def fail_quest(self, quest_id: str):
+    def fail_quest(self, quest_id: int):
         if quest_id in self.active_quests:
             self.active_quests.remove(quest_id)
         if quest_id not in self.failed_quests:
@@ -329,16 +338,16 @@ class PlayerCharacter(BaseModel):
     def _weapon_stat_bonus(self, stat: str) -> int:
         """Return the stat bonus for the current weapon, applying soft-restriction.
 
-        - Matching archetype → full stat modifier
+        - Matching category → full stat modifier
         - Jester → avg(LUCK mod, weapon stat mod)
-        - Mismatched archetype → 0 (no stat bonus, just base damage)
+        - Mismatched category → 0 (no stat bonus, just base damage)
         """
         archetype = self.player_class.archetype if self.player_class else "warrior"
         if archetype == "jester":
             return self.get_jester_mod(stat)
-        weapon_type = self.weapon.weapon_type if self.weapon else "simple"
-        allowed = ARCHETYPE_WEAPON_TYPES.get(archetype, set())
-        if weapon_type in allowed:
+        category = self.weapon.weapon_category if self.weapon else "simple"
+        allowed = ARCHETYPE_WEAPON_CATEGORIES.get(archetype, {"simple"})
+        if category in allowed:
             return self.get_stat_mod(stat)
         return 0
 

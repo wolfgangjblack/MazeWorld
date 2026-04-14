@@ -1,16 +1,17 @@
 import random
 import pygame
 from src.controllers.combat_controller import CombatController, CombatState
-from src.views.combat_view import CombatView
+from src.controllers.combat_input_handler import CombatInputHandler
+from src.controllers.event_input_handler import EventInputHandler
 from src.views.gameplay_view import GameView
 from src.views.shop_view import ShopView
 from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
 from src.models.time import DayNightCycle
 from src.systems.fog_of_war import FogOfWar
 from src.systems.day_night import (
-    apply_rest, apply_combat_rest, player_has_torch,
+    apply_rest, player_has_torch,
     consume_torch_use, is_event_active_at_time, is_npc_available,
-    get_night_overlay_alpha, spawn_night_encounter,
+    get_night_overlay_alpha,
 )
 from src.registry import registry
 from src.utils.conversation_utils import has_dialogue_choices
@@ -46,46 +47,38 @@ class GameController:
         self.fog = fog or FogOfWar()
         # Day/Night Cycle
         self.day_night = day_night or DayNightCycle()
-        # Enable real-time day cycle from config
         from config import DAY_NIGHT_REAL_TIME, DAY_NIGHT_REAL_TIME_SECONDS
         if DAY_NIGHT_REAL_TIME and not self.day_night.real_time:
             self.day_night.real_time_seconds_per_cycle = DAY_NIGHT_REAL_TIME_SECONDS
             self.day_night.enable_real_time()
 
         # Managers
-        self.quest_manager = QuestManager(self.quests, self.events)
+        self.quest_manager = QuestManager(self.quests, self.events, self.npcs)
         self.quest_manager.door_reveal_callback = self.reveal_door_from_quest
         self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
 
         # Build a lookup from grid position to event id
-        self.event_position_map: dict[tuple[int, int], str] = {}
+        self.event_position_map: dict[tuple[int, int], int] = {}
         self._build_event_position_map()
 
         # Build event type/flag maps for rendering
         self._event_type_map: dict[tuple[int, int], str] = {}
         self._event_flag_map: dict[tuple[int, int], str] = {}
-        for pos, eid in self.event_position_map.items():
-            evt = self.events.get(eid)
-            if evt:
-                self._event_type_map[pos] = getattr(evt, 'type', '')
-                if getattr(evt, 'is_climax_boss', False):
-                    self._event_flag_map[pos] = "climax_boss"
-                elif getattr(evt, 'is_gate', False):
-                    self._event_flag_map[pos] = "gate"
+        self.rebuild_event_maps()
 
-        # Check for kill quests already cleared at startup
         self.quest_manager.check_kill_quests_already_cleared(self.player)
 
-        # Inject story context into dialogue box
         story = registry.get_story()
         if story:
             self.dialogue_box.story_context = self._build_story_context(story)
 
-        # Initial fog reveal at player start position
         self._update_fog()
 
-        # Survival system
         self.survival = SurvivalSystem()
+
+        # Input handlers (extracted subsystems)
+        self.combat_handler = CombatInputHandler(self)
+        self.event_handler = EventInputHandler(self)
 
         # UI / State variables
         self.inventory_active = False
@@ -98,40 +91,18 @@ class GameController:
         self.running = True
         self.debug_reveal = False
 
-        # Rest menu state
         self.rest_menu_active = False
 
-        # Shop state
         self.shop_active = False
         self.shop_npc = None
         self.shop_view = None
 
-        # Combat target selection
-        self.combat_target_index = 0
-
-        # Full combat system (CombatController + CombatView)
-        self.combat_controller: CombatController | None = None
-        self.combat_view: CombatView | None = None
-        self.combat_event = None  # The CombatEvent that triggered combat
-        self.combat_selected_action = 0
-        self.combat_selected_target = 0
-        self.combat_selecting_target = False
-        self.combat_selecting_spell = False
-        self.combat_selected_spell = 0
-        self.combat_selecting_item = False
-        self.combat_selected_item = 0
-        self.combat_game_over_selection = 0
-        self.event_selected_choice = 0
-
-        # Player menu / save-load state
         self.player_menu_active = False
-        self.pending_action = None  # Signals main loop: "save", "load", "quit", "open_pause", "open_full_menu", "open_story", "game_over", "victory", "room_transition"
+        self.pending_action = None
 
-        # Room progression state
         self.gate_cleared = False
         self._count_total_encounters()
 
-        # Stats tracking for victory screen
         self.stats = {
             "monsters_killed": 0,
             "items_used": 0,
@@ -143,7 +114,6 @@ class GameController:
 
     @staticmethod
     def _build_story_context(story) -> str:
-        """Build a concise story summary for NPC dialogue flavoring."""
         parts = []
         if story.title:
             parts.append(f"The overarching story is '{story.title}'.")
@@ -158,7 +128,6 @@ class GameController:
         if story.final_boss_name:
             parts.append(
                 f"Rumors speak of a powerful being called {story.final_boss_name}.")
-        # Include the most recent beat for immediacy
         if story.beats:
             last_beat = story.beats[-1]
             if last_beat.summary:
@@ -166,7 +135,6 @@ class GameController:
         return " ".join(parts)
 
     def _count_total_encounters(self):
-        """Count total and resolved encounters for door reveal tracking."""
         self.total_encounters = sum(
             1 for e in self.events.values()
             if not getattr(e, 'is_gate', False)
@@ -186,7 +154,6 @@ class GameController:
         return self.resolved_encounters / self.total_encounters
 
     def _check_door_reveal(self):
-        """Reveal the exit door if encounter clear threshold met."""
         from config import DOOR_REVEAL_THRESHOLD
         if (self.maze.door_position
                 and not self.maze.door_revealed
@@ -200,7 +167,6 @@ class GameController:
                 self.sfx.play("door_reveal")
 
     def reveal_door_from_quest(self):
-        """Called when a quest reward reveals the door."""
         if self.maze.door_position and not self.maze.door_revealed:
             self.maze.reveal_door()
             self.dialogue_box.set_item_message(
@@ -210,16 +176,17 @@ class GameController:
                 self.sfx.play("door_reveal")
 
     def _build_event_position_map(self):
-        """Map event tile positions to event IDs using maze data."""
         if not self.events:
             return
         import os
+        import logging
         from src.utils.dataloader_utils import load_json_data
 
-        # Try room-specific maze.json first, then legacy path
-        room_maze = os.path.join("data", "rooms", f"room_{self.current_room}", "maze.json")
-        legacy_maze = "data/maze/maze.json"
-        maze_path = room_maze if os.path.exists(room_maze) else legacy_maze
+        _log = logging.getLogger(__name__)
+
+        from config import DATA_DIR
+        room_maze = os.path.join(DATA_DIR, "rooms", f"room_{self.current_room}", "maze.json")
+        maze_path = room_maze
 
         try:
             if os.path.exists(maze_path):
@@ -227,36 +194,37 @@ class GameController:
                 for ep in maze_data.get("event_positions", []):
                     if "x" in ep and "y" in ep and "event_id" in ep:
                         self.event_position_map[(ep["x"], ep["y"])] = ep["event_id"]
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("Failed to load event positions from %s: %s", maze_path, exc)
 
         if self.event_position_map:
             return
 
-        # Fallback: build from event objects that have x,y coords
         for eid, event in self.events.items():
             ex = getattr(event, "x", None)
             ey = getattr(event, "y", None)
             if ex is not None and ey is not None:
                 self.event_position_map[(ex, ey)] = eid
 
-        if self.event_position_map:
-            return
+        if not self.event_position_map:
+            _log.warning("Could not build event position map for room %d.", self.current_room)
 
-        # Last resort: scan grid for event tiles and match by index order
-        event_ids = list(self.events.keys())
-        idx = 0
-        for y, row in enumerate(self.maze.grid):
-            for x, cell in enumerate(row):
-                if cell == self.maze.event_tile_id and idx < len(event_ids):
-                    self.event_position_map[(x, y)] = event_ids[idx]
-                    idx += 1
+    def rebuild_event_maps(self):
+        self._event_type_map = {}
+        self._event_flag_map = {}
+        for pos, eid in self.event_position_map.items():
+            evt = self.events.get(eid)
+            if evt:
+                self._event_type_map[pos] = getattr(evt, 'type', '')
+                if getattr(evt, 'is_climax_boss', False):
+                    self._event_flag_map[pos] = "climax_boss"
+                elif getattr(evt, 'is_gate', False):
+                    self._event_flag_map[pos] = "gate"
 
     @property
     def has_active_overlay(self) -> bool:
-        """True if any modal UI is open (dialogue, event, shop, or combat)."""
         return (
-            self._in_full_combat
+            self.combat_handler.active
             or self.dialogue_box.event_active
             or self.dialogue_box.dialogue_active
             or self.shop_active
@@ -265,7 +233,6 @@ class GameController:
     # --- Fog of War & Day/Night helpers ---
 
     def _get_visibility_radius(self) -> int:
-        """Calculate current visibility radius based on time period."""
         period = self.day_night.current_period
         return self.fog.get_visibility_radius(
             self.player,
@@ -275,12 +242,10 @@ class GameController:
         )
 
     def _update_fog(self):
-        """Reveal tiles around the player's current position."""
         radius = self._get_visibility_radius()
         self.fog.update(self.player.x, self.player.y, self.maze, radius)
 
     def run(self) -> str | None:
-        """Main game loop. Returns 'open_menu' when the player opens the menu, or None on window close."""
         clock = pygame.time.Clock()
 
         while self.running:
@@ -291,7 +256,6 @@ class GameController:
             pygame.display.flip()
             clock.tick(60)
 
-            # Check if game controller wants to hand control back
             if self.pending_action:
                 action = self.pending_action
                 self.pending_action = None
@@ -300,16 +264,22 @@ class GameController:
         return None
 
     def handle_events(self):
-        """Handle all pygame events."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
                 return
             if event.type == pygame.KEYDOWN:
                 self.handle_keydown(event)
+            elif event.type == pygame.MOUSEWHEEL:
+                self._handle_mousewheel(event)
+
+    def _handle_mousewheel(self, event):
+        if self.dialogue_box.event_active and not self.dialogue_box.combat_active:
+            self.game_view.encounter_view.scroll_content(-event.y)
+        elif self.combat_handler.active:
+            self.combat_handler.handle_mousewheel(event)
 
     def _get_event_at_player(self):
-        """Return the Event object at the player's position, or None."""
         pos = (self.player.x, self.player.y)
         event_id = self.event_position_map.get(pos)
         if event_id:
@@ -317,26 +287,21 @@ class GameController:
         return None
 
     def after_move_check(self):
-        # Advance time on movement
         self.day_night.advance(1)
-        # Update fog of war
         self._update_fog()
-        # Consume torch use only on movement (not rest or startup)
         if self.day_night.is_night and player_has_torch(self.player):
             consume_torch_use(self.player)
 
         if self.player.is_on_event_tile(self.maze):
             event = self._get_event_at_player()
             if event and not event.resolved:
-                # Time-gated events: only trigger at correct time
                 if is_event_active_at_time(event, self.day_night.current_period):
                     if event.type == "combat":
-                        self._start_full_combat(event)
+                        self.combat_handler.start(event)
                     else:
                         self.day_night.pause()
                         self.dialogue_box.start_event(event)
                 else:
-                    # Time-gated: tile preserved, show feedback
                     time_gate = getattr(event, 'time_gate', 'always')
                     if time_gate == 'day':
                         self.dialogue_box.set_item_message("This area stirs only during daylight...")
@@ -352,18 +317,6 @@ class GameController:
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
             self.current_npc = self.player.get_nearby_npc(self.npcs)
 
-        # Random night encounter check — only when walking on open tiles at night
-        if (self.day_night.is_night
-                and not self._in_full_combat
-                and not self.dialogue_box.event_active
-                and not self.dialogue_box.dialogue_active):
-            night_event = spawn_night_encounter(
-                self.maze, self.player, self.day_night, self.current_room + 1)
-            if night_event:
-                self.total_encounters += 1
-                self._start_full_combat(night_event)
-
-        # Check escort zone completion
         completed_escort = self.quest_manager.check_escort_zone(self.player)
         if completed_escort:
             farewell = self.follower_manager.remove_follower_for_quest(completed_escort.id)
@@ -373,66 +326,31 @@ class GameController:
             self.dialogue_box.set_item_message(msg)
             self.item_message_active = True
 
-    def _start_full_combat(self, combat_event):
-        """Initialize CombatController + CombatView for a multi-turn combat encounter."""
-        # Resolve player weapon for combat
-        from src.models.weapon import STARTER_WEAPONS
-        if self.player.weapon is None and self.player.player_class:
-            self.player.weapon = STARTER_WEAPONS.get(self.player.player_class.archetype)
-
-        # Ensure monsters exist — generate fallback if empty
-        if not combat_event.monsters:
-            from src.models.monster import generate_encounter_monsters
-            env = getattr(self.maze, 'environment', 'dungeon')
-            room_level = getattr(combat_event, 'room_level', 1)
-            combat_event.monsters = generate_encounter_monsters(env, room_level)
-
-        self.day_night.pause()
-        self.combat_event = combat_event
-        self.combat_controller = CombatController(self.player, list(combat_event.monsters))
-        self.combat_view = CombatView(self.screen, self.font)
-        self.combat_selected_action = 0
-        self.combat_selected_target = 0
-        self.combat_selecting_target = False
-        self.combat_selecting_spell = False
-        self.combat_selected_spell = 0
-        self.combat_selecting_item = False
-        self.combat_selected_item = 0
-        self.combat_game_over_selection = 0
-
-    @property
-    def _in_full_combat(self) -> bool:
-        return self.combat_controller is not None
-
     def _is_on_door_tile(self) -> bool:
-        """Check if the player is standing on the revealed door tile."""
         return (self.maze.door_position is not None
                 and self.maze.door_revealed
                 and (self.player.x, self.player.y) == self.maze.door_position)
 
     def _handle_door_interaction(self):
-        """Handle player stepping on the exit door."""
         gate_id = self.maze.gate_encounter_id
         if gate_id and not self.gate_cleared:
             gate_event = self.events.get(gate_id)
             if gate_event and not gate_event.resolved:
-                # Trigger gate encounter
-                self.dialogue_box.start_event(gate_event)
+                if gate_event.type == "combat":
+                    self.combat_handler.start(gate_event)
+                else:
+                    self.dialogue_box.start_event(gate_event)
                 return
             else:
                 self.gate_cleared = True
-
-        # Gate cleared or no gate — check for undone quests and transition
         self._signal_room_transition()
 
     def _signal_room_transition(self):
-        """Signal the main loop to transition to the next room."""
         if self.sfx:
             self.sfx.play("door_open")
         if self.current_room >= self.total_rooms - 1:
             self.pending_action = "victory"
             return
-        # Check for incomplete story quests
         undone = [q for q in self.quests.values()
                   if getattr(q, 'is_story_quest', False)
                   and q.status in ("not_started", "active")]
@@ -442,35 +360,33 @@ class GameController:
                 f"Things left undone: {titles}. "
                 "Press Enter at the door again to continue anyway.")
             self.item_message_active = True
-            # Mark that we've warned — next door step will proceed
             if not hasattr(self, '_undone_warned'):
                 self._undone_warned = True
                 return
         self.stats["rooms_cleared"] += 1
         self.pending_action = "room_transition"
 
+    # ------------------------------------------------------------------
+    # Input dispatch
+    # ------------------------------------------------------------------
+
     def handle_keydown(self, event):
-        # 0. Full combat system active
-        if self._in_full_combat:
-            self._handle_full_combat_input(event)
+        if self.combat_handler.active:
+            self.combat_handler.handle_input(event)
             return
 
-        # 0.5. If an event is active (legacy/puzzle/event)
         if self.dialogue_box.event_active:
-            self._handle_event_input(event)
+            self.event_handler.handle_input(event)
             return
 
-        # 0.25. If rest menu is active
         if self.rest_menu_active:
             self._handle_rest_input(event)
             return
 
-        # 0.5. If shop is active
         if self.shop_active:
             self._handle_shop_input(event)
             return
 
-        # 1. If an item message is active
         if self.item_message_active:
             if event.key == pygame.K_RETURN:
                 self.item_message_active = False
@@ -480,7 +396,6 @@ class GameController:
                 return
             return
 
-        # 2. If inventory is active
         if self.inventory_active:
             if self.item_detail_active:
                 if event.key in (pygame.K_ESCAPE, pygame.K_d):
@@ -494,7 +409,6 @@ class GameController:
                 self.handle_inventory_input(event)
                 return
 
-        # 3. If dialogue is active (NPC conversation)
         if self.dialogue_box.dialogue_active:
             if event.key == pygame.K_ESCAPE:
                 self.dialogue_box.end_dialogue()
@@ -512,14 +426,12 @@ class GameController:
                 self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
                 return
             if self.dialogue_box.input_active:
-                # Numeric selection for offline_static dialogue choices
                 if has_dialogue_choices(self.current_npc):
                     tree = self.current_npc.dialogue_tree
                     nodes = tree.get("nodes", {})
                     current_id = tree.get("_current", "start")
                     node = nodes.get(current_id, nodes.get("start", {}))
                     choices = node.get("choices", [])
-                    # Keys 1-9 only; pygame has no K_10+ constants
                     for i in range(min(len(choices), 9)):
                         if event.key == getattr(pygame, f'K_{i+1}', None):
                             self.dialogue_box.update_dialogue(str(i + 1))
@@ -533,7 +445,6 @@ class GameController:
                 return
             return
 
-        # 4. Normal gameplay
         if event.key in [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN]:
             dx, dy = 0, 0
             if event.key == pygame.K_LEFT:
@@ -570,8 +481,6 @@ class GameController:
             if self.current_npc and isinstance(self.current_npc, MerchantNPC):
                 self._open_shop(self.current_npc)
                 return
-            self.pending_action = "open_spells"
-            return
 
         if event.key == pygame.K_i:
             self.inventory_active = not self.inventory_active
@@ -594,12 +503,10 @@ class GameController:
             self.item_message_active = True
             return
 
-        # Player menu (save/load)
         if event.key == pygame.K_TAB:
             self.pending_action = "open_menu"
             return
 
-        # Available in all builds (including packaged exe) for troubleshooting
         if event.key == pygame.K_F1:
             self.debug_reveal = not self.debug_reveal
             return
@@ -608,7 +515,6 @@ class GameController:
             if self.quest_log_active:
                 self.quest_log_active = False
                 return
-            # Esc opens pause menu in normal gameplay
             self.pending_action = "open_pause"
             return
 
@@ -616,677 +522,41 @@ class GameController:
             self.pending_action = "open_status"
             return
 
-        # B key opens story recap
         if event.key == pygame.K_b:
             self.pending_action = "open_story"
             return
 
     # ------------------------------------------------------------------
-    # Full Combat System (CombatController + CombatView)
+    # NPC, Shop, Inventory, Rest
     # ------------------------------------------------------------------
 
-    def _handle_full_combat_input(self, event):
-        """Handle input while the full CombatController combat is active."""
-        cc = self.combat_controller
-        if cc is None:
-            return
-
-        # Page Up/Down scrolls combat log
-        if event.key == pygame.K_PAGEUP and self.combat_view:
-            self.combat_view.scroll_log(3)
-            return
-        if event.key == pygame.K_PAGEDOWN and self.combat_view:
-            self.combat_view.scroll_log(-3)
-            return
-
-        # Combat is over — handle end-screen input
-        if cc.state != CombatState.ONGOING:
-            self._handle_combat_end_input(event)
-            return
-
-        if not cc.is_player_turn():
-            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                prev_hp = self.player.health
-                cc.execute_monster_turn()
-                while cc.state == CombatState.ONGOING and not cc.is_player_turn():
-                    cc.execute_monster_turn()
-                if self.sfx and self.player.health < prev_hp:
-                    self.sfx.play("player_take_damage")
-                self.combat_selecting_target = False
-                self.combat_selecting_spell = False
-                self.combat_selecting_item = False
-                self.combat_selected_action = 0
-            return
-
-        # Player turn — spell selection sub-menu
-        if self.combat_selecting_spell:
-            spells = cc.player.spells
-            if event.key == pygame.K_UP:
-                self.combat_selected_spell = (self.combat_selected_spell - 1) % max(len(spells), 1)
-            elif event.key == pygame.K_DOWN:
-                self.combat_selected_spell = (self.combat_selected_spell + 1) % max(len(spells), 1)
-            elif event.key == pygame.K_RETURN:
-                if spells:
-                    spell = spells[self.combat_selected_spell]
-                    if spell.targets == "self" or spell.spell_type in ("heal", "buff_stat", "buff_sustain"):
-                        if self.sfx:
-                            self.sfx.play_spell(spell.spell_type, "cast")
-                        cc.player_cast_spell(self.combat_selected_spell, 0)
-                        while cc.state == CombatState.ONGOING and not cc.is_player_turn():
-                            cc.execute_monster_turn()
-                        self.combat_selecting_spell = False
-                        self.combat_selected_action = 0
-                    else:
-                        self.combat_selecting_spell = False
-                        self.combat_selecting_target = True
-                        self.combat_selected_target = 0
-            elif event.key == pygame.K_ESCAPE:
-                self.combat_selecting_spell = False
-            return
-
-        # Player turn — item selection sub-menu
-        if self.combat_selecting_item:
-            consumables = self._get_combat_consumables()
-            if event.key == pygame.K_UP:
-                self.combat_selected_item = (self.combat_selected_item - 1) % max(len(consumables), 1)
-            elif event.key == pygame.K_DOWN:
-                self.combat_selected_item = (self.combat_selected_item + 1) % max(len(consumables), 1)
-            elif event.key == pygame.K_RETURN:
-                if consumables:
-                    item_name = consumables[self.combat_selected_item]
-                    cc.player_use_item(item_name)
-                    while cc.state == CombatState.ONGOING and not cc.is_player_turn():
-                        cc.execute_monster_turn()
-                    self.combat_selecting_item = False
-                    self.combat_selected_action = 0
-            elif event.key == pygame.K_ESCAPE:
-                self.combat_selecting_item = False
-            return
-
-        # Player turn — target selection mode
-        if self.combat_selecting_target:
-            alive = [m for m in cc.monsters if m.is_alive]
-            if event.key == pygame.K_UP:
-                self.combat_selected_target = (self.combat_selected_target - 1) % max(len(alive), 1)
-            elif event.key == pygame.K_DOWN:
-                self.combat_selected_target = (self.combat_selected_target + 1) % max(len(alive), 1)
-            elif event.key == pygame.K_RETURN:
-                action_name = self._grid_action_name(cc)
-                if action_name:
-                    self._execute_combat_by_name(action_name, self.combat_selected_target)
-                self.combat_selecting_target = False
-                self.combat_selected_action = 0
-            elif event.key == pygame.K_ESCAPE:
-                self.combat_selecting_target = False
-            return
-
-        # Player turn — action grid (3×2)
-        _gate = (getattr(self.combat_event, 'is_gate', False)
-                 or getattr(self.combat_event, 'is_climax_boss', False))
-        grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
-        total_slots = CombatView.GRID_COLS * CombatView.GRID_ROWS
-        cur = self.combat_selected_action
-        row = cur // CombatView.GRID_COLS
-        col = cur % CombatView.GRID_COLS
-
-        if event.key == pygame.K_UP:
-            row = (row - 1) % CombatView.GRID_ROWS
-            self.combat_selected_action = row * CombatView.GRID_COLS + col
-        elif event.key == pygame.K_DOWN:
-            row = (row + 1) % CombatView.GRID_ROWS
-            self.combat_selected_action = row * CombatView.GRID_COLS + col
-        elif event.key == pygame.K_LEFT:
-            col = (col - 1) % CombatView.GRID_COLS
-            self.combat_selected_action = row * CombatView.GRID_COLS + col
-        elif event.key == pygame.K_RIGHT:
-            col = (col + 1) % CombatView.GRID_COLS
-            self.combat_selected_action = row * CombatView.GRID_COLS + col
-        elif event.key == pygame.K_RETURN:
-            action_name = self._grid_action_name(cc)
-            if not action_name:
-                return
-            if action_name == "Cast Spell":
-                if cc.player.spells:
-                    self.combat_selecting_spell = True
-                    self.combat_selected_spell = 0
-            elif action_name == "Item":
-                consumables = self._get_combat_consumables()
-                if consumables:
-                    self.combat_selecting_item = True
-                    self.combat_selected_item = 0
-            elif action_name == "Attack":
-                self.combat_selecting_target = True
-                self.combat_selected_target = 0
-            elif action_name == "Multi-Attack":
-                self._execute_combat_by_name("Multi-Attack", 0)
-            elif action_name == "Weapons":
-                self._execute_combat_by_name("Swap Weapon", 0)
-            elif action_name == "Flee":
-                if (getattr(self.combat_event, 'is_gate', False)
-                        or getattr(self.combat_event, 'is_climax_boss', False)):
-                    return
-                self._execute_combat_by_name("Flee", 0)
-            elif action_name == "Gamble":
-                self._execute_combat_by_name("Gamble", 0)
-
-    def _grid_action_name(self, cc: CombatController) -> str | None:
-        """Return the action label at the current grid selection, or None."""
-        _gate = (getattr(self.combat_event, 'is_gate', False)
-                 or getattr(self.combat_event, 'is_climax_boss', False))
-        grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
-        row = self.combat_selected_action // CombatView.GRID_COLS
-        col = self.combat_selected_action % CombatView.GRID_COLS
-        if row < len(grid) and col < len(grid[row]):
-            return grid[row][col]
-        return None
-
-    def _get_combat_consumables(self) -> list[str]:
-        """Return names of consumable items usable in combat."""
-        from src.models.items import Food, Drink
-        cc = self.combat_controller
-        if cc is None:
-            return []
-        return [
-            name for name, item in cc.player.inventory.items()
-            if isinstance(item, (Food, Drink))
-        ]
-
-    def _execute_combat_by_name(self, action_name: str, target_index: int):
-        """Execute a combat action by name through CombatController."""
-        cc = self.combat_controller
-        if cc is None:
-            return
-
-        prev_hp = self.player.health
-
-        if action_name == "Attack":
-            if self.sfx:
-                self.sfx.play("dice_roll")
-                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
-                self.sfx.play_weapon_swing(wt)
-            result = cc.player_attack(target_index)
-            if self.sfx and result.get("success"):
-                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
-                self.sfx.play_weapon_hit(wt)
-        elif action_name == "Multi-Attack":
-            if self.sfx:
-                wt = self.player.weapon.weapon_type if self.player.weapon else "simple"
-                self.sfx.play_weapon_swing(wt)
-            cc.player_multi_attack()
-        elif action_name == "Cast Spell":
-            if cc.player.spells:
-                spell = cc.player.spells[self.combat_selected_spell]
-                if self.sfx:
-                    self.sfx.play_spell(spell.spell_type, "cast")
-                result = cc.player_cast_spell(self.combat_selected_spell, target_index)
-                if self.sfx and result.get("total_damage", 0) > 0:
-                    self.sfx.play_spell(spell.spell_type, "impact")
-        elif action_name == "Item":
-            consumables = self._get_combat_consumables()
-            if consumables:
-                cc.player_use_item(consumables[self.combat_selected_item])
-        elif action_name == "Flee":
-            if self.sfx:
-                self.sfx.play("dice_roll")
-            cc.player_flee()
-        elif action_name == "Gamble":
-            if self.sfx:
-                self.sfx.play("dice_roll")
-            cc.player_gamble()
-        elif action_name == "Swap Weapon":
-            cc.player_swap_weapon()
-
-        while cc.state == CombatState.ONGOING and not cc.is_player_turn():
-            cc.execute_monster_turn()
-
-        if self.sfx and self.player.health < prev_hp:
-            self.sfx.play("player_take_damage")
-
-        self.combat_selected_action = 0
-
-    def _handle_combat_end_input(self, event):
-        """Handle input on the combat end screen (victory/defeat/fled)."""
-        cc = self.combat_controller
-
-        if cc.state == CombatState.DEFEAT:
-            if event.key == pygame.K_UP:
-                self.combat_game_over_selection = (self.combat_game_over_selection - 1) % 2
-            elif event.key == pygame.K_DOWN:
-                self.combat_game_over_selection = (self.combat_game_over_selection + 1) % 2
-            elif event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                if self.combat_game_over_selection == 0:
-                    self.pending_action = "load"
-                else:
-                    self.pending_action = "quit"
-                self._end_full_combat()
-            return
-
-        if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-            self._finalize_full_combat()
-
-    def _finalize_full_combat(self):
-        """Handle loot, quest completion, and cleanup after combat victory/fled."""
-        cc = self.combat_controller
-        combat_event = self.combat_event
-
-        if cc.state == CombatState.VICTORY:
-            combat_event.resolved = True
-            # Collect loot from CombatController
-            loot_ids = cc.collect_loot()
-            for item_id in loot_ids:
-                item = registry.get_item(item_id)
-                if item:
-                    self.player.add_to_inventory(item.clone())
-            # Money drop from event
-            if hasattr(combat_event, 'money_drop') and combat_event.money_drop[1] > 0:
-                money = random.randint(combat_event.money_drop[0], combat_event.money_drop[1])
-                if money > 0:
-                    self.player.add_money(money)
-
-            # Clear tile
-            self.maze.grid[self.player.y][self.player.x] = 0
-
-            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
-            self.stats["monsters_killed"] += killed
-            self.player.combat_record["monsters_killed"] += killed
-            self.player.combat_record["combats_won"] += 1
-
-            # Quest and encounter tracking
-            is_gate = getattr(combat_event, 'is_gate', False)
-            if not is_gate:
-                self.resolved_encounters += 1
-                self._check_door_reveal()
-            else:
-                self.gate_cleared = True
-            self.quest_manager.on_event_resolved(combat_event.id, self.player)
-
-            # Check quest completion
-            for qid, quest in self.quests.items():
-                if (quest.type == "combat"
-                        and getattr(quest, 'target_event_id', '') == combat_event.id
-                        and quest.status == "active"):
-                    quest.status = "completed"
-                    self.player.complete_quest(qid)
-
-        self._end_full_combat()
-
-    def _end_full_combat(self):
-        """Clean up combat state."""
-        self.combat_controller = None
-        self.combat_view = None
-        self.combat_event = None
-        if hasattr(self, 'day_night'):
-            self.day_night.resume()
-
-    def _end_event(self):
-        """End the active event and resume time."""
-        self.dialogue_box.end_event()
-        if hasattr(self, 'day_night'):
-            self.day_night.resume()
-
-    def _handle_event_input(self, event):
-        """Handle keyboard input during an active event."""
-        current_event = self.dialogue_box.current_event
-        if not current_event:
-            return
-
-        # Multi-turn combat
-        if self.dialogue_box.combat_active:
-            self._handle_combat_input(event)
-            return
-
-        # Legacy/simple event handling
-        if self.dialogue_box.awaiting_roll:
-            if event.key == pygame.K_r:
-                if self.sfx:
-                    self.sfx.play("dice_roll")
-                dice_roll = random.randint(1, 20)
-                if current_event.type == "combat":
-                    result = current_event.resolve(dice_roll, self.player)
-                elif current_event.type == "puzzle":
-                    choice_idx = self.dialogue_box.event_context.get("selected_choice", 0)
-                    result = current_event.resolve(choice_idx, dice_roll, self.player)
-                elif current_event.type == "event":
-                    choice_idx = self.dialogue_box.event_context.get("selected_choice", 0)
-                    result = current_event.resolve(choice_idx, dice_roll, self.player)
-                else:
-                    result = {"success": False, "message": "Unknown event type."}
-
-                self._apply_event_result(result, current_event)
-                return
-
-            if event.key == pygame.K_ESCAPE:
-                self._end_event()
-                return
-
-        elif current_event.type in ("puzzle", "event") and not self.dialogue_box.event_context.get("result"):
-            rendered = self.dialogue_box.event_context.get("rendered_choices", [])
-            total_choices = len(rendered) if rendered else len(getattr(current_event, 'choices', []))
-
-            if event.key == pygame.K_UP:
-                self.event_selected_choice = (self.event_selected_choice - 1) % max(total_choices, 1)
-                self.dialogue_box.event_context["highlight"] = self.event_selected_choice
-                return
-            if event.key == pygame.K_DOWN:
-                self.event_selected_choice = (self.event_selected_choice + 1) % max(total_choices, 1)
-                self.dialogue_box.event_context["highlight"] = self.event_selected_choice
-                return
-
-            if event.key == pygame.K_RETURN:
-                idx = self.event_selected_choice
-                if rendered and 0 <= idx < len(rendered):
-                    rc = rendered[idx]
-                    if rc["kind"] == "tool":
-                        result = current_event.resolve_with_tool(self.player)
-                        self._apply_event_result(result, current_event)
-                    elif rc["kind"] == "ability":
-                        result = current_event.resolve_with_ability(self.player)
-                        self._apply_event_result(result, current_event)
-                    elif rc["kind"] == "spell":
-                        result = current_event.resolve_with_spell(self.player)
-                        self._apply_event_result(result, current_event)
-                    elif rc["kind"] == "walk_away":
-                        result = current_event.resolve(rc["choice_idx"], 0, self.player)
-                        self._apply_event_result(result, current_event)
-                    else:
-                        self.dialogue_box.event_context["selected_choice"] = rc["choice_idx"]
-                        self.dialogue_box.awaiting_roll = True
-                    self.event_selected_choice = 0
-                    return
-                choices = getattr(current_event, 'choices', [])
-                if choices and 0 <= idx < len(choices):
-                    self.dialogue_box.event_context["selected_choice"] = idx
-                    self.dialogue_box.awaiting_roll = True
-                    if choices[idx].auto_success:
-                        result = current_event.resolve(idx, 0, self.player)
-                        self._apply_event_result(result, current_event)
-                    self.event_selected_choice = 0
-                    return
-
-            # Number keys still work as shortcuts
-            if rendered:
-                for i in range(min(len(rendered), 9)):
-                    if event.key == getattr(pygame, f'K_{i+1}', None):
-                        self.event_selected_choice = i
-                        self.dialogue_box.event_context["highlight"] = i
-                        # Simulate enter
-                        fake_event = type(event)
-                        return
-
-            if event.key == pygame.K_ESCAPE:
-                self.event_selected_choice = 0
-                self._end_event()
-                return
-        else:
-            if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                self._end_event()
-                return
-
-    def _apply_event_result(self, result: dict, current_event):
-        """Apply result from puzzle/event resolution — rewards, quest tracking, cleanup."""
-        self.dialogue_box.event_context["result"] = result
-        self.dialogue_box.event_context.setdefault("dice_roll", 0)
-        self.dialogue_box.awaiting_roll = False
-
-        if result.get("success"):
-            if self.sfx:
-                self.sfx.play("event_complete")
-            if result.get("reward_item_id"):
-                reward_item = registry.get_item(result["reward_item_id"])
-                if reward_item:
-                    self.player.add_to_inventory(reward_item.clone())
-            for loot_id in result.get("loot_item_ids", []):
-                loot_item = registry.get_item(loot_id)
-                if loot_item:
-                    self.player.add_to_inventory(loot_item.clone())
-            money = result.get("money_dropped", 0)
-            if money > 0:
-                self.player.add_money(money)
-                msg = result.get("message", "")
-                result["message"] = f"{msg} Found {money} gold."
-        else:
-            if self.sfx and result.get("damage"):
-                self.sfx.play("player_take_damage")
-
-        if result.get("walked_away"):
-            pass
-        elif current_event.resolved:
-            self.maze.grid[self.player.y][self.player.x] = 0
-            self.quest_manager.on_event_resolved(current_event.id, self.player)
-            self.resolved_encounters += 1
-            self._check_door_reveal()
-
-    def _handle_combat_input(self, event):
-        """Handle input during multi-turn combat."""
-        combat_event = self.dialogue_box.current_event
-        phase = self.dialogue_box.combat_phase
-
-        if phase == "initiative":
-            # Press Enter or Space to roll initiative
-            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                init_result = combat_event.start_combat(self.player)
-                self.dialogue_box.start_combat_turns(init_result)
-                self.dialogue_box.combat_log = list(combat_event.combat_log)
-                self.combat_target_index = 0
-                self._advance_combat_to_next_turn(combat_event)
-            elif event.key == pygame.K_ESCAPE:
-                self._end_event()
-            return
-
-        if phase == "player_turn":
-            if self.dialogue_box.player_stunned_turns > 0:
-                # Stunned: any key skips turn
-                if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    self.dialogue_box.player_stunned_turns -= 1
-                    self.dialogue_box.add_combat_log("You shake off the stun.")
-                    combat_event.advance_turn()
-                    self._advance_combat_to_next_turn(combat_event)
-                return
-
-            # A = Attack, F = Flee, I = use Item, Up/Down = select target
-            if event.key == pygame.K_UP:
-                alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
-                if alive_indices:
-                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
-                    curr = (curr - 1) % len(alive_indices)
-                    self.combat_target_index = alive_indices[curr]
-                return
-
-            if event.key == pygame.K_DOWN:
-                alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
-                if alive_indices:
-                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
-                    curr = (curr + 1) % len(alive_indices)
-                    self.combat_target_index = alive_indices[curr]
-                return
-
-            if event.key == pygame.K_a:
-                # Apply poison damage before player acts
-                self._apply_player_poison()
-                # Advance time on combat action
-                self.day_night.advance(1)
-
-                result = combat_event.player_attack(self.player, self.combat_target_index)
-                self.dialogue_box.combat_log = list(combat_event.combat_log)
-
-                outcome = combat_event.is_combat_over()
-                if outcome == "victory":
-                    self._handle_combat_victory(combat_event)
-                    return
-                combat_event.advance_turn()
-                self._advance_combat_to_next_turn(combat_event)
-                return
-
-            if event.key == pygame.K_r:
-                # Rest in combat: skip turn for small HP recovery
-                self._apply_player_poison()
-                self.day_night.advance(1)
-                msg = apply_combat_rest(self.player)
-                self.dialogue_box.add_combat_log(msg)
-                combat_event.combat_log.append(msg)
-                combat_event.advance_turn()
-                self._advance_combat_to_next_turn(combat_event)
-                return
-
-            if event.key == pygame.K_f:
-                result = combat_event.try_flee(self.player)
-                self.dialogue_box.combat_log = list(combat_event.combat_log)
-
-                if result["success"]:
-                    self.player.combat_record["combats_fled"] += 1
-                    self.dialogue_box.set_combat_phase("fled")
-                    return
-
-                # Flee failed — monsters still get their turns
-                combat_event.advance_turn()
-                self._advance_combat_to_next_turn(combat_event)
-                return
-
-            if event.key == pygame.K_i:
-                # Use selected item in combat
-                message = self.player.use_item()
-                self.dialogue_box.add_combat_log(f"Item: {message}")
-                combat_event.combat_log.append(f"Item: {message}")
-                combat_event.advance_turn()
-                self._advance_combat_to_next_turn(combat_event)
-                return
-
-            return
-
-        if phase == "monster_turn":
-            # Auto-advance monster turns on any keypress (or auto in update)
-            if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                self._execute_monster_turn(combat_event)
-            return
-
-        if phase in ("victory", "defeat", "fled"):
-            if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                self._finalize_combat(combat_event)
-            return
-
-    def _advance_combat_to_next_turn(self, combat_event):
-        """Set the phase based on whose turn it is."""
-        outcome = combat_event.is_combat_over()
-        if outcome == "victory":
-            self._handle_combat_victory(combat_event)
-            return
-        if self.player.health <= 0:
-            self.dialogue_box.set_combat_phase("defeat")
-            self.dialogue_box.add_combat_log("You have been defeated...")
-            return
-
-        turn = combat_event.get_current_turn()
-        if not turn:
-            return
-
-        if turn["type"] == "player":
-            self.dialogue_box.set_combat_phase("player_turn")
-            # Auto-select first alive target
-            alive = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
-            if alive and self.combat_target_index not in alive:
-                self.combat_target_index = alive[0]
-        else:
-            self.dialogue_box.set_combat_phase("monster_turn")
-            # Auto-execute monster turn after brief display
-            self._execute_monster_turn(combat_event)
-
-    def _execute_monster_turn(self, combat_event):
-        """Execute the current monster's turn."""
-        turn = combat_event.get_current_turn()
-        if not turn or turn["type"] != "monster":
-            combat_event.advance_turn()
-            self._advance_combat_to_next_turn(combat_event)
-            return
-
-        monster_idx = turn["index"]
-        result = combat_event.monster_turn(monster_idx, self.player)
-        self.dialogue_box.combat_log = list(combat_event.combat_log)
-
-        # Track stun/poison on player
-        if result.get("effect") == "stun":
-            self.dialogue_box.player_stunned_turns = 1
-        if result.get("effect") == "poison":
-            self.dialogue_box.player_poison_turns = result.get("duration", 2)
-
-        if self.player.health <= 0:
-            self.dialogue_box.set_combat_phase("defeat")
-            self.dialogue_box.add_combat_log("You have been defeated...")
-            return
-
-        combat_event.advance_turn()
-        self._advance_combat_to_next_turn(combat_event)
-
-    def _apply_player_poison(self):
-        """Apply poison damage to player if poisoned."""
-        if self.dialogue_box.player_poison_turns > 0:
-            poison_dmg = random.randint(1, 4)
-            self.player.health = max(0, self.player.health - poison_dmg)
-            self.dialogue_box.add_combat_log(f"Poison deals {poison_dmg} damage to you!")
-            self.dialogue_box.player_poison_turns -= 1
-
-    def _handle_combat_victory(self, combat_event):
-        """Handle victory: collect loot, mark resolved."""
-        self.dialogue_box.set_combat_phase("victory")
-        combat_event.resolved = True
-        self.dialogue_box.add_combat_log("Victory!")
-        if self.sfx:
-            self.sfx.play("event_complete")
-
-        # Track stats
-        if hasattr(combat_event, 'monsters'):
-            killed = sum(1 for m in combat_event.monsters if not m.is_alive)
-            self.stats["monsters_killed"] += killed
-            self.player.combat_record["monsters_killed"] += killed
-        self.player.combat_record["combats_won"] += 1
-        if getattr(combat_event, 'is_climax_boss', False):
-            self.resolved_encounters += 1
-            self.gate_cleared = True
-            self.pending_action = "victory"
-        elif not getattr(combat_event, 'is_gate', False):
-            self.resolved_encounters += 1
-            self._check_door_reveal()
-        else:
-            self.gate_cleared = True
-
-        # Collect loot
-        loot_ids = combat_event.collect_loot()
-        for item_id in loot_ids:
-            item = registry.get_item(item_id)
-            if item:
-                self.player.add_to_inventory(item.clone())
-                self.dialogue_box.add_combat_log(f"Loot: {item.name}")
-
-    def _finalize_combat(self, combat_event):
-        """Clean up after combat ends."""
-        is_gate = getattr(combat_event, 'is_gate', False)
-
-        if combat_event.resolved:
-            self.maze.grid[self.player.y][self.player.x] = 0
-            self.quest_manager.on_event_resolved(combat_event.id, self.player)
-
-        self._end_event()
-
-        if self.player.health <= 0:
-            if self.sfx:
-                self.sfx.play("player_death")
-            self.pending_action = "game_over"
+    def _build_quest_context(self, npc) -> dict | None:
+        quest_id = getattr(npc, "quest_id", None)
+        if quest_id is None or quest_id not in self.quests:
+            return None
+        q = self.quests[quest_id]
+        return {
+            "quest_id": q.id, "title": q.title, "type": q.type,
+            "status": q.status, "description": q.description,
+            "dc": getattr(q, "dc", 10),
+        }
 
     def _handle_npc_interaction(self, npc):
-        """Start dialogue with an NPC, handling quest offers and completions."""
-        # Check NPC availability by time of day
         if not is_npc_available(npc, self.day_night.current_period):
             self.dialogue_box.set_item_message(
                 f"{npc.name or 'NPC'} is not available right now.")
             self.item_message_active = True
             return
 
-        # Check quest turn-in first
         turned_in = self.quest_manager.check_turn_in(npc, self.player)
         if turned_in:
+            if getattr(npc, "quest_id", None) == turned_in.id and npc.dialogue_tree:
+                self.dialogue_box.quest_context = self._build_quest_context(npc)
+                self.dialogue_box.start_dialogue(npc)
+                return
             msg = f"Quest completed: {turned_in.title}!"
             if turned_in.reward and turned_in.reward.money:
                 msg += f" +{turned_in.reward.money} gold!"
-            # Handle escort follower removal on turn-in
             if turned_in.type == "escort":
                 farewell = self.follower_manager.remove_follower_for_quest(turned_in.id)
                 if farewell:
@@ -1295,9 +565,12 @@ class GameController:
             self.item_message_active = True
             return
 
+        qctx = self._build_quest_context(npc)
+        self.dialogue_box.quest_context = qctx
+        if qctx:
+            npc.current_dc = qctx.get("dc", 10)
         self.dialogue_box.start_dialogue(npc)
 
-        # Try to offer quest
         offered = self.quest_manager.try_offer_quest(npc, self.player)
         if offered and offered.type == "escort":
             escort_msg = self.follower_manager.start_escort(offered, npc)
@@ -1306,7 +579,6 @@ class GameController:
                 self.item_message_active = True
 
     def _handle_rest_input(self, event):
-        """Handle input while rest menu is active."""
         hour_map = {pygame.K_1: 3, pygame.K_2: 6, pygame.K_3: 12}
         if event.key in hour_map:
             hours = hour_map[event.key]
@@ -1322,31 +594,30 @@ class GameController:
             return
 
     def _talk_to_follower(self):
-        """Talk to the first follower for hints/personality."""
         msg = self.follower_manager.talk_to_follower()
         self.dialogue_box.set_item_message(msg)
         self.item_message_active = True
 
     def get_quest_log(self) -> dict:
-        """Return quests organized by status for the quest log view."""
         log = self.quest_manager.get_quest_log()
         log["combat_stats"] = dict(self.player.combat_record)
+        log["encounter_stats"] = dict(self.player.encounter_record)
         log["encounters_cleared"] = self.resolved_encounters
         log["total_encounters"] = self.total_encounters
+        log["encounter_clear_fraction"] = self.encounter_clear_fraction
+        from config import DOOR_REVEAL_THRESHOLD
+        log["door_reveal_threshold"] = DOOR_REVEAL_THRESHOLD
         return log
 
     def get_follower_info(self) -> list[dict]:
-        """Return follower info for the player menu."""
         return self.follower_manager.get_follower_info()
 
     def _open_shop(self, merchant_npc):
-        """Open the shop interface for a MerchantNPC."""
         self.shop_active = True
         self.shop_npc = merchant_npc
         self.shop_view = ShopView(self.screen, self.font, merchant_npc, self.player)
 
     def _handle_shop_input(self, event):
-        """Handle keyboard input while the shop is open."""
         result = self.shop_view.handle_input(event)
         if result is None:
             return
@@ -1383,13 +654,11 @@ class GameController:
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
         elif event.key == pygame.K_e:
-            # Equip weapon
             item_name = inventory[self.player.selected_item_index][0]
             message = self.player.equip_weapon(item_name)
             self.item_message_active = True
             self.dialogue_box.set_item_message(message)
         elif event.key == pygame.K_d:
-            # Show item detail
             self.item_detail_active = True
 
     def _sync_inv_scroll(self, inv_length):
@@ -1402,14 +671,15 @@ class GameController:
             scroll = idx - visible + 1
         self.player._inv_scroll = max(0, min(scroll, inv_length - visible))
 
+    # ------------------------------------------------------------------
+    # Update & Draw
+    # ------------------------------------------------------------------
+
     def update(self, current_time):
-        """Update game logic (NPC movement, real-time day cycle, stamina drain, etc.)"""
-        # Advance real-time day/night cycle
         self.day_night.update_realtime(current_time)
         prev_period = self.day_night.current_period
         self.day_night.update()
 
-        # Notify player on period transitions (real-time driven)
         if self.day_night.real_time and self.day_night.current_period != prev_period:
             new_period = self.day_night.current_period
             self._update_fog()
@@ -1419,7 +689,6 @@ class GameController:
                     self.dialogue_box.set_item_message(msg)
                     self.item_message_active = True
 
-        # Stamina drain (real-time based)
         if hasattr(self, '_last_survival_ms'):
             delta = current_time - self._last_survival_ms
         else:
@@ -1447,7 +716,6 @@ class GameController:
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
 
     def _play_item_use_sfx(self):
-        """Play the appropriate SFX for the currently selected inventory item."""
         if not self.sfx:
             return
         from src.models.items import Food, Drink
@@ -1466,28 +734,13 @@ class GameController:
             self.sfx.play("item_tool")
 
     def draw(self, current_time):
-        """Draw the current game state."""
-        if self._in_full_combat and self.combat_view and self.combat_controller:
-            _gate_fight = (getattr(self.combat_event, 'is_gate', False)
-                           or getattr(self.combat_event, 'is_climax_boss', False))
-            self.combat_view.draw(
-                self.combat_controller,
-                selected_action=self.combat_selected_action,
-                selected_target=self.combat_selected_target,
-                selecting_target=self.combat_selecting_target,
-                selecting_spell=self.combat_selecting_spell,
-                selected_spell=self.combat_selected_spell,
-                selecting_item=self.combat_selecting_item,
-                selected_item=self.combat_selected_item,
-                game_over_selection=self.combat_game_over_selection,
-                is_gate_fight=_gate_fight,
-            )
+        if self.combat_handler.active:
+            self.combat_handler.draw()
             return
 
         if self.shop_active and self.shop_view:
             self.screen.fill((0, 0, 0))
             self.shop_view.draw()
-            # Draw item messages on top of shop
             if self.item_message_active:
                 self.game_view.draw_dialogue_and_messages(
                     self.player, self.maze,

@@ -10,14 +10,15 @@ class EventChoice(BaseModel):
     text: str
     stat_check: Optional[str] = None
     tool_attribute: Optional[str] = None
-    dc: int = 10
+    dc: Optional[int] = 10
     auto_success: bool = False
+    success_text: Optional[str] = None
     time_gate: Optional[str] = None  # "day" | "night" | None
 
 
 class Event(BaseModel):
     """Base event model placed on event tiles in the maze."""
-    id: str
+    id: int
     type: str  # "combat" | "puzzle" | "event"
     name: str
     description: str
@@ -37,6 +38,21 @@ class LootEntry(BaseModel):
     drop_chance: float = 0.5  # 0.0 to 1.0
 
 
+def _encounter_stat_mod(player, stat_name: str) -> int:
+    """Return the stat modifier for an encounter check.
+
+    Jesters silently use whichever is higher: the required stat or LUCK.
+    """
+    if not hasattr(player, 'get_stat_mod'):
+        return 0
+    mod = player.get_stat_mod(stat_name)
+    pc = getattr(player, 'player_class', None)
+    if pc and getattr(pc, 'archetype', '') == 'jester' and stat_name != 'LUCK':
+        luck_mod = player.get_stat_mod('LUCK')
+        mod = max(mod, luck_mod)
+    return mod
+
+
 def _roll_reward(player, money_drop: List[int], loot_table: List[LootEntry],
                  reward_chance: float, consumed_tool_attr: Optional[str] = None) -> dict:
     """Single reward roll: either gold OR item, never both. Chance of nothing.
@@ -48,7 +64,7 @@ def _roll_reward(player, money_drop: List[int], loot_table: List[LootEntry],
     if random.random() > reward_chance:
         return result
 
-    luck_mod = getattr(player, 'LUCK', 10) // 20
+    luck_mod = player.get_stat_mod('LUCK') if hasattr(player, 'get_stat_mod') else 0
 
     # 60 % gold, 40 % item
     if not loot_table or random.random() < 0.6:
@@ -81,13 +97,15 @@ def _loot_matches_tool(entry: LootEntry, tool_attr: str) -> bool:
             stats = getattr(item, 'item_stats', None)
             if stats and getattr(stats, 'attribute', None) == tool_attr:
                 return True
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Failed loot-tool check for item %d: %s", entry.item_id, exc)
     return False
 
 class CombatEvent(Event):
     """Multi-turn combat encounter with 1-N monsters."""
     type: str = "combat"
+    monster_ids: List[int] = Field(default_factory=list)
     monsters: List[Monster] = Field(default_factory=list)
     room_level: int = 1
     is_gate: bool = False
@@ -422,8 +440,7 @@ class PuzzleEvent(Event):
 
         modifier = 0
         if choice.stat_check:
-            stat_val = getattr(player, choice.stat_check, 50)
-            modifier = stat_val // 20
+            modifier = _encounter_stat_mod(player, choice.stat_check)
 
         consumed_tool = None
         if choice.tool_attribute:
@@ -436,7 +453,8 @@ class PuzzleEvent(Event):
                     break
 
         total = dice_roll + modifier
-        if total >= choice.dc:
+        effective_dc = choice.dc or 10
+        if total >= effective_dc:
             self.resolved = True
             reward = _roll_reward(player, self.money_drop, self.loot_table,
                                   self.reward_chance,
@@ -452,7 +470,7 @@ class PuzzleEvent(Event):
                 **reward,
             }
         else:
-            msg = f"You failed to overcome the {self.name}. (Rolled {total} vs DC {choice.dc})"
+            msg = f"You failed to overcome the {self.name}. (Rolled {total} vs DC {effective_dc})"
             if consumed_tool:
                 msg = f"Your {consumed_tool} was consumed in the attempt. " + msg
             return {
@@ -478,6 +496,10 @@ class EventEncounter(Event):
 
     correct_ability: Optional[str] = None
     correct_spell: Optional[str] = None
+    ability_text: Optional[str] = None
+    ability_success_text: Optional[str] = None
+    spell_text: Optional[str] = None
+    spell_success_text: Optional[str] = None
 
     failure_damage_type: str = "health"
     failure_damage_range: List[int] = Field(default_factory=lambda: [3, 10])
@@ -517,9 +539,10 @@ class EventEncounter(Event):
         reward = _roll_reward(player, self.money_drop, self.loot_table,
                               self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
+        msg = self.ability_success_text or f"You use {ability.name}{cost_msg} and resolve the situation!"
         return {
             "success": True,
-            "message": f"You use {ability.name}{cost_msg} and resolve the situation!",
+            "message": msg,
             "reward_item_id": self.reward_item_id,
             "auto_solved": True,
             **reward,
@@ -536,9 +559,10 @@ class EventEncounter(Event):
         reward = _roll_reward(player, self.money_drop, self.loot_table,
                               self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
+        msg = self.spell_success_text or f"You cast {spell.name}{cost_msg} and turn the tide!"
         return {
             "success": True,
-            "message": f"You cast {spell.name}{cost_msg} and turn the tide!",
+            "message": msg,
             "reward_item_id": self.reward_item_id,
             "auto_solved": True,
             **reward,
@@ -561,8 +585,7 @@ class EventEncounter(Event):
 
         modifier = 0
         if choice.stat_check:
-            stat_val = getattr(player, choice.stat_check, 50)
-            modifier = stat_val // 20
+            modifier = _encounter_stat_mod(player, choice.stat_check)
 
         consumed_tool = None
         if choice.tool_attribute:
@@ -575,8 +598,9 @@ class EventEncounter(Event):
                     break
 
         total = dice_roll + modifier
+        effective_dc = choice.dc or 10
 
-        if total >= choice.dc:
+        if total >= effective_dc:
             self.resolved = True
             reward = _roll_reward(player, self.money_drop, self.loot_table,
                                   self.reward_chance,
@@ -598,7 +622,7 @@ class EventEncounter(Event):
             elif self.failure_damage_type == "stamina":
                 player.stamina = max(0, player.stamina - damage)
 
-            msg = f"You failed! Took {damage} {self.failure_damage_type} damage. (Rolled {total} vs DC {choice.dc})"
+            msg = f"You failed! Took {damage} {self.failure_damage_type} damage. (Rolled {total} vs DC {effective_dc})"
             if consumed_tool:
                 msg = f"Your {consumed_tool} was consumed. " + msg
             return {
@@ -630,7 +654,36 @@ def create_event_from_data(data: dict) -> Event:
             for c in data["choices"]
         ]
 
-    if event_type == "combat" and "monsters" in data:
+    if event_type == "event" and "choices" in data:
+        cleaned = []
+        for c in data["choices"]:
+            is_placeholder = (
+                not c.stat_check
+                and not c.tool_attribute
+                and not c.auto_success
+                and not c.dc
+            )
+            if is_placeholder:
+                if data.get("correct_ability") and not data.get("ability_text"):
+                    data["ability_text"] = c.text
+                    data["ability_success_text"] = c.success_text
+                elif data.get("correct_spell") and not data.get("spell_text"):
+                    data["spell_text"] = c.text
+                    data["spell_success_text"] = c.success_text
+            else:
+                cleaned.append(c)
+        data["choices"] = cleaned
+
+    if event_type == "combat" and "monster_ids" in data:
+        from src.models.monster import instantiate_monster
+        from src.registry import registry
+        room_level = data.get("room_level", 1)
+        data["monsters"] = [
+            instantiate_monster(registry.get_monster_template(mid), room_level)
+            for mid in data["monster_ids"]
+            if registry.get_monster_template(mid) is not None
+        ]
+    elif event_type == "combat" and "monsters" in data:
         data["monsters"] = [
             Monster.from_dict(m) if isinstance(m, dict) else m
             for m in data["monsters"]

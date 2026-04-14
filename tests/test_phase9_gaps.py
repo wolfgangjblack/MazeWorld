@@ -203,7 +203,7 @@ class TestCombatRecord:
     def test_stats_tab_shows_combat_record(self, screen, font):
         player = _make_player_with_class()
         player.active_quests = []
-        player.completed_quests = ["q1"]
+        player.completed_quests = [4000]
         player.failed_quests = []
         player.combat_record["monsters_killed"] = 7
         player.combat_record["combats_won"] = 3

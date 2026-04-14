@@ -155,6 +155,23 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
 
 
 from src.models.weapon import WEAPON_DICE_BY_ROOM
+from src.models.spell import ELEMENT_ADVANTAGE
+
+WEAPON_TYPE_TO_DAMAGE_TYPE: dict[str, list[str]] = {
+    "heavy":  ["slashing", "bludgeoning"],
+    "light":  ["piercing", "slashing"],
+    "simple": ["bludgeoning", "piercing"],
+    "wild":   ["slashing", "piercing", "bludgeoning"],
+}
+
+WEAPON_TYPE_TO_CATEGORY: dict[str, str] = {
+    "heavy": "martial",
+    "light": "martial",
+    "simple": "simple",
+    "wild": "martial",
+}
+
+_ELEMENTAL_TYPES = list(ELEMENT_ADVANTAGE.keys())
 
 
 def _weapon_dice_for_level(room_level: int) -> list[str]:
@@ -179,10 +196,13 @@ def generate_item_primitive(environment: dict, room_level: int = 1,
     if "error" in result:
         return result
 
-    # Post-process: assign weapon dice scaled to room_level
     dice_pool = _weapon_dice_for_level(room_level)
     for weapon in result.get("weapons", []):
         weapon["attack_dice"] = _rng.choice(dice_pool)
+        wt = weapon.get("weapon_type", "simple")
+        weapon["damage_type"] = _rng.choice(WEAPON_TYPE_TO_DAMAGE_TYPE.get(wt, ["bludgeoning"]))
+        weapon["weapon_category"] = WEAPON_TYPE_TO_CATEGORY.get(wt, "simple")
+        weapon["magic_element"] = _rng.choice(_ELEMENTAL_TYPES) if _rng.random() < 0.05 else None
 
     return result
 
@@ -426,12 +446,13 @@ def generate_full_story_primitive(story_seed: str, room_count: int,
 
 
 def generate_monster_primitive(environment: dict, room_level: int,
-                               story_context: str) -> list[dict]:
+                               story_context: str, total_rooms: int = 1) -> list[dict]:
     """Generate environment-themed monsters with Bible context."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
-    request = prompts.monster_generation(env, env_name, room_level, story_context)
+    request = prompts.monster_generation(
+        env, env_name, room_level, story_context, total_rooms=total_rooms)
     raw = generate(request)
     return _parse_json_array(raw)
 
@@ -463,6 +484,24 @@ def _parse_json_array(raw: str) -> list[dict]:
                         return result
                 except Exception:
                     pass
+
+    # Truncation recovery: find last complete object boundary and parse partial array
+    for candidate in [stripped, raw]:
+        start = candidate.find("[")
+        if start == -1:
+            continue
+        text = candidate[start:]
+        last_brace = text.rfind("}")
+        if last_brace > 0:
+            truncated = text[:last_brace + 1] + "]"
+            try:
+                result = json.loads(truncated)
+                if isinstance(result, list) and result:
+                    _logger.info("Recovered %d items from truncated JSON response", len(result))
+                    return result
+            except (json.JSONDecodeError, ValueError):
+                pass
+
     _logger.warning("Failed to parse JSON array from LLM response (%d chars): %.200s",
                     len(raw), raw)
     return []

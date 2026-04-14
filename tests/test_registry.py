@@ -64,9 +64,3 @@ def test_npc_templates(reg):
         assert "type" in t
 
 
-@requires_data
-def test_starter_inventory(reg):
-    inv = reg.starter_inventory
-    assert len(inv) >= 1
-    for item in inv.values():
-        assert isinstance(item, (Food, Drink, Tool))

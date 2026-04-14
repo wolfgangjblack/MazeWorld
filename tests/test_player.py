@@ -5,10 +5,20 @@ from src.models.npc import StaticNPC
 from tests.conftest import requires_data
 
 
-@requires_data
-def test_starter_inventory_cloned(player, reg):
-    player.inventory["bread"].quantity = 99
-    assert reg.starter_inventory["bread"].quantity == 1
+def test_starter_inventory_cloned():
+    from src.models.items import Food, ItemStats
+    from src.registry import registry
+    registry.starter_inventory = {"test_food": Food(
+        category="food", name="test_food", desc="test",
+        item_stats=ItemStats(stamina_value=10),
+    )}
+    try:
+        p = PlayerCharacter(x=0, y=0)
+        p.initialize_inventory()
+        p.inventory["test_food"].quantity = 99
+        assert registry.starter_inventory["test_food"].quantity == 1
+    finally:
+        registry.starter_inventory = {}
 
 
 @requires_data
@@ -197,7 +207,7 @@ def test_move_does_not_drain_stamina():
 
 def test_get_nearby_npc_adjacent():
     player = PlayerCharacter(x=5, y=5)
-    npc = StaticNPC(x=5, y=6, id=100)
+    npc = StaticNPC(x=5, y=6, id=1000)
 
     result = player.get_nearby_npc([npc])
     assert result is npc
@@ -205,7 +215,7 @@ def test_get_nearby_npc_adjacent():
 
 def test_get_nearby_npc_none():
     player = PlayerCharacter(x=5, y=5)
-    npc = StaticNPC(x=50, y=50, id=100)
+    npc = StaticNPC(x=50, y=50, id=1000)
 
     result = player.get_nearby_npc([npc])
     assert result is None

@@ -9,7 +9,7 @@ MAX_FOLLOWERS = 2
 class Follower(BaseModel):
     npc_id: int
     name: str
-    quest_id: Optional[str] = None
+    quest_id: Optional[int] = None
     joined_in_room: int = 1
     destination_room: int = 1  # max 1 room ahead
     personality: str = ""

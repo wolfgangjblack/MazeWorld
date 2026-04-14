@@ -1294,7 +1294,6 @@ MazeWorld/
 |   |   +-- game_controller.py  # Main game loop (existing, heavily refactored)
 |   |   +-- combat_controller.py # Turn-based combat loop
 |   |   +-- screen_controller.py # Screen state machine
-|   |   +-- input_controller.py  # Input routing per screen state
 |   |
 |   +-- views/                  # Pygame rendering per screen
 |   |   +-- start_view.py

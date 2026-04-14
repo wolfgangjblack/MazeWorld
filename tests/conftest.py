@@ -1,17 +1,14 @@
-import random
-import sys
 import os
+import random
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
+from config import DATA_DIR
 from src.registry import registry
 from src.models.maze import Maze
 from src.models.player import PlayerCharacter
 
-HAS_GENERATED_DATA = (
-    os.path.exists(os.path.join(os.path.dirname(__file__), "..", "data", "items", "items.json"))
-)
+HAS_GENERATED_DATA = os.path.exists(os.path.join(DATA_DIR, "items", "items.json"))
 requires_data = pytest.mark.skipif(
     not HAS_GENERATED_DATA,
     reason="Requires generated world data (run pipeline first)",

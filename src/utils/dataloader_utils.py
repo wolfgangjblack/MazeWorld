@@ -32,6 +32,9 @@ def create_item_from_data(item_id: int, data: dict):
 
     if cls == Weapon:
         kwargs["weapon_type"] = data.get("weapon_type", "simple")
+        kwargs["damage_type"] = data.get("damage_type", "physical")
+        kwargs["weapon_category"] = data.get("weapon_category", "simple")
+        kwargs["magic_element"] = data.get("magic_element")
     elif cls == SpellScroll:
         kwargs["spell_effect"] = data.get("spell_effect", "generic")
 

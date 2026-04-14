@@ -11,6 +11,7 @@ import pygame
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
 from src.controllers.combat_controller import CombatController
 from src.models.combat import CombatState
+from src.models.weapon import resolve_weapon_stat, weapon_stat_bonus, step_down_weapon_dice
 from src.views.portrait_utils import load_portrait
 
 RED = (220, 50, 50)
@@ -21,6 +22,20 @@ DARK_GRAY = (40, 40, 40)
 LIGHT_GRAY = (180, 180, 180)
 YELLOW = (255, 220, 50)
 MED_GRAY = (70, 70, 70)
+
+def _weapon_type_tag(weapon) -> str:
+    """Build a short tag like '[slashing]' or '[slashing + fire]' for UI display."""
+    if weapon is None:
+        return ""
+    parts = []
+    dt = getattr(weapon, 'damage_type', 'physical')
+    if dt and dt != "physical":
+        parts.append(dt)
+    me = getattr(weapon, 'magic_element', None)
+    if me:
+        parts.append(me)
+    return f"[{' + '.join(parts)}]" if parts else ""
+
 
 _ELEMENT_COLORS = {
     "fire": RED,
@@ -52,17 +67,37 @@ class CombatView:
              selected_target: int = 0, selecting_target: bool = False,
              selecting_spell: bool = False, selected_spell: int = 0,
              selecting_item: bool = False, selected_item: int = 0,
-             game_over_selection: int = 0, is_gate_fight: bool = False):
+             game_over_selection: int = 0, is_gate_fight: bool = False,
+             highlight_all_targets: bool = False,
+             loot_summary: list[str] | None = None,
+             pending_action: str = "",
+             pending_spell_index: int = -1,
+             showing_result: bool = False,
+             result_text: str = "",
+             browsing_log: bool = False,
+             log_browse_scroll: int = 0):
         self.screen.fill(DARK_GRAY)
         self._draw_player_stats(combat.player)
         self._draw_turn_order(combat)
-        self._draw_monsters(combat)
+        self._draw_monsters(combat,
+                            selecting_target=selecting_target,
+                            selected_target=selected_target,
+                            highlight_all=highlight_all_targets)
         self._draw_action_menu(combat, selected_action, selected_target,
                                selecting_target, selecting_spell, selected_spell,
                                selecting_item, selected_item,
-                               is_gate_fight=is_gate_fight)
+                               is_gate_fight=is_gate_fight,
+                               highlight_all=highlight_all_targets,
+                               pending_action=pending_action,
+                               pending_spell_index=pending_spell_index,
+                               showing_result=showing_result,
+                               result_text=result_text,
+                               browsing_log=browsing_log,
+                               log_browse_scroll=log_browse_scroll)
         self._draw_combat_log(combat)
-        self._draw_state_banner(combat, game_over_selection)
+        self._draw_state_banner(combat, game_over_selection,
+                                loot_summary=loot_summary,
+                                showing_result=showing_result)
 
     # ------------------------------------------------------------------
     # Player stats — top of screen
@@ -128,7 +163,10 @@ class CombatView:
     # Monster area — centered
     # ------------------------------------------------------------------
 
-    def _draw_monsters(self, combat: CombatController):
+    def _draw_monsters(self, combat: CombatController,
+                       selecting_target: bool = False,
+                       selected_target: int = 0,
+                       highlight_all: bool = False):
         alive = [m for m in combat.monsters if m.is_alive]
         if not alive:
             return
@@ -136,7 +174,7 @@ class CombatView:
         monster_area_top = PLAYER_STATS_HEIGHT + 20
         monster_area_bottom = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 20
         area_h = monster_area_bottom - monster_area_top
-        portrait_size = min(80, max(48, area_h - 50))
+        portrait_size = min(150, max(64, area_h - 50))
         slot_height = portrait_size + 40
         area_center_y = monster_area_top + area_h // 2
 
@@ -148,6 +186,7 @@ class CombatView:
         for i, monster in enumerate(alive):
             x = start_x + i * slot_width + (slot_width - portrait_size) // 2
             slot_y = area_center_y - slot_height // 2
+            is_highlighted = selecting_target and (highlight_all or i == selected_target)
 
             # HP bar
             bar_w = portrait_size + 20
@@ -172,7 +211,27 @@ class CombatView:
             else:
                 color = _ELEMENT_COLORS.get(monster.elemental_affinity, LIGHT_GRAY)
                 pygame.draw.rect(self.screen, color, (x, portrait_y, portrait_size, portrait_size))
-            pygame.draw.rect(self.screen, WHITE, (x, portrait_y, portrait_size, portrait_size), 1)
+                name = monster.display_name
+                lines = self._wrap_name_for_portrait(name, portrait_size)
+                total_text_h = len(lines) * 16
+                text_start_y = portrait_y + (portrait_size - total_text_h) // 2
+                for li, line in enumerate(lines):
+                    ts = self.small_font.render(line, True, WHITE)
+                    tx = x + (portrait_size - ts.get_width()) // 2
+                    self.screen.blit(ts, (tx, text_start_y + li * 16))
+
+            # Dim non-selected portraits when targeting
+            if selecting_target and not is_highlighted:
+                dim = pygame.Surface((portrait_size, portrait_size))
+                dim.set_alpha(140)
+                dim.fill(BLACK)
+                self.screen.blit(dim, (x, portrait_y))
+
+            # Border: white highlight when targeted, default thin border otherwise
+            if is_highlighted:
+                pygame.draw.rect(self.screen, WHITE, (x - 2, portrait_y - 2, portrait_size + 4, portrait_size + 4), 3)
+            else:
+                pygame.draw.rect(self.screen, WHITE, (x, portrait_y, portrait_size, portrait_size), 1)
 
             # Name
             name = monster.display_name
@@ -181,6 +240,23 @@ class CombatView:
             name_surf = self.small_font.render(name, True, WHITE)
             name_x = x + (portrait_size - name_surf.get_width()) // 2
             self.screen.blit(name_surf, (name_x, portrait_y + portrait_size + 4))
+
+    def _wrap_name_for_portrait(self, name: str, max_width: int) -> list[str]:
+        """Break a name into lines that fit within max_width pixels."""
+        words = name.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.small_font.size(test)[0] <= max_width - 8:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines or [name[:10]]
 
     # ------------------------------------------------------------------
     # Action grid — just above combat log
@@ -211,8 +287,24 @@ class CombatView:
                           selected_target: int, selecting_target: bool,
                           selecting_spell: bool = False, selected_spell: int = 0,
                           selecting_item: bool = False, selected_item: int = 0,
-                          is_gate_fight: bool = False):
-        menu_y = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 5
+                          is_gate_fight: bool = False,
+                          highlight_all: bool = False,
+                          pending_action: str = "",
+                          pending_spell_index: int = -1,
+                          showing_result: bool = False,
+                          result_text: str = "",
+                          browsing_log: bool = False,
+                          log_browse_scroll: int = 0):
+        menu_y = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 10
+
+        if showing_result:
+            self._draw_action_result(result_text, menu_y)
+            return
+
+        if browsing_log:
+            self._draw_log_browser(combat, menu_y, log_browse_scroll)
+            return
+
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
             hint = self.font.render(
                 "Enemy turn..." if combat.state == CombatState.ONGOING else "",
@@ -230,7 +322,10 @@ class CombatView:
             return
 
         if selecting_target:
-            self._draw_target_selector(combat, menu_y, selected_target)
+            self._draw_target_selector(combat, menu_y, selected_target,
+                                       highlight_all=highlight_all,
+                                       pending_action=pending_action,
+                                       pending_spell_index=pending_spell_index)
             return
 
         grid = self.get_action_grid(combat, is_gate_fight=is_gate_fight)
@@ -256,49 +351,111 @@ class CombatView:
                 text = self.font.render(f"{prefix}{label}", True, color)
                 self.screen.blit(text, (cx, cy))
 
-    def _draw_target_selector(self, combat: CombatController, y: int, selected_target: int):
-        label = self.font.render("Select target:", True, WHITE)
-        self.screen.blit(label, (20, y))
+        tab_hint = self.small_font.render("Tab: Combat Log", True, MED_GRAY)
+        self.screen.blit(tab_hint, (SCREEN_WIDTH - tab_hint.get_width() - 25, menu_y + panel_h - 14))
+
+    def _draw_target_selector(self, combat: CombatController, y: int, selected_target: int,
+                              highlight_all: bool = False,
+                              pending_action: str = "",
+                              pending_spell_index: int = -1):
+        panel_h = self.GRID_ROWS * 36 + 16
+        pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
+        pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
+
+        player = combat.player
         alive = [m for m in combat.monsters if m.is_alive]
-        for i, m in enumerate(alive):
-            color = YELLOW if i == selected_target else LIGHT_GRAY
-            prefix = "> " if i == selected_target else "  "
-            text = self.font.render(f"{prefix}{m.display_name} (HP: {m.hp}/{m.max_hp})", True, color)
-            self.screen.blit(text, (30, y + 28 + i * 24))
+
+        dmg_tag = _weapon_type_tag(player.weapon)
+
+        if highlight_all and pending_action == "Multi-Attack":
+            dice = step_down_weapon_dice(player.weapon)
+            stat = resolve_weapon_stat(player.weapon)
+            bonus = weapon_stat_bonus(player, player.weapon, stat)
+            sign = "+" if bonus >= 0 else ""
+            action_text = f"Hit all enemies {dice} {sign}{bonus} {dmg_tag}"
+            cost_text = "6 stam"
+            controls = "Enter to confirm  |  Esc to cancel"
+        elif highlight_all and pending_action == "Cast Spell":
+            spell = player.spells[pending_spell_index] if 0 <= pending_spell_index < len(player.spells) else None
+            if spell:
+                cost = f"{spell.stamina_cost} stam" if spell.stamina_cost else "free"
+                action_text = f"Cast {spell.name} on all"
+                cost_text = cost
+            else:
+                action_text = "Cast spell on all"
+                cost_text = ""
+            controls = "Enter to confirm  |  Esc to cancel"
+        elif pending_action == "Cast Spell":
+            spell = player.spells[pending_spell_index] if 0 <= pending_spell_index < len(player.spells) else None
+            target_name = alive[selected_target].display_name if alive else "?"
+            if spell:
+                cost = f"{spell.stamina_cost} stam" if spell.stamina_cost else "free"
+                if spell.spell_type == "heal":
+                    action_text = f"Heal with {spell.name}"
+                elif spell.spell_type in ("buff_stat", "buff_sustain"):
+                    action_text = f"Buff with {spell.name}"
+                else:
+                    action_text = f"Cast {spell.name} at {target_name}"
+                cost_text = cost
+            else:
+                action_text = f"Cast at {target_name}"
+                cost_text = ""
+            controls = "Left/Right  |  Enter  |  Esc"
+        else:
+            target_name = alive[selected_target].display_name if alive else "?"
+            dice = f"1d{player.weapon.damage_dice}" if player.weapon else "1d4"
+            stat = resolve_weapon_stat(player.weapon)
+            bonus = weapon_stat_bonus(player, player.weapon, stat)
+            sign = "+" if bonus >= 0 else ""
+            action_text = f"Attack {target_name} for {dice} {sign}{bonus} {dmg_tag}"
+            cost_text = ""
+            controls = "Left/Right  |  Enter  |  Esc"
+
+        action_surf = self.font.render(action_text, True, WHITE)
+        self.screen.blit(action_surf, (20, y + 8))
+
+        if cost_text:
+            cost_surf = self.small_font.render(cost_text, True, YELLOW)
+            self.screen.blit(cost_surf, (SCREEN_WIDTH - cost_surf.get_width() - 25, y + 10))
+
+        ctrl_surf = self.small_font.render(controls, True, LIGHT_GRAY)
+        self.screen.blit(ctrl_surf, (20, y + panel_h - 20))
 
     def _draw_spell_selector(self, combat: CombatController, y: int, selected_spell: int):
+        panel_h = self.GRID_ROWS * 36 + 16
+        pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
+        pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
+
         label = self.font.render("Select spell:  (Esc to cancel)", True, WHITE)
-        self.screen.blit(label, (20, y))
+        self.screen.blit(label, (20, y + 4))
+
         spells = combat.player.spells
+        items: list[str] = []
+        for s in spells:
+            cost = f"{s.stamina_cost} stam" if s.stamina_cost else "free"
+            items.append(f"{s.name} [{s.element}] ({cost})")
 
-        pairs = self._pair_spells(spells)
-        row_y = y + 28
-        flat_idx = 0
+        item_y = y + 26
+        avail_h = panel_h - 26
+        max_visible = max(1, avail_h // 24)
+        scroll_offset = max(0, min(selected_spell - max_visible + 1, len(items) - max_visible))
 
-        for single, multi in pairs:
-            if single:
-                is_sel = flat_idx == selected_spell
-                color = YELLOW if is_sel else LIGHT_GRAY
-                prefix = "> " if is_sel else "  "
-                cost = f"{single.stamina_cost} stam" if single.stamina_cost else "free"
-                text = self.font.render(
-                    f"{prefix}{single.name} [{single.element}] ({cost})",
-                    True, color,
-                )
-                self.screen.blit(text, (30, row_y))
-                flat_idx += 1
-            if multi:
-                is_sel = flat_idx == selected_spell
-                color = YELLOW if is_sel else LIGHT_GRAY
-                prefix = "> " if is_sel else "  "
-                cost = f"{multi.stamina_cost} stam" if multi.stamina_cost else "free"
-                text = self.font.render(
-                    f"{prefix}{multi.name} [{multi.element}] ({cost})",
-                    True, color,
-                )
-                self.screen.blit(text, (SCREEN_WIDTH // 2 + 10, row_y))
-                flat_idx += 1
-            row_y += 24
+        clip = pygame.Rect(15, item_y, SCREEN_WIDTH - 30, avail_h)
+        self.screen.set_clip(clip)
+        for i in range(scroll_offset, min(scroll_offset + max_visible, len(items))):
+            is_sel = i == selected_spell
+            color = YELLOW if is_sel else LIGHT_GRAY
+            prefix = "> " if is_sel else "  "
+            text = self.font.render(f"{prefix}{items[i]}", True, color)
+            self.screen.blit(text, (30, item_y + (i - scroll_offset) * 24))
+        self.screen.set_clip(None)
+
+        if scroll_offset > 0:
+            arrow = self.small_font.render("^", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 40, y + 4))
+        if scroll_offset + max_visible < len(items):
+            arrow = self.small_font.render("v", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 40, y + panel_h - 16))
 
     @staticmethod
     def _pair_spells(spells) -> list[tuple]:
@@ -325,17 +482,120 @@ class CombatView:
 
     def _draw_item_selector(self, combat: CombatController, y: int, selected_item: int):
         from src.models.items import Food, Drink
+        panel_h = self.GRID_ROWS * 36 + 16
+        pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
+        pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
+
         label = self.font.render("Select item:  (Esc to cancel)", True, WHITE)
-        self.screen.blit(label, (20, y))
+        self.screen.blit(label, (20, y + 4))
+
         consumables = [
             (name, item) for name, item in combat.player.inventory.items()
             if isinstance(item, (Food, Drink))
         ]
-        for i, (name, item) in enumerate(consumables):
-            color = YELLOW if i == selected_item else LIGHT_GRAY
-            prefix = "> " if i == selected_item else "  "
+
+        item_y = y + 26
+        avail_h = panel_h - 26
+        max_visible = max(1, avail_h // 24)
+        scroll_offset = max(0, min(selected_item - max_visible + 1, len(consumables) - max_visible))
+
+        clip = pygame.Rect(15, item_y, SCREEN_WIDTH - 30, avail_h)
+        self.screen.set_clip(clip)
+        for i in range(scroll_offset, min(scroll_offset + max_visible, len(consumables))):
+            is_sel = i == selected_item
+            color = YELLOW if is_sel else LIGHT_GRAY
+            prefix = "> " if is_sel else "  "
+            name, item = consumables[i]
             text = self.font.render(f"{prefix}{name}  — {item.desc}", True, color)
-            self.screen.blit(text, (30, y + 28 + i * 24))
+            self.screen.blit(text, (30, item_y + (i - scroll_offset) * 24))
+        self.screen.set_clip(None)
+
+        if scroll_offset > 0:
+            arrow = self.small_font.render("^", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 40, y + 4))
+        if scroll_offset + max_visible < len(consumables):
+            arrow = self.small_font.render("v", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 40, y + panel_h - 16))
+
+    # ------------------------------------------------------------------
+    # Action result display — shown after player acts, before enemy turns
+    # ------------------------------------------------------------------
+
+    def _draw_action_result(self, result_text: str, y: int):
+        panel_h = self.GRID_ROWS * 36 + 16
+        pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
+        pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
+
+        max_w = SCREEN_WIDTH - 70
+        words = result_text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.font.size(test)[0] <= max_w:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+
+        is_miss = "miss" in result_text.lower()
+        is_fail = "not enough" in result_text.lower() or "failed" in result_text.lower()
+        if is_miss or is_fail:
+            text_color = RED
+        elif "heal" in result_text.lower() or "buff" in result_text.lower() or "energy" in result_text.lower():
+            text_color = GREEN
+        else:
+            text_color = WHITE
+
+        line_h = self.font.get_linesize()
+        max_lines = max(1, (panel_h - 24) // line_h)
+        for i, line in enumerate(lines[:max_lines]):
+            surf = self.font.render(line, True, text_color)
+            self.screen.blit(surf, (25, y + 6 + i * line_h))
+
+        ctrl = self.small_font.render("Enter to continue  |  Tab: Combat Log", True, LIGHT_GRAY)
+        self.screen.blit(ctrl, (20, y + panel_h - 18))
+
+    # ------------------------------------------------------------------
+    # Log browser — full combat log in menu panel, scrollable
+    # ------------------------------------------------------------------
+
+    def _draw_log_browser(self, combat: CombatController, y: int, scroll: int):
+        panel_h = self.GRID_ROWS * 36 + 16
+        pygame.draw.rect(self.screen, (20, 20, 30), (15, y, SCREEN_WIDTH - 30, panel_h))
+        pygame.draw.rect(self.screen, LIGHT_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
+
+        header = self.small_font.render("Combat Log  (Up/Down to scroll, Tab/Esc to close)", True, YELLOW)
+        self.screen.blit(header, (20, y + 3))
+
+        line_h = 16
+        content_top = y + 20
+        avail_h = panel_h - 24
+        max_lines = max(1, avail_h // line_h)
+
+        total = len(combat.log)
+        scroll = max(0, min(scroll, max(0, total - max_lines)))
+        start = max(0, total - max_lines - scroll)
+        end_idx = start + max_lines
+        visible = combat.log[start:end_idx]
+
+        clip = pygame.Rect(15, content_top, SCREEN_WIDTH - 30, avail_h)
+        self.screen.set_clip(clip)
+        for i, msg in enumerate(visible):
+            display = msg[:120] + "..." if len(msg) > 120 else msg
+            text = self.log_font.render(display, True, LIGHT_GRAY)
+            self.screen.blit(text, (20, content_top + i * line_h))
+        self.screen.set_clip(None)
+
+        if scroll > 0:
+            arrow = self.small_font.render("v", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 35, y + panel_h - 14))
+        if start > 0:
+            arrow = self.small_font.render("^", True, LIGHT_GRAY)
+            self.screen.blit(arrow, (SCREEN_WIDTH - 35, y + 3))
 
     # ------------------------------------------------------------------
     # Combat log — scrollable, bottom strip
@@ -368,8 +628,10 @@ class CombatView:
     # State banner
     # ------------------------------------------------------------------
 
-    def _draw_state_banner(self, combat: CombatController, game_over_selection: int = 0):
-        if combat.state == CombatState.ONGOING:
+    def _draw_state_banner(self, combat: CombatController, game_over_selection: int = 0,
+                           loot_summary: list[str] | None = None,
+                           showing_result: bool = False):
+        if combat.state == CombatState.ONGOING or showing_result:
             return
 
         banners = {
@@ -378,20 +640,39 @@ class CombatView:
             CombatState.FLED: ("ESCAPED!", YELLOW),
         }
         text, color = banners.get(combat.state, ("", WHITE))
-        surf = pygame.font.SysFont(None, 64).render(text, True, color)
-        rect = surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        big_font = pygame.font.SysFont(None, 64)
+        surf = big_font.render(text, True, color)
 
-        backdrop = pygame.Surface((rect.width + 40, rect.height + 20))
+        loot_lines: list[str] = []
+        if combat.state == CombatState.VICTORY and loot_summary:
+            loot_lines = loot_summary
+
+        banner_h = surf.get_height() + 20
+        if loot_lines:
+            banner_h += 10 + len(loot_lines) * 22
+        banner_h += 30  # room for "Press Enter"
+
+        rect = surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - banner_h // 4))
+
+        backdrop_w = max(rect.width + 60, 400)
+        backdrop = pygame.Surface((backdrop_w, banner_h))
         backdrop.set_alpha(200)
         backdrop.fill(BLACK)
-        self.screen.blit(backdrop, (rect.x - 20, rect.y - 10))
+        self.screen.blit(backdrop, (SCREEN_WIDTH // 2 - backdrop_w // 2, rect.y - 10))
         self.screen.blit(surf, rect)
 
         if combat.state == CombatState.DEFEAT:
             self._draw_game_over_menu(rect.bottom + 15, game_over_selection)
         else:
+            next_y = rect.bottom + 8
+            if loot_lines:
+                for line in loot_lines:
+                    loot_surf = self.font.render(f"  {line}", True, YELLOW)
+                    self.screen.blit(loot_surf, (SCREEN_WIDTH // 2 - loot_surf.get_width() // 2, next_y))
+                    next_y += 22
+                next_y += 4
             hint = self.font.render("Press Enter to continue", True, LIGHT_GRAY)
-            self.screen.blit(hint, (SCREEN_WIDTH // 2 - 100, rect.bottom + 20))
+            self.screen.blit(hint, (SCREEN_WIDTH // 2 - hint.get_width() // 2, next_y))
 
     GAME_OVER_OPTIONS = ["Load Save", "Quit to Menu"]
 
