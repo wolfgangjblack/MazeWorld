@@ -399,13 +399,14 @@ def _phase3a_classes(environments: list[dict], story: OverarchingStory, bible: W
 
 def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[dict]]:
     """Generate items for a room and distribute across item tiles."""
+    from src.db_constants import next_id, DB_PATHS
+
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
     maze = layout["maze"]
     env_type = layout["environment"]
     env_name = layout["environment_name"]
     room_level = layout["room_level"]
-    id_offset = layout["id_offset"]
 
     story_context = bible.get_cumulative_context(room_id)
 
@@ -419,19 +420,22 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
         if "error" not in result:
             item_list = _build_items_list(result, room_level)
             if item_list:
+                global_path = DB_PATHS["item"]
+                existing_db = load_json_data(global_path) if os.path.exists(global_path) else {}
+                start_id = next_id("item", existing_db)
                 generated_items = {}
-                item_id_base = 200 + id_offset
                 for i, item_data in enumerate(item_list):
-                    generated_items[str(item_id_base + i)] = item_data
+                    generated_items[str(start_id + i)] = item_data
+                existing_db.update(generated_items)
+                os.makedirs(os.path.dirname(global_path), exist_ok=True)
+                with open(global_path, "w") as f:
+                    json.dump(existing_db, f, indent=2)
     except Exception as e:
         logger.warning("Room %d item generation failed: %s", room_idx, e)
 
-    items_path = os.path.join(layout["room_dir"], "items.json")
     if generated_items:
-        with open(items_path, "w") as f:
-            json.dump(generated_items, f, indent=2)
         registry._loaded = False
-        registry._load_items_from(items_path)
+        registry._load_items_from(DB_PATHS["item"])
         registry._loaded = True
 
         for item_id, item_data in generated_items.items():
@@ -468,12 +472,13 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 
 def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
+    from src.db_constants import next_id, DB_PATHS
+
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
     maze = layout["maze"]
     env_type = layout["environment"]
     env_name = layout["environment_name"]
-    id_offset = layout["id_offset"]
 
     npc_tiles = maze.get_tiles_by_type("npc")
     if not npc_tiles:
@@ -503,7 +508,9 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
         logger.warning("Room %d NPC batch generation failed: %s", room_idx, e)
         llm_npcs = []
 
-    npc_id_counter = 100 + id_offset
+    global_npc_path = DB_PATHS["npc"]
+    existing_npc_db = load_json_data(global_npc_path) if os.path.exists(global_npc_path) else []
+    npc_id_counter = next_id("npc", existing_npc_db)
     for i, tile in enumerate(npc_tiles):
         llm_data = llm_npcs[i] if i < len(llm_npcs) else {}
         x, y = tile.position
@@ -566,12 +573,15 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
 
 
 def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
-    """Generate monster database for a room via LLM."""
+    """Generate monster database for a room via LLM and write to global DB."""
+    from src.db_constants import next_id, DB_PATHS
+
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
     env_type = layout["environment"]
     env_name = layout["environment_name"]
     room_level = layout["room_level"]
+    total_rooms = layout.get("total_rooms", 1)
 
     story_context = bible.get_cumulative_context(room_id)
     monster_db = []
@@ -579,7 +589,10 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
         from src.generate.generators.llm_primitives import generate_monster_primitive
 
         monsters = generate_monster_primitive(
-            {"environment": {"type": env_type, "name": env_name}}, room_level, story_context
+            {"environment": {"type": env_type, "name": env_name}},
+            room_level,
+            story_context,
+            total_rooms=total_rooms,
         )
         if monsters:
             monster_db = monsters
@@ -602,11 +615,27 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
                 }
             )
 
+    global_path = DB_PATHS["monster"]
+    existing_global = load_json_data(global_path) if os.path.exists(global_path) else {}
+    start_id = next_id("monster", existing_global)
+
+    for i, m in enumerate(monster_db):
+        m["id"] = start_id + i
+        m.setdefault("level", room_level)
+        m.setdefault("hp_range", [8 + room_level * 2, 15 + room_level * 3])
+        m.setdefault("ac_range", [9 + room_level, 12 + room_level])
+        existing_global[str(start_id + i)] = m
+
+    os.makedirs(os.path.dirname(global_path), exist_ok=True)
+    with open(global_path, "w") as f:
+        json.dump(existing_global, f, indent=2)
+
     for m in monster_db:
         bible.add_monster(
             room_id,
             EntityLore(
                 entity_type="monster",
+                entity_id=str(m["id"]),
                 name=m.get("name", ""),
                 room_id=room_id,
                 lore=m.get("backstory", m.get("description", "")),
@@ -670,13 +699,12 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict], class_data_
                 continue
 
             if tile.event_type == "combat":
-                # Assign monsters from DB
                 count = tile.assigned_monster_count
                 if regular_monsters:
                     chosen = random.choices(regular_monsters, k=min(count, len(regular_monsters)))
-                    tile.assigned_monsters = [m.get("name", "Unknown") for m in chosen]
+                    tile.assigned_monsters = [m["id"] for m in chosen]
                 else:
-                    tile.assigned_monsters = ["Unknown Creature"]
+                    tile.assigned_monsters = []
                 combat_tile_map[tile.position] = tile
 
             elif tile.requires_type and not tile.requires_ref:
@@ -716,12 +744,12 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict], class_data_
                 gate_tile.is_climax_boss = True
                 gate_tile.is_gate = True
                 if boss_monsters:
-                    gate_tile.assigned_monsters = [boss_monsters[0].get("name", "Final Boss")]
+                    gate_tile.assigned_monsters = [boss_monsters[0]["id"]]
                     gate_tile.assigned_monster_count = 1
             else:
                 gate_tile.is_gate = True
                 if boss_monsters:
-                    gate_tile.assigned_monsters = [boss_monsters[0].get("name", "Gate Guardian")]
+                    gate_tile.assigned_monsters = [boss_monsters[0]["id"]]
                     gate_tile.assigned_monster_count = 1
 
     logger.info("Enrichment pass complete: assigned monsters, requirements, and gate/boss tiles.")
@@ -813,16 +841,25 @@ def _item_has_attr(item_id: int, attr: str) -> bool:
 
 
 def _build_combat_event(tile, event_id, env_type, env_name, room_level, monster_db, story_related, faction_name=""):
-    """Build a combat event programmatically from tile.assigned_monsters."""
-    monster_names = tile.assigned_monsters or ["Unknown Creature"]
-    count = len(monster_names)
+    """Build a combat event programmatically from tile.assigned_monsters (IDs)."""
+    monster_ids = tile.assigned_monsters or []
+    db_by_id = {m.get("id", 0): m for m in monster_db}
 
+    monster_names = []
+    for mid in monster_ids:
+        m_data = db_by_id.get(mid)
+        if m_data:
+            monster_names.append(m_data.get("name", "Unknown"))
+        else:
+            monster_names.append("Unknown Creature")
+
+    count = len(monster_names) or 1
     if count > 1:
         monsters_str = (
             f"{count} {monster_names[0]}s" if len(set(monster_names)) == 1 else ", ".join(dict.fromkeys(monster_names))
         )
     else:
-        monsters_str = monster_names[0]
+        monsters_str = monster_names[0] if monster_names else "Unknown Creature"
 
     if story_related and faction_name:
         template = random.choice(_COMBAT_STORY_TEMPLATES)
@@ -830,19 +867,10 @@ def _build_combat_event(tile, event_id, env_type, env_name, room_level, monster_
         template = random.choice(_COMBAT_NAME_TEMPLATES)
     name = template.format(monsters=monsters_str)
 
-    # Build monster models from DB by name
-    db_by_name = {m.get("name", ""): m for m in monster_db}
-    all_monsters = []
-    for mn in monster_names:
-        m_data = db_by_name.get(mn)
-        if m_data:
-            all_monsters.append(_monster_dict_to_model(m_data, room_level))
-        else:
-            from src.models.monster import generate_encounter_monsters
-
-            all_monsters.extend(generate_encounter_monsters(env_type, room_level))
-
-    first_desc = db_by_name.get(monster_names[0], {}).get("description", "")
+    first_desc = ""
+    if monster_ids:
+        first_data = db_by_id.get(monster_ids[0], {})
+        first_desc = first_data.get("description", "")
     description = first_desc or f"A hostile encounter in the {env_name}."
 
     difficulty = min(5, max(1, room_level + (1 if tile.is_multi_combat else 0)))
@@ -859,7 +887,7 @@ def _build_combat_event(tile, event_id, env_type, env_name, room_level, monster_
         "x": tile.position[0],
         "y": tile.position[1],
         "_tile_pos": list(tile.position),
-        "monsters": [m.to_dict() for m in all_monsters],
+        "monster_ids": list(monster_ids),
         "room_level": room_level,
     }
 
@@ -924,18 +952,21 @@ def _phase4a_events(
     if registry_tools:
         tool_attrs = list(dict.fromkeys(registry_tools))
 
+    from src.db_constants import next_id, DB_PATHS
+
     event_tiles = maze.get_tiles_by_type("event")
     event_list = []
-    event_id_prefix = f"r{room_idx}_"
+
+    existing_events = load_json_data(DB_PATHS["event"]) if os.path.exists(DB_PATHS["event"]) else []
+    event_counter = next_id("event", existing_events)
 
     # --- Combat: build programmatically, no LLM ---
     combat_tiles = [t for t in event_tiles if t.event_type == "combat"]
     gate_event_id = None
     for tile in combat_tiles:
-        idx = len(event_list)
         event_data = _build_combat_event(
             tile,
-            f"{event_id_prefix}evt_{idx:03d}",
+            event_counter,
             env_type,
             env_name,
             room_level,
@@ -943,6 +974,7 @@ def _phase4a_events(
             tile.is_story_related,
             faction_name,
         )
+        event_counter += 1
         if tile.is_gate:
             event_data["is_gate"] = True
             gate_event_id = event_data["id"]
@@ -1005,7 +1037,7 @@ def _phase4a_events(
                 )
 
                 event_data = {
-                    "id": f"{event_id_prefix}evt_{idx:03d}",
+                    "id": event_counter,
                     "type": event_type,
                     "name": llm_data.get("name", f"Event {idx}"),
                     "description": llm_data.get("description", "Something happens!"),
@@ -1072,6 +1104,7 @@ def _phase4a_events(
                 accumulated_summaries.append(summary)
 
                 event_list.append(event_data)
+                event_counter += 1
 
     # Validate tool/ability references against real data
     _validate_puzzle_tools(event_list, registry)
@@ -1099,6 +1132,9 @@ def _phase4a_events(
 
     # --- Quest reconciliation: handle all 7 quest types ---
     quest_list = []
+    existing_quests = load_json_data(DB_PATHS["quest"]) if os.path.exists(DB_PATHS["quest"]) else []
+    quest_counter = next_id("quest", existing_quests)
+
     for npc in npc_pool:
         qtype = npc.get("quest_type")
         if not qtype:
@@ -1106,7 +1142,7 @@ def _phase4a_events(
 
         npc_first_name = npc.get("name", "").split()[0] or "Unknown"
         base_quest = {
-            "id": f"{event_id_prefix}q_{len(quest_list):03d}",
+            "id": quest_counter,
             "type": qtype,
             "title": f"{npc_first_name}'s Request",
             "description": f"{npc.get('name', 'Someone')} needs your help.",
@@ -1161,6 +1197,7 @@ def _phase4a_events(
 
         quest_list.append(base_quest)
         npc["quest_id"] = base_quest["id"]
+        quest_counter += 1
 
     story_count = sum(1 for q in quest_list if q.get("is_story_quest"))
     logger.info("Room %d: %d events, %d quests (%d story).", room_idx, len(event_list), len(quest_list), story_count)
@@ -1513,15 +1550,12 @@ def _phase7_portraits(
             if src_m:
                 src_m["profile_image"] = img
 
-    # Propagate monster portraits into combat event monster lists
+    # Propagate monster portraits into monster_db entries across all rooms
     for rr in room_results:
-        for evt in rr["event_list"]:
-            if evt.get("type") != "combat":
-                continue
-            for m_dict in evt.get("monsters", []):
-                mname = m_dict.get("name", "")
-                if mname and mname in monster_name_to_image and not m_dict.get("profile_image"):
-                    m_dict["profile_image"] = monster_name_to_image[mname]
+        for m in rr.get("monster_db", []):
+            mname = m.get("name", "")
+            if mname and mname in monster_name_to_image and not m.get("profile_image"):
+                m["profile_image"] = monster_name_to_image[mname]
 
     # Write back item portrait paths to item_placements entries
     item_name_to_image: dict[str, str] = {}
@@ -1645,12 +1679,6 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list, quest_list
             "quest_ids": [q["id"] for q in quest_list],
         },
     )
-    with open(os.path.join(room_dir, "npcs.json"), "w") as f:
-        json.dump(npc_pool, f, indent=2)
-    with open(os.path.join(room_dir, "events.json"), "w") as f:
-        json.dump(event_list, f, indent=2)
-    with open(os.path.join(room_dir, "quests.json"), "w") as f:
-        json.dump(quest_list, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
