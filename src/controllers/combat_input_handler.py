@@ -66,7 +66,7 @@ class CombatInputHandler:
         gc.day_night.pause()
         self._reset_state()
         self.combat_event = combat_event
-        self.combat_controller = CombatController(gc.player, list(combat_event.monsters))
+        self.combat_controller = CombatController(gc.player, list(combat_event.monsters), survival=gc.survival)
         self.combat_view = CombatView(gc.screen, gc.font)
 
     def handle_input(self, event) -> None:

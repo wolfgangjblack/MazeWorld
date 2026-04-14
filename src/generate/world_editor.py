@@ -98,15 +98,16 @@ def build_world_bible(
             entity_id=eid_str,
         )
 
-        # Index monsters within combat events
+        # Index monsters within combat events by XYYY monster IDs
         if event.get("type") == "combat":
-            for midx, monster in enumerate(event.get("monsters", [])):
-                monster_id = f"{eid_str}_m{midx}"
-                room.monsters.append(monster_id)
-                entity_index[f"monster:{monster_id}"] = EntityRef(
+            for mid in event.get("monster_ids", []):
+                mid_str = str(mid)
+                if mid_str not in room.monsters:
+                    room.monsters.append(mid_str)
+                entity_index[f"monster:{mid_str}"] = EntityRef(
                     entity_type="monster",
                     room_id=room_id,
-                    entity_id=monster_id,
+                    entity_id=mid_str,
                 )
 
     # --- Index quests ---
@@ -354,7 +355,7 @@ def gameplay_audit(
 
     # --- Monster presence in combat events ---
     for event in event_list:
-        if event.get("type") == "combat" and not event.get("monsters"):
+        if event.get("type") == "combat" and not event.get("monster_ids"):
             issues.append(
                 {
                     "severity": "error",

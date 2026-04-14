@@ -57,10 +57,6 @@ logging.getLogger("anthropic").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 DATA_DIR = "data"
-MAZE_PATH = os.path.join(DATA_DIR, "maze", "maze.json")
-NPC_PATH = os.path.join(DATA_DIR, "npcs", "npcs.json")
-EVENT_PATH = os.path.join(DATA_DIR, "events", "events.json")
-QUEST_PATH = os.path.join(DATA_DIR, "quests", "quests.json")
 STORY_PATH = os.path.join(DATA_DIR, "story", "story.json")
 CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
@@ -776,28 +772,6 @@ _QUEST_FAILURE = {
     "combat_npc": "Ha — you weren't ready for me. Come back when you're stronger.",
     "solve_event": "You couldn't handle it. The situation remains unsolved.",
 }
-
-
-def _monster_dict_to_model(m: dict, room_level: int):
-    """Convert an LLM monster dict (with hp_range/ac_range) to a Monster model."""
-    from src.models.monster import Monster
-
-    hp_range = m.get("hp_range", [8 + room_level * 2, 15 + room_level * 3])
-    ac_range = m.get("ac_range", [9 + room_level, 12 + room_level])
-    hp = random.randint(int(hp_range[0]), int(hp_range[1]))
-    ac = random.randint(int(ac_range[0]), int(ac_range[1]))
-    return Monster(
-        name=m.get("name", "Unknown"),
-        species=m.get("species", m.get("name", "creature")),
-        description=m.get("description", ""),
-        hp=hp,
-        max_hp=hp,
-        ac=ac,
-        damage_type=m.get("damage_type", "physical"),
-        elemental_affinity=m.get("elemental_affinity"),
-        level=room_level,
-        portrait_prompt=m.get("portrait_prompt"),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1709,13 +1683,14 @@ def generate_world():
     import src.generate.image_client as _img_mod
     import src.generate.music_client as _music_mod
     import src.generate.sfx_client as _sfx_mod
-    from config import IMAGE_BACKEND, LLM_BACKEND, MUSIC_BACKEND
+    from config import GENERATE_GUIDE, IMAGE_BACKEND, LLM_BACKEND, MUSIC_BACKEND
     from src.generate.generation_stats import GenerationStats
 
     stats = GenerationStats(
         llm_backend=LLM_BACKEND,
         image_backend=IMAGE_BACKEND,
         music_backend=MUSIC_BACKEND,
+        sfx_backend="elevenlabs" if MUSIC_BACKEND == "api" else "none",
     )
     _llm_api_mod.set_stats(stats)
     _llm_local_mod.set_stats(stats)
@@ -1733,7 +1708,8 @@ def generate_world():
     num_rooms = NUM_ROOMS
     story_seed = STORY_SEED or _FALLBACK_STORY_SEED
 
-    phase_bar = tqdm(total=len(PHASE_NAMES), desc="World Generation", unit="phase", position=0, leave=True)
+    total_phases = len(PHASE_NAMES) if GENERATE_GUIDE else len(PHASE_NAMES) - 1
+    phase_bar = tqdm(total=total_phases, desc="World Generation", unit="phase", position=0, leave=True)
 
     def advance(name: str):
         phase_bar.set_description(f"World Gen: {name}")
@@ -1942,8 +1918,6 @@ def generate_world():
     phase_bar.update(1)
 
     # --- Phase 9: Player Guide (optional) ---
-    from config import GENERATE_GUIDE
-
     if GENERATE_GUIDE:
         advance(PHASE_NAMES[10])
         try:

@@ -168,13 +168,13 @@ class TestQuestChecker:
 class TestEventChecker:
     def test_valid_combat_event(self):
         checker = EventChecker()
-        event = {"name": "Goblin", "type": "combat", "monsters": [{"name": "Goblin"}]}
+        event = {"name": "Goblin", "type": "combat", "monster_ids": [5000]}
         result = checker.check(event)
         assert result.passed
 
     def test_combat_no_monsters_fails(self):
         checker = EventChecker()
-        event = {"name": "Empty Fight", "type": "combat", "monsters": []}
+        event = {"name": "Empty Fight", "type": "combat", "monster_ids": []}
         result = checker.check(event)
         assert not result.passed
 
@@ -287,7 +287,7 @@ class TestQuestValidator:
 class TestEventValidator:
     def test_valid_combat(self):
         v = EventValidator()
-        event = {"name": "Fight", "description": "A fight.", "type": "combat", "monsters": [{"name": "Rat"}]}
+        event = {"name": "Fight", "description": "A fight.", "type": "combat", "monster_ids": [5000]}
         result = v.validate(event)
         assert result.passed
 
@@ -328,7 +328,7 @@ class TestBuildWorldBible:
             {"id": 1002, "name": "Unselected", "selected": False},
         ]
         event_list = [
-            {"id": 3000, "type": "combat", "name": "Rat", "monsters": [{"name": "Rat"}, {"name": "Rat"}]},
+            {"id": 3000, "type": "combat", "name": "Rat", "monster_ids": [5000, 5001]},
             {"id": 3001, "type": "puzzle", "name": "Lock"},
         ]
         quest_list = [

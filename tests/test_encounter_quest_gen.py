@@ -142,13 +142,13 @@ class TestDialogueExhaustion:
         assert check_dialogue_exhaustion(npc, "hi") is False
 
     @patch("src.utils.conversation_utils.generate", return_value="I have nothing more to say.")
-    def test_exhausted_npc_returns_finished_dialogue(self, _mock):
+    def test_exhausted_npc_returns_exhausted_dialogue(self, _mock):
         from src.utils.conversation_utils import generate_npc_response
 
         npc = _make_npc()
         npc.has_met_player = True
         npc.dialogue_exhausted = True
-        npc.finished_dialogue = "Go away."
+        npc.exhausted_dialogue = "Go away."
         result = generate_npc_response(npc, "hello")
         assert "Go away" in result
 
@@ -277,13 +277,13 @@ class TestItemChecker:
 class TestEventCheckerTimeGate:
     def test_valid_time_gate_passes(self):
         checker = EventChecker()
-        event = {"name": "Night Ambush", "type": "combat", "monsters": [{"name": "Rat"}], "time_gate": "night"}
+        event = {"name": "Night Ambush", "type": "combat", "monster_ids": [5000], "time_gate": "night"}
         result = checker.check(event)
         assert result.passed
 
     def test_invalid_time_gate_fails(self):
         checker = EventChecker()
-        event = {"name": "Bad Event", "type": "combat", "monsters": [{"name": "Rat"}], "time_gate": "midnight"}
+        event = {"name": "Bad Event", "type": "combat", "monster_ids": [5000], "time_gate": "midnight"}
         result = checker.check(event)
         assert not result.passed
         assert any("time_gate" in i for i in result.issues)
@@ -415,7 +415,7 @@ class TestEventValidatorTimeGate:
             "name": "Night Fight",
             "description": "A fight at night.",
             "type": "combat",
-            "monsters": [{"name": "Bat"}],
+            "monster_ids": [5000],
             "time_gate": "night",
         }
         result = v.validate(event)
@@ -427,7 +427,7 @@ class TestEventValidatorTimeGate:
             "name": "Bad",
             "description": "x",
             "type": "combat",
-            "monsters": [{"name": "Bat"}],
+            "monster_ids": [5000],
             "time_gate": "dawn",
         }
         result = v.validate(event)
@@ -455,7 +455,7 @@ class TestGameplayAudit:
                 {"id": 1001, "name": "Bob", "selected": True, "quest_id": None},
             ],
             "event_list": [
-                {"id": 3000, "type": "combat", "name": "Rat", "monsters": [{"name": "Rat"}]},
+                {"id": 3000, "type": "combat", "name": "Rat", "monster_ids": [5000]},
             ],
             "quest_list": [
                 {
@@ -491,7 +491,7 @@ class TestGameplayAudit:
 
     def test_combat_event_no_monsters(self):
         world = self._make_world()
-        world["event_list"][0]["monsters"] = []
+        world["event_list"][0]["monster_ids"] = []
         issues = gameplay_audit(**world)
         assert any("no monsters" in i["message"] for i in issues)
 

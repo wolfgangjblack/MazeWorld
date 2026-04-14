@@ -231,8 +231,8 @@ class EventValidator(BaseValidator):
             reasons.append("Missing event description")
 
         if etype == "combat":
-            if not data.get("monsters"):
-                reasons.append("Combat event has no monsters")
+            if not data.get("monster_ids"):
+                reasons.append("Combat event has no monster_ids")
         elif etype == "puzzle":
             choices = data.get("choices", [])
             solvable = any(c.get("auto_success") or c.get("tool_attribute") in tool_attrs for c in choices)

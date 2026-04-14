@@ -188,8 +188,8 @@ class EventChecker(BaseChecker):
 
         etype = data.get("type", "")
         if etype == "combat":
-            if not data.get("monsters"):
-                issues.append("Combat event has no monsters")
+            if not data.get("monster_ids"):
+                issues.append("Combat event has no monster_ids")
         elif etype == "puzzle":
             choices = data.get("choices", [])
             has_walkaway = any(c.get("auto_success") for c in choices)

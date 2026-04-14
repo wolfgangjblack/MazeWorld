@@ -1,5 +1,3 @@
-import os
-
 import pygame
 
 from config import (
@@ -10,26 +8,7 @@ from config import (
     SCREEN_WIDTH,
     WHITE,
 )
-
-_portrait_cache: dict[str, pygame.Surface | None] = {}
-
-
-def _load_portrait(path: str | None, size: tuple[int, int] = (64, 64)) -> pygame.Surface | None:
-    """Load and cache a portrait image, return None on failure."""
-    if not path:
-        return None
-    if path in _portrait_cache:
-        return _portrait_cache[path]
-    if os.path.exists(path):
-        try:
-            img = pygame.image.load(path).convert_alpha()
-            img = pygame.transform.scale(img, size)
-            _portrait_cache[path] = img
-            return img
-        except Exception:
-            pass
-    _portrait_cache[path] = None
-    return None
+from src.views.portrait_utils import load_portrait
 
 
 class DialogueBoxView:
@@ -72,7 +51,7 @@ class DialogueBoxView:
             portrait_offset = 0
 
             npc = dialogue_box.current_npc
-            portrait = _load_portrait(getattr(npc, "profile_image", None))
+            portrait = load_portrait(getattr(npc, "profile_image", None))
             if portrait:
                 self.screen.blit(portrait, (padding, y))
                 portrait_offset = 74
@@ -230,7 +209,7 @@ class DialogueBoxView:
         line_height = self.font.get_linesize()
         portrait_offset = 0
 
-        portrait = _load_portrait(getattr(event, "profile_image", None))
+        portrait = load_portrait(getattr(event, "profile_image", None))
         if portrait:
             self.screen.blit(portrait, (padding, y))
             portrait_offset = 74

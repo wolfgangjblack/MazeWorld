@@ -243,8 +243,6 @@ def serialize_event(event) -> dict:
     # For combat events, save monster HP
     if hasattr(event, "monsters"):
         data["monster_states"] = [{"hp": m.hp, "status_effects": dict(m.status_effects)} for m in event.monsters]
-        data["combat_started"] = event.combat_started
-        data["player_fled"] = event.player_fled
     return data
 
 

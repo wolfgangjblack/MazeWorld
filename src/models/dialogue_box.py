@@ -158,21 +158,8 @@ class DialogueBox:
         self.dialogue_active = False
         self.input_active = False
 
-        if event.type == "combat" and hasattr(event, "monsters") and event.monsters:
-            # Multi-turn combat
-            self.combat_active = True
-            self.combat_phase = "initiative"
-            self.combat_log = []
-            self.player_stunned_turns = 0
-            self.player_poison_turns = 0
-            self.awaiting_roll = False
-        elif event.type == "combat":
-            # Legacy single-roll combat
-            self.combat_active = False
-            self.awaiting_roll = True
-        else:
-            self.combat_active = False
-            self.awaiting_roll = False
+        self.combat_active = False
+        self.awaiting_roll = False
 
     def start_combat_turns(self, init_result: dict):
         """Called after initiative is rolled to begin turn-based combat."""

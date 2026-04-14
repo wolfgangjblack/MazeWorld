@@ -199,11 +199,13 @@ def weapon_stat_bonus(player, weapon: Weapon | None, resolved_stat: str | None =
 
 def weapon_from_inventory_item(item) -> Weapon:
     """Convert an items.py::Weapon into a weapon.py::Weapon for combat use."""
+    dice_str = item.item_stats.attack_dice or "1d6"
+    sides = int(dice_str.split("d")[-1]) if "d" in dice_str else 6
     return Weapon(
         name=item.name,
         weapon_type=getattr(item, "weapon_type", "simple"),
         stat=item.item_stats.stat_modifier or "STR",
-        damage_dice=getattr(item.item_stats, "damage_dice", 6),
+        damage_dice=sides,
         damage_type=getattr(item, "damage_type", "physical"),
         weapon_category=getattr(item, "weapon_category", "simple"),
         magic_element=getattr(item, "magic_element", None),

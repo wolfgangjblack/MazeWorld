@@ -74,7 +74,7 @@ class InventoryManager:
     def equip_weapon(self, weapon_name: str) -> str:
         """Equip or unequip a weapon. Returns message."""
         from src.models.items import Weapon
-        from src.models.weapon import WEAPON_CATEGORY_ACCESS
+        from src.models.weapon import WEAPON_CATEGORY_ACCESS, weapon_from_inventory_item
 
         if weapon_name not in self._inventory:
             return "You don't have that weapon."
@@ -83,12 +83,14 @@ class InventoryManager:
             return f"{weapon_name} is not a weapon."
         if self._player.equipped_weapon == weapon_name:
             self._player.equipped_weapon = None
+            self._player.weapon = None
             return f"You unequipped the {weapon_name}."
         archetype = self._player.player_class.archetype if self._player.player_class else "warrior"
         allowed = WEAPON_CATEGORY_ACCESS.get(archetype, {"simple"})
         if getattr(item, "weapon_category", "simple") not in allowed:
             return "Only warriors and jesters can wield martial weapons."
         self._player.equipped_weapon = weapon_name
+        self._player.weapon = weapon_from_inventory_item(item)
         return f"You equipped the {weapon_name}."
 
     def get_equipped_weapon(self) -> Optional[object]:

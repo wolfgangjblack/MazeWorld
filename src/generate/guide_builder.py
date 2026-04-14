@@ -95,14 +95,20 @@ def _img(rel_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _dedup_monsters(events: list[dict], room_id: str) -> list[dict]:
-    """Extract unique monsters from combat events, tracking encounter counts."""
+def _dedup_monsters(events: list[dict], room_id: str,
+                    monster_db: dict[int, dict] | None = None) -> list[dict]:
+    """Extract unique monsters from combat events, tracking encounter counts.
+
+    Resolves monster data from monster_db using monster_ids on each event.
+    """
     seen: dict[str, dict] = {}
+    db = monster_db or {}
     for evt in events:
         if evt.get("type") != "combat":
             continue
-        for mon in evt.get("monsters", []):
-            name = mon.get("name", "Unknown")
+        for mid in evt.get("monster_ids", []):
+            mon = db.get(mid, {})
+            name = mon.get("name", f"Monster #{mid}")
             if name not in seen:
                 entry = dict(mon)
                 entry["_encounter_count"] = 1
@@ -146,22 +152,6 @@ def _merge_deduped(existing: list[dict], new_entries: list[dict], key_field: str
         else:
             index[k] = entry
 
-    return list(index.values())
-
-
-def _merge_deduped_events(existing: list[dict], new_entries: list[dict]) -> list[dict]:
-    """Merge deduped events keyed by (name, type)."""
-    index: dict[tuple[str, str], dict] = {}
-    for e in existing:
-        k = (e.get("name", ""), e.get("type", ""))
-        index[k] = e
-    for entry in new_entries:
-        k = (entry.get("name", ""), entry.get("type", ""))
-        if k in index:
-            index[k]["_occurrence_count"] = index[k].get("_occurrence_count", 1) + entry.get("_occurrence_count", 1)
-            index[k]["_rooms"] = index[k].get("_rooms", set()) | entry.get("_rooms", set())
-        else:
-            index[k] = entry
     return list(index.values())
 
 
@@ -444,7 +434,8 @@ def _card_monster(mon: dict) -> str:
     return "\n".join(lines)
 
 
-def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
+def _card_event(evt: dict, items_lookup: dict | None = None,
+                monster_db: dict[int, dict] | None = None) -> str:
     """Centered portrait, description, choices/monsters with physical types."""
     evt_type = evt.get("type", "event")
     portrait = evt.get("profile_image") or ""
@@ -476,18 +467,21 @@ def _card_event(evt: dict, items_lookup: dict | None = None) -> str:
     lines.append("")
 
     if evt_type == "combat":
-        monsters = evt.get("monsters", [])
-        if monsters:
+        monster_ids = evt.get("monster_ids", [])
+        if monster_ids and monster_db:
             lines.append("**Monster Lineup:**")
             lines.append("")
-            for m in monsters:
+            for mid in monster_ids:
+                m = monster_db.get(mid, {})
                 phys = m.get("physical_type", "physical")
                 elem = m.get("elemental_affinity", "none")
                 elem_str = f", element: {elem}" if elem and elem != "none" else ""
+                hp_range = m.get("hp_range", ["?", "?"])
+                ac_range = m.get("ac_range", ["?", "?"])
                 lines.append(
-                    f"- **{m.get('name', '?')}** — "
-                    f"HP {m.get('hp', '?')}, AC {m.get('ac', '?')}, "
-                    f"{m.get('damage_dice_expr', '1d6')} {m.get('damage_type', '')}, "
+                    f"- **{m.get('name', f'Monster #{mid}')}** — "
+                    f"HP {hp_range[0]}-{hp_range[1]}, AC {ac_range[0]}-{ac_range[1]}, "
+                    f"{m.get('damage_type', 'physical')}, "
                     f"weakness: {phys}{elem_str}"
                 )
             lines.append("")
@@ -1218,7 +1212,8 @@ def _section_classes(classes: list[dict]) -> str:
 
 
 def _section_room(
-    room_id: str, room_idx: int, room_data: dict, story: dict, narrative: dict, all_items_lookup: dict
+    room_id: str, room_idx: int, room_data: dict, story: dict, narrative: dict, all_items_lookup: dict,
+    monster_db: dict[int, dict] | None = None,
 ) -> str:
     """Per-room chapter."""
     maze = room_data["maze"]
@@ -1313,7 +1308,7 @@ def _section_room(
         for npc in npcs:
             lines.append(_card_npc(npc, room_id, items_lookup=all_items_lookup))
 
-    room_monsters = _dedup_monsters(events, room_id)
+    room_monsters = _dedup_monsters(events, room_id, monster_db=monster_db)
     if room_monsters:
         lines.append("### Monster Bestiary")
         lines.append("")
@@ -1347,7 +1342,7 @@ def _section_room(
         lines.append(f"*{len(combats)} unique combat encounters in this room.*")
         lines.append("")
         for evt in sorted(combats, key=lambda e: e.get("difficulty", 0)):
-            lines.append(_card_event(evt, all_items_lookup))
+            lines.append(_card_event(evt, all_items_lookup, monster_db=monster_db))
 
     if quests:
         lines.append("### Quest Walkthrough")
@@ -1741,6 +1736,10 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR, ge
     all_npcs: list[dict] = []
     all_monsters: list[dict] = []
 
+    monster_db_path = os.path.join(data_dir, "monsters", "monsters.json")
+    raw_monster_db = _load_json(monster_db_path) or {}
+    monster_db: dict[int, dict] = {int(k): v for k, v in raw_monster_db.items()}
+
     room_data_cache: dict[str, dict] = {}
     for room_id in rooms:
         rd = _load_room_data(room_id, data_dir)
@@ -1759,7 +1758,7 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR, ge
             npc_copy["_room_id"] = room_id
             all_npcs.append(npc_copy)
 
-        room_monsters = _dedup_monsters(rd["events"], room_id)
+        room_monsters = _dedup_monsters(rd["events"], room_id, monster_db=monster_db)
         all_monsters = _merge_deduped(all_monsters, room_monsters)
 
     # Assemble guide sections in order
@@ -1787,7 +1786,7 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR, ge
     # 7. Room chapters
     for room_id in rooms:
         room_idx = int(room_id.split("_")[1])
-        sections.append(_section_room(room_id, room_idx, room_data_cache[room_id], story, narrative, all_items_lookup))
+        sections.append(_section_room(room_id, room_idx, room_data_cache[room_id], story, narrative, all_items_lookup, monster_db=monster_db))
 
     # 8. Appendices
     sections.append(_section_appendices(all_monsters, all_npcs, all_items_lookup, story, narrative))

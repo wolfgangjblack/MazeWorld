@@ -120,10 +120,9 @@ def generate_npc_response(
     Dialogue exhaustion: after the NPC is done or annoyed, falls back to
     finished_dialogue text FOREVER (prevents token burn).
     """
-    # If dialogue is already exhausted, always return finished text
     if getattr(npc, "dialogue_exhausted", False):
-        finished = getattr(npc, "finished_dialogue", "I have nothing more to say.")
-        return f"{npc.name}: {finished}"
+        text = getattr(npc, "exhausted_dialogue", None) or getattr(npc, "finished_dialogue", "I have nothing more to say.")
+        return f"{npc.name}: {text}"
 
     is_greeting = not player_input
 
