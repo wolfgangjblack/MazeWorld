@@ -673,10 +673,10 @@ def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
         lines.append(f"1. Speak to **{giver_name}** to accept the quest.")
         lines.append(f"2. Obtain item #{item_id} if you don't have it.")
         lines.append(f"3. Deliver the item to NPC #{target_npc}.")
-    elif qtype in ("follower_same", "follower_next", "escort"):
-        target_pos = quest.get("target_position", [])
+    elif qtype == "escort":
+        target_pos = quest.get("target_zone", [])
         pos_str = f"({target_pos[0]}, {target_pos[1]})" if target_pos else "the target zone"
-        crosses = " (crosses to next room)" if quest.get("crosses_room") else ""
+        crosses = " (crosses to next room)" if quest.get("destination_room") else ""
         lines.append(f"1. Speak to **{giver_name}** to accept the escort quest.")
         lines.append("2. The escort NPC will join as a follower (max 2 followers).")
         lines.append(f"3. Escort them safely to {pos_str}{crosses}.")

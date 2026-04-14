@@ -760,6 +760,7 @@ _QUEST_SUCCESS = {
     "combat_event": "You've done it. The threat is gone — here's what I promised.",
     "solve_puzzle": "I knew you could figure it out. Take this for your trouble.",
     "fetch_item": "You found it! This means more to me than you know. Please, take this.",
+    "escort": "We made it. I'm safe now, thanks to you. Take this for your bravery.",
     "follower_same": "We made it. I'm safe now, thanks to you. Take this for your bravery.",
     "follower_next": "You got me through. I won't forget this. Here is your reward.",
     "combat_npc": "You bested me. I yield. A deal is a deal — take your prize.",
@@ -769,6 +770,7 @@ _QUEST_FAILURE = {
     "combat_event": "It's over... they were too strong. I'm sorry, I have nothing left to give.",
     "solve_puzzle": "It's still blocked. Come back when you have what you need.",
     "fetch_item": "Without it, I can't help you. Maybe another time.",
+    "escort": "I... I can't go on. Leave me here.",
     "follower_same": "I... I can't go on. Leave me here.",
     "follower_next": "We didn't make it. Perhaps fate has other plans.",
     "combat_npc": "Ha — you weren't ready for me. Come back when you're stronger.",
@@ -1171,10 +1173,18 @@ def _phase4a_events(
                 base_quest["target_tile"] = list(t.position)
                 base_quest["item_category"] = t.item_category
 
-        elif qtype in ("follower_same", "follower_next"):
-            base_quest["target_position"] = list(maze.door_position) if maze.door_position else None
+        elif qtype in ("escort", "follower_same", "follower_next"):
+            base_quest["type"] = "escort"
+            base_quest["target_zone"] = list(maze.door_position) if maze.door_position else [0, 0]
             base_quest["escort_npc_id"] = npc["id"]
-            base_quest["crosses_room"] = qtype == "follower_next"
+            if qtype == "follower_next":
+                base_quest["destination_room"] = 1
+            elif qtype == "escort":
+                next_room_roll = random.random() < 0.20
+                is_final = layout["room_idx"] == layout.get("total_rooms", 99) - 1
+                base_quest["destination_room"] = 1 if (next_room_roll and not is_final) else 0
+            else:
+                base_quest["destination_room"] = 0
 
         elif qtype == "combat_npc":
             # NPC is also a combatant — give them stats and add to monster_db
@@ -1192,6 +1202,12 @@ def _phase4a_events(
                 "is_boss": False,
                 "portrait_prompt": npc.get("portrait_prompt", "a hostile NPC, pixel art fantasy"),
             }
+            monster_global = load_json_data(DB_PATHS["monster"]) if os.path.exists(DB_PATHS["monster"]) else {}
+            npc_mid = next_id("monster", monster_global)
+            npc_monster["id"] = npc_mid
+            monster_global[str(npc_mid)] = npc_monster
+            with open(DB_PATHS["monster"], "w") as f:
+                json.dump(monster_global, f, indent=2)
             monster_db.append(npc_monster)
             base_quest["target_npc_id"] = npc["id"]
 

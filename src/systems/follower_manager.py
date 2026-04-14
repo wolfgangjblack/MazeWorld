@@ -77,7 +77,7 @@ class FollowerManager:
     # Removing followers
     # ------------------------------------------------------------------
 
-    def remove_follower_for_quest(self, quest_id: str) -> str | None:
+    def remove_follower_for_quest(self, quest_id: int) -> str | None:
         """Remove the follower tied to *quest_id*. Returns farewell or None."""
         follower = self.player.get_follower_by_quest(quest_id)
         if not follower:

@@ -310,7 +310,7 @@ class PlayerCharacter(BaseModel):
     def remove_follower(self, npc_id: int):
         self.followers = [f for f in self.followers if f.npc_id != npc_id]
 
-    def get_follower_by_quest(self, quest_id: str):
+    def get_follower_by_quest(self, quest_id: int):
         for f in self.followers:
             if f.quest_id == quest_id:
                 return f
