@@ -1,6 +1,5 @@
 """Tests for Phase 5: Encounters & Monsters."""
 
-import random
 from unittest.mock import MagicMock
 
 import pygame

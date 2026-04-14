@@ -204,4 +204,3 @@ class EventInputHandler:
         gc.dialogue_box.end_event()
         if hasattr(gc, "day_night"):
             gc.day_night.resume()
-

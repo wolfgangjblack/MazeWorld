@@ -294,4 +294,3 @@ class MenuView:
             self.scroll_offset += 24
 
         return None
-

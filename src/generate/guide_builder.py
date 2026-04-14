@@ -95,8 +95,7 @@ def _img(rel_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _dedup_monsters(events: list[dict], room_id: str,
-                    monster_db: dict[int, dict] | None = None) -> list[dict]:
+def _dedup_monsters(events: list[dict], room_id: str, monster_db: dict[int, dict] | None = None) -> list[dict]:
     """Extract unique monsters from combat events, tracking encounter counts.
 
     Resolves monster data from monster_db using monster_ids on each event.
@@ -434,8 +433,7 @@ def _card_monster(mon: dict) -> str:
     return "\n".join(lines)
 
 
-def _card_event(evt: dict, items_lookup: dict | None = None,
-                monster_db: dict[int, dict] | None = None) -> str:
+def _card_event(evt: dict, items_lookup: dict | None = None, monster_db: dict[int, dict] | None = None) -> str:
     """Centered portrait, description, choices/monsters with physical types."""
     evt_type = evt.get("type", "event")
     portrait = evt.get("profile_image") or ""
@@ -1212,7 +1210,12 @@ def _section_classes(classes: list[dict]) -> str:
 
 
 def _section_room(
-    room_id: str, room_idx: int, room_data: dict, story: dict, narrative: dict, all_items_lookup: dict,
+    room_id: str,
+    room_idx: int,
+    room_data: dict,
+    story: dict,
+    narrative: dict,
+    all_items_lookup: dict,
     monster_db: dict[int, dict] | None = None,
 ) -> str:
     """Per-room chapter."""
@@ -1786,7 +1789,11 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR, ge
     # 7. Room chapters
     for room_id in rooms:
         room_idx = int(room_id.split("_")[1])
-        sections.append(_section_room(room_id, room_idx, room_data_cache[room_id], story, narrative, all_items_lookup, monster_db=monster_db))
+        sections.append(
+            _section_room(
+                room_id, room_idx, room_data_cache[room_id], story, narrative, all_items_lookup, monster_db=monster_db
+            )
+        )
 
     # 8. Appendices
     sections.append(_section_appendices(all_monsters, all_npcs, all_items_lookup, story, narrative))

@@ -121,7 +121,9 @@ def generate_npc_response(
     finished_dialogue text FOREVER (prevents token burn).
     """
     if getattr(npc, "dialogue_exhausted", False):
-        text = getattr(npc, "exhausted_dialogue", None) or getattr(npc, "finished_dialogue", "I have nothing more to say.")
+        text = getattr(npc, "exhausted_dialogue", None) or getattr(
+            npc, "finished_dialogue", "I have nothing more to say."
+        )
         return f"{npc.name}: {text}"
 
     is_greeting = not player_input

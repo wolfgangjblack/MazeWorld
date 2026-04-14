@@ -1,6 +1,5 @@
 from src.models.encounter import CombatEvent, LootEntry
-from src.models.items import ItemStats, Weapon
-from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.models.player import PlayerCharacter
 
 
 def _make_player(**kwargs):
