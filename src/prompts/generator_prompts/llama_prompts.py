@@ -298,6 +298,7 @@ class LlamaPromptSet(PromptSet):
                 'Format: {"incomplete": {"nodes": {"start": {"prompt": ..., "choices": [...]}, '
                 '"end": {"prompt": ..., "choices": []}}}, '
                 '"complete_success": {"nodes": {...}}, "complete_failure": {"nodes": {...}}}. '
+                "Use the NPC's personality, hobby, and personality_notes to shape their voice. "
                 "Stay in character."
             )
             max_tokens = 1000
@@ -305,6 +306,7 @@ class LlamaPromptSet(PromptSet):
             system = (
                 "You generate dialogue trees for fantasy game NPCs. "
                 "Output a JSON: {nodes: {start: {prompt, choices: [{text, next_node_id}]}, ...}}. "
+                "Use the NPC's personality, hobby, and personality_notes to shape their voice. "
                 "3-5 nodes. Stay in character."
             )
             max_tokens = 400

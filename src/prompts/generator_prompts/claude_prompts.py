@@ -288,6 +288,7 @@ class ClaudePromptSet(PromptSet):
                 '"end": {"prompt": "...", "choices": []}}}, '
                 '"complete_success": {"nodes": {...}}, '
                 '"complete_failure": {"nodes": {...}}}.\n\n'
+                "Use the NPC's personality, hobby, and personality_notes to shape their voice and word choice. "
                 "Stay in character. Reference the quest title and story context." + _NO_FENCES
             )
             max_tokens = 1000
@@ -299,6 +300,7 @@ class ClaudePromptSet(PromptSet):
                 '"choices": [{"text": "Player option", "next_node_id": "node2"}, ...]}, '
                 '"node2": {"prompt": "...", "choices": [...]}, '
                 '"end": {"prompt": "Farewell!", "choices": []}}}. '
+                "Use the NPC's personality, hobby, and personality_notes to shape their voice and word choice. "
                 "Keep it 3-5 nodes deep. Stay in character." + _NO_FENCES
             )
             max_tokens = 400
