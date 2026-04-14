@@ -192,9 +192,7 @@ class CreditsView:
             arrow = self.small_font.render("▼", True, HINT_COLOR)
             self.screen.blit(arrow, ((SCREEN_WIDTH - arrow.get_width()) // 2, viewport_bottom - 20))
 
-        hint = self.small_font.render(
-            "Press Esc or Enter to return  |  Up/Down to scroll", True, HINT_COLOR
-        )
+        hint = self.small_font.render("Press Esc or Enter to return  |  Up/Down to scroll", True, HINT_COLOR)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 35))
 
     def handle_input(self, event) -> str | None:

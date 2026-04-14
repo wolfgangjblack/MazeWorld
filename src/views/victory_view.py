@@ -15,8 +15,16 @@ PANEL_BG = (20, 20, 40)
 class VictoryView:
     """Displays victory screen with game stats summary."""
 
-    def __init__(self, screen, font, player, stats: dict, total_rooms: int,
-                 story_paragraph: str = "", portrait_path: str | None = None):
+    def __init__(
+        self,
+        screen,
+        font,
+        player,
+        stats: dict,
+        total_rooms: int,
+        story_paragraph: str = "",
+        portrait_path: str | None = None,
+    ):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 56)
@@ -55,8 +63,7 @@ class VictoryView:
         p = self.player
         class_name = p.player_class.name if p.player_class else "Adventurer"
         archetype = p.player_class.archetype if p.player_class else ""
-        subtitle = self.big_font.render(
-            f"{p.name} the {class_name}", True, WHITE)
+        subtitle = self.big_font.render(f"{p.name} the {class_name}", True, WHITE)
         self.screen.blit(subtitle, ((SCREEN_WIDTH - subtitle.get_width()) // 2, title_y + 60))
 
         # Stats panel
@@ -96,12 +103,10 @@ class VictoryView:
         # Victory narrative (Bible-driven)
         if self.story_paragraph:
             y += 10
-            draw_wrapped_text(self.screen, self.story_paragraph,
-                              panel_x + 20, y, panel_w - 40,
-                              self.small_font, STAT_COLOR)
+            draw_wrapped_text(
+                self.screen, self.story_paragraph, panel_x + 20, y, panel_w - 40, self.small_font, STAT_COLOR
+            )
 
         # Hint
-        hint = self.small_font.render(
-            "Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
+        hint = self.small_font.render("Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
-

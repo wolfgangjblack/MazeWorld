@@ -16,6 +16,7 @@ from src.models.story import OverarchingStory
 
 class EntityRef(BaseModel):
     """Legacy cross-reference entry. Kept for backward compatibility with world_editor."""
+
     entity_type: str  # "npc", "item", "monster", "encounter", "quest"
     room_id: str = ""
     entity_id: str = ""
@@ -23,6 +24,7 @@ class EntityRef(BaseModel):
 
 class EntityLore(BaseModel):
     """Full lore entry for any entity in the world."""
+
     entity_type: str  # "npc", "item", "monster", "player_class"
     entity_id: str = ""
     name: str = ""
@@ -72,9 +74,7 @@ class WorldBible(BaseModel):
         """Return a textual summary of story context for a room's generators."""
         parts = [f"Title: {self.story.title}", f"Synopsis: {self.story.synopsis}"]
         if self.story.faction:
-            parts.append(
-                f"Faction: {self.story.faction.name} — {self.story.faction.description}"
-            )
+            parts.append(f"Faction: {self.story.faction.name} — {self.story.faction.description}")
             if self.story.faction.history:
                 parts.append(f"Faction history: {self.story.faction.history}")
         beat = next((b for b in self.story.beats if b.room_id == room_id), None)

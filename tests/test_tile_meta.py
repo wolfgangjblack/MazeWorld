@@ -48,15 +48,9 @@ class TestTileCounts:
         expected_npcs = math.ceil(pool_size * NPC_DENSITY)
         expected_items = math.ceil(pool_size * ITEM_DENSITY)
 
-        assert abs(len(events) - expected_events) <= 1, (
-            f"Events: got {len(events)}, expected ~{expected_events}"
-        )
-        assert abs(len(npcs) - expected_npcs) <= 1, (
-            f"NPCs: got {len(npcs)}, expected ~{expected_npcs}"
-        )
-        assert abs(len(items) - expected_items) <= 1, (
-            f"Items: got {len(items)}, expected ~{expected_items}"
-        )
+        assert abs(len(events) - expected_events) <= 1, f"Events: got {len(events)}, expected ~{expected_events}"
+        assert abs(len(npcs) - expected_npcs) <= 1, f"NPCs: got {len(npcs)}, expected ~{expected_npcs}"
+        assert abs(len(items) - expected_items) <= 1, f"Items: got {len(items)}, expected ~{expected_items}"
 
 
 class TestTileIntegrity:
@@ -73,9 +67,7 @@ class TestTileIntegrity:
         for tile in maze.tile_meta:
             x, y = tile.position
             cell = maze.grid[y][x]
-            assert cell != maze.wall_tile_id, (
-                f"Tile at {tile.position} ({tile.tile_type}) placed on a wall"
-            )
+            assert cell != maze.wall_tile_id, f"Tile at {tile.position} ({tile.tile_type}) placed on a wall"
 
 
 class TestQuestTargets:
@@ -98,8 +90,7 @@ class TestQuestTargets:
                 if npc.quest_target_tile is None:
                     continue
                 assert npc.quest_target_tile in event_map, (
-                    f"NPC at {npc.position} targets tile {npc.quest_target_tile} "
-                    f"which is not an event tile"
+                    f"NPC at {npc.position} targets tile {npc.quest_target_tile} which is not an event tile"
                 )
                 expected_type = quest_to_event_type[npc.quest_type]
                 actual_type = event_map[npc.quest_target_tile]
@@ -114,9 +105,7 @@ class TestNPCExchanges:
         """Every NPC must have max_exchanges between 3 and 10."""
         maze, _, _ = seeded_maze
         for npc in maze.get_tiles_by_type("npc"):
-            assert 3 <= npc.npc_max_exchanges <= 10, (
-                f"NPC at {npc.position} has max_exchanges={npc.npc_max_exchanges}"
-            )
+            assert 3 <= npc.npc_max_exchanges <= 10, f"NPC at {npc.position} has max_exchanges={npc.npc_max_exchanges}"
 
 
 class TestDeterminism:
@@ -129,10 +118,7 @@ class TestDeterminism:
             m.generate()
             start = m.find_open_spaces()[0]
             m.build_tile_meta(start)
-            snapshot = [
-                (t.position, t.tile_type, t.event_type, t.npc_role, t.item_category)
-                for t in m.tile_meta
-            ]
+            snapshot = [(t.position, t.tile_type, t.event_type, t.npc_role, t.item_category) for t in m.tile_meta]
             layouts.append(snapshot)
 
         assert layouts[0] == layouts[1], "Seeded layouts differ between runs"

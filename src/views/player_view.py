@@ -30,8 +30,7 @@ class PlayerView:
             return (255, 200, 0)
         return (200, 50, 50)
 
-    def draw_hud(self, screen, player, time_period=None, day_number=None,
-                 period_progress=0.0):
+    def draw_hud(self, screen, player, time_period=None, day_number=None, period_progress=0.0):
         clock_reserved = _CLOCK_RADIUS * 2 + 30
         bar_width = (SCREEN_WIDTH - 60 - clock_reserved) // 2
         bar_height = 20
@@ -86,14 +85,13 @@ class PlayerView:
         r = _CLOCK_RADIUS
 
         # Semi-circle background
-        pygame.draw.arc(screen, (60, 60, 70), (cx - r, cy - r, r * 2, r * 2),
-                        0, math.pi, 2)
+        pygame.draw.arc(screen, (60, 60, 70), (cx - r, cy - r, r * 2, r * 2), 0, math.pi, 2)
         pygame.draw.line(screen, (60, 60, 70), (cx - r, cy), (cx + r, cy), 2)
 
         _ANGLE_RANGES = {
-            "dawn":  (math.pi, math.pi * 0.55),
-            "day":   (math.pi * 0.55, math.pi * 0.45),
-            "dusk":  (math.pi * 0.45, 0),
+            "dawn": (math.pi, math.pi * 0.55),
+            "day": (math.pi * 0.55, math.pi * 0.45),
+            "dusk": (math.pi * 0.45, 0),
             "night": (0, math.pi),
         }
         start_a, end_a = _ANGLE_RANGES.get(period_name, (math.pi, 0))

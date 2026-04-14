@@ -78,6 +78,7 @@ class MusicController:
         """Persist corrected music paths back to manifest.json."""
         try:
             import json
+
             manifest_path = os.path.join("data", "manifest.json")
             if not os.path.exists(manifest_path):
                 return
@@ -113,6 +114,7 @@ class MusicController:
 
         try:
             from config import MUSIC_VOLUME
+
             volume = MUSIC_VOLUME / 100.0
         except Exception:
             volume = 0.6
@@ -128,12 +130,13 @@ class MusicController:
             except Exception as e:
                 logger.warning(
                     "Music reinit failed for '%s' (%s): %s",
-                    track_name, path, e,
+                    track_name,
+                    path,
+                    e,
                 )
                 self._current = None
 
-    def _try_load_and_play(self, path: str, track_name: str,
-                           volume: float, loops: int) -> bool:
+    def _try_load_and_play(self, path: str, track_name: str, volume: float, loops: int) -> bool:
         """Attempt to load and play a music file. Returns True on success."""
         try:
             pygame.mixer.music.load(path)
@@ -143,8 +146,7 @@ class MusicController:
             logger.debug("Music: playing '%s' (loops=%d)", track_name, loops)
             return True
         except Exception as e:
-            logger.warning("Music playback failed for '%s' (%s): %s",
-                           track_name, path, e)
+            logger.warning("Music playback failed for '%s' (%s): %s", track_name, path, e)
             return False
 
     def stop(self) -> None:

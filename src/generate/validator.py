@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Pipeline-level validation report (PR #24)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationReport:
     """Accumulates validation findings during world generation.
@@ -51,30 +52,36 @@ class ValidationReport:
 
     def add_warning(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.minor_warnings += 1
-        self.details.append({
-            "severity": "minor",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "minor",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     def add_major(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.major_retries += 1
-        self.details.append({
-            "severity": "major",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "major",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     def add_critical(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.critical_failures += 1
-        self.details.append({
-            "severity": "critical",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "critical",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     # -- Derived status -------------------------------------------------------
 
@@ -103,9 +110,11 @@ class ValidationReport:
 # Phase 2: Per-entity validators
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationResult:
     """Outcome of a validation pass."""
+
     passed: bool
     reasons: list[str] = field(default_factory=list)
     data: object = None
@@ -226,10 +235,7 @@ class EventValidator(BaseValidator):
                 reasons.append("Combat event has no monsters")
         elif etype == "puzzle":
             choices = data.get("choices", [])
-            solvable = any(
-                c.get("auto_success") or c.get("tool_attribute") in tool_attrs
-                for c in choices
-            )
+            solvable = any(c.get("auto_success") or c.get("tool_attribute") in tool_attrs for c in choices)
             if not solvable and tool_attrs:
                 reasons.append("Puzzle has no solvable path with available tools")
 
@@ -303,9 +309,7 @@ class MonsterValidator(BaseValidator):
                     reasons.append(f"Monster {name}: ability[{i}] missing name")
                 effect = ability.get("effect_type", "")
                 if effect not in ("damage", "poison", "stun"):
-                    reasons.append(
-                        f"Monster {name}: ability[{i}] unknown effect_type '{effect}'"
-                    )
+                    reasons.append(f"Monster {name}: ability[{i}] unknown effect_type '{effect}'")
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
 
@@ -353,9 +357,6 @@ class ItemValidator(BaseValidator):
             stamina = stats.get("stamina_value", stats.get("nutrition_value", stats.get("hydration_value", 0)))
             health = stats.get("health_value", 0)
             if stamina == 0 and health == 0:
-                reasons.append(
-                    f"Item {name}: {category} restores nothing "
-                    "(nutrition, hydration, health all 0)"
-                )
+                reasons.append(f"Item {name}: {category} restores nothing (nutrition, hydration, health all 0)")
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)

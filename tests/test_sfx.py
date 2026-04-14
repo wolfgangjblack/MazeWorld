@@ -18,6 +18,7 @@ from src.systems.sfx_controller import SFXController
 # FIXED_SFX_PROMPTS: structural contract
 # ---------------------------------------------------------------------------
 
+
 class TestFixedSfxPromptStructure:
     def test_all_entries_have_required_keys(self):
         for name, spec in FIXED_SFX_PROMPTS.items():
@@ -43,6 +44,7 @@ class TestFixedSfxPromptStructure:
 # ---------------------------------------------------------------------------
 # build_full_sfx_prompt_dict: prompt merging logic
 # ---------------------------------------------------------------------------
+
 
 class TestBuildFullSfxPromptDict:
     def test_llm_dynamic_prompt_preserved(self):
@@ -97,6 +99,7 @@ class TestBuildFullSfxPromptDict:
 # SFXController: silent fallback tests
 # ---------------------------------------------------------------------------
 
+
 class TestSFXControllerFallback:
     def test_play_silent_on_nonexistent_file(self, tmp_path):
         sfx = SFXController({"player_death": str(tmp_path / "nonexistent.mp3")})
@@ -108,8 +111,7 @@ class TestSFXControllerFallback:
 
     def test_play_silent_on_empty_manifest(self):
         sfx = SFXController({})
-        for name in ["player_take_damage", "player_death", "item_pickup",
-                      "door_open", "dice_roll", "event_complete"]:
+        for name in ["player_take_damage", "player_death", "item_pickup", "door_open", "dice_roll", "event_complete"]:
             sfx.play(name)
 
     def test_stop_ambience_safe_when_nothing_playing(self):
@@ -140,6 +142,7 @@ class TestSFXControllerFallback:
 # ---------------------------------------------------------------------------
 # SFXController: key-mapping logic
 # ---------------------------------------------------------------------------
+
 
 class TestSFXControllerKeyMapping:
     def _make_controller(self):

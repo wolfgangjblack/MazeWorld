@@ -39,6 +39,7 @@ def font():
 
 # --- ScreenState CONFIG ---
 
+
 def test_config_state_exists():
     assert hasattr(ScreenState, "CONFIG")
     assert ScreenState.CONFIG.value == "config"
@@ -58,6 +59,7 @@ def test_config_back_to_start():
 
 
 # --- StartView ---
+
 
 def test_start_view_menu_items():
     assert "Start New Game" in MENU_ITEMS
@@ -134,6 +136,7 @@ def test_start_view_draw_no_crash(screen, font):
 
 # --- ConfigView: tab structure ---
 
+
 def test_config_view_has_all_settings(screen, font):
     """Legacy .items property returns combined list for both tabs."""
     view = ConfigView(screen, font)
@@ -198,6 +201,7 @@ def test_config_view_escape_returns_back(screen, font):
 
 
 # --- ConfigView: editable tab editing ---
+
 
 def test_config_view_cycle_editable(screen, font):
     view = ConfigView(screen, font)
@@ -277,6 +281,7 @@ def test_config_view_draw_no_crash(screen, font):
 
 # --- Secret masking ---
 
+
 def test_mask_secret_empty():
     assert _mask_secret("") == "(not set)"
 
@@ -292,6 +297,7 @@ def test_mask_secret_long():
 
 
 # --- Secret editing ---
+
 
 def test_config_view_secret_edit_writes_env(screen, font, tmp_path, monkeypatch):
     """Editing an API key writes to os.environ and calls _update_dotenv."""
@@ -335,6 +341,7 @@ def test_config_view_secret_displays_masked(screen, font, monkeypatch):
 
 # --- _update_dotenv ---
 
+
 def test_update_dotenv_creates_file(tmp_path, monkeypatch):
     dotenv_file = tmp_path / ".env"
     monkeypatch.setattr("src.views.config_view._DOTENV_PATH", str(dotenv_file))
@@ -369,6 +376,7 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
 
 
 # --- New config settings ---
+
 
 def test_config_new_settings_exist():
     """All required settings exist in config module."""
@@ -409,6 +417,7 @@ def test_config_music_backend_default():
 
 
 # --- GAME_MODE is read-only (generation tab) ---
+
 
 def test_game_mode_in_generation_tab():
     """GAME_MODE must be in the read-only generation tab, not editable."""
@@ -496,6 +505,7 @@ def test_config_view_volume_clamped_below(screen, font):
 
 # --- Manifest schema ---
 
+
 def test_manifest_schema():
     """build_manifest() output matches PDR spec structure and computes counts."""
     from src.generate.pipeline_utils import build_manifest
@@ -536,14 +546,21 @@ def test_manifest_schema():
     )
 
     # PDR-required top-level keys
-    for key in ("seed", "story_seed", "game_mode", "num_rooms",
-                "environments", "generated_at", "validation", "content_index"):
+    for key in (
+        "seed",
+        "story_seed",
+        "game_mode",
+        "num_rooms",
+        "environments",
+        "generated_at",
+        "validation",
+        "content_index",
+    ):
         assert key in manifest, f"Missing manifest key: {key}"
 
     # content_index sub-keys
     ci = manifest["content_index"]
-    for key in ("rooms", "npcs", "items", "quests", "encounters",
-                "monsters", "images", "music_tracks"):
+    for key in ("rooms", "npcs", "items", "quests", "encounters", "monsters", "images", "music_tracks"):
         assert key in ci, f"Missing content_index key: {key}"
 
     # Counts are computed from inputs, not hardcoded
@@ -570,19 +587,32 @@ def test_manifest_schema_with_validation_report():
     report.add_warning("test warning", entity_id="e1", phase="events")
 
     manifest = build_manifest(
-        seed=1, story_seed="s", game_mode="online", num_rooms=1,
-        environments=["forest"], generated_at="2026-01-01T00:00:00+00:00",
+        seed=1,
+        story_seed="s",
+        game_mode="online",
+        num_rooms=1,
+        environments=["forest"],
+        generated_at="2026-01-01T00:00:00+00:00",
         validation=report.to_dict(),
-        active_npc_count=0, item_count=0, quest_count=0,
-        event_list=[], npc_pool=[],
-        player_portrait_path=None, env_portrait_path=None,
-        environment="forest", env_name="Test", maze_width=40, maze_height=25,
-        class_count=0, portraits_generated=False, story_title="", faction_name="",
+        active_npc_count=0,
+        item_count=0,
+        quest_count=0,
+        event_list=[],
+        npc_pool=[],
+        player_portrait_path=None,
+        env_portrait_path=None,
+        environment="forest",
+        env_name="Test",
+        maze_width=40,
+        maze_height=25,
+        class_count=0,
+        portraits_generated=False,
+        story_title="",
+        faction_name="",
     )
 
     v = manifest["validation"]
-    for key in ("status", "rooms_validated", "critical_failures",
-                "major_retries", "minor_warnings", "details"):
+    for key in ("status", "rooms_validated", "critical_failures", "major_retries", "minor_warnings", "details"):
         assert key in v, f"Missing validation key: {key}"
 
     assert v["status"] == "passed_with_warnings"
@@ -593,8 +623,10 @@ def test_manifest_schema_with_validation_report():
 
 # --- ValidationReport unit tests ---
 
+
 def test_validation_report_empty_is_passed():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport(rooms_validated=1)
     assert r.status == "passed"
     assert r.to_dict()["status"] == "passed"
@@ -603,6 +635,7 @@ def test_validation_report_empty_is_passed():
 
 def test_validation_report_warning_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_warning("minor issue", entity_id="x", phase="quests")
     assert r.status == "passed_with_warnings"
@@ -614,6 +647,7 @@ def test_validation_report_warning_status():
 
 def test_validation_report_major_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_major("retry happened", phase="story")
     assert r.status == "passed_with_warnings"
@@ -623,6 +657,7 @@ def test_validation_report_major_status():
 
 def test_validation_report_critical_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_warning("a warning")
     r.add_critical("fatal problem", entity_id="q1", phase="quests")
@@ -634,6 +669,7 @@ def test_validation_report_critical_status():
 
 def test_validation_report_to_dict_shape():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport(rooms_validated=3)
     r.add_warning("w1")
     r.add_major("m1")

@@ -17,6 +17,7 @@ SAMPLE_REQUEST = LLMRequest(
 
 # -- LocalLLMBackend --------------------------------------------------------
 
+
 class TestLocalLLMBackend:
     def setup_method(self):
         self.backend = LocalLLMBackend()
@@ -83,6 +84,7 @@ class TestLocalLLMBackend:
 
 # -- ApiLLMBackend ----------------------------------------------------------
 
+
 class TestApiLLMBackend:
     def setup_method(self):
         self.backend = ApiLLMBackend()
@@ -90,6 +92,7 @@ class TestApiLLMBackend:
     def test_generate_raises_without_key(self):
         mock_mod = MagicMock()
         import sys
+
         sys.modules["anthropic"] = mock_mod
         try:
             with patch.dict(os.environ, {}, clear=True):
@@ -101,13 +104,12 @@ class TestApiLLMBackend:
     def test_generate_calls_anthropic(self):
         mock_mod = MagicMock()
         import sys
+
         sys.modules["anthropic"] = mock_mod
         try:
             mock_client = MagicMock()
             mock_mod.Anthropic.return_value = mock_client
-            mock_client.messages.create.return_value = MagicMock(
-                content=[MagicMock(text="claude says hi")]
-            )
+            mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="claude says hi")])
 
             with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
                 result = self.backend.generate(SAMPLE_REQUEST)
@@ -124,8 +126,10 @@ class TestApiLLMBackend:
 
 # -- generate() dispatch via registry ---------------------------------------
 
+
 def test_generate_delegates_to_registry():
     from src.generate import llm_client
+
     mock_backend = MagicMock()
     mock_backend.generate.return_value = "mocked response"
     with patch("src.generate.llm_client.get_llm_backend", return_value=mock_backend):

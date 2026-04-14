@@ -1,4 +1,5 @@
 """Tests for debug toggle, GameController, GameView, and MazeView."""
+
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -59,6 +60,7 @@ def _make_mini_maze():
 # MazeView tests
 # ---------------------------------------------------------------------------
 
+
 class TestMazeViewEventVisibility:
     def test_event_tile_invisible_by_default(self, screen):
         maze = _make_mini_maze()
@@ -96,6 +98,7 @@ class TestMazeViewEventVisibility:
 # GameController tests
 # ---------------------------------------------------------------------------
 
+
 class TestGameControllerDebugToggle:
     def _make_controller(self, mock_dialogue_box):
         from src.controllers.game_controller import GameController
@@ -113,9 +116,7 @@ class TestGameControllerDebugToggle:
         player.get_nearby_npc = MagicMock(return_value=None)
         player.followers = []
         maze = _make_mini_maze()
-        maze.is_wall = MagicMock(side_effect=lambda x, y: (
-            not (0 <= x < 3 and 0 <= y < 3) or maze.grid[y][x] == 1
-        ))
+        maze.is_wall = MagicMock(side_effect=lambda x, y: not (0 <= x < 3 and 0 <= y < 3) or maze.grid[y][x] == 1)
 
         with patch("src.controllers.game_controller.GameView"):
             ctrl = GameController(
@@ -156,9 +157,11 @@ class TestGameControllerDebugToggle:
 # GameView DEBUG label tests
 # ---------------------------------------------------------------------------
 
+
 class TestGameViewDebugLabel:
     def _make_game_view(self, screen, font, mock_dialogue_box):
         from src.views.gameplay_view import GameView
+
         return GameView(screen, font, mock_dialogue_box)
 
     @staticmethod
@@ -187,9 +190,14 @@ class TestGameViewDebugLabel:
 
         with patch("src.views.gameplay_view.registry"):
             gv.draw_game(
-                maze=maze, player=player, npcs=[], inventory_active=False,
-                item_message_active=False, current_npc=None,
-                player_at_item=False, debug_reveal=False,
+                maze=maze,
+                player=player,
+                npcs=[],
+                inventory_active=False,
+                item_message_active=False,
+                current_npc=None,
+                player_at_item=False,
+                debug_reveal=False,
             )
 
         post_color = screen.get_at((SCREEN_WIDTH - 20, 10))
@@ -202,9 +210,14 @@ class TestGameViewDebugLabel:
 
         with patch("src.views.gameplay_view.registry"):
             gv.draw_game(
-                maze=maze, player=player, npcs=[], inventory_active=False,
-                item_message_active=False, current_npc=None,
-                player_at_item=False, debug_reveal=True,
+                maze=maze,
+                player=player,
+                npcs=[],
+                inventory_active=False,
+                item_message_active=False,
+                current_npc=None,
+                player_at_item=False,
+                debug_reveal=True,
             )
 
         expected = font.render("DEBUG", True, (255, 0, 0))

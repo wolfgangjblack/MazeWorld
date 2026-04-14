@@ -5,20 +5,20 @@ from src.models.items import Drink, Food, Tool
 from src.registry import registry
 from src.utils.display_utils import game_to_screen
 
-EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
-DEBUG_COMBAT_COLOR = (200, 50, 50)    # Red — combat encounters
-DEBUG_PUZZLE_COLOR = (50, 150, 220)   # Blue — puzzles
-DEBUG_EVENT_COLOR = (50, 200, 100)    # Green — narrative events
+EVENT_COLOR = (0, 0, 0)  # Black — events are invisible during normal gameplay
+DEBUG_COMBAT_COLOR = (200, 50, 50)  # Red — combat encounters
+DEBUG_PUZZLE_COLOR = (50, 150, 220)  # Blue — puzzles
+DEBUG_EVENT_COLOR = (50, 200, 100)  # Green — narrative events
 DEBUG_EVENT_FALLBACK = (128, 0, 128)  # Purple — unknown type
-DEBUG_GATE_COLOR = (180, 140, 30)     # Dark gold — gate encounter (debug)
-BOSS_TILE_COLOR = (140, 20, 20)       # Dark red — climax boss (always visible)
-DOOR_COLOR = (255, 215, 0)    # Gold for revealed exit doors
+DEBUG_GATE_COLOR = (180, 140, 30)  # Dark gold — gate encounter (debug)
+BOSS_TILE_COLOR = (140, 20, 20)  # Dark red — climax boss (always visible)
+DOOR_COLOR = (255, 215, 0)  # Gold for revealed exit doors
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
 # Fog of war colors
-FOG_HIDDEN_COLOR = (10, 10, 15)       # Near-black for hidden tiles
-FOG_REVEALED_COLOR = (40, 40, 50)     # Dark gray for revealed-but-not-visible tiles
-FOG_DIM_ALPHA = 90                    # Semi-transparent overlay for dim edge tiles
+FOG_HIDDEN_COLOR = (10, 10, 15)  # Near-black for hidden tiles
+FOG_REVEALED_COLOR = (40, 40, 50)  # Dark gray for revealed-but-not-visible tiles
+FOG_DIM_ALPHA = 90  # Semi-transparent overlay for dim edge tiles
 
 # Night overlay color (dark blue tint)
 NIGHT_OVERLAY_COLOR = (10, 10, 50)
@@ -31,10 +31,20 @@ class MazeView:
         "event": DEBUG_EVENT_COLOR,
     }
 
-    def draw_maze(self, screen, maze, escort_zones=None, debug_reveal=False,
-                  fog=None, player_x=0, player_y=0, visibility_radius=3,
-                  night_alpha=0, event_type_map=None, event_flag_map=None):
-
+    def draw_maze(
+        self,
+        screen,
+        maze,
+        escort_zones=None,
+        debug_reveal=False,
+        fog=None,
+        player_x=0,
+        player_y=0,
+        visibility_radius=3,
+        night_alpha=0,
+        event_type_map=None,
+        event_flag_map=None,
+    ):
         for y, row in enumerate(maze.grid):
             for x, cell in enumerate(row):
                 screen_x, screen_y = game_to_screen(x, y)
@@ -76,8 +86,10 @@ class MazeView:
                     # Revealed exit door — gold tile
                     pygame.draw.rect(screen, BLACK, rect)
                     door_rect = pygame.Rect(
-                        screen_x + 2, screen_y + 2,
-                        GRID_SIZE - 4, GRID_SIZE - 4,
+                        screen_x + 2,
+                        screen_y + 2,
+                        GRID_SIZE - 4,
+                        GRID_SIZE - 4,
                     )
                     pygame.draw.rect(screen, DOOR_COLOR, door_rect)
                 elif cell == 0:
@@ -104,8 +116,7 @@ class MazeView:
 
                 # Apply fog dimming for revealed-but-not-currently-visible tiles
                 if fog and not debug_reveal:
-                    if not fog.is_currently_visible(x, y, player_x, player_y,
-                                                    visibility_radius, maze=maze):
+                    if not fog.is_currently_visible(x, y, player_x, player_y, visibility_radius, maze=maze):
                         dim = pygame.Surface((GRID_SIZE, GRID_SIZE), pygame.SRCALPHA)
                         dim.fill((0, 0, 0, 140))
                         screen.blit(dim, (screen_x, screen_y))
@@ -124,7 +135,7 @@ class MazeView:
             screen.blit(overlay, (0, top_y))
 
         if escort_zones:
-            for (tx, ty) in escort_zones:
+            for tx, ty in escort_zones:
                 for ox in range(-2, 3):
                     for oy in range(-2, 3):
                         hx, hy = tx + ox, ty + oy

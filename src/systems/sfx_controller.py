@@ -47,6 +47,7 @@ class SFXController:
 
         try:
             from config import MASTER_VOLUME, SFX_VOLUME
+
             self._volume = (SFX_VOLUME / 100.0) * (MASTER_VOLUME / 100.0)
         except Exception:
             self._volume = 0.7

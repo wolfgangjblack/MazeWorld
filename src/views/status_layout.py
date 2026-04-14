@@ -34,10 +34,21 @@ def truncate_to_fit(text: str, font: pygame.font.Font, max_w: int) -> str:
     return text + "..."
 
 
-def draw_status_layout(screen, font, small_font, tiny_font,
-                       portrait_surface, stats, flavor_text,
-                       weapon_name, weapon_info, abilities, spells,
-                       base_y, pad=20):
+def draw_status_layout(
+    screen,
+    font,
+    small_font,
+    tiny_font,
+    portrait_surface,
+    stats,
+    flavor_text,
+    weapon_name,
+    weapon_info,
+    abilities,
+    spells,
+    base_y,
+    pad=20,
+):
     """Draw the wireframe layout and return total content height.
 
     Parameters
@@ -75,12 +86,12 @@ def draw_status_layout(screen, font, small_font, tiny_font,
     sy += 26
     for stat in STAT_NAMES:
         val = getattr(stats, stat, 10)
-        mod = stats.modifier(stat) if hasattr(stats, 'modifier') else (val - 10) // 2
+        mod = stats.modifier(stat) if hasattr(stats, "modifier") else (val - 10) // 2
         mod_str = f"+{mod}" if mod >= 0 else str(mod)
         line = small_font.render(f"{stat}: {val} ({mod_str})", True, STAT_COLOR)
         screen.blit(line, (stats_x, sy))
         sy += 20
-    total_val = stats.total() if hasattr(stats, 'total') else sum(getattr(stats, s, 10) for s in STAT_NAMES)
+    total_val = stats.total() if hasattr(stats, "total") else sum(getattr(stats, s, 10) for s in STAT_NAMES)
     total = small_font.render(f"Total: {total_val}/95", True, UNSELECTED_COLOR)
     screen.blit(total, (stats_x, sy))
 
@@ -122,8 +133,7 @@ def draw_status_layout(screen, font, small_font, tiny_font,
             meta = tiny_font.render("  |  ".join(meta_parts), True, COST_COLOR)
             screen.blit(meta, (pad + full_w - meta.get_width(), y + 2))
             y += 20
-            y = draw_wrapped_text(screen, ab.description, pad + 20, y,
-                                  full_w - 20, tiny_font, DIM_COLOR)
+            y = draw_wrapped_text(screen, ab.description, pad + 20, y, full_w - 20, tiny_font, DIM_COLOR)
             y += 6
         y += 4
 
@@ -147,15 +157,13 @@ def draw_status_layout(screen, font, small_font, tiny_font,
             meta = tiny_font.render("  |  ".join(meta_parts), True, COST_COLOR)
             screen.blit(meta, (pad + full_w - meta.get_width(), y + 2))
             y += 20
-            y = draw_wrapped_text(screen, sp.description, pad + 20, y,
-                                  full_w - 20, tiny_font, DIM_COLOR)
+            y = draw_wrapped_text(screen, sp.description, pad + 20, y, full_w - 20, tiny_font, DIM_COLOR)
             y += 6
 
     return y - base_y
 
 
-def estimate_status_height(stats, flavor_text, weapon_name,
-                           abilities, spells, full_w=760):
+def estimate_status_height(stats, flavor_text, weapon_name, abilities, spells, full_w=760):
     """Estimate total content height for scroll calculation."""
     h = 190  # portrait row
     if flavor_text:

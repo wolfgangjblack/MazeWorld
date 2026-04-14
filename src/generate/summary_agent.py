@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 _NARRATIVE_SYSTEM = (
     "You are a narrator for a fantasy dungeon-crawler video game. "
     "Write immersive, concise player-facing text. Keep responses under 3 sentences "
-    "unless asked for more. Use second person (\"you\"). Match the tone of the "
+    'unless asked for more. Use second person ("you"). Match the tone of the '
     "world lore provided. Do not break the fourth wall."
 )
 
@@ -55,8 +55,7 @@ def generate_story_synopsis(bible: WorldBible) -> str:
         return story.synopsis or f"{story.title} — a tale of danger and discovery."
 
 
-def generate_room_intro(bible: WorldBible, room_id: str,
-                        env_name: str, env_type: str) -> str:
+def generate_room_intro(bible: WorldBible, room_id: str, env_name: str, env_type: str) -> str:
     """Generate a narrative paragraph for entering a new room."""
     story = bible.story
     room = bible.rooms.get(room_id)
@@ -81,8 +80,7 @@ def generate_room_intro(bible: WorldBible, room_id: str,
         return beat or f"You enter {env_name}. A {env_type} stretches before you."
 
 
-def generate_game_over_text(bible: WorldBible, player_name: str,
-                            player_class: str) -> str:
+def generate_game_over_text(bible: WorldBible, player_name: str, player_class: str) -> str:
     """Generate a somber game-over paragraph."""
     story = bible.story
     context = _build_story_context(story)
@@ -100,14 +98,10 @@ def generate_game_over_text(bible: WorldBible, player_name: str,
         return generate(request).strip()
     except Exception:
         logger.warning("LLM game over generation failed; using fallback")
-        return (
-            f"{player_name} the {player_class} has fallen. "
-            "The darkness spreads unchecked."
-        )
+        return f"{player_name} the {player_class} has fallen. The darkness spreads unchecked."
 
 
-def generate_victory_text(bible: WorldBible, player_name: str,
-                          player_class: str) -> str:
+def generate_victory_text(bible: WorldBible, player_name: str, player_class: str) -> str:
     """Generate a victory paragraph — story resolution."""
     story = bible.story
     context = _build_story_context(story)
@@ -138,8 +132,7 @@ def generate_victory_text(bible: WorldBible, player_name: str,
 _PORTRAIT_STYLE = "nano-banana fantasy game aesthetic, detailed portrait"
 
 
-def build_npc_portrait_prompt(npc_data: dict, bible: WorldBible,
-                              room_id: str = "") -> str:
+def build_npc_portrait_prompt(npc_data: dict, bible: WorldBible, room_id: str = "") -> str:
     """Build a portrait prompt for an NPC using Bible context."""
     name = npc_data.get("name", "NPC")
     personality = npc_data.get("personality", "")
@@ -157,8 +150,7 @@ def build_npc_portrait_prompt(npc_data: dict, bible: WorldBible,
     return ", ".join(parts)
 
 
-def build_monster_portrait_prompt(monster_data: dict, bible: WorldBible,
-                                  room_id: str = "") -> str:
+def build_monster_portrait_prompt(monster_data: dict, bible: WorldBible, room_id: str = "") -> str:
     """Build a portrait prompt for a monster using Bible context."""
     species = monster_data.get("species", monster_data.get("name", "monster"))
     element = monster_data.get("elemental_affinity", "")
@@ -191,8 +183,7 @@ def build_class_portrait_prompt(class_data: dict, bible: WorldBible) -> str:
     return ", ".join(parts)
 
 
-def build_item_portrait_prompt(item_data: dict, bible: WorldBible,
-                               room_id: str = "") -> str:
+def build_item_portrait_prompt(item_data: dict, bible: WorldBible, room_id: str = "") -> str:
     """Build a portrait prompt for an item using Bible context."""
     name = item_data.get("name", "item")
     desc = item_data.get("desc", item_data.get("description", ""))
@@ -207,8 +198,7 @@ def build_item_portrait_prompt(item_data: dict, bible: WorldBible,
     return ", ".join(parts)
 
 
-def build_event_portrait_prompt(event_data: dict, bible: WorldBible,
-                                room_id: str = "") -> str:
+def build_event_portrait_prompt(event_data: dict, bible: WorldBible, room_id: str = "") -> str:
     """Build a portrait prompt for a puzzle or event encounter."""
     name = event_data.get("name", "encounter")
     desc = event_data.get("description", "")
@@ -265,6 +255,7 @@ def build_game_over_portrait_prompt(bible: WorldBible) -> str:
 # Internals
 # ---------------------------------------------------------------------------
 
+
 def _build_story_context(story: OverarchingStory) -> str:
     """Build a compact context string from the story for LLM prompts."""
     parts = []
@@ -273,9 +264,7 @@ def _build_story_context(story: OverarchingStory) -> str:
     if story.synopsis:
         parts.append(f"Synopsis: {story.synopsis}")
     if story.faction:
-        parts.append(
-            f"Faction: {story.faction.name} — {story.faction.description}"
-        )
+        parts.append(f"Faction: {story.faction.name} — {story.faction.description}")
         if story.faction.leader:
             parts.append(f"Leader: {story.faction.leader}")
     if story.climax:

@@ -16,8 +16,7 @@ SCROLL_STEP = 20
 class StoryView:
     """Overlay showing the overarching story synopsis and current room context."""
 
-    def __init__(self, screen, font, story=None, room_story_beat="",
-                 room_name=""):
+    def __init__(self, screen, font, story=None, room_story_beat="", room_name=""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
@@ -26,12 +25,8 @@ class StoryView:
 
         self.title = story.title if story else "The Story So Far"
         self.synopsis = story.synopsis if story else "No story data available."
-        self.faction_name = (
-            story.faction.name if story and story.faction else ""
-        )
-        self.faction_desc = (
-            story.faction.description if story and story.faction else ""
-        )
+        self.faction_name = story.faction.name if story and story.faction else ""
+        self.faction_desc = story.faction.description if story and story.faction else ""
         self.climax = story.climax if story else ""
         self.room_story_beat = room_story_beat
         self.room_name = room_name
@@ -53,8 +48,7 @@ class StoryView:
         # Synopsis
         self._draw_section("Synopsis", y)
         y += 24
-        y = draw_wrapped_text(self.screen, self.synopsis, 60, y,
-                              SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
+        y = draw_wrapped_text(self.screen, self.synopsis, 60, y, SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
         y += 16
 
         # Faction
@@ -62,16 +56,16 @@ class StoryView:
             self._draw_section(f"Faction: {self.faction_name}", y)
             y += 24
             if self.faction_desc:
-                y = draw_wrapped_text(self.screen, self.faction_desc, 60, y,
-                                      SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
+                y = draw_wrapped_text(
+                    self.screen, self.faction_desc, 60, y, SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR
+                )
             y += 16
 
         # What lies ahead
         if self.climax:
             self._draw_section("What Lies Ahead", y)
             y += 24
-            y = draw_wrapped_text(self.screen, self.climax, 60, y,
-                                  SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
+            y = draw_wrapped_text(self.screen, self.climax, 60, y, SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
             y += 16
 
         # Current room
@@ -79,12 +73,10 @@ class StoryView:
             label = f"Current Area: {self.room_name}" if self.room_name else "Current Area"
             self._draw_section(label, y)
             y += 24
-            draw_wrapped_text(self.screen, self.room_story_beat, 60, y,
-                              SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
+            draw_wrapped_text(self.screen, self.room_story_beat, 60, y, SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
 
         # Footer (fixed at bottom, unaffected by scroll)
-        hint = self.small_font.render(
-            "Up/Down: Scroll  |  Esc/Enter: Return", True, HINT_COLOR)
+        hint = self.small_font.render("Up/Down: Scroll  |  Esc/Enter: Return", True, HINT_COLOR)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
     def _draw_section(self, text: str, y: int):

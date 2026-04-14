@@ -36,13 +36,11 @@ class FogOfWar:
         self.width = width
         self.height = height
         # False = hidden, True = revealed (permanently)
-        self.revealed: List[List[bool]] = [
-            [False for _ in range(width)] for _ in range(height)
-        ]
+        self.revealed: List[List[bool]] = [[False for _ in range(width)] for _ in range(height)]
 
-    def get_visibility_radius(self, player, is_night: bool = False,
-                              has_torch: bool = False,
-                              time_period: str | None = None) -> int:
+    def get_visibility_radius(
+        self, player, is_night: bool = False, has_torch: bool = False, time_period: str | None = None
+    ) -> int:
         """Calculate effective visibility radius.
 
         Base radius + WIS bonus (+1 per 2 WIS modifier points).
@@ -51,7 +49,7 @@ class FogOfWar:
         """
         radius = DEFAULT_VISIBILITY_RADIUS
 
-        wis_mod = player.get_stat_mod("WIS") if hasattr(player, 'get_stat_mod') else 0
+        wis_mod = player.get_stat_mod("WIS") if hasattr(player, "get_stat_mod") else 0
         radius += max(0, wis_mod // 2)
 
         period = time_period or ("night" if is_night else "day")
@@ -62,8 +60,7 @@ class FogOfWar:
 
         return max(1, radius)
 
-    def update(self, player_x: int, player_y: int, maze,
-               radius: int) -> None:
+    def update(self, player_x: int, player_y: int, maze, radius: int) -> None:
         """Reveal all tiles visible from (player_x, player_y) within radius.
 
         Uses raycasting: for each tile in the radius circle, cast a ray
@@ -90,8 +87,7 @@ class FogOfWar:
                 if self._has_line_of_sight(player_x, player_y, tx, ty, maze):
                     self.revealed[ty][tx] = True
 
-    def _has_line_of_sight(self, x0: int, y0: int, x1: int, y1: int,
-                           maze) -> bool:
+    def _has_line_of_sight(self, x0: int, y0: int, x1: int, y1: int, maze) -> bool:
         """Bresenham's line algorithm to check if a wall blocks LOS.
 
         Returns True if there is a clear line of sight from (x0,y0) to (x1,y1).
@@ -129,9 +125,7 @@ class FogOfWar:
             return self.revealed[y][x]
         return False
 
-    def is_currently_visible(self, x: int, y: int, player_x: int,
-                             player_y: int, radius: int,
-                             maze=None) -> bool:
+    def is_currently_visible(self, x: int, y: int, player_x: int, player_y: int, radius: int, maze=None) -> bool:
         """Check if a tile is within the player's current visibility radius and has LOS."""
         dx = x - player_x
         dy = y - player_y
@@ -141,8 +135,7 @@ class FogOfWar:
             return self._has_line_of_sight(player_x, player_y, x, y, maze)
         return True
 
-    def is_dim(self, x: int, y: int, player_x: int, player_y: int,
-               radius: int) -> bool:
+    def is_dim(self, x: int, y: int, player_x: int, player_y: int, radius: int) -> bool:
         """Check if a tile is at the dim edge of visibility."""
         dx = x - player_x
         dy = y - player_y

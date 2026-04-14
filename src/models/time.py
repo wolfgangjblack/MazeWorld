@@ -45,6 +45,7 @@ class DayNightCycle(BaseModel):
     = one full day cycle).  A pygame-driven millisecond clock
     (``update_realtime``) is also maintained for smooth rendering.
     """
+
     ticks: int = 0
     cycle_length: int = 200  # kept for action-based compat / serialization
 

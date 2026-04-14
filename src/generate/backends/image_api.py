@@ -19,8 +19,7 @@ class ApiImageBackend(ImageBackend):
         fal_key = os.getenv(FAL_KEY_ENV)
         if not fal_key:
             raise RuntimeError(
-                f"'{FAL_KEY_ENV}' env var is not set. "
-                "Provide a fal API key or set IMAGE_BACKEND='local'."
+                f"'{FAL_KEY_ENV}' env var is not set. Provide a fal API key or set IMAGE_BACKEND='local'."
             )
 
         result = fal_client.subscribe(

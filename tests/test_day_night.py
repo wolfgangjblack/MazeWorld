@@ -118,6 +118,7 @@ class TestDayNightCycleModel:
         # advance_hours now adds to elapsed_ms (real-time model)
         # 6 hours = 6/24 * FULL_CYCLE_MS = 0.25 * 960000 = 240000ms
         from src.models.time import FULL_CYCLE_MS
+
         cycle.advance_hours(6)
         expected_ms = int((FULL_CYCLE_MS / 24) * 6)
         assert cycle.elapsed_ms == expected_ms
@@ -235,6 +236,7 @@ class TestTimeGatedEncounters:
         class FakeEvent:
             def __init__(self, tg):
                 self.time_gate = tg
+
         return FakeEvent(time_gate)
 
     def test_no_gate_always_active(self):
@@ -267,6 +269,7 @@ class TestNPCAvailability:
         class FakeNPC:
             def __init__(self, avail):
                 self.availability = avail
+
         return FakeNPC(availability)
 
     def test_no_schedule_always_available(self):

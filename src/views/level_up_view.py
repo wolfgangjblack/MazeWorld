@@ -93,7 +93,7 @@ class LevelUpView:
 
             # Cost info
             costs = []
-            if hasattr(choice, 'stamina_cost') and choice.stamina_cost:
+            if hasattr(choice, "stamina_cost") and choice.stamina_cost:
                 costs.append(f"Stamina: {choice.stamina_cost}")
             if costs:
                 cost_text = self.small_font.render(" | ".join(costs), True, (180, 120, 80))

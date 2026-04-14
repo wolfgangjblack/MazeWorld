@@ -78,8 +78,7 @@ class ShopView:
         col_bottom = SCREEN_HEIGHT - 110
 
         # Vertical divider
-        pygame.draw.line(self.screen, DIVIDER_COLOR,
-                         (mid_x, col_top), (mid_x, col_bottom), 2)
+        pygame.draw.line(self.screen, DIVIDER_COLOR, (mid_x, col_top), (mid_x, col_bottom), 2)
 
         # Column headers
         buy_header_color = SELECTED_COLOR if self.active_column == "buy" else HEADER_COLOR
@@ -94,7 +93,7 @@ class ShopView:
 
         # Draw BUY column
         buy_items = self._buy_items()
-        visible_buy = buy_items[self.buy_scroll:self.buy_scroll + self.MAX_VISIBLE]
+        visible_buy = buy_items[self.buy_scroll : self.buy_scroll + self.MAX_VISIBLE]
         for i, entry in enumerate(visible_buy):
             real_idx = self.buy_scroll + i
             item = registry.get_item(entry["item_id"])
@@ -119,15 +118,16 @@ class ShopView:
 
         # Scroll indicators for buy
         if self.buy_scroll > 0:
-            self.screen.blit(self.small_font.render("^ more ^", True, DESC_COLOR),
-                             (mid_x // 2 - 25, item_top - 14))
+            self.screen.blit(self.small_font.render("^ more ^", True, DESC_COLOR), (mid_x // 2 - 25, item_top - 14))
         if self.buy_scroll + self.MAX_VISIBLE < len(buy_items):
-            self.screen.blit(self.small_font.render("v more v", True, DESC_COLOR),
-                             (mid_x // 2 - 25, item_top + self.MAX_VISIBLE * line_h))
+            self.screen.blit(
+                self.small_font.render("v more v", True, DESC_COLOR),
+                (mid_x // 2 - 25, item_top + self.MAX_VISIBLE * line_h),
+            )
 
         # Draw SELL column
         sell_items = self._sell_items()
-        visible_sell = sell_items[self.sell_scroll:self.sell_scroll + self.MAX_VISIBLE]
+        visible_sell = sell_items[self.sell_scroll : self.sell_scroll + self.MAX_VISIBLE]
         for i, (item_name, quantity) in enumerate(visible_sell):
             real_idx = self.sell_scroll + i
             selected = self.active_column == "sell" and real_idx == self.sell_index
@@ -152,11 +152,14 @@ class ShopView:
 
         # Scroll indicators for sell
         if self.sell_scroll > 0:
-            self.screen.blit(self.small_font.render("^ more ^", True, DESC_COLOR),
-                             (mid_x + mid_x // 2 - 25, item_top - 14))
+            self.screen.blit(
+                self.small_font.render("^ more ^", True, DESC_COLOR), (mid_x + mid_x // 2 - 25, item_top - 14)
+            )
         if self.sell_scroll + self.MAX_VISIBLE < len(sell_items):
-            self.screen.blit(self.small_font.render("v more v", True, DESC_COLOR),
-                             (mid_x + mid_x // 2 - 25, item_top + self.MAX_VISIBLE * line_h))
+            self.screen.blit(
+                self.small_font.render("v more v", True, DESC_COLOR),
+                (mid_x + mid_x // 2 - 25, item_top + self.MAX_VISIBLE * line_h),
+            )
 
         # Confirm prompt overlay
         if self.confirming and self.confirm_action:
@@ -168,8 +171,7 @@ class ShopView:
         else:
             ctrl = "Left/Right: Switch column  |  Up/Down: Select  |  Enter: Buy/Sell  |  Esc: Close"
         ctrl_surf = self.small_font.render(ctrl, True, CONTROLS_COLOR)
-        self.screen.blit(ctrl_surf, (SCREEN_WIDTH // 2 - ctrl_surf.get_width() // 2,
-                                     SCREEN_HEIGHT - 60))
+        self.screen.blit(ctrl_surf, (SCREEN_WIDTH // 2 - ctrl_surf.get_width() // 2, SCREEN_HEIGHT - 60))
 
     def _draw_confirm(self):
         """Draw a confirmation prompt overlay."""
@@ -185,8 +187,7 @@ class ShopView:
         else:
             msg = f"Sell {action['name']} for {action['price']}g?"
         msg_surf = self.font.render(msg, True, CONFIRM_TEXT)
-        self.screen.blit(msg_surf, (box_x + box_w // 2 - msg_surf.get_width() // 2,
-                                    box_y + 20))
+        self.screen.blit(msg_surf, (box_x + box_w // 2 - msg_surf.get_width() // 2, box_y + 20))
         hint = self.small_font.render("Enter: Yes  |  Esc: No", True, (180, 180, 180))
         self.screen.blit(hint, (box_x + box_w // 2 - hint.get_width() // 2, box_y + 60))
 

@@ -14,6 +14,7 @@ from src.systems.music_controller import MusicController
 # MusicController: silent fallback tests
 # ---------------------------------------------------------------------------
 
+
 class TestMusicControllerFallback:
     def test_silent_on_nonexistent_file(self, tmp_path):
         """play() should not raise when the track file doesn't exist on disk."""
@@ -30,8 +31,7 @@ class TestMusicControllerFallback:
     def test_silent_on_empty_manifest(self):
         """MusicController with no tracks silently accepts all play() calls."""
         mc = MusicController({})
-        for track in ["start_screen", "combat", "maze_village", "puzzle_event",
-                      "victory", "game_over"]:
+        for track in ["start_screen", "combat", "maze_village", "puzzle_event", "victory", "game_over"]:
             mc.play(track)
         assert mc.current_track is None
 
@@ -48,9 +48,9 @@ class TestMusicControllerFallback:
         and not raise, confirming the correct key format is used internally.
         """
         mc = MusicController({})
-        mc.play_maze("village")   # looks up "maze_village" — not in manifest, silent
+        mc.play_maze("village")  # looks up "maze_village" — not in manifest, silent
         assert mc.current_track is None
-        mc.play_maze("cave")      # looks up "maze_cave"
+        mc.play_maze("cave")  # looks up "maze_cave"
         assert mc.current_track is None
 
     def test_has_track_false_for_nonexistent_file(self, tmp_path):
@@ -77,14 +77,15 @@ class TestMusicControllerFallback:
         is raised, rather than trying to load a real audio file.
         """
         mc = MusicController({"combat": str(tmp_path / "missing.wav")})
-        mc.play("combat")   # sets current_track = None (file missing)
-        mc.play("combat")   # should be a no-op since current_track already matches
+        mc.play("combat")  # sets current_track = None (file missing)
+        mc.play("combat")  # should be a no-op since current_track already matches
         assert mc.current_track is None
 
 
 # ---------------------------------------------------------------------------
 # build_full_prompt_dict: prompt merging logic
 # ---------------------------------------------------------------------------
+
 
 class TestBuildFullPromptDict:
     def test_llm_combat_prompt_preserved(self):

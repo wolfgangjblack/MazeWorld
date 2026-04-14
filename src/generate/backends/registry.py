@@ -21,11 +21,14 @@ class BackendRegistry:
     def llm(self) -> LLMBackend:
         if self._llm is None:
             from config import LLM_BACKEND
+
             if LLM_BACKEND == "api":
                 from src.generate.backends.llm_api import ApiLLMBackend
+
                 self._llm = ApiLLMBackend()
             else:
                 from src.generate.backends.llm_local import LocalLLMBackend
+
                 self._llm = LocalLLMBackend()
         return self._llm
 
@@ -33,11 +36,14 @@ class BackendRegistry:
     def image(self) -> ImageBackend:
         if self._image is None:
             from config import IMAGE_BACKEND
+
             if IMAGE_BACKEND == "api":
                 from src.generate.backends.image_api import ApiImageBackend
+
                 self._image = ApiImageBackend()
             else:
                 from src.generate.backends.image_local import LocalImageBackend
+
                 self._image = LocalImageBackend()
         return self._image
 

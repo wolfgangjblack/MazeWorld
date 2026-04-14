@@ -55,12 +55,16 @@ class LoadGameView:
 
         if not self.saves:
             no_saves = self.font.render(
-                "No save files found.", True, (120, 120, 120),
+                "No save files found.",
+                True,
+                (120, 120, 120),
             )
             x = (SCREEN_WIDTH - no_saves.get_width()) // 2
             self.screen.blit(no_saves, (x, SCREEN_HEIGHT // 2))
             hint = self.font.render(
-                "Esc: Back", True, (100, 100, 100),
+                "Esc: Back",
+                True,
+                (100, 100, 100),
             )
             self.screen.blit(hint, (10, SCREEN_HEIGHT - 30))
             return
@@ -72,21 +76,27 @@ class LoadGameView:
         COL_TIME = 445
         COL_DATE = 560
 
-        headers = [("Name", COL_NAME), ("Class", COL_CLASS),
-                    ("Level", COL_LEVEL), ("Time", COL_TIME), ("Saved", COL_DATE)]
+        headers = [
+            ("Name", COL_NAME),
+            ("Class", COL_CLASS),
+            ("Level", COL_LEVEL),
+            ("Time", COL_TIME),
+            ("Saved", COL_DATE),
+        ]
         for label, col_x in headers:
             surf = self.small_font.render(label, True, HEADER_COLOR)
             self.screen.blit(surf, (col_x, 80))
 
         pygame.draw.line(
-            self.screen, HEADER_COLOR, (40, 100), (SCREEN_WIDTH - 40, 100),
+            self.screen,
+            HEADER_COLOR,
+            (40, 100),
+            (SCREEN_WIDTH - 40, 100),
         )
 
         line_height = 50
         start_y = 110
-        visible_saves = self.saves[
-            self.scroll_offset:self.scroll_offset + self.max_visible
-        ]
+        visible_saves = self.saves[self.scroll_offset : self.scroll_offset + self.max_visible]
 
         for i, save in enumerate(visible_saves):
             actual_idx = i + self.scroll_offset
@@ -114,7 +124,9 @@ class LoadGameView:
 
             if selected:
                 seed_surface = self.small_font.render(
-                    f"Seed: {save['seed']}", True, (100, 100, 100),
+                    f"Seed: {save['seed']}",
+                    True,
+                    (100, 100, 100),
                 )
                 self.screen.blit(seed_surface, (COL_NAME, y + 25))
 
@@ -124,12 +136,13 @@ class LoadGameView:
             self.screen.blit(arrow, (SCREEN_WIDTH // 2 - 80, start_y - 20))
         if self.scroll_offset + self.max_visible < len(self.saves):
             arrow = self.font.render(
-                "v more saves below", True, (100, 100, 100),
+                "v more saves below",
+                True,
+                (100, 100, 100),
             )
             self.screen.blit(
                 arrow,
-                (SCREEN_WIDTH // 2 - 80,
-                 start_y + self.max_visible * line_height + 5),
+                (SCREEN_WIDTH // 2 - 80, start_y + self.max_visible * line_height + 5),
             )
 
         # Error message
@@ -161,12 +174,11 @@ class LoadGameView:
                 self.scroll_offset = self.selected_index
         elif event.key == pygame.K_DOWN:
             self.selected_index = min(
-                len(self.saves) - 1, self.selected_index + 1,
+                len(self.saves) - 1,
+                self.selected_index + 1,
             )
             if self.selected_index >= self.scroll_offset + self.max_visible:
-                self.scroll_offset = (
-                    self.selected_index - self.max_visible + 1
-                )
+                self.scroll_offset = self.selected_index - self.max_visible + 1
         elif event.key == pygame.K_RETURN:
             save = self.saves[self.selected_index]
             return {

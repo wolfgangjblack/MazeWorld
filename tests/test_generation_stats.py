@@ -66,10 +66,7 @@ class TestCostCalculation:
         stats.record_llm_call(input_tokens=45_230, output_tokens=18_400)
         stats.record_images(attempted=87, succeeded=85)
 
-        expected_llm = (
-            45_230 / 1_000_000 * _CLAUDE_INPUT_COST_PER_M
-            + 18_400 / 1_000_000 * _CLAUDE_OUTPUT_COST_PER_M
-        )
+        expected_llm = 45_230 / 1_000_000 * _CLAUDE_INPUT_COST_PER_M + 18_400 / 1_000_000 * _CLAUDE_OUTPUT_COST_PER_M
         expected_img = 85 * _FAL_COST_PER_IMAGE
         assert stats.llm_cost_usd == pytest.approx(expected_llm, rel=1e-6)
         assert stats.image_cost_usd == pytest.approx(expected_img, rel=1e-6)
@@ -134,18 +131,17 @@ class TestCostCalculation:
     def test_total_cost_includes_all_categories(self):
         """total_cost_usd = LLM + images + audio when all backends are active."""
         stats = GenerationStats(
-            llm_backend="api", image_backend="api",
-            music_backend="api", sfx_backend="elevenlabs",
+            llm_backend="api",
+            image_backend="api",
+            music_backend="api",
+            sfx_backend="elevenlabs",
         )
         stats.record_llm_call(input_tokens=100_000, output_tokens=50_000)
         stats.record_images(attempted=10, succeeded=10)
         stats.record_music(attempted=8, succeeded=8, clip_succeeded=1)
         stats.record_sfx(attempted=15, succeeded=15)
 
-        expected_llm = (
-            100_000 / 1_000_000 * _CLAUDE_INPUT_COST_PER_M
-            + 50_000 / 1_000_000 * _CLAUDE_OUTPUT_COST_PER_M
-        )
+        expected_llm = 100_000 / 1_000_000 * _CLAUDE_INPUT_COST_PER_M + 50_000 / 1_000_000 * _CLAUDE_OUTPUT_COST_PER_M
         expected_img = 10 * _FAL_COST_PER_IMAGE
         expected_music = 7 * _LYRIA_PRO_COST_PER_TRACK + 1 * _LYRIA_CLIP_COST_PER_TRACK
         expected_sfx = 15 * _ELEVENLABS_COST_PER_SFX
@@ -155,8 +151,10 @@ class TestCostCalculation:
 
     def test_total_cost_none_when_all_local(self):
         stats = GenerationStats(
-            llm_backend="local", image_backend="local",
-            music_backend="none", sfx_backend="none",
+            llm_backend="local",
+            image_backend="local",
+            music_backend="none",
+            sfx_backend="none",
         )
         assert stats.total_cost_usd is None
 
@@ -164,8 +162,10 @@ class TestCostCalculation:
 class TestSerialization:
     def test_to_dict_contains_required_keys(self):
         stats = GenerationStats(
-            llm_backend="api", image_backend="api",
-            music_backend="api", sfx_backend="elevenlabs",
+            llm_backend="api",
+            image_backend="api",
+            music_backend="api",
+            sfx_backend="elevenlabs",
         )
         stats.record_llm_call(100, 50)
         stats.record_images(5, 4)
@@ -175,13 +175,26 @@ class TestSerialization:
 
         d = stats.to_dict()
         required = [
-            "llm_backend", "image_backend", "music_backend", "sfx_backend",
-            "llm_calls", "input_tokens", "output_tokens", "total_tokens",
-            "images_attempted", "images_succeeded",
-            "music_attempted", "music_succeeded",
-            "sfx_attempted", "sfx_succeeded",
-            "llm_cost_usd", "image_cost_usd", "audio_cost_usd", "total_cost_usd",
-            "generation_time_seconds", "generation_time_human",
+            "llm_backend",
+            "image_backend",
+            "music_backend",
+            "sfx_backend",
+            "llm_calls",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "images_attempted",
+            "images_succeeded",
+            "music_attempted",
+            "music_succeeded",
+            "sfx_attempted",
+            "sfx_succeeded",
+            "llm_cost_usd",
+            "image_cost_usd",
+            "audio_cost_usd",
+            "total_cost_usd",
+            "generation_time_seconds",
+            "generation_time_human",
         ]
         for key in required:
             assert key in d, f"Missing key: {key}"
@@ -194,8 +207,10 @@ class TestSerialization:
 
     def test_to_dict_local_costs_are_none(self):
         stats = GenerationStats(
-            llm_backend="local", image_backend="local",
-            music_backend="none", sfx_backend="none",
+            llm_backend="local",
+            image_backend="local",
+            music_backend="none",
+            sfx_backend="none",
         )
         stats.finish()
         d = stats.to_dict()

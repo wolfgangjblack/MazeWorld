@@ -31,18 +31,14 @@ class TestLlamaPromptSet:
         assert req.max_tokens == 40
 
     def test_conversation_identity_returns_str(self):
-        identity = self.prompts.conversation_identity(
-            "Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak"
-        )
+        identity = self.prompts.conversation_identity("Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak")
         assert isinstance(identity, str)
         assert "Arin" in identity
         assert "hunter" in identity
         assert "forest" in identity
 
     def test_npc_greeting_returns_llm_request(self):
-        identity = self.prompts.conversation_identity(
-            "Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak"
-        )
+        identity = self.prompts.conversation_identity("Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak")
         req = self.prompts.npc_greeting("Arin", identity)
         assert isinstance(req, LLMRequest)
         assert req.system == identity
@@ -75,9 +71,7 @@ class TestClaudePromptSet:
         assert "forest" in req.user_message
 
     def test_conversation_identity_returns_str(self):
-        identity = self.prompts.conversation_identity(
-            "Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak"
-        )
+        identity = self.prompts.conversation_identity("Arin", "hunter", "cheerful", "tracking", "forest", "Iron Oak")
         assert isinstance(identity, str)
         assert "Arin" in identity
         assert "concise" in identity.lower() or "1-3 sentences" in identity

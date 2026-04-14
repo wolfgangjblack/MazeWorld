@@ -16,8 +16,8 @@ GAMEPLAY_AUDIT_PROMPT = (
     "4. Do multi-step quests form logical chains?\n"
     "5. Are monster encounters appropriately themed and scaled?\n"
     "6. Is the mix of time-gated encounters reasonable (~20%)?\n\n"
-    "Return JSON: {{\"issues\": [{{\"severity\": \"warning\"|\"error\", "
-    "\"message\": \"...\", \"entity_id\": \"...\"}}]}}"
+    'Return JSON: {{"issues": [{{"severity": "warning"|"error", '
+    '"message": "...", "entity_id": "..."}}]}}'
 )
 
 NARRATIVE_COHERENCE_PROMPT = (
@@ -31,7 +31,7 @@ NARRATIVE_COHERENCE_PROMPT = (
     "1. Do the NPCs and quests fit the story beat?\n"
     "2. Is the faction's presence reflected in encounters and quests?\n"
     "3. Do quest rewards make narrative sense?\n\n"
-    "Return JSON: {{\"coherent\": true/false, \"suggestions\": [...]}}"
+    'Return JSON: {{"coherent": true/false, "suggestions": [...]}}'
 )
 
 CROSS_ROOM_QUEST_PROMPT = (
@@ -43,5 +43,5 @@ CROSS_ROOM_QUEST_PROMPT = (
     "1. Quest target is in the current room or at most 1 room ahead\n"
     "2. No backtracking required\n"
     "3. Quest can be completed with available resources\n\n"
-    "Return JSON: {{\"completable\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"completable": true/false, "reasons": [...]}}'
 )

@@ -20,6 +20,7 @@ from src.models.player import (
 # Stats tests
 # ---------------------------------------------------------------------------
 
+
 class TestStats:
     def test_modifier_positive(self):
         s = Stats(STR=16)
@@ -60,6 +61,7 @@ class TestStats:
 # ---------------------------------------------------------------------------
 # Stat fixer tests
 # ---------------------------------------------------------------------------
+
 
 class TestFixStats:
     def test_fix_stats_warrior_hits_budget(self):
@@ -108,6 +110,7 @@ class TestFixStats:
 # Fallback class generation tests
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackClass:
     @pytest.mark.parametrize("archetype", ["warrior", "mage", "healer", "jester"])
     def test_fallback_has_correct_archetype(self, archetype):
@@ -124,6 +127,7 @@ class TestFallbackClass:
 # ---------------------------------------------------------------------------
 # Check classes tests (fills missing archetypes)
 # ---------------------------------------------------------------------------
+
 
 class TestCheckClasses:
     def test_check_fills_missing(self):
@@ -148,42 +152,38 @@ class TestCheckClasses:
 # Validate classes tests (convert to PlayerClass)
 # ---------------------------------------------------------------------------
 
+
 class TestValidateClasses:
     def test_validate_produces_player_class_objects(self):
-        raw = [_fallback_class(a, "forest", "Shadowleaf")
-               for a in ["warrior", "mage", "healer", "jester"]]
+        raw = [_fallback_class(a, "forest", "Shadowleaf") for a in ["warrior", "mage", "healer", "jester"]]
         result = _validate_classes(raw, "forest", "Shadowleaf")
         assert len(result) == 4
         for pc in result:
             assert isinstance(pc, PlayerClass)
 
     def test_validate_warrior_has_abilities(self):
-        raw = [_fallback_class(a, "forest", "Shadowleaf")
-               for a in ["warrior", "mage", "healer", "jester"]]
+        raw = [_fallback_class(a, "forest", "Shadowleaf") for a in ["warrior", "mage", "healer", "jester"]]
         result = _validate_classes(raw, "forest", "Shadowleaf")
         warrior = result[0]
         assert warrior.archetype == "warrior"
         assert len(warrior.abilities) >= 4
 
     def test_validate_mage_has_spells(self):
-        raw = [_fallback_class(a, "forest", "Shadowleaf")
-               for a in ["warrior", "mage", "healer", "jester"]]
+        raw = [_fallback_class(a, "forest", "Shadowleaf") for a in ["warrior", "mage", "healer", "jester"]]
         result = _validate_classes(raw, "forest", "Shadowleaf")
         mage = result[1]
         assert mage.archetype == "mage"
         assert len(mage.spells) >= 4
 
     def test_validate_healer_has_spells(self):
-        raw = [_fallback_class(a, "forest", "Shadowleaf")
-               for a in ["warrior", "mage", "healer", "jester"]]
+        raw = [_fallback_class(a, "forest", "Shadowleaf") for a in ["warrior", "mage", "healer", "jester"]]
         result = _validate_classes(raw, "forest", "Shadowleaf")
         healer = result[2]
         assert healer.archetype == "healer"
         assert len(healer.spells) >= 4
 
     def test_validate_all_stats_on_budget(self):
-        raw = [_fallback_class(a, "forest", "Shadowleaf")
-               for a in ["warrior", "mage", "healer", "jester"]]
+        raw = [_fallback_class(a, "forest", "Shadowleaf") for a in ["warrior", "mage", "healer", "jester"]]
         result = _validate_classes(raw, "forest", "Shadowleaf")
         for pc in result:
             assert pc.stats.total() == STAT_BUDGET, f"{pc.archetype} total={pc.stats.total()}"
@@ -192,6 +192,7 @@ class TestValidateClasses:
 # ---------------------------------------------------------------------------
 # PlayerCharacter class integration tests
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerCharacterClassIntegration:
     def _make_class(self, archetype="warrior"):
@@ -272,15 +273,18 @@ class TestPlayerCharacterClassIntegration:
 # Screen state transition tests
 # ---------------------------------------------------------------------------
 
+
 class TestScreenTransitions:
     def test_class_select_state_exists(self):
         from src.controllers.screen_controller import ScreenController, ScreenState
+
         sc = ScreenController(ScreenState.START)
         sc.replace(ScreenState.CLASS_SELECT)
         assert sc.state == ScreenState.CLASS_SELECT
 
     def test_room_intro_state_exists(self):
         from src.controllers.screen_controller import ScreenController, ScreenState
+
         sc = ScreenController(ScreenState.START)
         sc.replace(ScreenState.CLASS_SELECT)
         sc.replace(ScreenState.ROOM_INTRO)
@@ -288,6 +292,7 @@ class TestScreenTransitions:
 
     def test_level_up_state_exists(self):
         from src.controllers.screen_controller import ScreenController, ScreenState
+
         sc = ScreenController(ScreenState.GAMEPLAY)
         sc.push(ScreenState.LEVEL_UP)
         assert sc.state == ScreenState.LEVEL_UP
@@ -296,6 +301,7 @@ class TestScreenTransitions:
 
     def test_full_flow_transitions(self):
         from src.controllers.screen_controller import ScreenController, ScreenState
+
         sc = ScreenController(ScreenState.START)
         sc.replace(ScreenState.CLASS_SELECT)
         sc.replace(ScreenState.ROOM_INTRO)

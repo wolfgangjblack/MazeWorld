@@ -27,10 +27,10 @@ _ELEVENLABS_COST_PER_SFX = 0.04
 class GenerationStats:
     """Accumulates stats during a single generate_world() run."""
 
-    llm_backend: str = "local"    # "api" | "local"
+    llm_backend: str = "local"  # "api" | "local"
     image_backend: str = "local"  # "api" | "local"
-    music_backend: str = "none"   # "none" | "api"
-    sfx_backend: str = "none"     # "none" | "elevenlabs"
+    music_backend: str = "none"  # "none" | "api"
+    sfx_backend: str = "none"  # "none" | "elevenlabs"
 
     # LLM usage
     llm_calls: int = 0
@@ -115,10 +115,7 @@ class GenerationStats:
         if self.music_backend == "none":
             return None
         pro_count = self.music_succeeded - self.music_clip_succeeded
-        return (
-            pro_count * _LYRIA_PRO_COST_PER_TRACK
-            + self.music_clip_succeeded * _LYRIA_CLIP_COST_PER_TRACK
-        )
+        return pro_count * _LYRIA_PRO_COST_PER_TRACK + self.music_clip_succeeded * _LYRIA_CLIP_COST_PER_TRACK
 
     @property
     def sfx_cost_usd(self) -> float | None:
@@ -171,18 +168,10 @@ class GenerationStats:
             "music_succeeded": self.music_succeeded,
             "sfx_attempted": self.sfx_attempted,
             "sfx_succeeded": self.sfx_succeeded,
-            "llm_cost_usd": (
-                round(self.llm_cost_usd, 4) if self.llm_cost_usd is not None else None
-            ),
-            "image_cost_usd": (
-                round(self.image_cost_usd, 4) if self.image_cost_usd is not None else None
-            ),
-            "audio_cost_usd": (
-                round(self.audio_cost_usd, 4) if self.audio_cost_usd is not None else None
-            ),
-            "total_cost_usd": (
-                round(self.total_cost_usd, 4) if self.total_cost_usd is not None else None
-            ),
+            "llm_cost_usd": (round(self.llm_cost_usd, 4) if self.llm_cost_usd is not None else None),
+            "image_cost_usd": (round(self.image_cost_usd, 4) if self.image_cost_usd is not None else None),
+            "audio_cost_usd": (round(self.audio_cost_usd, 4) if self.audio_cost_usd is not None else None),
+            "total_cost_usd": (round(self.total_cost_usd, 4) if self.total_cost_usd is not None else None),
             "generation_time_seconds": round(self.generation_seconds, 1),
             "generation_time_human": self.generation_time_human,
         }
@@ -191,8 +180,7 @@ class GenerationStats:
         """Log a human-readable stats summary to the given logger."""
         d = self.to_dict()
         logger.info("=== Generation Stats ===")
-        logger.info("  Time: %s (%.0fs)", d["generation_time_human"],
-                    d["generation_time_seconds"])
+        logger.info("  Time: %s (%.0fs)", d["generation_time_human"], d["generation_time_seconds"])
         logger.info(
             "  LLM: %d calls, %s tokens (%s in / %s out) [%s]",
             d["llm_calls"],

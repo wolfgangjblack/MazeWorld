@@ -32,6 +32,7 @@ def set_stats(stats) -> None:
     global _active_stats
     _active_stats = stats
 
+
 SFX_DIR = "data/sfx"
 
 # ---------------------------------------------------------------------------
@@ -131,6 +132,7 @@ FIXED_SFX_PROMPTS: dict[str, dict] = {
 # Async generation core
 # ---------------------------------------------------------------------------
 
+
 def _generate_one_sfx_sync(
     client,
     prompt: str,
@@ -170,7 +172,13 @@ async def _generate_sfx_async(
 ) -> tuple[str, str | None]:
     """Wrap synchronous ElevenLabs call in a thread for async concurrency."""
     return await asyncio.to_thread(
-        _generate_one_sfx_sync, client, prompt, sfx_name, save_dir, duration, loop,
+        _generate_one_sfx_sync,
+        client,
+        prompt,
+        sfx_name,
+        save_dir,
+        duration,
+        loop,
     )
 
 
@@ -195,11 +203,13 @@ async def generate_all_sfx_async(
         return {}
 
     from config import MUSIC_BACKEND
+
     if MUSIC_BACKEND != "api":
         logger.info("MUSIC_BACKEND=%s — skipping SFX generation.", MUSIC_BACKEND)
         return {}
 
     from elevenlabs import ElevenLabs
+
     client = ElevenLabs(api_key=key)
 
     tasks = []

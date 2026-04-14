@@ -16,9 +16,7 @@ def test_item_tiles_match_density():
 
     item_tiles = m.get_tiles_by_type("item")
     expected = math.ceil(pool_size * ITEM_DENSITY)
-    assert abs(len(item_tiles) - expected) <= 1, (
-        f"Items: got {len(item_tiles)}, expected ~{expected}"
-    )
+    assert abs(len(item_tiles) - expected) <= 1, f"Items: got {len(item_tiles)}, expected ~{expected}"
 
 
 def test_place_character():
@@ -36,9 +34,7 @@ def test_place_event_tiles_count():
     open_count = len(m.find_open_spaces())
     m.place_event_tiles()
 
-    event_count = sum(
-        1 for row in m.grid for cell in row if cell == m.event_tile_id
-    )
+    event_count = sum(1 for row in m.grid for cell in row if cell == m.event_tile_id)
     expected = math.ceil(open_count * m.event_percent)
     assert event_count == expected
 

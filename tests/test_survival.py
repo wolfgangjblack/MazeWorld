@@ -22,7 +22,6 @@ def _make_player(stamina=100) -> PlayerCharacter:
 
 
 class TestStaminaDrain:
-
     def test_on_time_update_drains_stamina(self):
         survival = SurvivalSystem()
         player = _make_player(stamina=100)
@@ -60,7 +59,6 @@ class TestStaminaDrain:
 
 
 class TestThresholdWarnings:
-
     def test_warning_at_50_percent(self):
         survival = SurvivalSystem()
         player = _make_player(stamina=51)
@@ -123,7 +121,6 @@ class TestThresholdWarnings:
 
 
 class TestSpellEffectiveness:
-
     def test_full_effectiveness_above_25(self):
         survival = SurvivalSystem()
         player = _make_player(stamina=26)
@@ -141,7 +138,6 @@ class TestSpellEffectiveness:
 
 
 class TestSpeedPenalty:
-
     def test_speed_drops_at_25_percent(self):
         survival = SurvivalSystem()
         player = _make_player(stamina=25)
@@ -164,7 +160,6 @@ class TestSpeedPenalty:
 
 
 class TestCanCast:
-
     def test_cannot_cast_at_10_percent(self):
         survival = SurvivalSystem()
         player = _make_player(stamina=10)
