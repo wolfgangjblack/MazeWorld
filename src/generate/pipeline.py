@@ -399,7 +399,7 @@ def _phase3a_classes(environments: list[dict], story: OverarchingStory, bible: W
 
 def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[dict]]:
     """Generate items for a room and distribute across item tiles."""
-    from src.db_constants import next_id, DB_PATHS
+    from src.db_constants import DB_PATHS, next_id
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
@@ -472,7 +472,7 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 
 def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
-    from src.db_constants import next_id, DB_PATHS
+    from src.db_constants import DB_PATHS, next_id
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
@@ -574,7 +574,7 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
 
 def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
     """Generate monster database for a room via LLM and write to global DB."""
-    from src.db_constants import next_id, DB_PATHS
+    from src.db_constants import DB_PATHS, next_id
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
@@ -952,7 +952,7 @@ def _phase4a_events(
     if registry_tools:
         tool_attrs = list(dict.fromkeys(registry_tools))
 
-    from src.db_constants import next_id, DB_PATHS
+    from src.db_constants import DB_PATHS, next_id
 
     event_tiles = maze.get_tiles_by_type("event")
     event_list = []
