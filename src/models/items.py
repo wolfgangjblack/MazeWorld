@@ -1,5 +1,6 @@
 import random
 from typing import Optional, Tuple
+
 from pydantic import BaseModel
 
 # Consumable stat scaling by room level (Phase 4)
@@ -20,11 +21,13 @@ def consumable_scale_factor(room_level: int) -> float:
 def scale_item_stats(stats: "ItemStats", room_level: int) -> "ItemStats":
     """Return a copy of stats with stamina/health/price scaled by room level."""
     factor = consumable_scale_factor(room_level)
-    return stats.model_copy(update={
-        "stamina_value": int(stats.stamina_value * factor),
-        "health_value": int(stats.health_value * factor),
-        "price": int(stats.price * factor),
-    })
+    return stats.model_copy(
+        update={
+            "stamina_value": int(stats.stamina_value * factor),
+            "health_value": int(stats.health_value * factor),
+            "price": int(stats.price * factor),
+        }
+    )
 
 
 class ItemStats(BaseModel):
@@ -39,6 +42,7 @@ class ItemStats(BaseModel):
 
 class Item(BaseModel):
     """Base class for all items."""
+
     category: str
     name: str
     desc: str
@@ -55,7 +59,7 @@ class Item(BaseModel):
     def give(self):
         """Give the item to someone."""
         return f"You gave away the {self.name}."
-    
+
     def clone(self):
         return self.model_copy(deep=True)
 
@@ -72,7 +76,7 @@ class Food(Item):
 
     def use(self, player):
         """Feed the player. Base stats + player CON modifier."""
-        con_mod = player.get_stat_mod("CON") if hasattr(player, 'get_stat_mod') else 0
+        con_mod = player.get_stat_mod("CON") if hasattr(player, "get_stat_mod") else 0
         base_hp = self.item_stats.health_value or 5
         base_stam = self.item_stats.stamina_value or 15
         hp_heal = max(1, base_hp + con_mod)
@@ -87,7 +91,7 @@ class Drink(Item):
 
     def use(self, player):
         """Refresh the player. Base stats + player CON modifier."""
-        con_mod = player.get_stat_mod("CON") if hasattr(player, 'get_stat_mod') else 0
+        con_mod = player.get_stat_mod("CON") if hasattr(player, "get_stat_mod") else 0
         base_hp = self.item_stats.health_value or 5
         base_stam = self.item_stats.stamina_value or 15
         hp_heal = max(1, base_hp + con_mod)
@@ -95,14 +99,15 @@ class Drink(Item):
         player.health = min(player.health + hp_heal, player.max_health)
         player.stamina = min(player.stamina + stam_heal, player.max_stamina)
         return f"You drank the {self.name}. (+{hp_heal} HP, +{stam_heal} stamina)"
-    
+
+
 class Tool(Item):
     """Represents tool items.
     1. Types can be 'bludgeon', 'cutting', 'digging', 'climbing'
     2. Negative stamina_value indicates a cost of using the tool
-    3. Uses is the number of times the tool can be used before it breaks. 
+    3. Uses is the number of times the tool can be used before it breaks.
     """
-        
+
     def use(self, player):
         """Use the tool. Tools can have negative stamina values as a cost."""
         player.stamina = max(0, player.stamina + self.item_stats.stamina_value)
@@ -112,7 +117,7 @@ class Tool(Item):
         if self.item_stats.uses <= 0:
             # The tool breaks
             return f"The {self.name} broke."
-        
+
         return f"You used the {self.name}. It still seems useful"
 
 
@@ -121,6 +126,7 @@ class Weapon(Item):
     Types: heavy (STR), light (DEX), simple (STR/INT).
     Categories: simple (any class) or martial (warrior/jester only).
     """
+
     weapon_type: str = "simple"  # "heavy", "light", "simple"
     damage_type: str = "physical"  # "slashing", "piercing", "bludgeoning"
     weapon_category: str = "simple"  # "simple", "martial"
@@ -150,6 +156,7 @@ class SpellScroll(Item):
     """Consumable single-use spell scroll.
     Solves events/quests/puzzles. Jester class can learn permanently.
     """
+
     spell_effect: str = "generic"  # describes what the spell does
 
     def use(self, player):
@@ -161,11 +168,12 @@ class SpellScroll(Item):
 
 class EscortItem(Item):
     """Represents an NPC being escorted. Cannot be consumed or dropped."""
+
     npc_id: int = 0
     target_zone: Tuple[int, int] = (0, 0)
 
     def use(self, player):
-        return "\"Are we there yet?\""
+        return '"Are we there yet?"'
 
     def give(self):
         return "You can't abandon your escort!"

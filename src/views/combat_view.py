@@ -8,10 +8,11 @@ Layout (top to bottom):
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 from src.controllers.combat_controller import CombatController
 from src.models.combat import CombatState
-from src.models.weapon import resolve_weapon_stat, weapon_stat_bonus, step_down_weapon_dice
+from src.models.weapon import resolve_weapon_stat, step_down_weapon_dice, weapon_stat_bonus
 from src.views.portrait_utils import load_portrait
 
 RED = (220, 50, 50)
@@ -23,15 +24,16 @@ LIGHT_GRAY = (180, 180, 180)
 YELLOW = (255, 220, 50)
 MED_GRAY = (70, 70, 70)
 
+
 def _weapon_type_tag(weapon) -> str:
     """Build a short tag like '[slashing]' or '[slashing + fire]' for UI display."""
     if weapon is None:
         return ""
     parts = []
-    dt = getattr(weapon, 'damage_type', 'physical')
+    dt = getattr(weapon, "damage_type", "physical")
     if dt and dt != "physical":
         parts.append(dt)
-    me = getattr(weapon, 'magic_element', None)
+    me = getattr(weapon, "magic_element", None)
     if me:
         parts.append(me)
     return f"[{' + '.join(parts)}]" if parts else ""
@@ -63,41 +65,56 @@ class CombatView:
         self.log_font = pygame.font.SysFont(None, 18)
         self.log_scroll = 0
 
-    def draw(self, combat: CombatController, selected_action: int = 0,
-             selected_target: int = 0, selecting_target: bool = False,
-             selecting_spell: bool = False, selected_spell: int = 0,
-             selecting_item: bool = False, selected_item: int = 0,
-             game_over_selection: int = 0, is_gate_fight: bool = False,
-             highlight_all_targets: bool = False,
-             loot_summary: list[str] | None = None,
-             pending_action: str = "",
-             pending_spell_index: int = -1,
-             showing_result: bool = False,
-             result_text: str = "",
-             browsing_log: bool = False,
-             log_browse_scroll: int = 0):
+    def draw(
+        self,
+        combat: CombatController,
+        selected_action: int = 0,
+        selected_target: int = 0,
+        selecting_target: bool = False,
+        selecting_spell: bool = False,
+        selected_spell: int = 0,
+        selecting_item: bool = False,
+        selected_item: int = 0,
+        game_over_selection: int = 0,
+        is_gate_fight: bool = False,
+        highlight_all_targets: bool = False,
+        loot_summary: list[str] | None = None,
+        pending_action: str = "",
+        pending_spell_index: int = -1,
+        showing_result: bool = False,
+        result_text: str = "",
+        browsing_log: bool = False,
+        log_browse_scroll: int = 0,
+    ):
         self.screen.fill(DARK_GRAY)
         self._draw_player_stats(combat.player)
         self._draw_turn_order(combat)
-        self._draw_monsters(combat,
-                            selecting_target=selecting_target,
-                            selected_target=selected_target,
-                            highlight_all=highlight_all_targets)
-        self._draw_action_menu(combat, selected_action, selected_target,
-                               selecting_target, selecting_spell, selected_spell,
-                               selecting_item, selected_item,
-                               is_gate_fight=is_gate_fight,
-                               highlight_all=highlight_all_targets,
-                               pending_action=pending_action,
-                               pending_spell_index=pending_spell_index,
-                               showing_result=showing_result,
-                               result_text=result_text,
-                               browsing_log=browsing_log,
-                               log_browse_scroll=log_browse_scroll)
+        self._draw_monsters(
+            combat,
+            selecting_target=selecting_target,
+            selected_target=selected_target,
+            highlight_all=highlight_all_targets,
+        )
+        self._draw_action_menu(
+            combat,
+            selected_action,
+            selected_target,
+            selecting_target,
+            selecting_spell,
+            selected_spell,
+            selecting_item,
+            selected_item,
+            is_gate_fight=is_gate_fight,
+            highlight_all=highlight_all_targets,
+            pending_action=pending_action,
+            pending_spell_index=pending_spell_index,
+            showing_result=showing_result,
+            result_text=result_text,
+            browsing_log=browsing_log,
+            log_browse_scroll=log_browse_scroll,
+        )
         self._draw_combat_log(combat)
-        self._draw_state_banner(combat, game_over_selection,
-                                loot_summary=loot_summary,
-                                showing_result=showing_result)
+        self._draw_state_banner(combat, game_over_selection, loot_summary=loot_summary, showing_result=showing_result)
 
     # ------------------------------------------------------------------
     # Player stats — top of screen
@@ -163,10 +180,13 @@ class CombatView:
     # Monster area — centered
     # ------------------------------------------------------------------
 
-    def _draw_monsters(self, combat: CombatController,
-                       selecting_target: bool = False,
-                       selected_target: int = 0,
-                       highlight_all: bool = False):
+    def _draw_monsters(
+        self,
+        combat: CombatController,
+        selecting_target: bool = False,
+        selected_target: int = 0,
+        highlight_all: bool = False,
+    ):
         alive = [m for m in combat.monsters if m.is_alive]
         if not alive:
             return
@@ -283,18 +303,25 @@ class CombatView:
 
         return [row0, row1]
 
-    def _draw_action_menu(self, combat: CombatController, selected: int,
-                          selected_target: int, selecting_target: bool,
-                          selecting_spell: bool = False, selected_spell: int = 0,
-                          selecting_item: bool = False, selected_item: int = 0,
-                          is_gate_fight: bool = False,
-                          highlight_all: bool = False,
-                          pending_action: str = "",
-                          pending_spell_index: int = -1,
-                          showing_result: bool = False,
-                          result_text: str = "",
-                          browsing_log: bool = False,
-                          log_browse_scroll: int = 0):
+    def _draw_action_menu(
+        self,
+        combat: CombatController,
+        selected: int,
+        selected_target: int,
+        selecting_target: bool,
+        selecting_spell: bool = False,
+        selected_spell: int = 0,
+        selecting_item: bool = False,
+        selected_item: int = 0,
+        is_gate_fight: bool = False,
+        highlight_all: bool = False,
+        pending_action: str = "",
+        pending_spell_index: int = -1,
+        showing_result: bool = False,
+        result_text: str = "",
+        browsing_log: bool = False,
+        log_browse_scroll: int = 0,
+    ):
         menu_y = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 10
 
         if showing_result:
@@ -308,7 +335,8 @@ class CombatView:
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
             hint = self.font.render(
                 "Enemy turn..." if combat.state == CombatState.ONGOING else "",
-                True, LIGHT_GRAY,
+                True,
+                LIGHT_GRAY,
             )
             self.screen.blit(hint, (20, menu_y + 10))
             return
@@ -322,10 +350,14 @@ class CombatView:
             return
 
         if selecting_target:
-            self._draw_target_selector(combat, menu_y, selected_target,
-                                       highlight_all=highlight_all,
-                                       pending_action=pending_action,
-                                       pending_spell_index=pending_spell_index)
+            self._draw_target_selector(
+                combat,
+                menu_y,
+                selected_target,
+                highlight_all=highlight_all,
+                pending_action=pending_action,
+                pending_spell_index=pending_spell_index,
+            )
             return
 
         grid = self.get_action_grid(combat, is_gate_fight=is_gate_fight)
@@ -345,7 +377,7 @@ class CombatView:
                     continue
                 cx = 30 + c * col_w
                 cy = menu_y + 8 + r * row_h
-                is_sel = (r == sel_row and c == sel_col)
+                is_sel = r == sel_row and c == sel_col
                 color = YELLOW if is_sel else LIGHT_GRAY
                 prefix = "> " if is_sel else "  "
                 text = self.font.render(f"{prefix}{label}", True, color)
@@ -354,10 +386,15 @@ class CombatView:
         tab_hint = self.small_font.render("Tab: Combat Log", True, MED_GRAY)
         self.screen.blit(tab_hint, (SCREEN_WIDTH - tab_hint.get_width() - 25, menu_y + panel_h - 14))
 
-    def _draw_target_selector(self, combat: CombatController, y: int, selected_target: int,
-                              highlight_all: bool = False,
-                              pending_action: str = "",
-                              pending_spell_index: int = -1):
+    def _draw_target_selector(
+        self,
+        combat: CombatController,
+        y: int,
+        selected_target: int,
+        highlight_all: bool = False,
+        pending_action: str = "",
+        pending_spell_index: int = -1,
+    ):
         panel_h = self.GRID_ROWS * 36 + 16
         pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
         pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
@@ -481,7 +518,8 @@ class CombatView:
         return pairs
 
     def _draw_item_selector(self, combat: CombatController, y: int, selected_item: int):
-        from src.models.items import Food, Drink
+        from src.models.items import Drink, Food
+
         panel_h = self.GRID_ROWS * 36 + 16
         pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
         pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
@@ -490,8 +528,7 @@ class CombatView:
         self.screen.blit(label, (20, y + 4))
 
         consumables = [
-            (name, item) for name, item in combat.player.inventory.items()
-            if isinstance(item, (Food, Drink))
+            (name, item) for name, item in combat.player.inventory.items() if isinstance(item, (Food, Drink))
         ]
 
         item_y = y + 26
@@ -628,9 +665,13 @@ class CombatView:
     # State banner
     # ------------------------------------------------------------------
 
-    def _draw_state_banner(self, combat: CombatController, game_over_selection: int = 0,
-                           loot_summary: list[str] | None = None,
-                           showing_result: bool = False):
+    def _draw_state_banner(
+        self,
+        combat: CombatController,
+        game_over_selection: int = 0,
+        loot_summary: list[str] | None = None,
+        showing_result: bool = False,
+    ):
         if combat.state == CombatState.ONGOING or showing_result:
             return
 

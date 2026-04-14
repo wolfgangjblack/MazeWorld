@@ -1,17 +1,20 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from src.models.npc import StaticNPC
-from src.models.quest import Quest, QuestReward
+from src.models.quest import Quest
 from src.systems.quest_manager import QuestManager
 from src.utils.conversation_utils import (
-    generate_npc_response, _extract_response, has_dialogue_choices,
+    _extract_response,
     _extract_response_with_cha,
+    generate_npc_response,
+    has_dialogue_choices,
 )
 
 
 def _make_npc(**overrides):
-    defaults = dict(x=0, y=0, id=1000, name="Arin", job="hunter",
-                    personality="cheerful", hobby="tracking",
-                    environment="forest")
+    defaults = dict(
+        x=0, y=0, id=1000, name="Arin", job="hunter", personality="cheerful", hobby="tracking", environment="forest"
+    )
     defaults.update(overrides)
     npc = StaticNPC(**defaults)
     npc.prepare()
@@ -21,6 +24,7 @@ def _make_npc(**overrides):
 # ---------------------------------------------------------------------------
 # Three-branch dispatch in generate_npc_response
 # ---------------------------------------------------------------------------
+
 
 class TestGenerateNpcResponse:
     @patch("src.utils.conversation_utils.generate", return_value="Hello traveler!")
@@ -93,6 +97,7 @@ class TestGenerateNpcResponse:
 # _extract_response
 # ---------------------------------------------------------------------------
 
+
 class TestExtractResponse:
     def test_strips_output_prefix(self):
         raw = "preamble\n##Output: Hello there!\nmore stuff"
@@ -116,6 +121,7 @@ class TestExtractResponse:
 # ---------------------------------------------------------------------------
 # has_dialogue_choices
 # ---------------------------------------------------------------------------
+
 
 class TestHasDialogueChoices:
     @patch("src.utils.conversation_utils.GAME_MODE", "offline_static")
@@ -187,6 +193,7 @@ class TestHasDialogueChoices:
 # _extract_response_with_cha
 # ---------------------------------------------------------------------------
 
+
 class TestExtractResponseWithCha:
     def test_parses_cha_json_from_last_line(self):
         raw = 'I am happy to help you.\n{"dc_next": 12, "tone": "friendly"}'
@@ -223,6 +230,7 @@ class TestExtractResponseWithCha:
 # Dialogue tree swap via QuestManager
 # ---------------------------------------------------------------------------
 
+
 class TestDialogueTreeSwap:
     def _make_quest_npc(self):
         npc = _make_npc(quest_id=4000)
@@ -251,8 +259,7 @@ class TestDialogueTreeSwap:
 
     def test_swap_to_complete_on_success(self):
         npc = self._make_quest_npc()
-        quest = Quest(id=4000, type="combat", title="Slay the beast",
-                      description="Kill it", giver_npc_id=npc.id)
+        quest = Quest(id=4000, type="combat", title="Slay the beast", description="Kill it", giver_npc_id=npc.id)
         quest.status = "active"
 
         player = MagicMock()
@@ -269,8 +276,7 @@ class TestDialogueTreeSwap:
 
     def test_swap_to_failed_on_failure(self):
         npc = self._make_quest_npc()
-        quest = Quest(id=4000, type="combat", title="Slay the beast",
-                      description="Kill it", giver_npc_id=npc.id)
+        quest = Quest(id=4000, type="combat", title="Slay the beast", description="Kill it", giver_npc_id=npc.id)
         quest.status = "active"
 
         player = MagicMock()
@@ -289,8 +295,7 @@ class TestDialogueTreeSwap:
         original_tree = {"nodes": {"start": {"prompt": "Hi", "choices": []}}}
         npc.dialogue_tree = original_tree
 
-        quest = Quest(id=4000, type="fetch", title="Fetch herbs",
-                      description="Get herbs", giver_npc_id=npc.id)
+        quest = Quest(id=4000, type="fetch", title="Fetch herbs", description="Get herbs", giver_npc_id=npc.id)
         quest.status = "active"
 
         player = MagicMock()
@@ -306,6 +311,7 @@ class TestDialogueTreeSwap:
 # ---------------------------------------------------------------------------
 # Triple-tree mapping (pipeline assigns LLM response to NPC model fields)
 # ---------------------------------------------------------------------------
+
 
 class TestTripleTreeMapping:
     """Verify the mapping logic used in _phase4b_dialogue Step B."""

@@ -3,31 +3,36 @@ real-time day/night, night monsters, summary agent, and portrait prompt builders
 
 import random
 
-from src.models.items import (
-    CONSUMABLE_SCALING, consumable_scale_factor, scale_item_stats,
-    ItemStats, Food,
-)
-from src.models.weapon import (
-    STARTER_WEAPONS, WEAPON_CATEGORY_ACCESS, weapon_stat_bonus,
-)
-from src.models.player import PlayerCharacter, PlayerClass, Stats
-from src.models.time import DayNightCycle, TimePeriod, FULL_CYCLE_MS
-from src.models.world_bible import WorldBible, RoomBible
-from src.models.story import OverarchingStory, Faction
 from src.generate.summary_agent import (
     _build_story_context,
-    build_npc_portrait_prompt,
-    build_monster_portrait_prompt,
     build_class_portrait_prompt,
-    build_item_portrait_prompt,
-    build_room_portrait_prompt,
     build_game_over_portrait_prompt,
+    build_item_portrait_prompt,
+    build_monster_portrait_prompt,
+    build_npc_portrait_prompt,
+    build_room_portrait_prompt,
 )
-
+from src.models.items import (
+    CONSUMABLE_SCALING,
+    Food,
+    ItemStats,
+    consumable_scale_factor,
+    scale_item_stats,
+)
+from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.models.story import Faction, OverarchingStory
+from src.models.time import FULL_CYCLE_MS, DayNightCycle, TimePeriod
+from src.models.weapon import (
+    STARTER_WEAPONS,
+    WEAPON_CATEGORY_ACCESS,
+    weapon_stat_bonus,
+)
+from src.models.world_bible import RoomBible, WorldBible
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_player(archetype="warrior"):
     stat_blocks = {
@@ -74,6 +79,7 @@ def _make_bible():
 # Phase 4: Consumable Scaling
 # ===========================================================================
 
+
 class TestConsumableScaling:
     def test_scaling_factors(self):
         assert consumable_scale_factor(1) == 1.0
@@ -97,7 +103,9 @@ class TestConsumableScaling:
 
     def test_scaled_clone(self):
         food = Food(
-            category="food", name="Bread", desc="Tasty",
+            category="food",
+            name="Bread",
+            desc="Tasty",
             item_stats=ItemStats(stamina_value=10, price=5),
         )
         scaled = food.scaled_clone(3)
@@ -112,6 +120,7 @@ class TestConsumableScaling:
 # ===========================================================================
 # Weapon Soft-Restriction
 # ===========================================================================
+
 
 class TestWeaponSoftRestriction:
     def test_matching_class_gets_bonus(self):
@@ -164,6 +173,7 @@ class TestWeaponSoftRestriction:
 # ===========================================================================
 # Phase 8: Real-Time Day/Night Cycle
 # ===========================================================================
+
 
 class TestRealTimeDayNight:
     def test_initial_period_is_dawn(self):
@@ -240,12 +250,14 @@ class TestRealTimeDayNight:
 # Summary Agent: Portrait Prompt Builders
 # ===========================================================================
 
+
 class TestPortraitPrompts:
     def test_npc_portrait_prompt(self):
         bible = _make_bible()
         prompt = build_npc_portrait_prompt(
             {"name": "Grom", "job": "blacksmith", "personality": "gruff but kind"},
-            bible, room_id="room_0",
+            bible,
+            room_id="room_0",
         )
         assert "Grom" in prompt
         assert "blacksmith" in prompt
@@ -256,7 +268,8 @@ class TestPortraitPrompts:
         bible = _make_bible()
         prompt = build_monster_portrait_prompt(
             {"species": "Shadow Wolf", "elemental_affinity": "dark"},
-            bible, room_id="room_0",
+            bible,
+            room_id="room_0",
         )
         assert "Shadow Wolf" in prompt
         assert "dark" in prompt
@@ -265,9 +278,12 @@ class TestPortraitPrompts:
     def test_class_portrait_prompt(self):
         bible = _make_bible()
         prompt = build_class_portrait_prompt(
-            {"name": "Fire Mage", "archetype": "mage",
-             "flavor_text": "Wielder of ancient flames",
-             "environment": "dungeon"},
+            {
+                "name": "Fire Mage",
+                "archetype": "mage",
+                "flavor_text": "Wielder of ancient flames",
+                "environment": "dungeon",
+            },
             bible,
         )
         assert "Fire Mage" in prompt
@@ -278,7 +294,8 @@ class TestPortraitPrompts:
         bible = _make_bible()
         prompt = build_item_portrait_prompt(
             {"name": "Crystal Sword", "desc": "A blade forged in starlight"},
-            bible, room_id="room_0",
+            bible,
+            room_id="room_0",
         )
         assert "Crystal Sword" in prompt
         assert "dungeon" in prompt
@@ -305,6 +322,7 @@ class TestPortraitPrompts:
 # Summary Agent: Story Context Builder
 # ===========================================================================
 
+
 class TestStoryContext:
     def test_build_story_context(self):
         story = OverarchingStory(
@@ -329,37 +347,51 @@ class TestStoryContext:
 # View constructors accept new params
 # ===========================================================================
 
+
 class TestViewParams:
     def test_gameover_view_story_param(self):
         """GameOverView accepts story_paragraph param."""
-        import os, pygame
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        import os
+
+        import pygame
+
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
+
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.gameover_view import GameOverView
-        view = GameOverView(screen, font, player,
-                            story_paragraph="The world mourns.")
+
+        view = GameOverView(screen, font, player, story_paragraph="The world mourns.")
         assert view.story_paragraph == "The world mourns."
         view.draw()  # Should not raise
         pygame.quit()
 
     def test_victory_view_story_param(self):
         """VictoryView accepts story_paragraph param."""
-        import os, pygame
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+        import os
+
+        import pygame
+
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
+
         os.environ["SDL_VIDEODRIVER"] = "dummy"
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         player = _make_player("warrior")
         from src.views.victory_view import VictoryView
-        view = VictoryView(screen, font, player,
-                           stats={"rooms_cleared": 1, "monsters_killed": 5},
-                           total_rooms=3,
-                           story_paragraph="Victory achieved!")
+
+        view = VictoryView(
+            screen,
+            font,
+            player,
+            stats={"rooms_cleared": 1, "monsters_killed": 5},
+            total_rooms=3,
+            story_paragraph="Victory achieved!",
+        )
         assert view.story_paragraph == "Victory achieved!"
         view.draw()  # Should not raise
         pygame.quit()

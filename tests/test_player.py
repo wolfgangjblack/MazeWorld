@@ -1,17 +1,23 @@
 import pytest
-from src.models.player import PlayerCharacter
-from src.models.items import Food, Drink, ItemStats
+
+from src.models.items import Drink, Food, ItemStats
 from src.models.npc import StaticNPC
+from src.models.player import PlayerCharacter
 from tests.conftest import requires_data
 
 
 def test_starter_inventory_cloned():
     from src.models.items import Food, ItemStats
     from src.registry import registry
-    registry.starter_inventory = {"test_food": Food(
-        category="food", name="test_food", desc="test",
-        item_stats=ItemStats(stamina_value=10),
-    )}
+
+    registry.starter_inventory = {
+        "test_food": Food(
+            category="food",
+            name="test_food",
+            desc="test",
+            item_stats=ItemStats(stamina_value=10),
+        )
+    }
     try:
         p = PlayerCharacter(x=0, y=0)
         p.initialize_inventory()
@@ -107,15 +113,21 @@ def test_move_changes_position(maze):
 
 def _make_food(name="apple", stamina=20, health=5, qty=1):
     return Food(
-        category="food", name=name, desc="test",
-        quantity=qty, item_stats=ItemStats(stamina_value=stamina, health_value=health),
+        category="food",
+        name=name,
+        desc="test",
+        quantity=qty,
+        item_stats=ItemStats(stamina_value=stamina, health_value=health),
     )
 
 
 def _make_drink(name="juice", stamina=20, health=5, qty=1):
     return Drink(
-        category="drink", name=name, desc="test",
-        quantity=qty, item_stats=ItemStats(stamina_value=stamina, health_value=health),
+        category="drink",
+        name=name,
+        desc="test",
+        quantity=qty,
+        item_stats=ItemStats(stamina_value=stamina, health_value=health),
     )
 
 
@@ -197,6 +209,7 @@ def test_get_inventory_format():
 
 def test_move_does_not_drain_stamina():
     from unittest.mock import MagicMock
+
     maze = MagicMock()
     maze.is_wall.return_value = False
     player = PlayerCharacter(x=0, y=0)

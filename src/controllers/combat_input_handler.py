@@ -6,10 +6,12 @@ result display, log browsing, loot collection, and quest completion.
 """
 
 import random
+
 import pygame
+
 from src.controllers.combat_controller import CombatController, CombatState
-from src.views.combat_view import CombatView
 from src.registry import registry
+from src.views.combat_view import CombatView
 
 
 class CombatInputHandler:
@@ -47,15 +49,17 @@ class CombatInputHandler:
     def start(self, combat_event):
         """Initialize combat for the given event."""
         from src.models.weapon import STARTER_WEAPONS
+
         gc = self.gc
         if gc.player.weapon is None and gc.player.player_class:
             gc.player.weapon = STARTER_WEAPONS.get(gc.player.player_class.archetype)
 
         if not combat_event.monsters:
             import logging
+
             logging.getLogger(__name__).warning(
                 "Combat event '%s' has no monsters — skipping.",
-                getattr(combat_event, 'name', combat_event.id),
+                getattr(combat_event, "name", combat_event.id),
             )
             return
 
@@ -202,8 +206,7 @@ class CombatInputHandler:
                 self.pending_action = ""
             return
 
-        _gate = (getattr(self.combat_event, 'is_gate', False)
-                 or getattr(self.combat_event, 'is_climax_boss', False))
+        _gate = getattr(self.combat_event, "is_gate", False) or getattr(self.combat_event, "is_climax_boss", False)
         grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
         cur = self.selected_action
         row = cur // CombatView.GRID_COLS
@@ -262,8 +265,9 @@ class CombatInputHandler:
     def draw(self):
         if not self.active or not self.combat_view or not self.combat_controller:
             return
-        _gate_fight = (getattr(self.combat_event, 'is_gate', False)
-                       or getattr(self.combat_event, 'is_climax_boss', False))
+        _gate_fight = getattr(self.combat_event, "is_gate", False) or getattr(
+            self.combat_event, "is_climax_boss", False
+        )
         self.combat_view.draw(
             self.combat_controller,
             selected_action=self.selected_action,
@@ -286,8 +290,7 @@ class CombatInputHandler:
         )
 
     def _grid_action_name(self, cc: CombatController) -> str | None:
-        _gate = (getattr(self.combat_event, 'is_gate', False)
-                 or getattr(self.combat_event, 'is_climax_boss', False))
+        _gate = getattr(self.combat_event, "is_gate", False) or getattr(self.combat_event, "is_climax_boss", False)
         grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
         row = self.selected_action // CombatView.GRID_COLS
         col = self.selected_action % CombatView.GRID_COLS
@@ -296,14 +299,12 @@ class CombatInputHandler:
         return None
 
     def _get_consumables(self) -> list[str]:
-        from src.models.items import Food, Drink
+        from src.models.items import Drink, Food
+
         cc = self.combat_controller
         if cc is None:
             return []
-        return [
-            name for name, item in cc.player.inventory.items()
-            if isinstance(item, (Food, Drink))
-        ]
+        return [name for name, item in cc.player.inventory.items() if isinstance(item, (Food, Drink))]
 
     def _execute_by_name(self, action_name: str, target_index: int):
         cc = self.combat_controller
@@ -387,7 +388,7 @@ class CombatInputHandler:
             if item:
                 summary.append(item.name)
         self._rolled_gold = 0
-        if hasattr(combat_event, 'money_drop') and combat_event.money_drop[1] > 0:
+        if hasattr(combat_event, "money_drop") and combat_event.money_drop[1] > 0:
             lo, hi = combat_event.money_drop
             killed = sum(1 for m in combat_event.monsters if not m.is_alive)
             base = random.randint(lo, hi) if hi > 0 else 0
@@ -429,7 +430,7 @@ class CombatInputHandler:
                 if item:
                     gc.player.add_to_inventory(item.clone())
             money = self._rolled_gold
-            if not money and hasattr(combat_event, 'money_drop') and combat_event.money_drop[1] > 0:
+            if not money and hasattr(combat_event, "money_drop") and combat_event.money_drop[1] > 0:
                 money = random.randint(combat_event.money_drop[0], combat_event.money_drop[1])
             if money > 0:
                 gc.player.add_money(money)
@@ -441,7 +442,7 @@ class CombatInputHandler:
             gc.player.combat_record["monsters_killed"] += killed
             gc.player.combat_record["combats_won"] += 1
 
-            is_gate = getattr(combat_event, 'is_gate', False)
+            is_gate = getattr(combat_event, "is_gate", False)
             if not is_gate:
                 gc.resolved_encounters += 1
                 gc._check_door_reveal()
@@ -450,12 +451,15 @@ class CombatInputHandler:
             gc.quest_manager.on_event_resolved(combat_event.id, gc.player)
 
             for qid, quest in gc.quests.items():
-                if (quest.type == "combat"
-                        and getattr(quest, 'target_event_id', 0) == combat_event.id
-                        and quest.status == "completed"):
-                    target_npc_id = getattr(quest, 'target_npc_id', None)
+                if (
+                    quest.type == "combat"
+                    and getattr(quest, "target_event_id", 0) == combat_event.id
+                    and quest.status == "completed"
+                ):
+                    target_npc_id = getattr(quest, "target_npc_id", None)
                     if target_npc_id:
                         from src.models.npc import AggressiveNPC
+
                         for npc in gc.npcs:
                             if npc.id == target_npc_id and isinstance(npc, AggressiveNPC):
                                 npc.combat_defeated = True
@@ -468,5 +472,5 @@ class CombatInputHandler:
         self.combat_controller = None
         self.combat_view = None
         self.combat_event = None
-        if hasattr(self.gc, 'day_night'):
+        if hasattr(self.gc, "day_night"):
             self.gc.day_night.resume()

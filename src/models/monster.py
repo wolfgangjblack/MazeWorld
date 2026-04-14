@@ -10,7 +10,8 @@ adding Phase 5 features (abilities, status effects, environment pools).
 
 import os
 import random
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 from config import DATA_DIR
@@ -18,16 +19,18 @@ from config import DATA_DIR
 
 class MonsterAbility(BaseModel):
     """A battle-scoped ability a monster can use."""
-    name: str                           # "poison", "stun", "fire_breath", etc.
-    effect_type: str = "damage"         # "damage" | "poison" | "stun"
-    damage_dice: str = "1d4"            # Dice expression for ability damage
-    damage_type: str = "physical"       # "physical" | "fire" | "water" | "forest" | "light" | "dark"
-    duration: int = 0                   # Turns of lingering effect (0 = instant)
-    chance: float = 0.3                 # Probability monster uses this instead of basic attack
+
+    name: str  # "poison", "stun", "fire_breath", etc.
+    effect_type: str = "damage"  # "damage" | "poison" | "stun"
+    damage_dice: str = "1d4"  # Dice expression for ability damage
+    damage_type: str = "physical"  # "physical" | "fire" | "water" | "forest" | "light" | "dark"
+    duration: int = 0  # Turns of lingering effect (0 = instant)
+    chance: float = 0.3  # Probability monster uses this instead of basic attack
 
 
 class LootDrop(BaseModel):
     """A possible item drop from a monster."""
+
     item_id: int
     probability: float = 0.5  # 0.0-1.0
 
@@ -54,8 +57,8 @@ class Monster(BaseModel):
     str_mod: int = 0
     dex_mod: int = 0
     attack_name: str = "attack"
-    damage_dice: int = 6               # kept as int for Phase 3 combat compat
-    damage_dice_expr: str = "1d6"      # dice expression used by Phase 5
+    damage_dice: int = 6  # kept as int for Phase 3 combat compat
+    damage_dice_expr: str = "1d6"  # dice expression used by Phase 5
     damage_type: str = "physical"
     elemental_affinity: Optional[str] = None
     physical_type: Optional[str] = None  # "slashing" | "piercing" | "bludgeoning"
@@ -134,9 +137,7 @@ class Monster(BaseModel):
         return {"type": "attack"}
 
     def apply_status(self, effect_name: str, duration: int):
-        self.status_effects[effect_name] = max(
-            self.status_effects.get(effect_name, 0), duration
-        )
+        self.status_effects[effect_name] = max(self.status_effects.get(effect_name, 0), duration)
 
     def tick_status_effects(self) -> List[str]:
         """Decrement status timers; return list of expired effects."""
@@ -160,26 +161,21 @@ class Monster(BaseModel):
     @classmethod
     def from_dict(cls, data: dict) -> "Monster":
         if "abilities" in data:
-            data["abilities"] = [
-                MonsterAbility(**a) if isinstance(a, dict) else a
-                for a in data["abilities"]
-            ]
+            data["abilities"] = [MonsterAbility(**a) if isinstance(a, dict) else a for a in data["abilities"]]
         if "loot_table" in data:
-            data["loot_table"] = [
-                LootDrop(**e) if isinstance(e, dict) else e
-                for e in data["loot_table"]
-            ]
+            data["loot_table"] = [LootDrop(**e) if isinstance(e, dict) else e for e in data["loot_table"]]
         return cls(**data)
 
 
 # -- Level scaling tables (per PDR section 4.4) --
 
 LEVEL_SCALING = {
-    1: {"hp": (8, 12),  "ac": (10, 12), "damage_dice": ["1d4", "1d6"],  "str_mod": (0, 1), "dex_mod": (0, 1)},
-    2: {"hp": (12, 20), "ac": (11, 13), "damage_dice": ["1d6", "1d8"],  "str_mod": (1, 2), "dex_mod": (0, 2)},
+    1: {"hp": (8, 12), "ac": (10, 12), "damage_dice": ["1d4", "1d6"], "str_mod": (0, 1), "dex_mod": (0, 1)},
+    2: {"hp": (12, 20), "ac": (11, 13), "damage_dice": ["1d6", "1d8"], "str_mod": (1, 2), "dex_mod": (0, 2)},
     3: {"hp": (18, 25), "ac": (12, 15), "damage_dice": ["1d6", "1d10"], "str_mod": (1, 3), "dex_mod": (1, 2)},
     4: {"hp": (25, 30), "ac": (13, 16), "damage_dice": ["1d8", "1d12"], "str_mod": (2, 4), "dex_mod": (1, 3)},
 }
+
 
 def instantiate_monster(template: dict, room_level: int) -> "Monster":
     """Create a live Monster instance from a DB template, rolling stats fresh.
@@ -230,23 +226,24 @@ def instantiate_monster(template: dict, room_level: int) -> "Monster":
 
 # Environment-themed monster pools
 MONSTER_POOLS = {
-    "forest":  ["Wolf", "Treant", "Spider", "Bandit", "Bear", "Vine Serpent"],
-    "cave":    ["Bat Swarm", "Slime", "Rock Golem", "Cave Troll", "Blind Crawler", "Crystal Beetle"],
+    "forest": ["Wolf", "Treant", "Spider", "Bandit", "Bear", "Vine Serpent"],
+    "cave": ["Bat Swarm", "Slime", "Rock Golem", "Cave Troll", "Blind Crawler", "Crystal Beetle"],
     "dungeon": ["Skeleton", "Wraith", "Mimic", "Dungeon Spider", "Cultist", "Animated Armor"],
-    "castle":  ["Knight", "Guard Dog", "Gargoyle", "Phantom", "Rat King", "Cursed Squire"],
-    "house":   ["Giant Rat", "Poltergeist", "Feral Cat", "Possessed Doll", "Swarm of Spiders", "Shadow"],
-    "city":    ["Thug", "Sewer Rat", "Corrupt Guard", "Pickpocket", "Alley Hound", "Street Brawler"],
+    "castle": ["Knight", "Guard Dog", "Gargoyle", "Phantom", "Rat King", "Cursed Squire"],
+    "house": ["Giant Rat", "Poltergeist", "Feral Cat", "Possessed Doll", "Swarm of Spiders", "Shadow"],
+    "city": ["Thug", "Sewer Rat", "Corrupt Guard", "Pickpocket", "Alley Hound", "Street Brawler"],
 }
 
 ENVIRONMENT_PHYSICAL_TYPES: dict[str, list[str]] = {
-    "forest":  ["slashing", "slashing", "piercing"],
-    "cave":    ["bludgeoning", "bludgeoning", "piercing"],
+    "forest": ["slashing", "slashing", "piercing"],
+    "cave": ["bludgeoning", "bludgeoning", "piercing"],
     "dungeon": ["slashing", "piercing", "slashing"],
-    "castle":  ["slashing", "piercing", "slashing"],
-    "house":   ["piercing", "piercing", "bludgeoning"],
-    "city":    ["bludgeoning", "bludgeoning", "slashing"],
+    "castle": ["slashing", "piercing", "slashing"],
+    "house": ["piercing", "piercing", "bludgeoning"],
+    "city": ["bludgeoning", "bludgeoning", "slashing"],
     "village": ["bludgeoning", "piercing", "slashing"],
 }
+
 
 def _parse_dice_sides(expr: str) -> Optional[int]:
     """Extract the die size from '1d6' -> 6.  Returns None on failure."""
@@ -278,7 +275,7 @@ def _roll_dice(expr: str) -> int:
 
 def _try_assign_portrait(monster: "Monster") -> None:
     """Look up an existing portrait file by normalized name and assign it."""
-    if getattr(monster, 'profile_image', None):
+    if getattr(monster, "profile_image", None):
         return
     portrait_dir = os.path.join(DATA_DIR, "portraits", "monsters")
     if not os.path.isdir(portrait_dir):
@@ -287,7 +284,3 @@ def _try_assign_portrait(monster: "Monster") -> None:
     candidate = os.path.join(portrait_dir, f"mon_{key}.png")
     if os.path.exists(candidate):
         monster.profile_image = candidate
-
-
-
-

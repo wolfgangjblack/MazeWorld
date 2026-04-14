@@ -3,9 +3,9 @@ import logging
 import random
 
 from config import GAME_MODE
+from src.generate.llm_client import generate
 from src.prompts import get_prompt_set
 from src.prompts.base import LLMRequest
-from src.generate.llm_client import generate
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +23,13 @@ def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = N
     Falls back to False (continue) on any error.
     """
     history_text = "\n".join(
-        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}"
-        for t in npc.interaction_history[-6:]
+        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}" for t in npc.interaction_history[-6:]
     )
 
     quest_info = ""
     if quest_context:
         quest_info = (
-            f"Active quest: \"{quest_context.get('title', 'unknown')}\" "
+            f'Active quest: "{quest_context.get("title", "unknown")}" '
             f"(type: {quest_context.get('type', '?')}, "
             f"status: {quest_context.get('status', 'active')}). "
         )
@@ -54,7 +53,7 @@ def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = N
             f"{getattr(npc, 'personality', 'unknown')})\n"
             f"{quest_info}\n"
             f"Recent conversation:\n{history_text}\n\n"
-            f"Player's latest input: \"{player_input}\"\n\n"
+            f'Player\'s latest input: "{player_input}"\n\n'
             "Should the NPC end this conversation? (yes/no)"
         ),
         max_tokens=10,
@@ -107,9 +106,9 @@ def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None
     return False
 
 
-def generate_npc_response(npc, player_input: str, story_context: str = "",
-                          quest_context: dict | None = None,
-                          player=None) -> str:
+def generate_npc_response(
+    npc, player_input: str, story_context: str = "", quest_context: dict | None = None, player=None
+) -> str:
     """Generate an NPC response.
 
     - First meeting: uses pre-generated opening_greeting if available.
@@ -196,7 +195,7 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
         # CHA check: d20 + CHA mod vs NPC's current DC (online mode only)
         if cha_data and quest_context and player:
             npc.current_dc = max(8, min(20, cha_data.get("dc_next", npc.current_dc)))
-            cha_mod = player.get_stat_modifier("CHA") if hasattr(player, 'get_stat_modifier') else 0
+            cha_mod = player.get_stat_modifier("CHA") if hasattr(player, "get_stat_modifier") else 0
             roll = random.randint(1, 20) + cha_mod
             if roll < npc.current_dc:
                 npc.dialogue_exhausted = True
@@ -238,7 +237,7 @@ def _static_dialogue_response(npc, player_input: str) -> str:
     prompt = node.get("prompt", "...")
     choices = node.get("choices", [])
     if choices:
-        choice_text = "\n".join(f"  {i+1}. {c['text']}" for i, c in enumerate(choices))
+        choice_text = "\n".join(f"  {i + 1}. {c['text']}" for i, c in enumerate(choices))
         return f"{npc.name}: {prompt}\n{choice_text}"
     return f"{npc.name}: {prompt}"
 

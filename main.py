@@ -15,34 +15,38 @@ import time
 import pygame
 
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, WORLD_SEED, NUM_ROOMS, DATA_DIR,
+    DATA_DIR,
+    NUM_ROOMS,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    WORLD_SEED,
 )
-from src.registry import registry
-from src.utils.dataloader_utils import load_json_data
-from src.models.maze import Maze
-from src.models.dialogue_box import DialogueBox
-from src.models.player import PlayerCharacter
-from src.models.npc import StaticNPC, RandomNPC, AggressiveNPC, MerchantNPC
 from src.controllers.game_controller import GameController
 from src.controllers.screen_controller import ScreenController, ScreenState
-from src.views.start_view import StartView
-from src.views.config_view import ConfigView
-from src.views.class_select_view import ClassSelectView
-from src.views.room_intro_view import RoomIntroView
-from src.views.level_up_view import LevelUpView
-from src.views.victory_view import VictoryView
-from src.views.player_menu_view import PlayerMenuView
-from src.views.load_game_view import LoadGameView
-from src.views.pause_view import PauseView
-from src.views.gameover_view import GameOverView
-from src.views.menu_view import MenuView
-from src.views.tutorial_view import TutorialView
-from src.views.story_view import StoryView
-from src.views.credits_view import CreditsView
+from src.models.dialogue_box import DialogueBox
+from src.models.maze import Maze
+from src.models.npc import AggressiveNPC, MerchantNPC, RandomNPC, StaticNPC
+from src.models.player import PlayerCharacter
+from src.models.time import DayNightCycle
+from src.registry import registry
 from src.systems import save_manager
 from src.systems.fog_of_war import FogOfWar
 from src.systems.music_director import MusicDirector
-from src.models.time import DayNightCycle
+from src.utils.dataloader_utils import load_json_data
+from src.views.class_select_view import ClassSelectView
+from src.views.config_view import ConfigView
+from src.views.credits_view import CreditsView
+from src.views.gameover_view import GameOverView
+from src.views.level_up_view import LevelUpView
+from src.views.load_game_view import LoadGameView
+from src.views.menu_view import MenuView
+from src.views.pause_view import PauseView
+from src.views.player_menu_view import PlayerMenuView
+from src.views.room_intro_view import RoomIntroView
+from src.views.start_view import StartView
+from src.views.story_view import StoryView
+from src.views.tutorial_view import TutorialView
+from src.views.victory_view import VictoryView
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +60,21 @@ NPC_CLASS_MAP = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MazeWorld V1")
-    parser.add_argument("--dev", action="store_true",
-                        help="Dev mode: generate world and launch game directly")
-    parser.add_argument("--skip-gen", action="store_true",
-                        help="Skip world generation (use with --dev)")
+    parser.add_argument("--dev", action="store_true", help="Dev mode: generate world and launch game directly")
+    parser.add_argument("--skip-gen", action="store_true", help="Skip world generation (use with --dev)")
     return parser.parse_args()
 
 
 def run_generation():
     from src.generate.pipeline import generate_world
+
     generate_world()
     registry.reload()
 
 
-def setup_game(screen, font, player_name="Adventurer", selected_class=None,
-               room_index=0, player=None, day_night=None, sfx=None):
+def setup_game(
+    screen, font, player_name="Adventurer", selected_class=None, room_index=0, player=None, day_night=None, sfx=None
+):
     """Load game data and create all game objects. Returns GameController.
 
     Global entity databases are loaded once by registry.load(). Room-specific
@@ -155,9 +159,20 @@ def setup_game(screen, font, player_name="Adventurer", selected_class=None,
     events = registry.get_events_by_ids(room_event_ids) if room_event_ids else registry.event_registry
     quests = registry.get_quests_by_ids(room_quest_ids) if room_quest_ids else registry.quest_registry
 
-    return GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
-                          current_room=room_index, total_rooms=total_rooms,
-                          day_night=day_night, sfx=sfx)
+    return GameController(
+        screen,
+        font,
+        maze,
+        player,
+        npcs,
+        dialogue_box,
+        events,
+        quests,
+        current_room=room_index,
+        total_rooms=total_rooms,
+        day_night=day_night,
+        sfx=sfx,
+    )
 
 
 def setup_game_from_save(screen, font, save_state, sfx=None):
@@ -219,7 +234,7 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             npc.interaction_history = saved.get("interaction_history", [])
             npc.has_met_player = saved.get("has_met_player", False)
 
-            if hasattr(npc, 'shop_inventory') and "shop_inventory" in saved:
+            if hasattr(npc, "shop_inventory") and "shop_inventory" in saved:
                 npc.shop_inventory = saved["shop_inventory"]
 
             # Restore dialogue state
@@ -227,9 +242,9 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             npc.finished_dialogue = saved.get("finished_dialogue", npc.finished_dialogue)
             npc.current_dc = saved.get("current_dc", 10)
             active_tree = saved.get("_active_tree")
-            if active_tree == "complete" and getattr(npc, 'dialogue_tree_complete', None):
+            if active_tree == "complete" and getattr(npc, "dialogue_tree_complete", None):
                 npc.dialogue_tree = npc.dialogue_tree_complete
-            elif active_tree == "failed" and getattr(npc, 'dialogue_tree_failed', None):
+            elif active_tree == "failed" and getattr(npc, "dialogue_tree_failed", None):
                 npc.dialogue_tree = npc.dialogue_tree_failed
             dialogue_current = saved.get("_dialogue_current")
             if dialogue_current and npc.dialogue_tree:
@@ -246,7 +261,7 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             eid = int(raw_eid) if isinstance(raw_eid, str) else raw_eid
             if eid in events:
                 events[eid].resolved = saved_evt.get("resolved", False)
-                if hasattr(events[eid], 'monsters') and "monster_states" in saved_evt:
+                if hasattr(events[eid], "monsters") and "monster_states" in saved_evt:
                     for i, ms in enumerate(saved_evt["monster_states"]):
                         if i < len(events[eid].monsters):
                             events[eid].monsters[i].hp = ms.get("hp", events[eid].monsters[i].hp)
@@ -259,7 +274,7 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             qid = int(raw_qid) if isinstance(raw_qid, str) else raw_qid
             if qid in quests:
                 quests[qid].status = saved_q.get("status", "not_started")
-                if hasattr(quests[qid], 'current_step') and "current_step" in saved_q:
+                if hasattr(quests[qid], "current_step") and "current_step" in saved_q:
                     quests[qid].current_step = saved_q["current_step"]
     else:
         logger.warning(
@@ -274,10 +289,21 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
     if save_state.day_night_data:
         day_night = DayNightCycle.deserialize(save_state.day_night_data)
 
-    gc = GameController(screen, font, maze, player, npcs, dialogue_box, events, quests,
-                        fog=fog, day_night=day_night,
-                        current_room=room_index, total_rooms=total_rooms,
-                        sfx=sfx)
+    gc = GameController(
+        screen,
+        font,
+        maze,
+        player,
+        npcs,
+        dialogue_box,
+        events,
+        quests,
+        fog=fog,
+        day_night=day_night,
+        current_room=room_index,
+        total_rooms=total_rooms,
+        sfx=sfx,
+    )
 
     gc.event_position_map = {}
     for key, eid in save_state.event_position_map.items():
@@ -299,8 +325,7 @@ class SessionManager:
     previously lived inside main().
     """
 
-    def __init__(self, screen, font, clock, screen_ctrl, music, sfx,
-                 start_view, config_view, narrative):
+    def __init__(self, screen, font, clock, screen_ctrl, music, sfx, start_view, config_view, narrative):
         self.screen = screen
         self.font = font
         self.clock = clock
@@ -447,7 +472,11 @@ class SessionManager:
                             if rooms:
                                 env_portrait = rooms[0].get("environment_portrait")
                         self.room_intro_view = RoomIntroView(
-                            self.screen, self.font, env_name, env_type, story_text,
+                            self.screen,
+                            self.font,
+                            env_name,
+                            env_type,
+                            story_text,
                             portrait_path=env_portrait,
                         )
                         self.screen_ctrl.replace(ScreenState.ROOM_INTRO)
@@ -470,8 +499,13 @@ class SessionManager:
                         player = self.game_controller.player
                         day_night = self.game_controller.day_night
                         self.game_controller = setup_game(
-                            self.screen, self.font, room_index=self.current_room_index,
-                            player=player, day_night=day_night, sfx=self.sfx)
+                            self.screen,
+                            self.font,
+                            room_index=self.current_room_index,
+                            player=player,
+                            day_night=day_night,
+                            sfx=self.sfx,
+                        )
                     if self.game_controller is not None:
                         self.music.play_maze(self.game_controller.maze.environment)
                         self.sfx.play_ambience(self.game_controller.maze.environment)
@@ -485,9 +519,14 @@ class SessionManager:
 
     def _handle_gameplay(self) -> str | None:
         if self.game_controller is None:
-            self.game_controller = setup_game(self.screen, self.font, self.player_name,
-                                              self.selected_class,
-                                              room_index=self.current_room_index, sfx=self.sfx)
+            self.game_controller = setup_game(
+                self.screen,
+                self.font,
+                self.player_name,
+                self.selected_class,
+                room_index=self.current_room_index,
+                sfx=self.sfx,
+            )
             self.gameplay_start_time = time.time()
             self.music.play_maze(self.game_controller.maze.environment)
             self.sfx.play_ambience(self.game_controller.maze.environment)
@@ -499,7 +538,8 @@ class SessionManager:
         if result == "open_menu":
             can_save = not self.game_controller.has_active_overlay
             self.player_menu_view = PlayerMenuView(
-                self.screen, self.font,
+                self.screen,
+                self.font,
                 can_save=can_save,
                 has_saves=self._cached_has_saves,
                 quest_log=self.game_controller.get_quest_log(),
@@ -512,8 +552,7 @@ class SessionManager:
         if result == "open_pause":
             self.game_controller.day_night.pause()
             can_save = not self.game_controller.has_active_overlay
-            self.pause_view = PauseView(self.screen, self.font, can_save=can_save,
-                                        has_saves=self._cached_has_saves)
+            self.pause_view = PauseView(self.screen, self.font, can_save=can_save, has_saves=self._cached_has_saves)
             self.screen_ctrl.push(ScreenState.PAUSE)
             return None
 
@@ -540,16 +579,17 @@ class SessionManager:
             room_beat = ""
             room_name = ""
             if story:
-                beat = next(
-                    (b for b in story.beats
-                     if b.room_id == f"room_{self.current_room_index}"), None)
+                beat = next((b for b in story.beats if b.room_id == f"room_{self.current_room_index}"), None)
                 if beat:
                     room_beat = beat.summary
             if self.game_controller:
                 room_name = self.game_controller.maze.environment_name or ""
             self.story_view = StoryView(
-                self.screen, self.font, story=story,
-                room_story_beat=room_beat, room_name=room_name,
+                self.screen,
+                self.font,
+                story=story,
+                room_story_beat=room_beat,
+                room_name=room_name,
             )
             self.screen_ctrl.push(ScreenState.STORY)
             return None
@@ -562,7 +602,9 @@ class SessionManager:
             if not go_portrait:
                 go_portrait = self.game_controller.player.profile_image
             self.gameover_view = GameOverView(
-                self.screen, self.font, self.game_controller.player,
+                self.screen,
+                self.font,
+                self.game_controller.player,
                 has_saves=self._cached_has_saves,
                 portrait_path=go_portrait,
                 story_paragraph=self.narrative.get("game_over", ""),
@@ -583,9 +625,14 @@ class SessionManager:
                 player = self.game_controller.player
                 vic_portrait = registry.manifest.get("victory_portrait") if registry.manifest else None
                 self.victory_view = VictoryView(
-                    self.screen, self.font, player, self.game_stats, total_rooms,
+                    self.screen,
+                    self.font,
+                    player,
+                    self.game_stats,
+                    total_rooms,
                     story_paragraph=self.narrative.get("victory", ""),
-                    portrait_path=vic_portrait)
+                    portrait_path=vic_portrait,
+                )
                 self.screen_ctrl.replace(ScreenState.VICTORY)
                 return None
 
@@ -602,9 +649,14 @@ class SessionManager:
             total_rooms = self.game_controller.total_rooms
             vic_portrait = registry.manifest.get("victory_portrait") if registry.manifest else None
             self.victory_view = VictoryView(
-                self.screen, self.font, player, self.game_stats, total_rooms,
+                self.screen,
+                self.font,
+                player,
+                self.game_stats,
+                total_rooms,
                 story_paragraph=self.narrative.get("victory", ""),
-                portrait_path=vic_portrait)
+                portrait_path=vic_portrait,
+            )
             self.screen_ctrl.replace(ScreenState.VICTORY)
             return None
 
@@ -636,7 +688,10 @@ class SessionManager:
             total_time = self.accumulated_play_time + elapsed
             try:
                 save_manager.save_game_to_path(
-                    self.game_controller, WORLD_SEED, total_time, action["filepath"],
+                    self.game_controller,
+                    WORLD_SEED,
+                    total_time,
+                    action["filepath"],
                 )
                 self._cached_has_saves = True
                 panel.refresh_saves(save_manager.list_saves())
@@ -700,7 +755,8 @@ class SessionManager:
                     return None
                 if isinstance(action, dict):
                     result = self._handle_save_load_action(
-                        action, self.player_menu_view.save_load_panel,
+                        action,
+                        self.player_menu_view.save_load_panel,
                     )
                     if result == "loaded":
                         self.screen_ctrl.reset_to(ScreenState.GAMEPLAY)
@@ -739,8 +795,7 @@ class SessionManager:
                 if action == "rest":
                     self.screen_ctrl.pop()
                     self.game_controller.rest_menu_active = True
-                    self.game_controller.dialogue_box.set_item_message(
-                        "Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
+                    self.game_controller.dialogue_box.set_item_message("Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
                     self.game_controller.item_message_active = True
                     return None
                 if action == "status":
@@ -762,16 +817,17 @@ class SessionManager:
                     room_beat = ""
                     room_name = ""
                     if story:
-                        beat = next(
-                            (b for b in story.beats
-                             if b.room_id == f"room_{self.current_room_index}"), None)
+                        beat = next((b for b in story.beats if b.room_id == f"room_{self.current_room_index}"), None)
                         if beat:
                             room_beat = beat.summary
                     if self.game_controller:
                         room_name = self.game_controller.maze.environment_name or ""
                     self.story_view = StoryView(
-                        self.screen, self.font, story=story,
-                        room_story_beat=room_beat, room_name=room_name,
+                        self.screen,
+                        self.font,
+                        story=story,
+                        room_story_beat=room_beat,
+                        room_name=room_name,
                     )
                     self.screen_ctrl.pop()
                     self.screen_ctrl.push(ScreenState.STORY)
@@ -875,7 +931,10 @@ class SessionManager:
 
                     try:
                         self.game_controller = setup_game_from_save(
-                            self.screen, self.font, save_state, sfx=self.sfx,
+                            self.screen,
+                            self.font,
+                            save_state,
+                            sfx=self.sfx,
                         )
                         self.current_room_index = save_state.current_room
                         self.accumulated_play_time = save_state.time_played_seconds
@@ -902,8 +961,7 @@ class SessionManager:
                 if result:
                     if result["action"] == "chosen":
                         player = self.game_controller.player
-                        if (player.player_class
-                                and player.player_class.archetype == "jester"):
+                        if player.player_class and player.player_class.archetype == "jester":
                             player.apply_level_up(result["type"], result["choice"])
                         else:
                             player.apply_level_up(result["type"], result["choice"])
@@ -928,6 +986,7 @@ class SessionManager:
         env_portrait = None
         if os.path.exists(maze_path):
             import json
+
             with open(maze_path) as f:
                 mdata = json.load(f)
             env_name = mdata.get("environment_name", env_name)
@@ -937,8 +996,7 @@ class SessionManager:
         if not story_text:
             story = registry.get_story()
             if story:
-                beat = next((b for b in story.beats
-                             if b.room_id == f"room_{self.current_room_index}"), None)
+                beat = next((b for b in story.beats if b.room_id == f"room_{self.current_room_index}"), None)
                 if beat:
                     story_text = beat.summary
         if not story_text:
@@ -952,7 +1010,11 @@ class SessionManager:
                     break
 
         self.room_intro_view = RoomIntroView(
-            self.screen, self.font, env_name, env_type, story_text,
+            self.screen,
+            self.font,
+            env_name,
+            env_type,
+            story_text,
             portrait_path=env_portrait,
         )
 
@@ -1032,16 +1094,17 @@ def main():
     clock = pygame.time.Clock()
 
     from src.systems.music_controller import MusicController
+
     music = MusicController(registry.manifest.get("music", {}) if registry.manifest else {})
     music.play_start_screen()
 
     from src.systems.sfx_controller import SFXController
+
     sfx = SFXController(registry.manifest.get("sfx", {}) if registry.manifest else {})
 
     screen_ctrl = ScreenController(ScreenState.START)
     _start_portrait = registry.manifest.get("start_portrait") if registry.manifest else None
-    start_view = StartView(screen, font, has_saves=save_manager.has_saves(),
-                           portrait_path=_start_portrait)
+    start_view = StartView(screen, font, has_saves=save_manager.has_saves(), portrait_path=_start_portrait)
     config_view = ConfigView(screen, font)
 
     narrative = {}
@@ -1049,13 +1112,13 @@ def main():
     if os.path.exists(narrative_path):
         try:
             import json as _json
+
             with open(narrative_path) as _nf:
                 narrative = _json.load(_nf)
         except Exception:
             logger.warning("Failed to load narrative.json", exc_info=True)
 
-    session = SessionManager(screen, font, clock, screen_ctrl, music, sfx,
-                             start_view, config_view, narrative)
+    session = SessionManager(screen, font, clock, screen_ctrl, music, sfx, start_view, config_view, narrative)
     session.run()
     pygame.quit()
 

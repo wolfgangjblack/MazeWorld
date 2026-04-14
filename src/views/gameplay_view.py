@@ -1,11 +1,12 @@
 import pygame
-from config import BLACK, WHITE, SCREEN_WIDTH, SCREEN_HEIGHT
-from src.views.npc_view import NPCView
-from src.views.maze_view import MazeView
-from src.views.player_view import PlayerView
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from src.registry import registry
 from src.views.dialogue_view import DialogueBoxView
 from src.views.encounter_view import EncounterView
-from src.registry import registry
+from src.views.maze_view import MazeView
+from src.views.npc_view import NPCView
+from src.views.player_view import PlayerView
 
 
 class GameView:
@@ -22,15 +23,34 @@ class GameView:
         self.title_font = pygame.font.Font(None, 36)
         self.quest_font = pygame.font.Font(None, 24)
 
-    def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
-                  current_npc, player_at_item, quests=None, debug_reveal=False,
-                  shop_active=False, shop_npc=None, shop_mode="buy",
-                  shop_selected_index=0,
-                  quest_log_active=False, quest_log=None, followers=None,
-                  fog=None, visibility_radius=3, night_alpha=0,
-                  time_period=None, day_number=None, period_progress=0.0,
-                  item_detail_active=False, event_type_map=None,
-                  event_flag_map=None):
+    def draw_game(
+        self,
+        maze,
+        player,
+        npcs,
+        inventory_active,
+        item_message_active,
+        current_npc,
+        player_at_item,
+        quests=None,
+        debug_reveal=False,
+        shop_active=False,
+        shop_npc=None,
+        shop_mode="buy",
+        shop_selected_index=0,
+        quest_log_active=False,
+        quest_log=None,
+        followers=None,
+        fog=None,
+        visibility_radius=3,
+        night_alpha=0,
+        time_period=None,
+        day_number=None,
+        period_progress=0.0,
+        item_detail_active=False,
+        event_type_map=None,
+        event_flag_map=None,
+    ):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -42,27 +62,31 @@ class GameView:
             if item_detail_active:
                 self.draw_item_detail(player)
         else:
-            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
-                                     debug_reveal=debug_reveal,
-                                     fog=fog, player_x=player.x, player_y=player.y,
-                                     visibility_radius=visibility_radius,
-                                     night_alpha=night_alpha,
-                                     event_type_map=event_type_map,
-                                     event_flag_map=event_flag_map)
+            self.maze_view.draw_maze(
+                self.screen,
+                maze,
+                escort_zones=escort_zones,
+                debug_reveal=debug_reveal,
+                fog=fog,
+                player_x=player.x,
+                player_y=player.y,
+                visibility_radius=visibility_radius,
+                night_alpha=night_alpha,
+                event_type_map=event_type_map,
+                event_flag_map=event_flag_map,
+            )
 
             for npc in npcs:
                 # Only draw NPCs in revealed/visible tiles (if fog active)
                 if fog and not debug_reveal:
-                    if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y,
-                                                     visibility_radius, maze=maze):
+                    if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y, visibility_radius, maze=maze):
                         continue
                 self.npc_view.draw_npc(self.screen, npc)
 
             self.player_view.draw_player(self.screen, player)
-            self.player_view.draw_hud(self.screen, player,
-                                       time_period=time_period,
-                                       day_number=day_number,
-                                       period_progress=period_progress)
+            self.player_view.draw_hud(
+                self.screen, player, time_period=time_period, day_number=day_number, period_progress=period_progress
+            )
 
             # Show follower count in HUD area
             if followers:
@@ -70,11 +94,16 @@ class GameView:
                 ft = self.font.render(f"Followers: {follower_names}", True, (180, 255, 180))
                 self.screen.blit(ft, (10, SCREEN_HEIGHT - 70))
 
-        if (current_npc and not item_message_active and
-            not inventory_active
+        if (
+            current_npc
+            and not item_message_active
+            and not inventory_active
             and not self.dialogue_box.dialogue_active
-            and not self.dialogue_box.event_active and not quest_log_active):
+            and not self.dialogue_box.event_active
+            and not quest_log_active
+        ):
             from src.models.npc import MerchantNPC
+
             if isinstance(current_npc, MerchantNPC):
                 text_surface = self.font.render("Enter: Talk  |  S: Shop", True, WHITE)
             else:
@@ -83,8 +112,7 @@ class GameView:
 
         if debug_reveal:
             debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
-            self.screen.blit(debug_surface,
-                             (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
+            self.screen.blit(debug_surface, (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
         self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
 
@@ -94,9 +122,8 @@ class GameView:
         if not quests:
             return zones
         for quest in quests.values():
-            if (quest.type == "escort" and quest.status == "active"
-                    and quest.id in player.active_quests):
-                tz = getattr(quest, 'target_zone', None)
+            if quest.type == "escort" and quest.status == "active" and quest.id in player.active_quests:
+                tz = getattr(quest, "target_zone", None)
                 if tz:
                     zones.append(tuple(tz))
         return zones
@@ -128,7 +155,7 @@ class GameView:
         half_space = 8
         stride = row_h + half_space
         visible_count = max(1, (list_bottom - list_top) // stride)
-        scroll = getattr(player, '_inv_scroll', 0)
+        scroll = getattr(player, "_inv_scroll", 0)
         total = len(inventory)
 
         for vi in range(visible_count):
@@ -175,8 +202,7 @@ class GameView:
                 cy = detail_y + 8
                 portrait_w = 0
 
-                portrait_surf = load_portrait(
-                    getattr(item_obj, 'profile_image', None), (80, 80))
+                portrait_surf = load_portrait(getattr(item_obj, "profile_image", None), (80, 80))
                 if portrait_surf:
                     px = SCREEN_WIDTH - M - 95
                     self.screen.blit(portrait_surf, (px, cy))
@@ -222,8 +248,8 @@ class GameView:
         ctrl_y = SCREEN_HEIGHT - M - ctrl_h
         pygame.draw.line(self.screen, (80, 80, 100), (M, ctrl_y - 3), (SCREEN_WIDTH - M, ctrl_y - 3))
         ctrl = self.small_font.render(
-            "Up/Down: Select  |  Enter: Use  |  E: Equip  |  D: Details  |  Esc: Close",
-            True, (100, 100, 100))
+            "Up/Down: Select  |  Enter: Use  |  E: Equip  |  D: Details  |  Esc: Close", True, (100, 100, 100)
+        )
         self.screen.blit(ctrl, (M + 12, ctrl_y + 2))
 
     def _wrap_inv_text(self, text, max_w):
@@ -270,6 +296,7 @@ class GameView:
         if item.profile_image:
             try:
                 import os
+
                 if os.path.exists(item.profile_image):
                     img = pygame.image.load(item.profile_image)
                     img = pygame.transform.scale(img, (96, 96))
@@ -292,7 +319,7 @@ class GameView:
         y += 22
 
         # Equipped indicator
-        if hasattr(player, 'equipped_weapon') and player.equipped_weapon == item.name:
+        if hasattr(player, "equipped_weapon") and player.equipped_weapon == item.name:
             eq_surf = self.font.render("[EQUIPPED]", True, (100, 255, 100))
             self.screen.blit(eq_surf, (content_x, y))
             y += 24
@@ -360,8 +387,7 @@ class GameView:
 
         # Close hint
         hint = self.small_font.render("Esc / D: Close detail", True, (120, 120, 120))
-        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2,
-                                panel_y + panel_h - 25))
+        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2, panel_y + panel_h - 25))
 
     def draw_quest_log(self, quest_log):
         """Draw the quest log overlay with active/completed/failed sections."""
@@ -429,8 +455,7 @@ class GameView:
         pygame.draw.rect(self.screen, (30, 30, 50), exit_bg)
         pygame.draw.line(self.screen, (80, 80, 100), (50, SCREEN_HEIGHT - 80), (SCREEN_WIDTH - 50, SCREEN_HEIGHT - 80))
         exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (200, 200, 210))
-        self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2,
-                                     SCREEN_HEIGHT - 72))
+        self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2, SCREEN_HEIGHT - 72))
 
     def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
         if self.dialogue_box.event_active:
@@ -438,9 +463,10 @@ class GameView:
             # Use full-screen encounter view for puzzle/event types,
             # and for combat initiative (trigger screen before combat starts).
             # Once multi-turn combat is underway, use the dialogue view's combat renderer.
-            if event and (event.type in ("puzzle", "event")
-                         or (event.type == "combat"
-                             and self.dialogue_box.combat_phase == "initiative")):
+            if event and (
+                event.type in ("puzzle", "event")
+                or (event.type == "combat" and self.dialogue_box.combat_phase == "initiative")
+            ):
                 self.encounter_view.draw(self.dialogue_box)
             else:
                 self.dialogue_view.draw(self.dialogue_box)

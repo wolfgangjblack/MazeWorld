@@ -1,10 +1,9 @@
 import ast
 import json
 import logging
-import re
 
-from src.prompts import get_prompt_set
 from src.generate.llm_client import generate
+from src.prompts import get_prompt_set
 
 _logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ def _strip_fences(raw: str) -> str:
     if text.startswith("```"):
         first_newline = text.find("\n")
         if first_newline != -1:
-            text = text[first_newline + 1:]
+            text = text[first_newline + 1 :]
     if text.rstrip().endswith("```"):
         text = text.rstrip()[:-3]
     return text.strip()
@@ -92,36 +91,31 @@ def generate_environment_name(env_type: str) -> str:
     return _extract_response(raw)
 
 
-def generate_event_primitive(environment: dict, event_type: str,
-                             story_context: str = "") -> dict:
+def generate_event_primitive(environment: dict, event_type: str, story_context: str = "") -> dict:
     """Generate a combat or puzzle event for the given environment."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.event_generation(env, env_name, event_type,
-                                       story_context=story_context)
+    request = prompts.event_generation(env, env_name, event_type, story_context=story_context)
     raw = generate(request)
     return _parse_json_response(raw)
 
 
-def generate_quest_primitive(environment: dict, npcs: list[dict],
-                             items: list[dict], events: list[dict],
-                             quest_type: str,
-                             story_context: str = "") -> dict:
+def generate_quest_primitive(
+    environment: dict, npcs: list[dict], items: list[dict], events: list[dict], quest_type: str, story_context: str = ""
+) -> dict:
     """Generate a quest given available NPCs, items, events."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.quest_generation(env, env_name, npcs, items, events, quest_type,
-                                       story_context=story_context)
+    request = prompts.quest_generation(env, env_name, npcs, items, events, quest_type, story_context=story_context)
     raw = generate(request)
     return _parse_json_response(raw)
 
 
-def generate_story_primitive(story_seed: str, room_count: int,
-                             environments: list[str]) -> dict:
+def generate_story_primitive(story_seed: str, room_count: int, environments: list[str]) -> dict:
     """Generate the overarching story from a seed, room count, and environment list."""
     prompts = get_prompt_set()
     request = prompts.story_generation(story_seed, room_count, environments)
@@ -129,17 +123,29 @@ def generate_story_primitive(story_seed: str, room_count: int,
     return _parse_json_response(raw)
 
 
-def generate_story_quest_primitive(environment: dict, story_beat: str,
-                                   faction_name: str, npcs: list[dict],
-                                   items: list[dict], events: list[dict],
-                                   quest_type: str,
-                                   story_context: str = "") -> dict:
+def generate_story_quest_primitive(
+    environment: dict,
+    story_beat: str,
+    faction_name: str,
+    npcs: list[dict],
+    items: list[dict],
+    events: list[dict],
+    quest_type: str,
+    story_context: str = "",
+) -> dict:
     """Generate a story-connected quest."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
     request = prompts.story_quest_generation(
-        env, env_name, story_beat, faction_name, npcs, items, events, quest_type,
+        env,
+        env_name,
+        story_beat,
+        faction_name,
+        npcs,
+        items,
+        events,
+        quest_type,
         story_context=story_context,
     )
     raw = generate(request)
@@ -154,14 +160,14 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
     return _parse_json_response(raw)
 
 
-from src.models.weapon import WEAPON_DICE_BY_ROOM
 from src.models.spell import ELEMENT_ADVANTAGE
+from src.models.weapon import WEAPON_DICE_BY_ROOM
 
 WEAPON_TYPE_TO_DAMAGE_TYPE: dict[str, list[str]] = {
-    "heavy":  ["slashing", "bludgeoning"],
-    "light":  ["piercing", "slashing"],
+    "heavy": ["slashing", "bludgeoning"],
+    "light": ["piercing", "slashing"],
     "simple": ["bludgeoning", "piercing"],
-    "wild":   ["slashing", "piercing", "bludgeoning"],
+    "wild": ["slashing", "piercing", "bludgeoning"],
 }
 
 WEAPON_TYPE_TO_CATEGORY: dict[str, str] = {
@@ -179,8 +185,7 @@ def _weapon_dice_for_level(room_level: int) -> list[str]:
     return list(set(WEAPON_DICE_BY_ROOM.get(capped, WEAPON_DICE_BY_ROOM[1]).values()))
 
 
-def generate_item_primitive(environment: dict, room_level: int = 1,
-                            story_context: str = "") -> dict:
+def generate_item_primitive(environment: dict, room_level: int = 1, story_context: str = "") -> dict:
     """Generate environment-themed items via LLM. Returns dict with category arrays."""
     import random as _rng
 
@@ -188,8 +193,7 @@ def generate_item_primitive(environment: dict, room_level: int = 1,
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.item_generation(env, env_name, room_level,
-                                      story_context=story_context)
+    request = prompts.item_generation(env, env_name, room_level, story_context=story_context)
     raw = generate(request)
     result = _parse_json_response(raw)
 
@@ -295,9 +299,7 @@ def _parse_class_array(raw: str) -> list[dict]:
     return []
 
 
-def generate_npc_batch(room_env: dict, room_story: str,
-                       npc_slots: list[dict],
-                       story_context: str) -> list[dict]:
+def generate_npc_batch(room_env: dict, room_story: str, npc_slots: list[dict], story_context: str) -> list[dict]:
     """Generate all NPCs for a room in a single batched call."""
     prompts = get_prompt_set()
     request = prompts.npc_batch_generation(room_env, room_story, npc_slots, story_context)
@@ -305,20 +307,29 @@ def generate_npc_batch(room_env: dict, room_story: str,
     return _parse_json_array(raw)
 
 
-def generate_event_batch(room_env: dict, room_story: str,
-                         event_type: str, event_slots: list[dict],
-                         story_context: str,
-                         previous_summaries: list[str] | None = None,
-                         available_abilities: list[str] | None = None,
-                         available_spells: list[str] | None = None,
-                         available_tools: list[str] | None = None) -> list[dict]:
+def generate_event_batch(
+    room_env: dict,
+    room_story: str,
+    event_type: str,
+    event_slots: list[dict],
+    story_context: str,
+    previous_summaries: list[str] | None = None,
+    available_abilities: list[str] | None = None,
+    available_spells: list[str] | None = None,
+    available_tools: list[str] | None = None,
+) -> list[dict]:
     """Generate a batch of events of the same type for a room."""
     import logging
+
     _logger = logging.getLogger(__name__)
 
     prompts = get_prompt_set()
     request = prompts.event_batch_generation(
-        room_env, room_story, event_type, event_slots, story_context,
+        room_env,
+        room_story,
+        event_type,
+        event_slots,
+        story_context,
         previous_summaries=previous_summaries,
         available_abilities=available_abilities,
         available_spells=available_spells,
@@ -327,14 +338,11 @@ def generate_event_batch(room_env: dict, room_story: str,
     raw = generate(request)
     results = _parse_json_array(raw)
     if len(results) < len(event_slots):
-        _logger.warning("Event batch returned %d/%d events for type '%s'",
-                        len(results), len(event_slots), event_type)
+        _logger.warning("Event batch returned %d/%d events for type '%s'", len(results), len(event_slots), event_type)
     return results
 
 
-def generate_dialogue_context(room_env: dict, room_story: str,
-                              npc_data: list[dict],
-                              story_context: str) -> list[dict]:
+def generate_dialogue_context(room_env: dict, room_story: str, npc_data: list[dict], story_context: str) -> list[dict]:
     """Generate dialogue context (greeting, exhaustion, personality notes) for online mode."""
     prompts = get_prompt_set()
     request = prompts.dialogue_context_generation(room_env, room_story, npc_data, story_context)
@@ -342,8 +350,7 @@ def generate_dialogue_context(room_env: dict, room_story: str,
     return _parse_json_array(raw)
 
 
-def generate_weapon_database(environments: list[dict],
-                             num_rooms: int) -> list[dict]:
+def generate_weapon_database(environments: list[dict], num_rooms: int) -> list[dict]:
     """Generate the full weapon database across all rooms."""
     prompts = get_prompt_set()
     request = prompts.weapon_database_generation(environments, num_rooms)
@@ -351,8 +358,7 @@ def generate_weapon_database(environments: list[dict],
     return _parse_json_array(raw)
 
 
-def generate_spell_database(class_type: str, environments: list[dict],
-                            num_rooms: int) -> list[dict]:
+def generate_spell_database(class_type: str, environments: list[dict], num_rooms: int) -> list[dict]:
     """Generate spells for a class (mage or healer)."""
     prompts = get_prompt_set()
     request = prompts.spell_database_generation(class_type, environments, num_rooms)
@@ -360,8 +366,7 @@ def generate_spell_database(class_type: str, environments: list[dict],
     return _parse_json_array(raw)
 
 
-def generate_utility_abilities(environments: list[dict],
-                               num_rooms: int) -> list[dict]:
+def generate_utility_abilities(environments: list[dict], num_rooms: int) -> list[dict]:
     """Generate utility abilities usable by any class."""
     prompts = get_prompt_set()
     request = prompts.utility_ability_generation(environments, num_rooms)
@@ -369,8 +374,7 @@ def generate_utility_abilities(environments: list[dict],
     return _parse_json_array(raw)
 
 
-def generate_environment_sequence(story_seed: str, num_rooms: int,
-                                  known_types: list[str]) -> list[dict]:
+def generate_environment_sequence(story_seed: str, num_rooms: int, known_types: list[str]) -> list[dict]:
     """Generate a narrative environment sequence for the world."""
     prompts = get_prompt_set()
     request = prompts.environment_sequence_generation(story_seed, num_rooms, known_types)
@@ -381,8 +385,7 @@ def generate_environment_sequence(story_seed: str, num_rooms: int,
     return []
 
 
-def generate_overarching_story(story_seed: str,
-                               environments: list[dict]) -> dict:
+def generate_overarching_story(story_seed: str, environments: list[dict]) -> dict:
     """Generate the high-level story arc (no per-room beats)."""
     prompts = get_prompt_set()
     request = prompts.overarching_story_generation(story_seed, environments)
@@ -390,20 +393,17 @@ def generate_overarching_story(story_seed: str,
     return _parse_json_response(raw)
 
 
-def generate_room_story_beat(overarching_story: dict, room_env: dict,
-                             room_index: int,
-                             prior_beats: list[dict],
-                             num_rooms: int = 5) -> dict:
+def generate_room_story_beat(
+    overarching_story: dict, room_env: dict, room_index: int, prior_beats: list[dict], num_rooms: int = 5
+) -> dict:
     """Generate a detailed story beat for a single room."""
     prompts = get_prompt_set()
-    request = prompts.room_story_beat_generation(
-        overarching_story, room_env, room_index, prior_beats, num_rooms)
+    request = prompts.room_story_beat_generation(overarching_story, room_env, room_index, prior_beats, num_rooms)
     raw = generate(request)
     return _parse_json_response(raw)
 
 
-def generate_music_prompts(story_summary: dict,
-                           environments: list[str]) -> dict[str, str | None]:
+def generate_music_prompts(story_summary: dict, environments: list[str]) -> dict[str, str | None]:
     """Generate Lyra 3 music prompts for combat + one maze track per environment.
 
     Returns a dict keyed by track name (e.g. 'combat', 'maze_village') with
@@ -419,9 +419,7 @@ def generate_music_prompts(story_summary: dict,
     return result
 
 
-def generate_sfx_prompts(story_summary: dict,
-                         environments: list[dict],
-                         spell_elements: list[str]) -> dict[str, dict]:
+def generate_sfx_prompts(story_summary: dict, environments: list[dict], spell_elements: list[str]) -> dict[str, dict]:
     """Generate ElevenLabs SFX prompts for weapons, spells, and ambience.
 
     Returns a dict keyed by sfx name with {prompt, duration, loop} specs.
@@ -436,8 +434,7 @@ def generate_sfx_prompts(story_summary: dict,
     return result
 
 
-def generate_full_story_primitive(story_seed: str, room_count: int,
-                                  environments: list[str]) -> dict:
+def generate_full_story_primitive(story_seed: str, room_count: int, environments: list[str]) -> dict:
     """Generate the full story arc + story-important entities for the World Bible."""
     prompts = get_prompt_set()
     request = prompts.full_story_generation(story_seed, room_count, environments)
@@ -445,14 +442,14 @@ def generate_full_story_primitive(story_seed: str, room_count: int,
     return _parse_json_response(raw)
 
 
-def generate_monster_primitive(environment: dict, room_level: int,
-                               story_context: str, total_rooms: int = 1) -> list[dict]:
+def generate_monster_primitive(
+    environment: dict, room_level: int, story_context: str, total_rooms: int = 1
+) -> list[dict]:
     """Generate environment-themed monsters with Bible context."""
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
-    request = prompts.monster_generation(
-        env, env_name, room_level, story_context, total_rooms=total_rooms)
+    request = prompts.monster_generation(env, env_name, room_level, story_context, total_rooms=total_rooms)
     raw = generate(request)
     return _parse_json_array(raw)
 
@@ -493,7 +490,7 @@ def _parse_json_array(raw: str) -> list[dict]:
         text = candidate[start:]
         last_brace = text.rfind("}")
         if last_brace > 0:
-            truncated = text[:last_brace + 1] + "]"
+            truncated = text[: last_brace + 1] + "]"
             try:
                 result = json.loads(truncated)
                 if isinstance(result, list) and result:
@@ -502,8 +499,7 @@ def _parse_json_array(raw: str) -> list[dict]:
             except (json.JSONDecodeError, ValueError):
                 pass
 
-    _logger.warning("Failed to parse JSON array from LLM response (%d chars): %.200s",
-                    len(raw), raw)
+    _logger.warning("Failed to parse JSON array from LLM response (%d chars): %.200s", len(raw), raw)
     return []
 
 

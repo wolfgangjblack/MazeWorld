@@ -1,7 +1,8 @@
 """Pause screen — game menu overlay with navigation to all game systems."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.views.save_load_panel import SaveLoadPanel
 
 TITLE_COLOR = (220, 180, 60)
@@ -67,7 +68,9 @@ class PauseView:
     def open_save_load(self, saves: list[dict]):
         """Open the save/load panel with current save list."""
         self.save_load_panel = SaveLoadPanel(
-            self.screen, self.font, saves,
+            self.screen,
+            self.font,
+            saves,
             can_save=self.can_save,
         )
         self.showing_save_load = True
@@ -107,14 +110,14 @@ class PauseView:
             if disabled:
                 label += " (unavailable)"
             surf = self.small_font.render(f"{prefix}{label}", True, color)
-            self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2,
-                                    start_y + i * (line_height + 6)))
+            self.screen.blit(surf, ((SCREEN_WIDTH - surf.get_width()) // 2, start_y + i * (line_height + 6)))
 
         if self.status_message:
             color = (200, 100, 100) if self.status_is_error else (100, 200, 100)
             msg = self.small_font.render(self.status_message, True, color)
-            self.screen.blit(msg, ((SCREEN_WIDTH - msg.get_width()) // 2,
-                                   start_y + len(MENU_ITEMS) * (line_height + 6) + 10))
+            self.screen.blit(
+                msg, ((SCREEN_WIDTH - msg.get_width()) // 2, start_y + len(MENU_ITEMS) * (line_height + 6) + 10)
+            )
 
     def _is_disabled(self, item: str) -> bool:
         if item == "Save/Load" and not self.can_save and not self.has_saves:

@@ -5,15 +5,11 @@ Night reduces fog of war visibility. Torch/lantern negates this.
 Rest recovers HP at the cost of stamina.
 """
 
-import random
-from typing import Optional
-
 from src.models.time import DayNightCycle, TimePeriod
 
-
 REST_OPTIONS = {
-    3:  {"hp_recovery": 15, "stamina_cost": 5},
-    6:  {"hp_recovery": 30, "stamina_cost": 8},
+    3: {"hp_recovery": 15, "stamina_cost": 5},
+    6: {"hp_recovery": 30, "stamina_cost": 8},
     12: {"hp_recovery": 50, "stamina_cost": 8},
 }
 
@@ -41,8 +37,7 @@ def apply_rest(player, hours: int, cycle: DayNightCycle) -> str:
     cycle.advance_hours(hours)
 
     period = cycle.current_period.value
-    return (f"Rested {hours}h: +{hp_gain} HP, -{stamina_cost} stamina. "
-            f"It is now {period}.")
+    return f"Rested {hours}h: +{hp_gain} HP, -{stamina_cost} stamina. It is now {period}."
 
 
 def apply_combat_rest(player) -> str:
@@ -54,8 +49,8 @@ def apply_combat_rest(player) -> str:
 def player_has_torch(player) -> bool:
     """Check if the player has an active torch/lantern in inventory."""
     for item in player.inventory.values():
-        stats = getattr(item, 'item_stats', None)
-        if stats and getattr(stats, 'attribute', None) == 'light':
+        stats = getattr(item, "item_stats", None)
+        if stats and getattr(stats, "attribute", None) == "light":
             if stats.uses > 0:
                 return True
     return False
@@ -64,8 +59,8 @@ def player_has_torch(player) -> bool:
 def consume_torch_use(player) -> None:
     """Decrement one use from the player's torch/lantern."""
     for item in player.inventory.values():
-        stats = getattr(item, 'item_stats', None)
-        if stats and getattr(stats, 'attribute', None) == 'light':
+        stats = getattr(item, "item_stats", None)
+        if stats and getattr(stats, "attribute", None) == "light":
             if stats.uses > 0:
                 stats.uses -= 1
                 return
@@ -78,7 +73,7 @@ def is_event_active_at_time(event, period: TimePeriod) -> bool:
     Events with time_gate="day" only trigger during dawn/day.
     Events with time_gate="night" only trigger during dusk/night.
     """
-    time_gate = getattr(event, 'time_gate', None)
+    time_gate = getattr(event, "time_gate", None)
     if not time_gate or time_gate == "always":
         return True
     if time_gate == "day":
@@ -93,7 +88,7 @@ def is_npc_available(npc, period: TimePeriod) -> bool:
 
     NPCs without availability are always available.
     """
-    availability = getattr(npc, 'availability', None)
+    availability = getattr(npc, "availability", None)
     if not availability or availability == "always":
         return True
     if availability == "day":
@@ -117,5 +112,3 @@ def get_night_overlay_alpha(period: TimePeriod, progress: float) -> int:
     if period == TimePeriod.NIGHT:
         return 80
     return 0
-
-

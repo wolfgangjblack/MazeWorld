@@ -6,32 +6,32 @@ combat end conditions (victory / defeat / flee).
 """
 
 import random
+
 import pytest
 
-from src.models.player import PlayerCharacter, PlayerClass, Stats, stat_modifier
-from src.models.monster import (
-    Monster,
-    LootDrop,
-)
-from src.models.weapon import Weapon, STARTER_WEAPONS, RANDOM_WEAPON_STATS, WEAPON_CATEGORY_ACCESS
-from src.models.spell import (
-    Spell,
-    elemental_multiplier,
-    physical_multiplier,
-    SUPER_EFFECTIVE_MULT,
-    RESISTED_MULT,
-    PHYSICAL_ADVANTAGE,
-)
 from src.controllers.combat_controller import (
     CombatController,
     CombatState,
     roll_buff_duration,
 )
-
+from src.models.monster import (
+    LootDrop,
+    Monster,
+)
+from src.models.player import PlayerCharacter, PlayerClass, Stats, stat_modifier
+from src.models.spell import (
+    RESISTED_MULT,
+    SUPER_EFFECTIVE_MULT,
+    Spell,
+    elemental_multiplier,
+    physical_multiplier,
+)
+from src.models.weapon import RANDOM_WEAPON_STATS, STARTER_WEAPONS, WEAPON_CATEGORY_ACCESS, Weapon
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_player(archetype: str, stats_dict: dict, armor: int = 0) -> PlayerCharacter:
     """Create a PlayerCharacter with a PlayerClass for combat tests."""
@@ -49,6 +49,7 @@ def _make_player(archetype: str, stats_dict: dict, armor: int = 0) -> PlayerChar
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def warrior():
@@ -119,20 +120,32 @@ def jester():
 @pytest.fixture
 def weak_monster():
     return Monster(
-        id=5000, species="Goblin", level=1,
-        hp=10, max_hp=10, ac=10,
-        str_mod=0, dex_mod=0,
-        damage_dice=4, damage_type="physical",
+        id=5000,
+        species="Goblin",
+        level=1,
+        hp=10,
+        max_hp=10,
+        ac=10,
+        str_mod=0,
+        dex_mod=0,
+        damage_dice=4,
+        damage_type="physical",
     )
 
 
 @pytest.fixture
 def fire_monster():
     return Monster(
-        id=5001, species="Fire Imp", level=1,
-        hp=12, max_hp=12, ac=11,
-        str_mod=1, dex_mod=1,
-        damage_dice=6, damage_type="fire",
+        id=5001,
+        species="Fire Imp",
+        level=1,
+        hp=12,
+        max_hp=12,
+        ac=11,
+        str_mod=1,
+        dex_mod=1,
+        damage_dice=6,
+        damage_type="fire",
         elemental_affinity="fire",
         magic_resistance=1,
     )
@@ -141,10 +154,16 @@ def fire_monster():
 @pytest.fixture
 def forest_monster():
     return Monster(
-        id=5002, species="Treant", level=2,
-        hp=18, max_hp=18, ac=13,
-        str_mod=2, dex_mod=0,
-        damage_dice=8, damage_type="physical",
+        id=5002,
+        species="Treant",
+        level=2,
+        hp=18,
+        max_hp=18,
+        ac=13,
+        str_mod=2,
+        dex_mod=0,
+        damage_dice=8,
+        damage_type="physical",
         elemental_affinity="forest",
         magic_resistance=2,
     )
@@ -153,10 +172,16 @@ def forest_monster():
 def make_pack(count=3):
     return [
         Monster(
-            id=5010 + i, species="Wolf", level=1,
-            hp=8, max_hp=8, ac=10,
-            str_mod=0, dex_mod=1,
-            damage_dice=4, damage_type="physical",
+            id=5010 + i,
+            species="Wolf",
+            level=1,
+            hp=8,
+            max_hp=8,
+            ac=10,
+            str_mod=0,
+            dex_mod=1,
+            damage_dice=4,
+            damage_type="physical",
         )
         for i in range(count)
     ]
@@ -165,6 +190,7 @@ def make_pack(count=3):
 # ---------------------------------------------------------------------------
 # stat_modifier
 # ---------------------------------------------------------------------------
+
 
 class TestStatModifier:
     """Known D&D modifier table: (stat - 10) // 2."""
@@ -199,6 +225,7 @@ class TestStatModifier:
 # Initiative ordering
 # ---------------------------------------------------------------------------
 
+
 class TestInitiative:
     def test_initiative_order_descending(self, warrior, weak_monster):
         """Higher initiative rolls go first."""
@@ -210,8 +237,11 @@ class TestInitiative:
     def test_player_wins_ties(self, warrior, weak_monster):
         """On initiative tie, player acts first (CombatController resolves)."""
         from unittest.mock import patch
-        with patch.object(type(warrior), 'roll_initiative', return_value=15), \
-             patch.object(type(weak_monster), 'roll_initiative', return_value=15):
+
+        with (
+            patch.object(type(warrior), "roll_initiative", return_value=15),
+            patch.object(type(weak_monster), "roll_initiative", return_value=15),
+        ):
             cc = CombatController(warrior, [weak_monster])
         assert cc.combatants[0].is_player
 
@@ -226,6 +256,7 @@ class TestInitiative:
 # ---------------------------------------------------------------------------
 # Attack roll vs AC resolution (hit / miss)
 # ---------------------------------------------------------------------------
+
 
 class TestMeleeAttack:
     def test_hit_deals_damage(self, warrior, weak_monster):
@@ -275,6 +306,7 @@ class TestMeleeAttack:
 # Elemental multiplier calculations (1.5x / 0.5x)
 # ---------------------------------------------------------------------------
 
+
 class TestElementalMultiplier:
     def test_fire_vs_forest_super_effective(self):
         assert elemental_multiplier("fire", "forest") == SUPER_EFFECTIVE_MULT
@@ -314,6 +346,7 @@ class TestElementalMultiplier:
 # Spell stamina cost deduction
 # ---------------------------------------------------------------------------
 
+
 class TestSpellCosts:
     def test_damage_spell_costs_stamina(self, mage, weak_monster):
         initial_stamina = mage.stamina
@@ -352,6 +385,7 @@ class TestSpellCosts:
 # ---------------------------------------------------------------------------
 # Multi-target damage distribution
 # ---------------------------------------------------------------------------
+
 
 class TestMultiTarget:
     def test_multi_attack_hits_multiple(self, warrior):
@@ -399,6 +433,7 @@ class TestMultiTarget:
 # Flee success / failure + free attack on fail
 # ---------------------------------------------------------------------------
 
+
 class TestFlee:
     def test_flee_success_ends_combat(self, warrior, weak_monster):
         """High DEX + low monster level → flee succeeds."""
@@ -415,9 +450,14 @@ class TestFlee:
         warrior.player_class.stats.DEX = 2  # -4 mod → max roll 20 - 4 = 16 vs DC 13 could succeed
         # Use a strong monster to make DC higher
         strong = Monster(
-            id=5099, species="Boss", level=10,
-            hp=50, max_hp=50, ac=18,
-            str_mod=5, dex_mod=3,
+            id=5099,
+            species="Boss",
+            level=10,
+            hp=50,
+            max_hp=50,
+            ac=18,
+            str_mod=5,
+            dex_mod=3,
             damage_dice=10,
         )
         cc = CombatController(warrior, [strong])
@@ -441,6 +481,7 @@ class TestFlee:
 # ---------------------------------------------------------------------------
 # Jester Gamble effect distribution
 # ---------------------------------------------------------------------------
+
 
 class TestJesterGamble:
     def test_gamble_only_for_jester(self, warrior, weak_monster):
@@ -483,6 +524,7 @@ class TestJesterGamble:
 # Combat ends correctly on victory / defeat / flee
 # ---------------------------------------------------------------------------
 
+
 class TestCombatEndConditions:
     def test_victory_when_all_monsters_dead(self, warrior, weak_monster):
         weak_monster.hp = 1
@@ -500,9 +542,14 @@ class TestCombatEndConditions:
         warrior.player_class.stats.DEX = 2
         # Strong monster that always hits
         boss = Monster(
-            id=5099, species="Boss", level=5,
-            hp=50, max_hp=50, ac=20,
-            str_mod=10, dex_mod=5,
+            id=5099,
+            species="Boss",
+            level=5,
+            hp=50,
+            max_hp=50,
+            ac=20,
+            str_mod=10,
+            dex_mod=5,
             damage_dice=20,
         )
         cc = CombatController(warrior, [boss])
@@ -526,11 +573,15 @@ class TestCombatEndConditions:
 # Use Item in combat
 # ---------------------------------------------------------------------------
 
+
 class TestUseItem:
     def test_use_food_restores_stamina(self, warrior, weak_monster):
         from src.models.items import Food, ItemStats
+
         bread = Food(
-            category="food", name="Bread", desc="A loaf",
+            category="food",
+            name="Bread",
+            desc="A loaf",
             item_stats=ItemStats(stamina_value=20, health_value=5),
         )
         warrior.inventory = {"Bread": bread}
@@ -538,7 +589,7 @@ class TestUseItem:
         cc = CombatController(warrior, [weak_monster], room_level=1)
         cc.combatants = [cc.player_combatant] + [c for c in cc.combatants if not c.is_player]
         cc.turn_index = 0
-        con_mod = warrior.get_stat_mod("CON") if hasattr(warrior, 'get_stat_mod') else 0
+        con_mod = warrior.get_stat_mod("CON") if hasattr(warrior, "get_stat_mod") else 0
         expected = min(50 + max(1, 20 + 2 * con_mod), warrior.max_stamina)
         result = cc.player_use_item("Bread")
         assert result["success"] is True
@@ -548,6 +599,7 @@ class TestUseItem:
 # ---------------------------------------------------------------------------
 # Buffs
 # ---------------------------------------------------------------------------
+
 
 class TestBuffs:
     def test_buff_increases_stat_modifier(self, healer, weak_monster):
@@ -567,6 +619,7 @@ class TestBuffs:
 # ---------------------------------------------------------------------------
 # Buff duration roll (1d4 + INT mod // 2)
 # ---------------------------------------------------------------------------
+
 
 class TestBuffDuration:
     def test_roll_buff_duration_uses_int_mod(self, healer, weak_monster):
@@ -603,9 +656,15 @@ class TestBuffDuration:
         """Casting a buff spell should apply a rolled duration, not hardcoded 3."""
         healer.spells = [
             Spell(
-                name="Fortify", spell_type="buff_stat", element="light", stat="WIS",
-                buff_stat="CON", buff_value=2, buff_duration=3,
-                stamina_cost=5, targets="self",
+                name="Fortify",
+                spell_type="buff_stat",
+                element="light",
+                stat="WIS",
+                buff_stat="CON",
+                buff_value=2,
+                buff_duration=3,
+                stamina_cost=5,
+                targets="self",
             ),
         ]
         durations = set()
@@ -627,10 +686,14 @@ class TestBuffDuration:
 # Monster model
 # ---------------------------------------------------------------------------
 
+
 class TestMonsterModel:
     def test_loot_roll(self):
         m = Monster(
-            species="Rat", hp=5, max_hp=5, ac=10,
+            species="Rat",
+            hp=5,
+            max_hp=5,
+            ac=10,
             damage_dice=4,
             loot_table=[LootDrop(item_id=2000, probability=1.0)],
         )
@@ -639,7 +702,10 @@ class TestMonsterModel:
 
     def test_loot_roll_zero_probability(self):
         m = Monster(
-            species="Rat", hp=5, max_hp=5, ac=10,
+            species="Rat",
+            hp=5,
+            max_hp=5,
+            ac=10,
             damage_dice=4,
             loot_table=[LootDrop(item_id=2000, probability=0.0)],
         )
@@ -660,6 +726,7 @@ class TestMonsterModel:
 # Weapon model
 # ---------------------------------------------------------------------------
 
+
 class TestWeaponModel:
     def test_damage_roll_in_range(self):
         w = Weapon(name="Sword", weapon_type="heavy", stat="STR", damage_dice=8)
@@ -677,6 +744,7 @@ class TestWeaponModel:
 # ---------------------------------------------------------------------------
 # Player combat helpers
 # ---------------------------------------------------------------------------
+
 
 class TestPlayerCombat:
     def test_get_ac(self, warrior):
@@ -704,6 +772,7 @@ class TestPlayerCombat:
 # Jester random weapon stat
 # ---------------------------------------------------------------------------
 
+
 class TestJesterRandomWeapon:
     def test_random_weapon_uses_varying_stats(self, jester):
         """Jester's resolve_attack_stat should sometimes use different stats."""
@@ -724,6 +793,7 @@ class TestJesterRandomWeapon:
 # ---------------------------------------------------------------------------
 # Physical damage type triangle
 # ---------------------------------------------------------------------------
+
 
 class TestPhysicalMultiplier:
     def test_slashing_beats_piercing(self):
@@ -776,13 +846,11 @@ class TestWeaponCategoryAccess:
 class TestStarterWeaponsHaveTypes:
     def test_all_starters_have_damage_type(self):
         for archetype, w in STARTER_WEAPONS.items():
-            assert w.damage_type in ("slashing", "piercing", "bludgeoning"), \
-                f"{archetype} starter missing damage_type"
+            assert w.damage_type in ("slashing", "piercing", "bludgeoning"), f"{archetype} starter missing damage_type"
 
     def test_all_starters_have_category(self):
         for archetype, w in STARTER_WEAPONS.items():
-            assert w.weapon_category in ("simple", "martial"), \
-                f"{archetype} starter missing weapon_category"
+            assert w.weapon_category in ("simple", "martial"), f"{archetype} starter missing weapon_category"
 
     def test_rogue_removed(self):
         assert "rogue" not in STARTER_WEAPONS
@@ -795,11 +863,14 @@ class TestMeleeMultiplierInCombat:
         stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
         player = _make_player("warrior", stats)
         player.weapon = Weapon(
-            name="Test Sword", weapon_type="heavy", stat="STR",
-            damage_dice=6, damage_type="slashing", weapon_category="martial",
+            name="Test Sword",
+            weapon_type="heavy",
+            stat="STR",
+            damage_dice=6,
+            damage_type="slashing",
+            weapon_category="martial",
         )
-        monster = Monster(species="Rat", hp=100, max_hp=100, ac=1, dex_mod=0,
-                          physical_type="piercing")
+        monster = Monster(species="Rat", hp=100, max_hp=100, ac=1, dex_mod=0, physical_type="piercing")
         combat = CombatController(player, [monster])
         combat.turn_index = 0
         for c in combat.combatants:
@@ -815,11 +886,14 @@ class TestMeleeMultiplierInCombat:
         stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
         player = _make_player("warrior", stats)
         player.weapon = Weapon(
-            name="Test Sword", weapon_type="heavy", stat="STR",
-            damage_dice=6, damage_type="slashing", weapon_category="martial",
+            name="Test Sword",
+            weapon_type="heavy",
+            stat="STR",
+            damage_dice=6,
+            damage_type="slashing",
+            weapon_category="martial",
         )
-        monster = Monster(species="Golem", hp=100, max_hp=100, ac=1, dex_mod=0,
-                          physical_type="bludgeoning")
+        monster = Monster(species="Golem", hp=100, max_hp=100, ac=1, dex_mod=0, physical_type="bludgeoning")
         combat = CombatController(player, [monster])
         for c in combat.combatants:
             if c.is_player:
@@ -834,12 +908,17 @@ class TestMeleeMultiplierInCombat:
         stats = {"STR": 14, "DEX": 12, "CON": 12, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
         player = _make_player("warrior", stats)
         player.weapon = Weapon(
-            name="Fire Sword", weapon_type="heavy", stat="STR",
-            damage_dice=6, damage_type="slashing", weapon_category="martial",
+            name="Fire Sword",
+            weapon_type="heavy",
+            stat="STR",
+            damage_dice=6,
+            damage_type="slashing",
+            weapon_category="martial",
             magic_element="fire",
         )
-        monster = Monster(species="Treant", hp=100, max_hp=100, ac=1, dex_mod=0,
-                          physical_type="piercing", elemental_affinity="forest")
+        monster = Monster(
+            species="Treant", hp=100, max_hp=100, ac=1, dex_mod=0, physical_type="piercing", elemental_affinity="forest"
+        )
         combat = CombatController(player, [monster])
         for c in combat.combatants:
             if c.is_player:
@@ -858,12 +937,16 @@ class TestMonsterPhysicalWeakness:
         stats = {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10, "LUCK": 10}
         player = _make_player("warrior", stats)
         player.weapon = Weapon(
-            name="Sword", weapon_type="heavy", stat="STR",
-            damage_dice=6, damage_type="slashing", weapon_category="martial",
+            name="Sword",
+            weapon_type="heavy",
+            stat="STR",
+            damage_dice=6,
+            damage_type="slashing",
+            weapon_category="martial",
         )
-        monster = Monster(species="Troll", hp=50, max_hp=50, ac=5,
-                          str_mod=5, damage_dice=6,
-                          physical_type="bludgeoning")
+        monster = Monster(
+            species="Troll", hp=50, max_hp=50, ac=5, str_mod=5, damage_dice=6, physical_type="bludgeoning"
+        )
         combat = CombatController(player, [monster])
         initial_hp = player.health
         random.seed(1)

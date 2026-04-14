@@ -43,7 +43,8 @@ class InventoryManager:
         if not items or selected_index >= len(items):
             return "No item to use."
         item = items[selected_index]
-        from src.models.items import EscortItem, Weapon, Tool
+        from src.models.items import EscortItem, Tool, Weapon
+
         if isinstance(item, EscortItem):
             return item.use(self._player)
         if isinstance(item, Weapon):
@@ -63,6 +64,7 @@ class InventoryManager:
             return "No item to give."
         item = items[selected_index]
         from src.models.items import EscortItem
+
         if isinstance(item, EscortItem):
             return item.give()
         message = item.give()
@@ -73,6 +75,7 @@ class InventoryManager:
         """Equip or unequip a weapon. Returns message."""
         from src.models.items import Weapon
         from src.models.weapon import WEAPON_CATEGORY_ACCESS
+
         if weapon_name not in self._inventory:
             return "You don't have that weapon."
         item = self._inventory[weapon_name]
@@ -81,12 +84,9 @@ class InventoryManager:
         if self._player.equipped_weapon == weapon_name:
             self._player.equipped_weapon = None
             return f"You unequipped the {weapon_name}."
-        archetype = (
-            self._player.player_class.archetype
-            if self._player.player_class else "warrior"
-        )
+        archetype = self._player.player_class.archetype if self._player.player_class else "warrior"
         allowed = WEAPON_CATEGORY_ACCESS.get(archetype, {"simple"})
-        if getattr(item, 'weapon_category', 'simple') not in allowed:
+        if getattr(item, "weapon_category", "simple") not in allowed:
             return "Only warriors and jesters can wield martial weapons."
         self._player.equipped_weapon = weapon_name
         return f"You equipped the {weapon_name}."
@@ -94,6 +94,7 @@ class InventoryManager:
     def get_equipped_weapon(self) -> Optional[object]:
         """Return the equipped Weapon object, or None."""
         from src.models.items import Weapon
+
         ew = self._player.equipped_weapon
         if ew and ew in self._inventory:
             item = self._inventory[ew]
@@ -105,6 +106,7 @@ class InventoryManager:
     def pick_up_from_maze(self, maze, player_x: int, player_y: int) -> str:
         """Pick up an item at the player's grid position. Returns message."""
         from src.registry import registry
+
         cell_value = maze.grid[player_y][player_x]
         if registry.is_item(cell_value):
             item_template = registry.get_item(cell_value)
@@ -117,6 +119,7 @@ class InventoryManager:
     def use_spell_scroll(self, scroll_name: str) -> str:
         """Use a spell scroll. Jesters learn the spell permanently."""
         from src.models.items import SpellScroll
+
         if scroll_name not in self._inventory:
             return "You don't have that scroll."
         item = self._inventory[scroll_name]

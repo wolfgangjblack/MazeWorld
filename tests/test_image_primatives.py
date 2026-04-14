@@ -1,11 +1,13 @@
 import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from src.generate import image_client as img_mod
 from src.generate.backends.image_api import ApiImageBackend
 
-
 # -- ApiImageBackend --------------------------------------------------------
+
 
 class TestApiImageBackend:
     def setup_method(self):
@@ -27,6 +29,7 @@ class TestApiImageBackend:
 
 # -- Portrait helpers via registry ------------------------------------------
 
+
 def test_generate_npc_portraits_delegates(tmp_path):
     """When IMAGE_BACKEND is 'local', falls back to sequential path via get_image_backend."""
     mock_backend = MagicMock()
@@ -39,9 +42,11 @@ def test_generate_npc_portraits_delegates(tmp_path):
 
     # Patch both get_image_backend AND IMAGE_BACKEND so the parallel path
     # falls through to the sequential backend.
-    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend), \
-         patch("src.generate.image_client.os.environ.get", return_value=None), \
-         patch("config.IMAGE_BACKEND", "local"):
+    with (
+        patch("src.generate.image_client.get_image_backend", return_value=mock_backend),
+        patch("src.generate.image_client.os.environ.get", return_value=None),
+        patch("config.IMAGE_BACKEND", "local"),
+    ):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
     assert mock_backend.generate_and_save.call_count == 2
@@ -56,8 +61,10 @@ def test_generate_npc_portraits_handles_failure(tmp_path):
 
     npc_db = {"1001": {"description": "an elf"}}
 
-    with patch("src.generate.image_client.get_image_backend", return_value=mock_backend), \
-         patch("config.IMAGE_BACKEND", "local"):
+    with (
+        patch("src.generate.image_client.get_image_backend", return_value=mock_backend),
+        patch("config.IMAGE_BACKEND", "local"),
+    ):
         img_mod.generate_npc_portraits(npc_db, save_dir=str(tmp_path))
 
     assert npc_db["1001"]["profile_image"] is None

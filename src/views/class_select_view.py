@@ -1,12 +1,14 @@
 """Class selection screen — pick from 4 generated classes, name character."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 from src.views.portrait_utils import load_portrait
 from src.views.status_layout import (
-    draw_status_layout, estimate_status_height, truncate_to_fit,
+    draw_status_layout,
+    estimate_status_height,
+    truncate_to_fit,
 )
-
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
@@ -94,7 +96,8 @@ class ClassSelectView:
 
         hint = self.small_font.render(
             "Arrow keys to select  |  Enter to view details  |  Esc to go back",
-            True, UNSELECTED_COLOR,
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
@@ -113,10 +116,13 @@ class ClassSelectView:
         if is_jester and self.state == STATE_SELECT:
             pygame.draw.rect(self.screen, (20, 20, 20), portrait_rect)
             q_text = self.font.render("???", True, JESTER_HIDDEN_COLOR)
-            self.screen.blit(q_text, (
-                portrait_rect.x + (portrait_size - q_text.get_width()) // 2,
-                portrait_rect.y + (portrait_size - q_text.get_height()) // 2,
-            ))
+            self.screen.blit(
+                q_text,
+                (
+                    portrait_rect.x + (portrait_size - q_text.get_width()) // 2,
+                    portrait_rect.y + (portrait_size - q_text.get_height()) // 2,
+                ),
+            )
         elif self.portraits.get(index):
             scaled = pygame.transform.scale(self.portraits[index], (portrait_size, portrait_size))
             self.screen.blit(scaled, portrait_rect.topleft)
@@ -130,14 +136,17 @@ class ClassSelectView:
 
         if is_jester and self.state == STATE_SELECT:
             self.screen.blit(self.font.render("???", True, JESTER_HIDDEN_COLOR), (text_x, text_y))
-            self.screen.blit(self.small_font.render("A mystery awaits...", True, JESTER_HIDDEN_COLOR),
-                             (text_x, text_y + 28))
+            self.screen.blit(
+                self.small_font.render("A mystery awaits...", True, JESTER_HIDDEN_COLOR), (text_x, text_y + 28)
+            )
         else:
             name_color = SELECTED_COLOR if selected else WHITE
             name_surf = self.font.render(pc.name, True, name_color)
             self.screen.blit(name_surf, (text_x, text_y))
 
-            arch_text = self.small_font.render(f"({ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())})", True, UNSELECTED_COLOR)
+            arch_text = self.small_font.render(
+                f"({ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())})", True, UNSELECTED_COLOR
+            )
             self.screen.blit(arch_text, (text_x, text_y + 26))
 
             wpn_text = self.tiny_font.render(f"Weapon: {pc.starting_weapon}", True, ABILITY_COLOR)
@@ -150,7 +159,7 @@ class ClassSelectView:
                 surf = self.tiny_font.render(line1, True, DIM_COLOR)
                 self.screen.blit(surf, (text_x, text_y + 64))
                 if len(line1) < len(flavor) and not line1.endswith("..."):
-                    rest = flavor[len(line1):]
+                    rest = flavor[len(line1) :]
                     line2 = truncate_to_fit(rest, self.tiny_font, text_max_w)
                     surf2 = self.tiny_font.render(line2, True, DIM_COLOR)
                     self.screen.blit(surf2, (text_x, text_y + 80))
@@ -197,7 +206,9 @@ class ClassSelectView:
         title = self.title_font.render(pc.name, True, TITLE_COLOR)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 10))
         arch = self.small_font.render(
-            f"{ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())} \u2014 {pc.environment}", True, UNSELECTED_COLOR
+            f"{ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())} \u2014 {pc.environment}",
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(arch, ((SCREEN_WIDTH - arch.get_width()) // 2, 48))
 
@@ -208,6 +219,7 @@ class ClassSelectView:
 
         # Weapon info string
         from src.models.weapon import STARTER_WEAPONS
+
         starter = STARTER_WEAPONS.get(pc.archetype)
         weapon_info = ""
         if starter:
@@ -216,8 +228,11 @@ class ClassSelectView:
             weapon_info = f"{starter.weapon_type.title()}  |  1d{starter.damage_dice}  |  {starter.stat}{dt_str}"
 
         content_h = estimate_status_height(
-            pc.stats, pc.flavor_text, pc.starting_weapon,
-            pc.abilities, pc.spells,
+            pc.stats,
+            pc.flavor_text,
+            pc.starting_weapon,
+            pc.abilities,
+            pc.spells,
         )
         max_scroll = max(0, content_h - viewport_h)
         self.detail_scroll = max(0, min(self.detail_scroll, max_scroll))
@@ -229,11 +244,19 @@ class ClassSelectView:
         portrait = self.portraits.get(self.selected_index)
 
         draw_status_layout(
-            self.screen, self.font, self.small_font, self.tiny_font,
-            portrait, pc.stats, pc.flavor_text,
-            pc.starting_weapon, weapon_info,
-            pc.abilities, pc.spells,
-            base_y, pad,
+            self.screen,
+            self.font,
+            self.small_font,
+            self.tiny_font,
+            portrait,
+            pc.stats,
+            pc.flavor_text,
+            pc.starting_weapon,
+            weapon_info,
+            pc.abilities,
+            pc.spells,
+            base_y,
+            pad,
         )
 
         self.screen.set_clip(None)
@@ -247,7 +270,8 @@ class ClassSelectView:
 
         hint = self.small_font.render(
             "Enter to select this class  |  Esc to go back  |  Up/Down to scroll",
-            True, UNSELECTED_COLOR,
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
@@ -276,7 +300,8 @@ class ClassSelectView:
 
         hint = self.small_font.render(
             "Type your name and press Enter  |  Esc to go back",
-            True, UNSELECTED_COLOR,
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
@@ -289,7 +314,8 @@ class ClassSelectView:
 
         question = self.title_font.render(
             f"Will you be {self.player_name} the {pc.name}?",
-            True, TITLE_COLOR,
+            True,
+            TITLE_COLOR,
         )
         self.screen.blit(question, ((SCREEN_WIDTH - question.get_width()) // 2, SCREEN_HEIGHT // 3))
 

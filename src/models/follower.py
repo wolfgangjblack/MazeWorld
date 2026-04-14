@@ -1,7 +1,8 @@
 """Follower data model — NPC companions that travel with the player."""
 
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 MAX_FOLLOWERS = 2
 
@@ -20,6 +21,7 @@ class Follower(BaseModel):
         """Return a random hint from this follower, or a generic line."""
         if self.dialogue_hints:
             import random
+
             return random.choice(self.dialogue_hints)
         return f"{self.name} has nothing to say right now."
 

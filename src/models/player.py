@@ -1,6 +1,8 @@
 import random
 from typing import Any, Dict, List, Literal, Optional, Tuple
+
 from pydantic import BaseModel, Field
+
 from src.models.spell import Spell
 from src.registry import registry
 
@@ -11,9 +13,9 @@ STAT_BUDGET = 95
 # Archetype stat role assignments: primary stats get 14-18, secondary 11-14, dump 6-10
 ARCHETYPE_STAT_ROLES = {
     "warrior": {"primary": ["STR", "CON"], "secondary": ["DEX", "CHA"], "dump": ["INT", "WIS"]},
-    "mage":    {"primary": ["INT"],        "secondary": ["WIS", "DEX"], "dump": ["STR", "CON", "CHA"]},
-    "healer":  {"primary": ["WIS"],        "secondary": ["CHA", "CON"], "dump": ["STR", "DEX", "INT"]},
-    "jester":  {"primary": ["LUCK"],       "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
+    "mage": {"primary": ["INT"], "secondary": ["WIS", "DEX"], "dump": ["STR", "CON", "CHA"]},
+    "healer": {"primary": ["WIS"], "secondary": ["CHA", "CON"], "dump": ["STR", "DEX", "INT"]},
+    "jester": {"primary": ["LUCK"], "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
 }
 
 # Weapon category soft-restriction: only matching archetypes get the stat bonus.
@@ -21,9 +23,9 @@ ARCHETYPE_STAT_ROLES = {
 # Jester uses avg(LUCK mod, weapon stat mod) for any weapon instead.
 ARCHETYPE_WEAPON_CATEGORIES: dict[str, set[str]] = {
     "warrior": {"simple", "martial"},
-    "mage":    {"simple"},
-    "healer":  {"simple"},
-    "jester":  set(),  # jester uses luck rule for all weapons
+    "mage": {"simple"},
+    "healer": {"simple"},
+    "jester": set(),  # jester uses luck rule for all weapons
 }
 
 
@@ -34,6 +36,7 @@ def stat_modifier(value: int) -> int:
 
 class ActiveBuff(BaseModel):
     """A temporary stat buff active during combat."""
+
     stat: str
     value: int
     turns_remaining: int
@@ -41,6 +44,7 @@ class ActiveBuff(BaseModel):
 
 class Stats(BaseModel):
     """D&D-style stat block for player classes."""
+
     STR: int = 10
     DEX: int = 10
     CON: int = 10
@@ -138,19 +142,23 @@ class PlayerCharacter(BaseModel):
     learned_spells: List[str] = Field(default_factory=list)
 
     # --- Combat record ---
-    combat_record: Dict[str, int] = Field(default_factory=lambda: {
-        "monsters_killed": 0,
-        "damage_dealt": 0,
-        "damage_taken": 0,
-        "combats_won": 0,
-        "combats_fled": 0,
-    })
-    encounter_record: Dict[str, int] = Field(default_factory=lambda: {
-        "puzzles_solved": 0,
-        "puzzles_failed": 0,
-        "events_resolved": 0,
-        "events_failed": 0,
-    })
+    combat_record: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "monsters_killed": 0,
+            "damage_dealt": 0,
+            "damage_taken": 0,
+            "combats_won": 0,
+            "combats_fled": 0,
+        }
+    )
+    encounter_record: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "puzzles_solved": 0,
+            "puzzles_failed": 0,
+            "events_resolved": 0,
+            "events_failed": 0,
+        }
+    )
     title: str = ""
 
     class Config:
@@ -158,8 +166,9 @@ class PlayerCharacter(BaseModel):
 
     def _get_inv_manager(self):
         """Lazy-init InventoryManager bound to this player's inventory."""
-        if not hasattr(self, '_inv_manager') or self._inv_manager is None:
+        if not hasattr(self, "_inv_manager") or self._inv_manager is None:
             from src.systems.inventory import InventoryManager
+
             self._inv_manager = InventoryManager(self.inventory, self)
         return self._inv_manager
 
@@ -206,16 +215,14 @@ class PlayerCharacter(BaseModel):
 
     def initialize_inventory(self):
         from config import STARTING_MONEY
-        self.inventory = {
-            name: item.clone()
-            for name, item in registry.starter_inventory.items()
-        }
+
+        self.inventory = {name: item.clone() for name, item in registry.starter_inventory.items()}
         self.money = STARTING_MONEY
         if self.equipped_weapon and self.equipped_weapon not in self.inventory:
             template = registry.get_item_by_name(self.equipped_weapon)
             if template:
                 self.inventory[self.equipped_weapon] = template.clone()
-        
+
     def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
         new_y = self.y + dy
@@ -243,7 +250,7 @@ class PlayerCharacter(BaseModel):
     def give_item(self):
         """Give the currently selected item."""
         return self._get_inv_manager().give_selected(self.selected_item_index)
-    
+
     def pay_stamina(self, amount: int):
         """Deduct stamina, clamped to 0."""
         self.stamina = max(0, self.stamina - amount)
@@ -259,7 +266,7 @@ class PlayerCharacter(BaseModel):
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         return self._get_inv_manager().pick_up_from_maze(maze, self.x, self.y)
-    
+
     def check_health(self):
         """Check if the player is alive."""
         if self.health <= 0:
@@ -294,6 +301,7 @@ class PlayerCharacter(BaseModel):
     def add_follower(self, follower) -> bool:
         """Add a follower. Returns False if at max capacity."""
         from src.models.follower import MAX_FOLLOWERS
+
         if len(self.followers) >= MAX_FOLLOWERS:
             return False
         self.followers.append(follower)
@@ -332,6 +340,7 @@ class PlayerCharacter(BaseModel):
             return "STR"
         if self.weapon.weapon_type == "wild":
             from src.models.weapon import RANDOM_WEAPON_STATS
+
             return random.choice(RANDOM_WEAPON_STATS)
         return self.weapon.stat
 

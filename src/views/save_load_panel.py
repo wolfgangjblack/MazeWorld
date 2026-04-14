@@ -5,7 +5,8 @@ new-save creation, overwrite confirmation, and delete confirmation.
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
+from config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
@@ -45,8 +46,7 @@ class SaveLoadPanel:
       - ``None`` (no action yet)
     """
 
-    def __init__(self, screen, font, saves: list[dict],
-                 can_save: bool = True, initial_tab: int = 0):
+    def __init__(self, screen, font, saves: list[dict], can_save: bool = True, initial_tab: int = 0):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
@@ -82,9 +82,7 @@ class SaveLoadPanel:
         return max(0, count - 1)
 
     def _is_new_save_row(self) -> bool:
-        return (self.active_tab == 0
-                and self.can_save
-                and self.selected_index == len(self.saves))
+        return self.active_tab == 0 and self.can_save and self.selected_index == len(self.saves)
 
     # ------------------------------------------------------------------
     # Drawing
@@ -117,8 +115,7 @@ class SaveLoadPanel:
             x = i * tab_width + (tab_width - surf.get_width()) // 2
             self.screen.blit(surf, (x, tab_y))
 
-        pygame.draw.line(self.screen, (80, 80, 80),
-                         (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
+        pygame.draw.line(self.screen, (80, 80, 80), (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
 
     def _draw_save_list(self):
         COL_NAME = 50
@@ -127,14 +124,18 @@ class SaveLoadPanel:
         COL_TIME = 445
         COL_DATE = 560
 
-        headers = [("Name", COL_NAME), ("Class", COL_CLASS),
-                    ("Level", COL_LEVEL), ("Time", COL_TIME), ("Saved", COL_DATE)]
+        headers = [
+            ("Name", COL_NAME),
+            ("Class", COL_CLASS),
+            ("Level", COL_LEVEL),
+            ("Time", COL_TIME),
+            ("Saved", COL_DATE),
+        ]
         for label, col_x in headers:
             surf = self.small_font.render(label, True, HEADER_COLOR)
             self.screen.blit(surf, (col_x, 80))
 
-        pygame.draw.line(self.screen, HEADER_COLOR,
-                         (40, 100), (SCREEN_WIDTH - 40, 100))
+        pygame.draw.line(self.screen, HEADER_COLOR, (40, 100), (SCREEN_WIDTH - 40, 100))
 
         line_height = 50
         start_y = 110
@@ -173,16 +174,14 @@ class SaveLoadPanel:
                 lvl_s = self.font.render(f"Rm {save['room_level']}", True, color)
                 self.screen.blit(lvl_s, (COL_LEVEL, y))
 
-                time_s = self.font.render(
-                    _format_time(save["time_played_seconds"]), True, color)
+                time_s = self.font.render(_format_time(save["time_played_seconds"]), True, color)
                 self.screen.blit(time_s, (COL_TIME, y))
 
                 date_s = self.font.render(save["last_save_date"], True, color)
                 self.screen.blit(date_s, (COL_DATE, y))
 
                 if selected:
-                    seed_s = self.small_font.render(
-                        f"Seed: {save['seed']}", True, (100, 100, 100))
+                    seed_s = self.small_font.render(f"Seed: {save['seed']}", True, (100, 100, 100))
                     self.screen.blit(seed_s, (COL_NAME, y + 25))
             else:
                 color = SELECTED_COLOR if selected else NEW_SAVE_COLOR
@@ -195,8 +194,7 @@ class SaveLoadPanel:
             self.screen.blit(arrow, (SCREEN_WIDTH // 2 - 60, start_y - 20))
         if visible_end < total_items:
             arrow = self.font.render("v more below", True, (100, 100, 100))
-            self.screen.blit(arrow, (SCREEN_WIDTH // 2 - 60,
-                                     start_y + self.max_visible * line_height + 5))
+            self.screen.blit(arrow, (SCREEN_WIDTH // 2 - 60, start_y + self.max_visible * line_height + 5))
 
     def _draw_status(self):
         if not self.status_message:

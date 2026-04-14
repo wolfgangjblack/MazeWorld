@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,7 +22,7 @@ MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - HUD_HEIGHT) // GRID_SIZE  # Subtract HUD height only
 WORLD_SEED = int(os.getenv("WORLD_SEED", "1234"))  # Set to -1 for random seed
 STORY_SEED = os.getenv("STORY_SEED", "A local seaside village is under siege by a goblin horde")
-NUM_ROOMS = 2 #5 for base
+NUM_ROOMS = 2  # 5 for base
 # Density parameters (% of OPEN/PATH cells, not total cells)
 EVENT_DENSITY = 0.10
 ITEM_DENSITY = 0.10

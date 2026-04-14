@@ -4,9 +4,9 @@ import random
 import pytest
 
 from config import DATA_DIR
-from src.registry import registry
 from src.models.maze import Maze
 from src.models.player import PlayerCharacter
+from src.registry import registry
 
 HAS_GENERATED_DATA = os.path.exists(os.path.join(DATA_DIR, "items", "items.json"))
 requires_data = pytest.mark.skipif(

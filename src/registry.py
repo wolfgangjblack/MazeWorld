@@ -1,8 +1,9 @@
 import logging
 import os
 import warnings
+
 from config import DATA_DIR
-from src.utils.dataloader_utils import load_json_data, create_item_from_data
+from src.utils.dataloader_utils import create_item_from_data, load_json_data
 
 _log = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class GameRegistry:
     All entity databases are loaded once from global JSON files at startup.
     Room-specific filtering is done by setup_game using maze.json position maps.
     """
+
     _instance = None
 
     def __new__(cls):
@@ -60,8 +62,7 @@ class GameRegistry:
             manifest_seed = self.manifest.get("world_seed")
             if manifest_seed is not None:
                 warnings.warn(
-                    "Manifest uses deprecated 'world_seed' key; "
-                    "regenerate to update to 'seed'.",
+                    "Manifest uses deprecated 'world_seed' key; regenerate to update to 'seed'.",
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -70,16 +71,16 @@ class GameRegistry:
     # -- items ---------------------------------------------------------------
 
     def _load_items(self):
-        self._load_items_from(os.path.join(DATA_DIR, 'items', 'items.json'))
+        self._load_items_from(os.path.join(DATA_DIR, "items", "items.json"))
 
     def _load_items_from(self, path: str):
         """Load items from a specific JSON file, merging into the existing registry."""
         if not os.path.exists(path):
-            if not hasattr(self, 'item_registry'):
+            if not hasattr(self, "item_registry"):
                 self.item_registry = {}
             return
         items_data = load_json_data(path)
-        if not hasattr(self, 'item_registry'):
+        if not hasattr(self, "item_registry"):
             self.item_registry = {}
         for item_id_str, item_info in items_data.items():
             item_id = int(item_id_str)
@@ -111,7 +112,7 @@ class GameRegistry:
     # -- npcs ----------------------------------------------------------------
 
     def _load_npcs(self):
-        path = os.path.join(DATA_DIR, 'npcs', 'npcs.json')
+        path = os.path.join(DATA_DIR, "npcs", "npcs.json")
         if os.path.exists(path):
             self.npc_templates: list = load_json_data(path)
         else:
@@ -145,6 +146,7 @@ class GameRegistry:
         path = os.path.join(DATA_DIR, "events", "events.json")
         if os.path.exists(path):
             from src.models.encounter import create_event_from_data
+
             events_data = load_json_data(path)
             for evt in events_data:
                 event_obj = create_event_from_data(evt)
@@ -164,6 +166,7 @@ class GameRegistry:
         path = os.path.join(DATA_DIR, "quests", "quests.json")
         if os.path.exists(path):
             from src.models.quest import create_quest_from_data
+
             quests_data = load_json_data(path)
             for qd in quests_data:
                 quest_obj = create_quest_from_data(qd)
@@ -183,6 +186,7 @@ class GameRegistry:
         path = os.path.join(DATA_DIR, "classes", "classes.json")
         if os.path.exists(path):
             from src.models.player import PlayerClass
+
             classes_data = load_json_data(path)
             if isinstance(classes_data, list):
                 for cd in classes_data:
@@ -201,6 +205,7 @@ class GameRegistry:
         path = os.path.join(DATA_DIR, "story", "story.json")
         if os.path.exists(path):
             from src.models.story import OverarchingStory
+
             story_data = load_json_data(path)
             if isinstance(story_data, dict):
                 try:
@@ -226,7 +231,7 @@ class GameRegistry:
     # -- starter inventory ---------------------------------------------------
 
     def _load_starter_inventory(self):
-        path = os.path.join(DATA_DIR, 'player', 'starter_inventory.json')
+        path = os.path.join(DATA_DIR, "player", "starter_inventory.json")
         self.starter_inventory: dict = {}
         if not os.path.exists(path):
             return

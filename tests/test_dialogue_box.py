@@ -1,12 +1,13 @@
-from unittest.mock import patch, MagicMock
-from src.models.npc import StaticNPC
+from unittest.mock import MagicMock, patch
+
 from src.models.dialogue_box import DialogueBox
+from src.models.npc import StaticNPC
 
 
 def _make_npc(**overrides):
-    defaults = dict(x=0, y=0, id=1000, name="Arin", job="hunter",
-                    personality="cheerful", hobby="tracking",
-                    environment="forest")
+    defaults = dict(
+        x=0, y=0, id=1000, name="Arin", job="hunter", personality="cheerful", hobby="tracking", environment="forest"
+    )
     defaults.update(overrides)
     npc = StaticNPC(**defaults)
     npc.prepare()
@@ -20,6 +21,7 @@ def _make_db():
 # ---------------------------------------------------------------------------
 # get_display_window  (scroll math — the original bug)
 # ---------------------------------------------------------------------------
+
 
 class TestGetDisplayWindow:
     def test_content_fits_starts_at_zero(self):
@@ -71,10 +73,10 @@ class TestGetDisplayWindow:
         assert db.max_scroll == 0
 
 
-
 # ---------------------------------------------------------------------------
 # scroll_up / scroll_down
 # ---------------------------------------------------------------------------
+
 
 class TestScrollUpDown:
     def test_scroll_up_decrements(self):
@@ -105,10 +107,10 @@ class TestScrollUpDown:
         assert db.scroll_position == 10
 
 
-
 # ---------------------------------------------------------------------------
 # _build_display_history
 # ---------------------------------------------------------------------------
+
 
 class TestBuildDisplayHistory:
     def test_formats_npc_and_user_turns(self):
@@ -143,6 +145,7 @@ class TestBuildDisplayHistory:
 # ---------------------------------------------------------------------------
 # start_dialogue
 # ---------------------------------------------------------------------------
+
 
 class TestStartDialogue:
     @patch("src.models.dialogue_box.generate_npc_response", return_value="Arin: Hello!")
@@ -188,6 +191,7 @@ class TestStartDialogue:
 # update_dialogue
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateDialogue:
     @patch("src.models.dialogue_box.generate_npc_response", return_value="Arin: Sure thing")
     def test_appends_user_message_and_starts_generation(self, _mock_gen):
@@ -209,6 +213,7 @@ class TestUpdateDialogue:
 # ---------------------------------------------------------------------------
 # end_dialogue
 # ---------------------------------------------------------------------------
+
 
 class TestEndDialogue:
     def test_resets_all_state(self):
@@ -235,6 +240,7 @@ class TestEndDialogue:
 # ---------------------------------------------------------------------------
 # check_generation (async)
 # ---------------------------------------------------------------------------
+
 
 class TestCheckGeneration:
     @patch("src.models.dialogue_box.generate_npc_response", return_value="Arin: Reply")
@@ -275,6 +281,7 @@ class TestCheckGeneration:
 # ---------------------------------------------------------------------------
 # set_item_message / clear_item_message
 # ---------------------------------------------------------------------------
+
 
 class TestItemMessage:
     def test_set_item_message(self):

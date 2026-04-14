@@ -1,6 +1,8 @@
 import threading
+
 from config import SCREEN_WIDTH
 from src.utils.conversation_utils import generate_npc_response
+
 
 class DialogueBox:
     def __init__(self, screen, font):
@@ -21,7 +23,9 @@ class DialogueBox:
 
         # Combat state
         self.combat_active = False
-        self.combat_phase = None  # "initiative" | "player_turn" | "monster_turn" | "result" | "victory" | "defeat" | "fled"
+        self.combat_phase = (
+            None  # "initiative" | "player_turn" | "monster_turn" | "result" | "victory" | "defeat" | "fled"
+        )
         self.combat_log = []
         self.player_stunned_turns = 0
         self.player_poison_turns = 0
@@ -94,10 +98,11 @@ class DialogueBox:
         def _run():
             try:
                 self._generation_result = generate_npc_response(
-                    npc, user_input, story_context=ctx,
-                    quest_context=qctx, player=player)
+                    npc, user_input, story_context=ctx, quest_context=qctx, player=player
+                )
             except Exception:
                 self._generation_result = f"{npc.name}: [Unable to generate response]"
+
         self._generation_thread = threading.Thread(target=_run, daemon=True)
         self._generation_thread.start()
 
@@ -121,7 +126,7 @@ class DialogueBox:
         self.user_message = ""
         self.input_active = False
         self.generating = True
-        self._start_generation(npc, '')
+        self._start_generation(npc, "")
         self.auto_scroll = True
         self._scroll_target = "top" if not npc.has_met_player else "bottom"
 
@@ -153,7 +158,7 @@ class DialogueBox:
         self.dialogue_active = False
         self.input_active = False
 
-        if event.type == "combat" and hasattr(event, 'monsters') and event.monsters:
+        if event.type == "combat" and hasattr(event, "monsters") and event.monsters:
             # Multi-turn combat
             self.combat_active = True
             self.combat_phase = "initiative"

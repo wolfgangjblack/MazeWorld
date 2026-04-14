@@ -1,11 +1,13 @@
 """Save state serialization model — full game state snapshot."""
 
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 class SaveMetadata(BaseModel):
     """Display info shown in save file lists."""
+
     character_name: str = "Adventurer"
     character_class: str = ""
     room_level: int = 1
@@ -62,9 +64,13 @@ class SaveState(BaseModel):
 
     # Room progression
     gate_cleared: bool = False
-    gc_stats: dict = Field(default_factory=lambda: {
-        "monsters_killed": 0, "items_used": 0, "rooms_cleared": 0,
-    })
+    gc_stats: dict = Field(
+        default_factory=lambda: {
+            "monsters_killed": 0,
+            "items_used": 0,
+            "rooms_cleared": 0,
+        }
+    )
 
     # Timing
     time_played_seconds: float = 0.0

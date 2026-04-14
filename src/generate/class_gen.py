@@ -8,8 +8,12 @@ import logging
 import random
 
 from src.models.player import (
-    Stats, Ability, PlayerClass,
-    STAT_NAMES, STAT_BUDGET, ARCHETYPE_STAT_ROLES,
+    ARCHETYPE_STAT_ROLES,
+    STAT_BUDGET,
+    STAT_NAMES,
+    Ability,
+    PlayerClass,
+    Stats,
 )
 from src.models.spell import Spell, compute_stamina_cost
 
@@ -36,13 +40,13 @@ def _llm_generate(env_type: str, env_name: str) -> list[dict]:
     """Call LLM to generate 4 class definitions."""
     try:
         from src.generate.generators.llm_primitives import generate_player_classes
-        result = generate_player_classes({
-            "environment": {"type": env_type, "name": env_name}
-        })
+
+        result = generate_player_classes({"environment": {"type": env_type, "name": env_name}})
         if isinstance(result, list) and len(result) >= 4:
             return result[:4]
-        logger.warning("LLM returned %d classes, expected 4. Using fallback.",
-                       len(result) if isinstance(result, list) else 0)
+        logger.warning(
+            "LLM returned %d classes, expected 4. Using fallback.", len(result) if isinstance(result, list) else 0
+        )
     except Exception as e:
         logger.warning("LLM class generation failed: %s. Using fallback.", e)
     return []
@@ -144,10 +148,12 @@ def _fix_stats(raw: dict, archetype: str) -> Stats:
     diff = total - STAT_BUDGET
 
     if diff != 0:
-        adjustable = (effective_roles.get("secondary", [])
-                      + effective_roles.get("dump", [])
-                      + unassigned
-                      + effective_roles.get("primary", []))
+        adjustable = (
+            effective_roles.get("secondary", [])
+            + effective_roles.get("dump", [])
+            + unassigned
+            + effective_roles.get("primary", [])
+        )
 
         idx = 0
         while diff != 0 and idx < len(adjustable) * 30:
@@ -191,12 +197,14 @@ def _parse_abilities(raw_list: list) -> list[Ability]:
     for a in raw_list:
         if isinstance(a, dict):
             try:
-                abilities.append(Ability(
-                    name=a.get("name", "Unknown"),
-                    description=a.get("description", ""),
-                    stat=a.get("stat", "STR"),
-                    stamina_cost=a.get("stamina_cost", a.get("hunger_cost", 0) + a.get("thirst_cost", 0)),
-                ))
+                abilities.append(
+                    Ability(
+                        name=a.get("name", "Unknown"),
+                        description=a.get("description", ""),
+                        stat=a.get("stat", "STR"),
+                        stamina_cost=a.get("stamina_cost", a.get("hunger_cost", 0) + a.get("thirst_cost", 0)),
+                    )
+                )
             except Exception:
                 logger.warning("Skipping malformed ability: %s", a, exc_info=True)
     return abilities
@@ -235,19 +243,21 @@ def _parse_spells(raw_list: list) -> list[Spell]:
                 spell_type = _SPELL_TYPE_MAP.get(raw_type, raw_type)
                 damage_dice = _parse_damage_dice(s.get("damage_dice", 6))
                 targets = s.get("targets", "single")
-                spells.append(Spell(
-                    name=s.get("name", "Unknown Spell"),
-                    description=s.get("description", ""),
-                    element=s.get("element", "fire"),
-                    stat=s.get("stat", "INT"),
-                    damage_dice=damage_dice,
-                    spell_type=spell_type,
-                    stamina_cost=compute_stamina_cost(spell_type, damage_dice, targets),
-                    targets=targets,
-                    heal_amount=s.get("heal_amount", 0),
-                    buff_stat=s.get("buff_stat"),
-                    buff_value=s.get("buff_value", 2),
-                ))
+                spells.append(
+                    Spell(
+                        name=s.get("name", "Unknown Spell"),
+                        description=s.get("description", ""),
+                        element=s.get("element", "fire"),
+                        stat=s.get("stat", "INT"),
+                        damage_dice=damage_dice,
+                        spell_type=spell_type,
+                        stamina_cost=compute_stamina_cost(spell_type, damage_dice, targets),
+                        targets=targets,
+                        heal_amount=s.get("heal_amount", 0),
+                        buff_stat=s.get("buff_stat"),
+                        buff_value=s.get("buff_value", 2),
+                    )
+                )
             except Exception:
                 logger.warning("Skipping malformed spell: %s", s, exc_info=True)
     return spells
@@ -260,12 +270,20 @@ def _pad_abilities(existing: list[Ability], target: int, archetype: str) -> list
             Ability(name="Bash", description="Slam target with your shield.", stat="STR", stamina_cost=5),
             Ability(name="Intimidate", description="Frighten an enemy into hesitation.", stat="CHA", stamina_cost=3),
             Ability(name="Break Door", description="Force open a stuck door.", stat="STR", stamina_cost=8),
-            Ability(name="Rally", description="Boost morale, restoring a small amount of party HP.", stat="CHA", stamina_cost=5),
+            Ability(
+                name="Rally",
+                description="Boost morale, restoring a small amount of party HP.",
+                stat="CHA",
+                stamina_cost=5,
+            ),
         ],
     }
-    defaults = fallbacks.get(archetype, [
-        Ability(name="Focus", description="Concentrate to improve next action.", stat="INT"),
-    ])
+    defaults = fallbacks.get(
+        archetype,
+        [
+            Ability(name="Focus", description="Concentrate to improve next action.", stat="INT"),
+        ],
+    )
     result = list(existing)
     for fb in defaults:
         if len(result) >= target:
@@ -280,33 +298,87 @@ def _pad_spells(existing: list[Spell], target: int, archetype: str) -> list[Spel
     element = random.choice(ELEMENTS)
     if archetype == "mage":
         defaults = [
-            Spell(name=f"{element.title()} Bolt", description=f"A bolt of {element} energy.",
-                  element=element, stat="INT", damage_dice=8, spell_type="damage_single",
-                  stamina_cost=compute_stamina_cost("damage_single", 8, "single"), targets="single"),
-            Spell(name=f"{element.title()} Blast", description=f"An explosion of {element} force.",
-                  element=element, stat="INT", damage_dice=6, spell_type="damage_multi",
-                  stamina_cost=compute_stamina_cost("damage_multi", 6, "multi"), targets="multi"),
-            Spell(name=f"{element.title()} Shield", description=f"A protective {element} barrier.",
-                  element=element, stat="INT", spell_type="buff_stat", buff_stat="CON",
-                  stamina_cost=compute_stamina_cost("buff_stat", 0, "self"), targets="self"),
-            Spell(name=f"{element.title()} Sight", description=f"See hidden things using {element} magic.",
-                  element=element, stat="INT", spell_type="buff_sustain",
-                  stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"), targets="self"),
+            Spell(
+                name=f"{element.title()} Bolt",
+                description=f"A bolt of {element} energy.",
+                element=element,
+                stat="INT",
+                damage_dice=8,
+                spell_type="damage_single",
+                stamina_cost=compute_stamina_cost("damage_single", 8, "single"),
+                targets="single",
+            ),
+            Spell(
+                name=f"{element.title()} Blast",
+                description=f"An explosion of {element} force.",
+                element=element,
+                stat="INT",
+                damage_dice=6,
+                spell_type="damage_multi",
+                stamina_cost=compute_stamina_cost("damage_multi", 6, "multi"),
+                targets="multi",
+            ),
+            Spell(
+                name=f"{element.title()} Shield",
+                description=f"A protective {element} barrier.",
+                element=element,
+                stat="INT",
+                spell_type="buff_stat",
+                buff_stat="CON",
+                stamina_cost=compute_stamina_cost("buff_stat", 0, "self"),
+                targets="self",
+            ),
+            Spell(
+                name=f"{element.title()} Sight",
+                description=f"See hidden things using {element} magic.",
+                element=element,
+                stat="INT",
+                spell_type="buff_sustain",
+                stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"),
+                targets="self",
+            ),
         ]
     elif archetype == "healer":
         defaults = [
-            Spell(name="Healing Light", description="Restore HP to a target.",
-                  element=element, stat="WIS", spell_type="heal", heal_amount=10,
-                  stamina_cost=compute_stamina_cost("heal", 0, "self"), targets="self"),
-            Spell(name="Bolster", description="Temporarily boost an ally's defense.",
-                  element=element, stat="WIS", spell_type="buff_stat", buff_stat="CON",
-                  stamina_cost=compute_stamina_cost("buff_stat", 0, "self"), targets="self"),
-            Spell(name=f"{element.title()} Strike", description=f"A damaging bolt of {element}.",
-                  element=element, stat="WIS", damage_dice=6, spell_type="damage_single",
-                  stamina_cost=compute_stamina_cost("damage_single", 6, "single"), targets="single"),
-            Spell(name="Purify", description="Remove a negative effect.",
-                  element=element, stat="WIS", spell_type="buff_sustain",
-                  stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"), targets="self"),
+            Spell(
+                name="Healing Light",
+                description="Restore HP to a target.",
+                element=element,
+                stat="WIS",
+                spell_type="heal",
+                heal_amount=10,
+                stamina_cost=compute_stamina_cost("heal", 0, "self"),
+                targets="self",
+            ),
+            Spell(
+                name="Bolster",
+                description="Temporarily boost an ally's defense.",
+                element=element,
+                stat="WIS",
+                spell_type="buff_stat",
+                buff_stat="CON",
+                stamina_cost=compute_stamina_cost("buff_stat", 0, "self"),
+                targets="self",
+            ),
+            Spell(
+                name=f"{element.title()} Strike",
+                description=f"A damaging bolt of {element}.",
+                element=element,
+                stat="WIS",
+                damage_dice=6,
+                spell_type="damage_single",
+                stamina_cost=compute_stamina_cost("damage_single", 6, "single"),
+                targets="single",
+            ),
+            Spell(
+                name="Purify",
+                description="Remove a negative effect.",
+                element=element,
+                stat="WIS",
+                spell_type="buff_sustain",
+                stamina_cost=compute_stamina_cost("buff_sustain", 0, "self"),
+                targets="self",
+            ),
         ]
     else:
         defaults = []
@@ -323,14 +395,38 @@ def _pad_spells(existing: list[Spell], target: int, archetype: str) -> list[Spel
 def _fallback_class(archetype: str, env_type: str, env_name: str) -> dict:
     """Generate a complete fallback class definition for an archetype."""
     fallback_names = {
-        "warrior": {"forest": "Ranger", "cave": "Berserker", "dungeon": "Knight",
-                     "castle": "Guardian", "city": "Soldier", "house": "Brawler"},
-        "mage":    {"forest": "Druid", "cave": "Geomancer", "dungeon": "Warlock",
-                     "castle": "Court Wizard", "city": "Arcanist", "house": "Hedge Mage"},
-        "healer":  {"forest": "Shaman", "cave": "Oracle", "dungeon": "Cleric",
-                     "castle": "Priest", "city": "Apothecary", "house": "Herbalist"},
-        "jester":  {"forest": "Trickster", "cave": "Gremlin", "dungeon": "Fool",
-                     "castle": "Court Jester", "city": "Charlatan", "house": "Prankster"},
+        "warrior": {
+            "forest": "Ranger",
+            "cave": "Berserker",
+            "dungeon": "Knight",
+            "castle": "Guardian",
+            "city": "Soldier",
+            "house": "Brawler",
+        },
+        "mage": {
+            "forest": "Druid",
+            "cave": "Geomancer",
+            "dungeon": "Warlock",
+            "castle": "Court Wizard",
+            "city": "Arcanist",
+            "house": "Hedge Mage",
+        },
+        "healer": {
+            "forest": "Shaman",
+            "cave": "Oracle",
+            "dungeon": "Cleric",
+            "castle": "Priest",
+            "city": "Apothecary",
+            "house": "Herbalist",
+        },
+        "jester": {
+            "forest": "Trickster",
+            "cave": "Gremlin",
+            "dungeon": "Fool",
+            "castle": "Court Jester",
+            "city": "Charlatan",
+            "house": "Prankster",
+        },
     }
 
     name = fallback_names.get(archetype, {}).get(env_type, archetype.title())

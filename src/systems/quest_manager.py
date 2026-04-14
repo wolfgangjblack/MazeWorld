@@ -1,6 +1,7 @@
 """Quest state tracking, completion, failure, and reward distribution."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,8 +14,7 @@ from src.registry import registry
 class QuestManager:
     """Centralizes quest lifecycle: offer, accept, progress, complete, fail."""
 
-    def __init__(self, quests: dict[int, Quest], events: dict | None = None,
-                 npcs: list | None = None):
+    def __init__(self, quests: dict[int, Quest], events: dict | None = None, npcs: list | None = None):
         self.quests = quests
         self.events = events or {}
         self.npcs = npcs or []
@@ -113,8 +113,7 @@ class QuestManager:
     def on_event_resolved(self, event_id: int, player: PlayerCharacter) -> Quest | None:
         """Called when any event is resolved. Completes matching quests by target_event_id."""
         for qid, quest in self.quests.items():
-            if (getattr(quest, "target_event_id", 0) == event_id
-                    and quest.status == "active"):
+            if getattr(quest, "target_event_id", 0) == event_id and quest.status == "active":
                 self.complete_quest(quest, player)
                 return quest
         return None
@@ -122,8 +121,7 @@ class QuestManager:
     def on_event_failed(self, event_id: int, player: PlayerCharacter) -> Quest | None:
         """Called when a puzzle/event is failed. Fails matching active quests."""
         for qid, quest in self.quests.items():
-            if (getattr(quest, "target_event_id", 0) == event_id
-                    and quest.status == "active"):
+            if getattr(quest, "target_event_id", 0) == event_id and quest.status == "active":
                 self.fail_quest(quest, player)
                 return quest
         return None
@@ -135,13 +133,16 @@ class QuestManager:
     def check_escort_zone(self, player: PlayerCharacter) -> Quest | None:
         """Check if any active escort quest target zone has been reached."""
         from src.models.items import EscortItem
+
         for item_name, item in list(player.inventory.items()):
             if isinstance(item, EscortItem):
                 for qid, quest in self.quests.items():
-                    if (quest.type == "escort"
-                            and getattr(quest, "escort_npc_id", None) == item.npc_id
-                            and quest.status == "active"
-                            and quest.check_completion(player.x, player.y)):
+                    if (
+                        quest.type == "escort"
+                        and getattr(quest, "escort_npc_id", None) == item.npc_id
+                        and quest.status == "active"
+                        and quest.check_completion(player.x, player.y)
+                    ):
                         player.remove_from_inventory(item_name)
                         self.complete_quest(quest, player)
                         return quest
@@ -240,8 +241,7 @@ class QuestManager:
                         if next_q.status == "not_started":
                             next_q.status = "active"
                             player.accept_quest(next_q.id)
-                    return (f"Quest progress: {quest.title} "
-                            f"— step {quest.current_step}/{len(quest.sub_quest_ids)}")
+                    return f"Quest progress: {quest.title} — step {quest.current_step}/{len(quest.sub_quest_ids)}"
         return None
 
     # ------------------------------------------------------------------

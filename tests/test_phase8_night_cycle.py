@@ -1,22 +1,23 @@
 """Tests for Phase 8: time-gated encounters/NPCs, real-time day cycle."""
 
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.models.time import DayNightCycle, TimePeriod
 from src.models.encounter import CombatEvent
 from src.models.npc import StaticNPC
+from src.models.time import DayNightCycle, TimePeriod
 from src.systems.day_night import (
-    is_event_active_at_time, is_npc_available,
+    is_event_active_at_time,
+    is_npc_available,
 )
-
 
 # ---------------------------------------------------------------------------
 # Real-time day cycle
 # ---------------------------------------------------------------------------
+
 
 class TestRealTimeDayCycle:
     def test_enable_real_time(self):
@@ -106,6 +107,7 @@ class TestRealTimeDayCycle:
 # Time-gated events (model-level field)
 # ---------------------------------------------------------------------------
 
+
 class TestEventTimeGate:
     def test_event_has_time_gate_field(self):
         event = CombatEvent(id=3000, name="Test", description="desc")
@@ -113,8 +115,10 @@ class TestEventTimeGate:
 
     def test_event_time_gate_night(self):
         event = CombatEvent(
-            id=3001, name="Night Fight",
-            description="desc", time_gate="night",
+            id=3001,
+            name="Night Fight",
+            description="desc",
+            time_gate="night",
         )
         assert event.time_gate == "night"
         assert is_event_active_at_time(event, TimePeriod.NIGHT)
@@ -122,8 +126,10 @@ class TestEventTimeGate:
 
     def test_event_time_gate_day(self):
         event = CombatEvent(
-            id=3002, name="Day Fight",
-            description="desc", time_gate="day",
+            id=3002,
+            name="Day Fight",
+            description="desc",
+            time_gate="day",
         )
         assert is_event_active_at_time(event, TimePeriod.DAY)
         assert is_event_active_at_time(event, TimePeriod.DAWN)
@@ -133,6 +139,7 @@ class TestEventTimeGate:
 # ---------------------------------------------------------------------------
 # NPC availability (model-level field)
 # ---------------------------------------------------------------------------
+
 
 class TestNPCAvailabilityField:
     def test_npc_has_availability_field(self):

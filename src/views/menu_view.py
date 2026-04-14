@@ -2,8 +2,10 @@
 
 import logging
 import os
+
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
+from config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 logger = logging.getLogger(__name__)
 from src.views.status_layout import draw_status_layout, estimate_status_height
@@ -188,7 +190,8 @@ class MenuView:
         level_text = self.small_font.render(
             f"Level {p.level}  |  HP: {p.health}/{p.max_health}  |  "
             f"Stamina: {p.stamina}/{p.max_stamina}  |  Gold: {p.money}",
-            True, TEXT_COLOR,
+            True,
+            TEXT_COLOR,
         )
         self.screen.blit(level_text, ((SCREEN_WIDTH - level_text.get_width()) // 2, 72))
 
@@ -208,28 +211,29 @@ class MenuView:
         weapon_info = ""
         if p.weapon:
             w = p.weapon
-            stat_mod = p.get_stat_mod(w.stat) if hasattr(p, 'get_stat_mod') else 0
+            stat_mod = p.get_stat_mod(w.stat) if hasattr(p, "get_stat_mod") else 0
             dmg_bonus = w.damage_bonus + stat_mod
             bonus_str = f"+{dmg_bonus}" if dmg_bonus > 0 else (str(dmg_bonus) if dmg_bonus < 0 else "")
             wtype = "Wild" if w.weapon_type == "wild" else w.weapon_type.title()
-            dt = getattr(w, 'damage_type', 'physical')
+            dt = getattr(w, "damage_type", "physical")
             dt_str = f"  |  {dt}" if dt and dt != "physical" else ""
-            weapon_info = (f"{wtype}  |  "
-                           f"Hit: {stat_mod:+d} ({w.stat})  |  "
-                           f"Dmg: 1d{w.damage_dice}{bonus_str}{dt_str}")
+            weapon_info = f"{wtype}  |  Hit: {stat_mod:+d} ({w.stat})  |  Dmg: 1d{w.damage_dice}{bonus_str}{dt_str}"
         elif pc:
             from src.models.weapon import STARTER_WEAPONS
+
             starter = STARTER_WEAPONS.get(pc.archetype)
             if starter:
-                stat_mod = p.get_stat_mod(starter.stat) if hasattr(p, 'get_stat_mod') else 0
+                stat_mod = p.get_stat_mod(starter.stat) if hasattr(p, "get_stat_mod") else 0
                 dmg_bonus = starter.damage_bonus + stat_mod
                 bonus_str = f"+{dmg_bonus}" if dmg_bonus > 0 else (str(dmg_bonus) if dmg_bonus < 0 else "")
                 wtype = "Wild" if starter.weapon_type == "wild" else starter.weapon_type.title()
-                dt = getattr(starter, 'damage_type', 'physical')
+                dt = getattr(starter, "damage_type", "physical")
                 dt_str = f"  |  {dt}" if dt and dt != "physical" else ""
-                weapon_info = (f"{wtype}  |  "
-                               f"Hit: {stat_mod:+d} ({starter.stat})  |  "
-                               f"Dmg: 1d{starter.damage_dice}{bonus_str}{dt_str}")
+                weapon_info = (
+                    f"{wtype}  |  "
+                    f"Hit: {stat_mod:+d} ({starter.stat})  |  "
+                    f"Dmg: 1d{starter.damage_dice}{bonus_str}{dt_str}"
+                )
 
         flavor = pc.flavor_text if pc else ""
         abilities = list(p.abilities) if p.abilities else []
@@ -248,11 +252,19 @@ class MenuView:
 
         base_y = viewport_top - self.scroll_offset
         draw_status_layout(
-            self.screen, self.font, self.small_font, tiny_font,
-            portrait_surface, stats, flavor,
-            weapon_name, weapon_info,
-            abilities, spells,
-            base_y, pad,
+            self.screen,
+            self.font,
+            self.small_font,
+            tiny_font,
+            portrait_surface,
+            stats,
+            flavor,
+            weapon_name,
+            weapon_info,
+            abilities,
+            spells,
+            base_y,
+            pad,
         )
 
         self.screen.set_clip(None)
@@ -293,21 +305,21 @@ class MenuView:
                 name_color = EQUIPPED_COLOR if is_learned else TEXT_COLOR
 
                 # Spell name and type
-                spell_type = getattr(spell, 'spell_type', 'unknown')
-                element = getattr(spell, 'element', '')
+                spell_type = getattr(spell, "spell_type", "unknown")
+                element = getattr(spell, "element", "")
                 element_tag = f" [{element}]" if element else ""
                 line = f"{spell.name}{learned_tag} - {spell_type}{element_tag}"
                 self._stat_line(line, name_color, 60, y)
                 y += 20
 
                 # Cost and effect
-                s_cost = getattr(spell, 'stamina_cost', 0)
+                s_cost = getattr(spell, "stamina_cost", 0)
                 cost_parts = []
                 if s_cost:
                     cost_parts.append(f"Stamina: {s_cost}")
                 cost_str = "  |  ".join(cost_parts) if cost_parts else "Free"
 
-                desc = getattr(spell, 'description', '')
+                desc = getattr(spell, "description", "")
                 detail = f"Cost: {cost_str}"
                 if desc:
                     detail += f"  |  {desc[:50]}"
@@ -334,13 +346,13 @@ class MenuView:
                 self._stat_line(line, TEXT_COLOR, 60, y)
                 y += 20
 
-                s_cost = getattr(ability, 'stamina_cost', 0)
+                s_cost = getattr(ability, "stamina_cost", 0)
                 cost_parts = []
                 if s_cost:
                     cost_parts.append(f"Stamina: {s_cost}")
                 cost_str = "  |  ".join(cost_parts) if cost_parts else "Free"
 
-                desc = getattr(ability, 'description', '')
+                desc = getattr(ability, "description", "")
                 detail = f"Cost: {cost_str}"
                 if desc:
                     detail += f"  |  {desc[:50]}"

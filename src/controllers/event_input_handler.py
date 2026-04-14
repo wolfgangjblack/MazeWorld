@@ -4,9 +4,11 @@ Manages input for puzzle, event, and legacy dialogue-box combat encounters.
 """
 
 import random
+
 import pygame
-from src.systems.day_night import apply_combat_rest
+
 from src.registry import registry
+from src.systems.day_night import apply_combat_rest
 
 
 class EventInputHandler:
@@ -30,9 +32,11 @@ class EventInputHandler:
             gc.game_view.encounter_view.scroll_content(1)
             return
 
-        choosing = (current_event.type in ("puzzle", "event")
-                    and not gc.dialogue_box.event_context.get("result")
-                    and not gc.dialogue_box.awaiting_roll)
+        choosing = (
+            current_event.type in ("puzzle", "event")
+            and not gc.dialogue_box.event_context.get("result")
+            and not gc.dialogue_box.awaiting_roll
+        )
         if not choosing and event.key in (pygame.K_UP, pygame.K_DOWN):
             direction = -1 if event.key == pygame.K_UP else 1
             gc.game_view.encounter_view.scroll_content(direction)
@@ -67,7 +71,7 @@ class EventInputHandler:
 
         elif current_event.type in ("puzzle", "event") and not gc.dialogue_box.event_context.get("result"):
             rendered = gc.dialogue_box.event_context.get("rendered_choices", [])
-            total_choices = len(rendered) if rendered else len(getattr(current_event, 'choices', []))
+            total_choices = len(rendered) if rendered else len(getattr(current_event, "choices", []))
 
             if event.key == pygame.K_UP:
                 self.event_selected_choice = (self.event_selected_choice - 1) % max(total_choices, 1)
@@ -103,7 +107,7 @@ class EventInputHandler:
                         gc.dialogue_box.awaiting_roll = True
                     self.event_selected_choice = 0
                     return
-                choices = getattr(current_event, 'choices', [])
+                choices = getattr(current_event, "choices", [])
                 if choices and 0 <= idx < len(choices):
                     gc.dialogue_box.event_context["selected_choice"] = idx
                     gc.dialogue_box.awaiting_roll = True
@@ -115,7 +119,7 @@ class EventInputHandler:
 
             if rendered:
                 for i in range(min(len(rendered), 9)):
-                    if event.key == getattr(pygame, f'K_{i+1}', None):
+                    if event.key == getattr(pygame, f"K_{i + 1}", None):
                         self.event_selected_choice = i
                         gc.dialogue_box.event_context["highlight"] = i
                         rc = rendered[i]
@@ -206,7 +210,7 @@ class EventInputHandler:
     def _end_event(self):
         gc = self.gc
         gc.dialogue_box.end_event()
-        if hasattr(gc, 'day_night'):
+        if hasattr(gc, "day_night"):
             gc.day_night.resume()
 
     def _handle_combat_input(self, event):
@@ -237,7 +241,11 @@ class EventInputHandler:
             if event.key == pygame.K_UP:
                 alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
                 if alive_indices:
-                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
+                    curr = (
+                        alive_indices.index(self.combat_target_index)
+                        if self.combat_target_index in alive_indices
+                        else 0
+                    )
                     curr = (curr - 1) % len(alive_indices)
                     self.combat_target_index = alive_indices[curr]
                 return
@@ -245,7 +253,11 @@ class EventInputHandler:
             if event.key == pygame.K_DOWN:
                 alive_indices = [i for i, m in enumerate(combat_event.monsters) if m.is_alive]
                 if alive_indices:
-                    curr = alive_indices.index(self.combat_target_index) if self.combat_target_index in alive_indices else 0
+                    curr = (
+                        alive_indices.index(self.combat_target_index)
+                        if self.combat_target_index in alive_indices
+                        else 0
+                    )
                     curr = (curr + 1) % len(alive_indices)
                     self.combat_target_index = alive_indices[curr]
                 return
@@ -369,16 +381,16 @@ class EventInputHandler:
         if gc.sfx:
             gc.sfx.play("event_complete")
 
-        if hasattr(combat_event, 'monsters'):
+        if hasattr(combat_event, "monsters"):
             killed = sum(1 for m in combat_event.monsters if not m.is_alive)
             gc.stats["monsters_killed"] += killed
             gc.player.combat_record["monsters_killed"] += killed
         gc.player.combat_record["combats_won"] += 1
-        if getattr(combat_event, 'is_climax_boss', False):
+        if getattr(combat_event, "is_climax_boss", False):
             gc.resolved_encounters += 1
             gc.gate_cleared = True
             gc.pending_action = "victory"
-        elif not getattr(combat_event, 'is_gate', False):
+        elif not getattr(combat_event, "is_gate", False):
             gc.resolved_encounters += 1
             gc._check_door_reveal()
         else:

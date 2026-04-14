@@ -2,28 +2,34 @@
 
 import json
 import os
+
 import pytest
 
-from src.models.player import (
-    Stats, Spell, PlayerClass,
-    STAT_NAMES,
-)
-from src.models.story import OverarchingStory, Faction, RoomStoryBeat
-from src.models.world_bible import WorldBible, RoomBible, EntityRef
-
 from src.generate.checker import (
-    ClassChecker, QuestChecker, EventChecker,
+    ClassChecker,
+    EventChecker,
+    QuestChecker,
 )
+from src.generate.class_gen import _fallback_class, _fix_stats, _validate_classes
 from src.generate.validator import (
-    ClassValidator, QuestValidator, EventValidator,
+    ClassValidator,
+    EventValidator,
+    QuestValidator,
 )
 from src.generate.world_editor import build_world_bible, cross_validate, write_world_bible
-from src.generate.class_gen import _fix_stats, _fallback_class, _validate_classes
-
+from src.models.player import (
+    STAT_NAMES,
+    PlayerClass,
+    Spell,
+    Stats,
+)
+from src.models.story import Faction, OverarchingStory, RoomStoryBeat
+from src.models.world_bible import EntityRef, RoomBible, WorldBible
 
 # ---------------------------------------------------------------------------
 # Checker tests
 # ---------------------------------------------------------------------------
+
 
 class TestClassChecker:
     def _make_valid_classes(self):
@@ -75,8 +81,11 @@ class TestQuestChecker:
     def test_valid_quest_passes(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "fetch", "title": "Get Mushrooms",
-            "description": "Find mushrooms.", "giver_npc_id": 1000,
+            "id": 4001,
+            "type": "fetch",
+            "title": "Get Mushrooms",
+            "description": "Find mushrooms.",
+            "giver_npc_id": 1000,
             "target_items": [{"item_id": 2000}],
         }
         ctx = {"npc_ids": {1000}, "item_ids": {2000}}
@@ -92,8 +101,11 @@ class TestQuestChecker:
     def test_bad_giver_npc_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "fetch", "title": "Get it",
-            "description": "Do it.", "giver_npc_id": 1999,
+            "id": 4001,
+            "type": "fetch",
+            "title": "Get it",
+            "description": "Do it.",
+            "giver_npc_id": 1999,
         }
         result = checker.check(quest, {"npc_ids": {1000}})
         assert not result.passed
@@ -102,8 +114,11 @@ class TestQuestChecker:
     def test_bad_fetch_item_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "fetch", "title": "Get it",
-            "description": "Do it.", "giver_npc_id": 1000,
+            "id": 4001,
+            "type": "fetch",
+            "title": "Get it",
+            "description": "Do it.",
+            "giver_npc_id": 1000,
             "target_items": [{"item_id": 2999}],
         }
         result = checker.check(quest, {"npc_ids": {1000}, "item_ids": {2000}})
@@ -112,8 +127,11 @@ class TestQuestChecker:
     def test_bad_combat_event_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "combat", "title": "Kill it",
-            "description": "Kill.", "giver_npc_id": 1000,
+            "id": 4001,
+            "type": "combat",
+            "title": "Kill it",
+            "description": "Kill.",
+            "giver_npc_id": 1000,
             "target_event_id": 3999,
         }
         result = checker.check(quest, {"npc_ids": {1000}, "event_ids": {3001}})
@@ -122,8 +140,11 @@ class TestQuestChecker:
     def test_escort_bad_npc_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "escort", "title": "Escort",
-            "description": "Go.", "giver_npc_id": 1000,
+            "id": 4001,
+            "type": "escort",
+            "title": "Escort",
+            "description": "Go.",
+            "giver_npc_id": 1000,
             "escort_npc_id": 1999,
         }
         result = checker.check(quest, {"npc_ids": {1000}})
@@ -132,9 +153,13 @@ class TestQuestChecker:
     def test_delivery_bad_item_fails(self):
         checker = QuestChecker()
         quest = {
-            "id": 4001, "type": "delivery", "title": "Deliver",
-            "description": "Bring.", "giver_npc_id": 1000,
-            "delivery_item_id": 2999, "target_npc_id": 1001,
+            "id": 4001,
+            "type": "delivery",
+            "title": "Deliver",
+            "description": "Bring.",
+            "giver_npc_id": 1000,
+            "delivery_item_id": 2999,
+            "target_npc_id": 1001,
         }
         result = checker.check(quest, {"npc_ids": {1000, 1001}, "item_ids": {2000}})
         assert not result.passed
@@ -156,7 +181,8 @@ class TestEventChecker:
     def test_puzzle_no_walkaway_fails(self):
         checker = EventChecker()
         event = {
-            "name": "Locked Door", "type": "puzzle",
+            "name": "Locked Door",
+            "type": "puzzle",
             "choices": [{"text": "Force it", "dc": 12}],
         }
         result = checker.check(event)
@@ -165,7 +191,8 @@ class TestEventChecker:
     def test_puzzle_with_walkaway_passes(self):
         checker = EventChecker()
         event = {
-            "name": "Locked Door", "type": "puzzle",
+            "name": "Locked Door",
+            "type": "puzzle",
             "choices": [
                 {"text": "Force it", "dc": 12},
                 {"text": "Walk away", "auto_success": True},
@@ -183,6 +210,7 @@ class TestEventChecker:
 # ---------------------------------------------------------------------------
 # Validator tests
 # ---------------------------------------------------------------------------
+
 
 class TestClassValidator:
     def test_valid_warrior(self):
@@ -211,10 +239,12 @@ class TestClassValidator:
         v = ClassValidator()
         stats = _fix_stats({}, "mage")
         pc = PlayerClass(
-            name="Druid", archetype="mage", stats=stats,
+            name="Druid",
+            archetype="mage",
+            stats=stats,
             spells=[
-                Spell(name=f"S{i}", description="x", spell_type="damage_single",
-                      element="fire", stat="INT") for i in range(4)
+                Spell(name=f"S{i}", description="x", spell_type="damage_single", element="fire", stat="INT")
+                for i in range(4)
             ],
         )
         result = v.validate(pc)
@@ -233,7 +263,8 @@ class TestQuestValidator:
     def test_valid_fetch_quest(self):
         v = QuestValidator()
         quest = {
-            "type": "fetch", "giver_npc_id": 1000,
+            "type": "fetch",
+            "giver_npc_id": 1000,
             "target_items": [{"item_id": 2000}],
         }
         ctx = {"npc_ids": {1000}, "item_ids": {2000}}
@@ -256,15 +287,16 @@ class TestQuestValidator:
 class TestEventValidator:
     def test_valid_combat(self):
         v = EventValidator()
-        event = {"name": "Fight", "description": "A fight.", "type": "combat",
-                 "monsters": [{"name": "Rat"}]}
+        event = {"name": "Fight", "description": "A fight.", "type": "combat", "monsters": [{"name": "Rat"}]}
         result = v.validate(event)
         assert result.passed
 
     def test_puzzle_unsolvable(self):
         v = EventValidator()
         event = {
-            "name": "Lock", "description": "A lock.", "type": "puzzle",
+            "name": "Lock",
+            "description": "A lock.",
+            "type": "puzzle",
             "choices": [{"text": "Use wrench", "tool_attribute": "wrench"}],
         }
         result = v.validate(event, {"tool_attributes": {"hammer"}})
@@ -280,11 +312,13 @@ class TestEventValidator:
 # WorldBible / world_editor tests
 # ---------------------------------------------------------------------------
 
+
 class TestBuildWorldBible:
     @pytest.fixture
     def world_data(self):
         story = OverarchingStory(
-            title="Test Story", synopsis="Synopsis",
+            title="Test Story",
+            synopsis="Synopsis",
             faction=Faction(name="Evil Cult", description="Bad guys"),
             beats=[RoomStoryBeat(room_id="room_0", summary="Darkness gathers")],
         )
@@ -294,15 +328,12 @@ class TestBuildWorldBible:
             {"id": 1002, "name": "Unselected", "selected": False},
         ]
         event_list = [
-            {"id": 3000, "type": "combat", "name": "Rat",
-             "monsters": [{"name": "Rat"}, {"name": "Rat"}]},
+            {"id": 3000, "type": "combat", "name": "Rat", "monsters": [{"name": "Rat"}, {"name": "Rat"}]},
             {"id": 3001, "type": "puzzle", "name": "Lock"},
         ]
         quest_list = [
-            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
-             "target_items": [{"item_id": 2000}]},
-            {"id": 4001, "type": "combat", "giver_npc_id": 1001,
-             "target_event_id": 3000},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000, "target_items": [{"item_id": 2000}]},
+            {"id": 4001, "type": "combat", "giver_npc_id": 1001, "target_event_id": 3000},
         ]
         item_placements = [
             {"x": 1, "y": 1, "item_id": 2000},
@@ -313,9 +344,13 @@ class TestBuildWorldBible:
             {"x": 5, "y": 5, "event_id": 3001},
         ]
         return {
-            "story": story, "npc_pool": npc_pool, "event_list": event_list,
-            "quest_list": quest_list, "item_placements": item_placements,
-            "event_position_map": event_position_map, "maze_environment": "forest",
+            "story": story,
+            "npc_pool": npc_pool,
+            "event_list": event_list,
+            "quest_list": quest_list,
+            "item_placements": item_placements,
+            "event_position_map": event_position_map,
+            "maze_environment": "forest",
         }
 
     def test_build_indexes_entities(self, world_data):
@@ -359,8 +394,7 @@ class TestCrossValidate:
         ]
         event_list = [{"id": 3000, "type": "combat"}]
         quest_list = [
-            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
-             "target_items": [{"item_id": 2000}]},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000, "target_items": [{"item_id": 2000}]},
         ]
         item_placements = [{"item_id": 2000}]
         bible = WorldBible()
@@ -376,8 +410,7 @@ class TestCrossValidate:
     def test_missing_fetch_item(self):
         npc_pool = [{"id": 1000, "selected": True}]
         quest_list = [
-            {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
-             "target_items": [{"item_id": 2999}]},
+            {"id": 4000, "type": "fetch", "giver_npc_id": 1000, "target_items": [{"item_id": 2999}]},
         ]
         issues = cross_validate(WorldBible(), npc_pool, [], quest_list, [{"item_id": 2000}])
         assert any("fetch item" in i for i in issues)
@@ -385,8 +418,7 @@ class TestCrossValidate:
     def test_missing_combat_event(self):
         npc_pool = [{"id": 1000, "selected": True}]
         quest_list = [
-            {"id": 4000, "type": "combat", "giver_npc_id": 1000,
-             "target_event_id": 3999},
+            {"id": 4000, "type": "combat", "giver_npc_id": 1000, "target_event_id": 3999},
         ]
         issues = cross_validate(WorldBible(), npc_pool, [{"id": 3000}], quest_list, [])
         assert any("target event" in i for i in issues)
@@ -398,7 +430,9 @@ class TestWriteWorldBible:
         bible = WorldBible(story=story)
         bible.rooms["room_0"] = RoomBible(environment="forest")
         bible.entity_index["npc:1000"] = EntityRef(
-            entity_type="npc", room_id="room_0", entity_id="1000",
+            entity_type="npc",
+            room_id="room_0",
+            entity_id="1000",
         )
         out_path = str(tmp_path / "world_bible.json")
         result = write_world_bible(bible, out_path)
@@ -414,6 +448,7 @@ class TestWriteWorldBible:
 # ---------------------------------------------------------------------------
 # Retry-with-feedback tests
 # ---------------------------------------------------------------------------
+
 
 class TestRetryWithFeedback:
     def test_passes_first_try(self):
@@ -503,6 +538,7 @@ class TestRetryWithFeedback:
 # Jester stat range fix tests
 # ---------------------------------------------------------------------------
 
+
 class TestJesterStatRangeFix:
     def test_validate_guardrails_jester_uses_9_13(self):
         """validate_guardrails should accept 9-13 secondary range for jester."""
@@ -536,16 +572,20 @@ class TestJesterStatRangeFix:
 # Import bug fix test
 # ---------------------------------------------------------------------------
 
+
 class TestImportBugFix:
     def test_generate_and_save_image_importable(self):
         """generate_and_save_image should be importable from image_client."""
         from src.generate.image_client import generate_and_save_image
+
         assert callable(generate_and_save_image)
 
     def test_pipeline_imports_correct_name(self):
         """pipeline.py should no longer reference _generate_and_save."""
         import inspect
+
         import src.generate.pipeline as pipeline_mod
+
         source = inspect.getsource(pipeline_mod)
         assert "_generate_and_save" not in source
         assert "generate_and_save_image" in source

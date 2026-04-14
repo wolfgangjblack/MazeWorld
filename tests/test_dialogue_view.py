@@ -1,17 +1,21 @@
 """Tests for portrait loading and display in DialogueBoxView."""
+
 import os
-import pytest
-import pygame
 from unittest.mock import MagicMock
 
-from src.views.portrait_utils import load_portrait as _load_portrait, _cache as _portrait_cache
+import pygame
+import pytest
+
+from config import SCREEN_HEIGHT, SCREEN_WIDTH
 from src.views.dialogue_view import DialogueBoxView
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
+from src.views.portrait_utils import _cache as _portrait_cache
+from src.views.portrait_utils import load_portrait as _load_portrait
 
 
 @pytest.fixture(autouse=True)
 def init_pygame():
     import os
+
     os.environ["SDL_VIDEODRIVER"] = "dummy"
     pygame.init()
     pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -49,6 +53,7 @@ def _make_portrait_file(tmp_path, name="portrait.png", size=(64, 64)):
 # ---------------------------------------------------------------------------
 # _load_portrait unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestLoadPortrait:
     def test_returns_none_for_none_path(self):
@@ -108,6 +113,7 @@ class TestLoadPortrait:
 # ---------------------------------------------------------------------------
 # DialogueBoxView portrait integration
 # ---------------------------------------------------------------------------
+
 
 class TestDialogueViewPortraitIntegration:
     """Verify that draw() handles portrait presence/absence correctly."""

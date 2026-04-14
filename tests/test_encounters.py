@@ -1,23 +1,29 @@
 """Tests for Phase 5: Encounters & Monsters."""
 
 import random
-import pytest
-import pygame
 from unittest.mock import MagicMock
 
-from src.models.monster import (
-    Monster, MonsterAbility, LootEntry,
-    _roll_dice,
-)
+import pygame
+import pytest
+
 from src.models.encounter import (
-    CombatEvent, PuzzleEvent, EventEncounter, EventChoice,
+    CombatEvent,
+    EventChoice,
+    EventEncounter,
+    PuzzleEvent,
     create_event_from_data,
 )
+from src.models.items import ItemStats, Tool
+from src.models.monster import (
+    LootEntry,
+    Monster,
+    MonsterAbility,
+    _roll_dice,
+)
 from src.models.player import PlayerCharacter, PlayerClass, Stats
-from src.models.items import Tool, ItemStats
-
 
 # ─── Helpers ─────────────────────────────────────���─────────────────────
+
 
 def _make_player(**overrides):
     defaults = {"x": 0, "y": 0, "health": 100, "stamina": 100}
@@ -25,8 +31,11 @@ def _make_player(**overrides):
     player = PlayerCharacter(**defaults)
     if player.player_class is None:
         player.player_class = PlayerClass(
-            name="TestClass", archetype="warrior", environment="dungeon",
-            starting_weapon="Sword", flavor_text="",
+            name="TestClass",
+            archetype="warrior",
+            environment="dungeon",
+            starting_weapon="Sword",
+            flavor_text="",
             stats=Stats(STR=20, DEX=14, CON=12, INT=10, WIS=10, CHA=10, LUCK=10),
         )
     return player
@@ -34,7 +43,9 @@ def _make_player(**overrides):
 
 def _make_tool(name="hammer", attribute="bludgeon"):
     return Tool(
-        category="tool", name=name, desc="test",
+        category="tool",
+        name=name,
+        desc="test",
         item_stats=ItemStats(attribute=attribute, uses=3),
     )
 
@@ -56,6 +67,7 @@ def _make_monster(**overrides):
 
 
 # ─── Monster Model Tests ──────────────────────────────────────────────
+
 
 class TestMonster:
     def test_monster_max_hp_equals_hp_on_creation(self):
@@ -136,6 +148,7 @@ class TestMonster:
 
 # ─── Dice Roller Tests ────────────────────────────────────────────────
 
+
 class TestDiceRoller:
     def test_0d0(self):
         assert _roll_dice("0d0") == 0
@@ -146,13 +159,16 @@ class TestDiceRoller:
 
 # ─── CombatEvent Tests ────────────────────────────────────────────────
 
+
 class TestCombatEvent:
     def _make_combat_event(self, num_monsters=1, level=1):
         monsters = [_make_monster(hp=10, ac=10, level=level) for _ in range(num_monsters)]
         return CombatEvent(
-            id=3000, name="Test Fight",
+            id=3000,
+            name="Test Fight",
             description="A test combat encounter",
-            monsters=monsters, room_level=level,
+            monsters=monsters,
+            room_level=level,
         )
 
     def test_start_combat_rolls_initiative(self):
@@ -166,9 +182,11 @@ class TestCombatEvent:
     def test_player_attack_hit(self):
         monsters = [_make_monster(hp=10, ac=2, dex_mod=0, level=1)]
         event = CombatEvent(
-            id=3001, name="Easy Fight",
+            id=3001,
+            name="Easy Fight",
             description="A weak foe",
-            monsters=monsters, room_level=1,
+            monsters=monsters,
+            room_level=1,
         )
         player = _make_player()
         event.start_combat(player)
@@ -250,9 +268,11 @@ class TestCombatEvent:
     def test_legacy_single_roll_resolve(self):
         """Old CombatEvent without monsters should use legacy resolve."""
         event = CombatEvent(
-            id=3002, name="Old Goblin",
+            id=3002,
+            name="Old Goblin",
             description="A goblin attacks!",
-            difficulty=3, damage_type="health",
+            difficulty=3,
+            damage_type="health",
             damage_range=[5, 10],
         )
         player = _make_player()
@@ -263,10 +283,12 @@ class TestCombatEvent:
 
 # ─── PuzzleEvent Tests ─────────────────────────────────────────────────
 
+
 class TestPuzzleEvent:
     def _make_puzzle_event(self):
         return PuzzleEvent(
-            id=3003, name="Locked Chest",
+            id=3003,
+            name="Locked Chest",
             description="A locked chest blocks your path.",
             choices=[
                 EventChoice(text="Force it open", stat_check="STR", dc=12),
@@ -324,19 +346,18 @@ class TestPuzzleEvent:
     def test_solvability_at_least_one_option(self):
         """Puzzle must have at least one completable solution."""
         event = self._make_puzzle_event()
-        solvable = any(
-            c.auto_success or c.tool_attribute or c.stat_check
-            for c in event.choices
-        )
+        solvable = any(c.auto_success or c.tool_attribute or c.stat_check for c in event.choices)
         assert solvable
 
 
 # ─── EventEncounter Tests ──────────────────────────────────────────────
 
+
 class TestEventEncounter:
     def _make_event_encounter(self):
         return EventEncounter(
-            id=3004, name="Strange Shrine",
+            id=3004,
+            name="Strange Shrine",
             description="A strange shrine glows in the darkness.",
             choices=[
                 EventChoice(text="Pray at the shrine", stat_check="STR", dc=12),
@@ -383,6 +404,7 @@ class TestEventEncounter:
 
 # ─── Event Tile Trigger Tests ──────────────────────────────────────────
 
+
 class TestEncounterTileTrigger:
     def test_event_tile_detected(self, maze):
         """Player stepping on event tile should detect it."""
@@ -407,6 +429,7 @@ class TestEncounterTileTrigger:
 
 
 # ─── create_event_from_data Tests ─────────────────────────────────────
+
 
 class TestCreateEventFromData:
     def test_combat_with_monsters(self):
@@ -460,6 +483,7 @@ class TestCreateEventFromData:
 
 # ─── EncounterView Render Tests ──────────────────────────────────────
 
+
 class TestEncounterViewRender:
     """Smoke tests: EncounterView.draw() should not raise for any event type."""
 
@@ -483,16 +507,20 @@ class TestEncounterViewRender:
         return db
 
     def test_render_combat_trigger(self):
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
         from src.views.encounter_view import EncounterView
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
         screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
         monsters = [_make_monster()]
         event = CombatEvent(
-            id=3005, name="Wolf Pack", description="Wolves attack!",
-            monsters=monsters, room_level=1,
+            id=3005,
+            name="Wolf Pack",
+            description="Wolves attack!",
+            monsters=monsters,
+            room_level=1,
         )
         db = self._make_dialogue_box(event)
         db.combat_active = True
@@ -500,14 +528,16 @@ class TestEncounterViewRender:
         view.draw(db)  # Should not raise
 
     def test_render_puzzle(self):
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
         from src.views.encounter_view import EncounterView
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
         screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
         event = PuzzleEvent(
-            id=3006, name="Locked Chest",
+            id=3006,
+            name="Locked Chest",
             description="A locked chest blocks your path.",
             choices=[
                 EventChoice(text="Force it", stat_check="STR", dc=12),
@@ -518,14 +548,16 @@ class TestEncounterViewRender:
         view.draw(db)
 
     def test_render_event(self):
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
         from src.views.encounter_view import EncounterView
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
         screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
         event = EventEncounter(
-            id=3007, name="Strange Shrine",
+            id=3007,
+            name="Strange Shrine",
             description="A shrine glows.",
             choices=[
                 EventChoice(text="Pray", stat_check="STR", dc=10),
@@ -536,14 +568,16 @@ class TestEncounterViewRender:
         view.draw(db)
 
     def test_render_puzzle_with_result(self):
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
         from src.views.encounter_view import EncounterView
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
         screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
         event = PuzzleEvent(
-            id=3008, name="Lock",
+            id=3008,
+            name="Lock",
             description="A lock.",
             choices=[EventChoice(text="Pick", dc=10)],
         )
@@ -555,14 +589,16 @@ class TestEncounterViewRender:
         view.draw(db)
 
     def test_render_event_with_failure(self):
+        from config import SCREEN_HEIGHT, SCREEN_WIDTH
         from src.views.encounter_view import EncounterView
-        from config import SCREEN_WIDTH, SCREEN_HEIGHT
+
         screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         font = pygame.font.SysFont(None, 24)
         view = EncounterView(screen, font)
 
         event = EventEncounter(
-            id=3009, name="Trap",
+            id=3009,
+            name="Trap",
             description="A trap!",
             choices=[EventChoice(text="Jump", dc=15)],
         )

@@ -1,5 +1,6 @@
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 
 class QuestReward(BaseModel):
@@ -19,6 +20,7 @@ class QuestFailurePenalty(BaseModel):
 
 class Quest(BaseModel):
     """Base quest model."""
+
     id: int
     type: str  # "fetch" | "escort" | "delivery" | "dialogue" | "combat" | "multi_step"
     title: str
@@ -60,6 +62,7 @@ class FetchQuest(Quest):
             found = 0
             for item in player.inventory.values():
                 from src.registry import registry
+
                 for rid, ritem in registry.item_registry.items():
                     if rid == item_id and ritem.name == item.name:
                         found += item.quantity
@@ -77,8 +80,7 @@ class EscortQuest(Quest):
 
     def check_completion(self, player_x: int, player_y: int) -> bool:
         zone_x, zone_y = self.target_zone
-        return (zone_x - 2 <= player_x <= zone_x + 2
-                and zone_y - 2 <= player_y <= zone_y + 2)
+        return zone_x - 2 <= player_x <= zone_x + 2 and zone_y - 2 <= player_y <= zone_y + 2
 
 
 class DeliveryQuest(Quest):
@@ -92,6 +94,7 @@ class DeliveryQuest(Quest):
             return False
         for item in player.inventory.values():
             from src.registry import registry
+
             for rid, ritem in registry.item_registry.items():
                 if rid == self.delivery_item_id and ritem.name == item.name:
                     return True
@@ -107,7 +110,7 @@ class DialogueQuest(Quest):
 
     def check_completion_cha(self, player, roll: int) -> bool:
         """CHA-based DC check. roll = 1d20 + CHA modifier."""
-        cha_mod = player.get_stat_modifier("CHA") if hasattr(player, 'get_stat_modifier') else 0
+        cha_mod = player.get_stat_modifier("CHA") if hasattr(player, "get_stat_modifier") else 0
         return (roll + cha_mod) >= self.dc
 
     def check_completion(self, dialogue_result: str) -> bool:
@@ -125,7 +128,7 @@ class CombatQuest(Quest):
     def check_already_cleared(self, resolved_events: dict) -> bool:
         """Kill quests are completable out of order — if encounter already cleared."""
         event = resolved_events.get(self.target_event_id)
-        if event and getattr(event, 'resolved', False):
+        if event and getattr(event, "resolved", False):
             return True
         return False
 

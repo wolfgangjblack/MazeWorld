@@ -3,18 +3,18 @@
 import pygame
 import pytest
 
-from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.controllers.combat_controller import CombatController
+from src.models.items import Food, ItemStats
 from src.models.monster import Monster
+from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.spell import Spell
 from src.models.weapon import STARTER_WEAPONS
-from src.models.items import Food, ItemStats
-from src.controllers.combat_controller import CombatController
 from src.views.combat_view import CombatView
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_player(archetype="mage"):
     stat_blocks = {
@@ -34,32 +34,45 @@ def _make_player(archetype="mage"):
 
 def _weak_monster():
     return Monster(
-        id=5000, species="Goblin", level=1,
-        hp=10, max_hp=10, ac=10,
-        str_mod=0, dex_mod=0,
-        damage_dice=4, damage_type="physical",
+        id=5000,
+        species="Goblin",
+        level=1,
+        hp=10,
+        max_hp=10,
+        ac=10,
+        str_mod=0,
+        dex_mod=0,
+        damage_dice=4,
+        damage_type="physical",
     )
 
 
 def _fireball():
     return Spell(
-        name="Fireball", spell_type="damage_single",
-        element="fire", stat="INT",
-        damage_dice=8, stamina_cost=5,
+        name="Fireball",
+        spell_type="damage_single",
+        element="fire",
+        stat="INT",
+        damage_dice=8,
+        stamina_cost=5,
     )
 
 
 def _heal():
     return Spell(
-        name="Heal", spell_type="heal",
-        element="light", stat="WIS",
+        name="Heal",
+        spell_type="heal",
+        element="light",
+        stat="WIS",
         heal_amount=10,
     )
 
 
 def _bread():
     return Food(
-        category="consumable", name="Bread", desc="Restores 5 stamina",
+        category="consumable",
+        name="Bread",
+        desc="Restores 5 stamina",
         item_stats=ItemStats(stamina_value=5),
     )
 
@@ -67,6 +80,7 @@ def _bread():
 # ---------------------------------------------------------------------------
 # CombatController: spell selection routes correctly
 # ---------------------------------------------------------------------------
+
 
 class TestSpellSelection:
     def test_cast_specific_spell_by_index(self):
@@ -77,9 +91,7 @@ class TestSpellSelection:
         cc = CombatController(player, [_weak_monster()])
 
         # Force player turn
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
 
         initial_hp = player.health
         result = cc.player_cast_spell(1, 0)  # Cast Heal (index 1)
@@ -90,9 +102,7 @@ class TestSpellSelection:
         player = _make_player("mage")
         player.spells = [_fireball()]
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
         result = cc.player_cast_spell(5, 0)
         assert not result["success"]
         assert "Invalid" in result["message"]
@@ -102,6 +112,7 @@ class TestSpellSelection:
 # CombatController: item selection uses specific item
 # ---------------------------------------------------------------------------
 
+
 class TestItemSelection:
     def test_use_specific_item_by_name(self):
         player = _make_player("warrior")
@@ -109,9 +120,7 @@ class TestItemSelection:
         bread = _bread()
         player.inventory["Bread"] = bread
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
 
         result = cc.player_use_item("Bread")
         assert result["success"]
@@ -120,9 +129,7 @@ class TestItemSelection:
     def test_use_item_not_in_inventory(self):
         player = _make_player("warrior")
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
         result = cc.player_use_item("Nonexistent")
         assert not result["success"]
 
@@ -131,10 +138,12 @@ class TestItemSelection:
 # CombatView: spell and item sub-menu rendering
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def _pygame_init():
     pygame.init()
-    from config import SCREEN_WIDTH, SCREEN_HEIGHT
+    from config import SCREEN_HEIGHT, SCREEN_WIDTH
+
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HIDDEN)
     font = pygame.font.SysFont(None, 24)
     yield screen, font
@@ -148,9 +157,7 @@ class TestCombatViewSubMenus:
         player = _make_player("mage")
         player.spells = [_fireball(), _heal()]
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
 
         # Should not raise
         view.draw(cc, selecting_spell=True, selected_spell=0)
@@ -162,9 +169,7 @@ class TestCombatViewSubMenus:
         player = _make_player("warrior")
         player.inventory["Bread"] = _bread()
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
 
         # Should not raise
         view.draw(cc, selecting_item=True, selected_item=0)
@@ -175,9 +180,7 @@ class TestCombatViewSubMenus:
         view = CombatView(screen, font)
         player = _make_player("warrior")
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
         view.draw(cc, selected_action=0)
 
 
@@ -185,15 +188,14 @@ class TestCombatViewSubMenus:
 # Esc backs out without consuming a turn
 # ---------------------------------------------------------------------------
 
+
 class TestEscCancels:
     def test_spell_select_esc_does_not_advance_turn(self):
         """Pressing Esc in spell sub-menu should not advance the turn."""
         player = _make_player("mage")
         player.spells = [_fireball()]
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
         turn_before = cc.turn_index
         # Simulate: nothing happens (no action executed on Esc)
         # The controller doesn't call any CombatController action on Esc,
@@ -206,9 +208,7 @@ class TestEscCancels:
         player = _make_player("warrior")
         player.inventory["Bread"] = _bread()
         cc = CombatController(player, [_weak_monster()])
-        cc.turn_index = next(
-            i for i, c in enumerate(cc.combatants) if c.is_player
-        )
+        cc.turn_index = next(i for i, c in enumerate(cc.combatants) if c.is_player)
         turn_before = cc.turn_index
         assert cc.turn_index == turn_before
         assert cc.is_player_turn()

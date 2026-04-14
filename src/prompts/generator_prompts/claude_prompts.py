@@ -1,34 +1,33 @@
 import json
+
 from config import STORY_CONTEXT_LIMIT
-from src.prompts.base import PromptSet, LLMRequest
+from src.prompts.base import LLMRequest, PromptSet
 
 _NO_FENCES = "\nRespond with raw JSON only. Do not wrap in markdown code fences."
 
 
 class ClaudePromptSet(PromptSet):
-
     def personality_generation(self, env: str, env_name: str) -> LLMRequest:
         return LLMRequest(
             system=(
                 "You generate NPC personalities for a fantasy video game. "
                 "Given an environment, respond with ONLY a JSON object with keys: "
                 "name, job, personality, hobby. Keep values thematic to the environment. "
-                "Do not include any text outside the JSON object."
-                + _NO_FENCES
+                "Do not include any text outside the JSON object." + _NO_FENCES
             ),
             examples=[
                 (
                     "environment: 'forest', name: 'Iron Oak'",
-                    json.dumps({"name": "helena", "job": "herbalist",
-                                "personality": "mysterious", "hobby": "collecting herbs"}),
+                    json.dumps(
+                        {"name": "helena", "job": "herbalist", "personality": "mysterious", "hobby": "collecting herbs"}
+                    ),
                 ),
             ],
             user_message=f"environment: '{env}', name: '{env_name}'",
             max_tokens=60,
         )
 
-    def conversation_identity(self, name: str, job: str, personality: str,
-                              hobby: str, env: str, env_name: str) -> str:
+    def conversation_identity(self, name: str, job: str, personality: str, hobby: str, env: str, env_name: str) -> str:
         return (
             f"You are {name}, a {job} in a fantasy {env} called {env_name}. "
             f"Your personality is {personality}. Your hobbies include {hobby}.\n\n"
@@ -45,17 +44,19 @@ class ClaudePromptSet(PromptSet):
         return LLMRequest(
             system=identity,
             examples=[],
-            user_message=(
-                "The player approaches you for the first time. "
-                "Give a brief, in-character greeting."
-            ),
+            user_message=("The player approaches you for the first time. Give a brief, in-character greeting."),
             max_tokens=80,
         )
 
-    def npc_response(self, identity: str, history: list[dict],
-                     npc_name: str, player_input: str,
-                     story_context: str = "",
-                     quest_context: dict | None = None) -> LLMRequest:
+    def npc_response(
+        self,
+        identity: str,
+        history: list[dict],
+        npc_name: str,
+        player_input: str,
+        story_context: str = "",
+        quest_context: dict | None = None,
+    ) -> LLMRequest:
         examples = _history_to_examples(history)
         system = identity
         if story_context:
@@ -102,18 +103,24 @@ class ClaudePromptSet(PromptSet):
             ),
             examples=[
                 (
-                    json.dumps({"name": "Duran", "job": "fighter",
-                                "personality": "brooding", "hobby": "swordsplay",
-                                "environment": "city", "environment_name": "Capital City"}),
+                    json.dumps(
+                        {
+                            "name": "Duran",
+                            "job": "fighter",
+                            "personality": "brooding",
+                            "hobby": "swordsplay",
+                            "environment": "city",
+                            "environment_name": "Capital City",
+                        }
+                    ),
                     "A precocious warrior, clad in steel armor with a great sword over his "
                     "shoulder. He has long red hair, untamed and wild. He stands in a bustling "
-                    "city square, scanning the crowd."
+                    "city square, scanning the crowd.",
                 ),
             ],
             user_message=json.dumps(personality_doc),
             max_tokens=80,
         )
-
 
     def environment_name_generation(self, env_type: str) -> LLMRequest:
         return LLMRequest(
@@ -131,8 +138,7 @@ class ClaudePromptSet(PromptSet):
             max_tokens=10,
         )
 
-    def event_generation(self, env: str, env_name: str, event_type: str,
-                         story_context: str = "") -> LLMRequest:
+    def event_generation(self, env: str, env_name: str, event_type: str, story_context: str = "") -> LLMRequest:
         ctx_suffix = ""
         if story_context:
             ctx_suffix = (
@@ -149,14 +155,20 @@ class ClaudePromptSet(PromptSet):
                     "Given an environment, respond with ONLY a JSON object with keys: "
                     "name, description, difficulty (1-5), damage_type (health|stamina), "
                     "damage_range ([min, max]). Name and describe encounters using the "
-                    "world's lore when provided — faction creatures, story-relevant hazards."
-                    + _NO_FENCES
+                    "world's lore when provided — faction creatures, story-relevant hazards." + _NO_FENCES
                 ),
                 examples=[
                     (
                         "environment: 'forest', name: 'Shadowleaf'",
-                        json.dumps({"name": "Giant Spider", "description": "A massive spider drops from the canopy!",
-                                    "difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}),
+                        json.dumps(
+                            {
+                                "name": "Giant Spider",
+                                "description": "A massive spider drops from the canopy!",
+                                "difficulty": 3,
+                                "damage_type": "health",
+                                "damage_range": [5, 15],
+                            }
+                        ),
                     ),
                 ],
                 user_message=f"environment: '{env}', name: '{env_name}'{ctx_suffix}",
@@ -172,33 +184,60 @@ class ClaudePromptSet(PromptSet):
                     "(bludgeon|cutting|digging|climbing|null), dc (number), auto_success (bool)). "
                     "Include 2-3 choices, one should be a safe 'walk away' option. "
                     "Name and describe puzzles using the world's lore when provided — "
-                    "faction mechanisms, story-relevant obstacles."
-                    + _NO_FENCES
+                    "faction mechanisms, story-relevant obstacles." + _NO_FENCES
                 ),
                 examples=[
                     (
                         "environment: 'cave', name: 'Gloomhollow'",
-                        json.dumps({
-                            "name": "Locked Chest", "description": "A heavy chest with a strange mechanism...",
-                            "difficulty": 2,
-                            "choices": [
-                                {"text": "Force it open", "stat_check": "health", "tool_attribute": None, "dc": 12, "auto_success": False},
-                                {"text": "Pick the lock", "stat_check": None, "tool_attribute": "cutting", "dc": 8, "auto_success": False},
-                                {"text": "Walk away", "stat_check": None, "tool_attribute": None, "dc": 0, "auto_success": True},
-                            ]
-                        }),
+                        json.dumps(
+                            {
+                                "name": "Locked Chest",
+                                "description": "A heavy chest with a strange mechanism...",
+                                "difficulty": 2,
+                                "choices": [
+                                    {
+                                        "text": "Force it open",
+                                        "stat_check": "health",
+                                        "tool_attribute": None,
+                                        "dc": 12,
+                                        "auto_success": False,
+                                    },
+                                    {
+                                        "text": "Pick the lock",
+                                        "stat_check": None,
+                                        "tool_attribute": "cutting",
+                                        "dc": 8,
+                                        "auto_success": False,
+                                    },
+                                    {
+                                        "text": "Walk away",
+                                        "stat_check": None,
+                                        "tool_attribute": None,
+                                        "dc": 0,
+                                        "auto_success": True,
+                                    },
+                                ],
+                            }
+                        ),
                     ),
                 ],
                 user_message=f"environment: '{env}', name: '{env_name}'{ctx_suffix}",
                 max_tokens=250,
             )
 
-    def quest_generation(self, env: str, env_name: str,
-                         available_npcs: list[dict], available_items: list[dict],
-                         available_events: list[dict], quest_type: str,
-                         story_context: str = "") -> LLMRequest:
+    def quest_generation(
+        self,
+        env: str,
+        env_name: str,
+        available_npcs: list[dict],
+        available_items: list[dict],
+        available_events: list[dict],
+        quest_type: str,
+        story_context: str = "",
+    ) -> LLMRequest:
         ctx_data: dict = {
-            "environment": env, "environment_name": env_name,
+            "environment": env,
+            "environment_name": env_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
@@ -221,38 +260,35 @@ class ClaudePromptSet(PromptSet):
                 "Quest titles and descriptions MUST reference the world's faction, environment, "
                 "or story from world_bible_context. Make objectives feel like part of the living "
                 "world, not generic fetch/kill tasks. Be information-dense: every detail should "
-                "add gameplay or lore value. Do not pad or ramble."
-                + _NO_FENCES
+                "add gameplay or lore value. Do not pad or ramble." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=200,
         )
 
-    def dialogue_tree_generation(self, npc_personality: dict,
-                                 quest_context: dict | None = None) -> LLMRequest:
+    def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest:
         context = json.dumps({"npc": npc_personality, "quest": quest_context})
 
         if quest_context:
             system = (
                 "You generate dialogue trees for a fantasy game NPC who has a quest. "
                 "Respond with ONLY a JSON object containing THREE dialogue trees:\n\n"
-                "1. \"incomplete\" — shown while the quest is active (3-5 nodes). "
+                '1. "incomplete" — shown while the quest is active (3-5 nodes). '
                 "Introduce the NPC, describe the quest and why it matters to them. "
                 "End node: urge the player to complete the quest.\n\n"
-                "2. \"complete_success\" — shown after quest success (2-3 nodes). "
+                '2. "complete_success" — shown after quest success (2-3 nodes). '
                 "Thank the player, explain what changed, give a grateful farewell. "
                 "Use the success_dialogue hint from quest context as a tone guide.\n\n"
-                "3. \"complete_failure\" — shown after quest failure (2-3 nodes). "
+                '3. "complete_failure" — shown after quest failure (2-3 nodes). '
                 "Acknowledge the attempt, reflect with semi-disappointment, give a resigned farewell. "
                 "Use the failure_dialogue hint from quest context as a tone guide.\n\n"
-                "Format: {\"incomplete\": {\"nodes\": {\"start\": {\"prompt\": \"...\", "
-                "\"choices\": [{\"text\": \"...\", \"next_node_id\": \"...\"}]}, ..., "
-                "\"end\": {\"prompt\": \"...\", \"choices\": []}}}, "
-                "\"complete_success\": {\"nodes\": {...}}, "
-                "\"complete_failure\": {\"nodes\": {...}}}.\n\n"
-                "Stay in character. Reference the quest title and story context."
-                + _NO_FENCES
+                'Format: {"incomplete": {"nodes": {"start": {"prompt": "...", '
+                '"choices": [{"text": "...", "next_node_id": "..."}]}, ..., '
+                '"end": {"prompt": "...", "choices": []}}}, '
+                '"complete_success": {"nodes": {...}}, '
+                '"complete_failure": {"nodes": {...}}}.\n\n'
+                "Stay in character. Reference the quest title and story context." + _NO_FENCES
             )
             max_tokens = 1000
         else:
@@ -263,8 +299,7 @@ class ClaudePromptSet(PromptSet):
                 '"choices": [{"text": "Player option", "next_node_id": "node2"}, ...]}, '
                 '"node2": {"prompt": "...", "choices": [...]}, '
                 '"end": {"prompt": "Farewell!", "choices": []}}}. '
-                "Keep it 3-5 nodes deep. Stay in character."
-                + _NO_FENCES
+                "Keep it 3-5 nodes deep. Stay in character." + _NO_FENCES
             )
             max_tokens = 400
 
@@ -275,8 +310,7 @@ class ClaudePromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int,
-                        story_context: str = "") -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "") -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -302,46 +336,79 @@ class ClaudePromptSet(PromptSet):
                 "- desert: dried meat, cactus juice, sandstone chisel, scimitar\n"
                 "- cave: mushroom stew, underground spring, pickaxe, stone mace\n"
                 "- city: pastries, ale, lockpick, rapier\n"
-                "- castle: roast pheasant, fine wine, grappling hook, halberd"
-                + _NO_FENCES
+                "- castle: roast pheasant, fine wine, grappling hook, halberd" + _NO_FENCES
             ),
             examples=[
                 (
                     "environment: 'forest', name: 'Whisperwood', room_level: 1",
-                    json.dumps({
-                        "food": [
-                            {"name": "forest bread", "desc": "Hearty bread baked with acorn flour."},
-                            {"name": "wild berries", "desc": "A handful of sweet, ripe berries."},
-                            {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire."},
-                            {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey."},
-                        ],
-                        "drink": [
-                            {"name": "spring water", "desc": "Cool, clear water from a forest spring."},
-                            {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs."},
-                            {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries."},
-                            {"name": "dew drops", "desc": "Morning dew collected from broad leaves."},
-                        ],
-                        "tools": [
-                            {"name": "woodcutter's hatchet", "desc": "A small hatchet for chopping branches.", "attribute": "cutting"},
-                            {"name": "climbing vines", "desc": "Strong vines woven into a makeshift rope.", "attribute": "climbing"},
-                            {"name": "root digger", "desc": "A curved tool for digging up roots.", "attribute": "digging"},
-                        ],
-                        "weapons": [
-                            {"name": "wooden bow", "desc": "A short bow carved from yew wood.", "weapon_type": "light", "stat_modifier": "DEX"},
-                            {"name": "oak club", "desc": "A heavy club hewn from solid oak.", "weapon_type": "heavy", "stat_modifier": "STR"},
-                            {"name": "thorn staff", "desc": "A staff wrapped in enchanted thorns.", "weapon_type": "simple", "stat_modifier": "INT"},
-                        ],
-                        "spell_scrolls": [
-                            {"name": "scroll of entangle", "desc": "Vines erupt from the ground to ensnare.", "spell_effect": "shield"},
-                            {"name": "scroll of regrowth", "desc": "Nature's magic mends your wounds.", "spell_effect": "heal"},
-                        ],
-                    }),
+                    json.dumps(
+                        {
+                            "food": [
+                                {"name": "forest bread", "desc": "Hearty bread baked with acorn flour."},
+                                {"name": "wild berries", "desc": "A handful of sweet, ripe berries."},
+                                {"name": "roasted rabbit", "desc": "A small rabbit roasted over a campfire."},
+                                {"name": "honey cake", "desc": "A sticky-sweet cake drizzled with wild honey."},
+                            ],
+                            "drink": [
+                                {"name": "spring water", "desc": "Cool, clear water from a forest spring."},
+                                {"name": "herbal tea", "desc": "A soothing tea brewed from forest herbs."},
+                                {"name": "berry juice", "desc": "Freshly squeezed juice from wild berries."},
+                                {"name": "dew drops", "desc": "Morning dew collected from broad leaves."},
+                            ],
+                            "tools": [
+                                {
+                                    "name": "woodcutter's hatchet",
+                                    "desc": "A small hatchet for chopping branches.",
+                                    "attribute": "cutting",
+                                },
+                                {
+                                    "name": "climbing vines",
+                                    "desc": "Strong vines woven into a makeshift rope.",
+                                    "attribute": "climbing",
+                                },
+                                {
+                                    "name": "root digger",
+                                    "desc": "A curved tool for digging up roots.",
+                                    "attribute": "digging",
+                                },
+                            ],
+                            "weapons": [
+                                {
+                                    "name": "wooden bow",
+                                    "desc": "A short bow carved from yew wood.",
+                                    "weapon_type": "light",
+                                    "stat_modifier": "DEX",
+                                },
+                                {
+                                    "name": "oak club",
+                                    "desc": "A heavy club hewn from solid oak.",
+                                    "weapon_type": "heavy",
+                                    "stat_modifier": "STR",
+                                },
+                                {
+                                    "name": "thorn staff",
+                                    "desc": "A staff wrapped in enchanted thorns.",
+                                    "weapon_type": "simple",
+                                    "stat_modifier": "INT",
+                                },
+                            ],
+                            "spell_scrolls": [
+                                {
+                                    "name": "scroll of entangle",
+                                    "desc": "Vines erupt from the ground to ensnare.",
+                                    "spell_effect": "shield",
+                                },
+                                {
+                                    "name": "scroll of regrowth",
+                                    "desc": "Nature's magic mends your wounds.",
+                                    "spell_effect": "heal",
+                                },
+                            ],
+                        }
+                    ),
                 ),
             ],
-            user_message=(
-                f"environment: '{env}', name: '{env_name}', room_level: {room_level}"
-                + lore_suffix
-            ),
+            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix),
             max_tokens=800,
         )
 
@@ -356,7 +423,7 @@ class ClaudePromptSet(PromptSet):
             examples=[
                 (
                     json.dumps({"name": "hammer", "desc": "A craftsman's hammer", "category": "tool"}),
-                    "A sturdy iron hammer with a worn leather grip, resting on a wooden workbench."
+                    "A sturdy iron hammer with a worn leather grip, resting on a wooden workbench.",
                 ),
             ],
             user_message=json.dumps(item_data),
@@ -373,8 +440,14 @@ class ClaudePromptSet(PromptSet):
             ),
             examples=[
                 (
-                    json.dumps({"name": "Giant Spider", "type": "combat", "description": "A massive spider drops from the canopy!"}),
-                    "A giant spider descending from dark forest canopy, silk threads glistening, menacing fangs visible."
+                    json.dumps(
+                        {
+                            "name": "Giant Spider",
+                            "type": "combat",
+                            "description": "A massive spider drops from the canopy!",
+                        }
+                    ),
+                    "A giant spider descending from dark forest canopy, silk threads glistening, menacing fangs visible.",
                 ),
             ],
             user_message=json.dumps(event_data),
@@ -392,7 +465,6 @@ class ClaudePromptSet(PromptSet):
             user_message="Generate a default player character portrait description.",
             max_tokens=60,
         )
-
 
     def class_generation(self, env: str, env_name: str) -> LLMRequest:
         return LLMRequest(
@@ -419,8 +491,7 @@ class ClaudePromptSet(PromptSet):
                 "- portrait_prompt: visual description for image generation\n"
                 "- ability_pool: 4 additional abilities/spells beyond starting set (for level-ups)\n"
                 "- spell_pool: 4 additional spells beyond starting set (for level-ups)\n"
-                "Output order: warrior, mage, healer, jester."
-                + _NO_FENCES
+                "Output order: warrior, mage, healer, jester." + _NO_FENCES
             ),
             examples=[],
             user_message=f"environment: '{env}', name: '{env_name}'",
@@ -436,24 +507,30 @@ class ClaudePromptSet(PromptSet):
             ),
             examples=[
                 (
-                    json.dumps({"name": "Ranger", "archetype": "warrior",
-                                "starting_weapon": "longbow", "environment": "forest"}),
+                    json.dumps(
+                        {
+                            "name": "Ranger",
+                            "archetype": "warrior",
+                            "starting_weapon": "longbow",
+                            "environment": "forest",
+                        }
+                    ),
                     "A rugged ranger in forest-green leather armor, longbow slung across their back, "
-                    "standing in a sun-dappled forest clearing with keen eyes scanning the treeline."
+                    "standing in a sun-dappled forest clearing with keen eyes scanning the treeline.",
                 ),
             ],
             user_message=json.dumps(class_data),
             max_tokens=80,
         )
 
-
-    def story_generation(self, story_seed: str, room_count: int,
-                         environments: list[str]) -> LLMRequest:
-        context = json.dumps({
-            "story_seed": story_seed,
-            "room_count": room_count,
-            "environments": environments,
-        })
+    def story_generation(self, story_seed: str, room_count: int, environments: list[str]) -> LLMRequest:
+        context = json.dumps(
+            {
+                "story_seed": story_seed,
+                "room_count": room_count,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate overarching stories for a fantasy dungeon-crawling game. "
@@ -471,24 +548,30 @@ class ClaudePromptSet(PromptSet):
                 "The escalation_arc should have one entry per room, increasing in tension. "
                 "Beats array should have one entry per room. "
                 "faction_presence describes how the faction manifests in that room. "
-                "escalation is 1-5, increasing per room."
-                + _NO_FENCES
+                "escalation is 1-5, increasing per room." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=800,
         )
 
-    def story_quest_generation(self, env: str, env_name: str,
-                               story_beat: str, faction_name: str,
-                               available_npcs: list[dict],
-                               available_items: list[dict],
-                               available_events: list[dict],
-                               quest_type: str,
-                               story_context: str = "") -> LLMRequest:
+    def story_quest_generation(
+        self,
+        env: str,
+        env_name: str,
+        story_beat: str,
+        faction_name: str,
+        available_npcs: list[dict],
+        available_items: list[dict],
+        available_events: list[dict],
+        quest_type: str,
+        story_context: str = "",
+    ) -> LLMRequest:
         ctx_data: dict = {
-            "environment": env, "environment_name": env_name,
-            "story_beat": story_beat, "faction_name": faction_name,
+            "environment": env,
+            "environment_name": env_name,
+            "story_beat": story_beat,
+            "faction_name": faction_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
@@ -512,22 +595,21 @@ class ClaudePromptSet(PromptSet):
                 "The quest title and description MUST reference the faction name, story beat, "
                 "and world_bible_context. Tie the objective directly to the story's conflict — "
                 "not a generic task. Be information-dense: every detail should advance the "
-                "narrative. Do not pad or ramble."
-                + _NO_FENCES
+                "narrative. Do not pad or ramble." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=300,
         )
 
-
-    def full_story_generation(self, story_seed: str, room_count: int,
-                              environments: list[str]) -> LLMRequest:
-        context = json.dumps({
-            "story_seed": story_seed,
-            "room_count": room_count,
-            "environments": environments,
-        })
+    def full_story_generation(self, story_seed: str, room_count: int, environments: list[str]) -> LLMRequest:
+        context = json.dumps(
+            {
+                "story_seed": story_seed,
+                "room_count": room_count,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate a COMPLETE world story for a fantasy dungeon-crawling game. "
@@ -552,27 +634,29 @@ class ClaudePromptSet(PromptSet):
                 "- Generate 1 boss per room + the final boss (story_monsters with is_boss=true)\n"
                 "- Every entity needs a FULL LORE PARAGRAPH (3-5 sentences minimum), not just a label\n"
                 "- The story should feel like a living world: interconnected characters, motivations, betrayals\n"
-                "- Beats array: one entry per room, escalation 1-5 increasing"
-                + _NO_FENCES
+                "- Beats array: one entry per room, escalation 1-5 increasing" + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=2500,
         )
 
-    def monster_generation(self, env: str, env_name: str, room_level: int,
-                           story_context: str, total_rooms: int = 1) -> LLMRequest:
+    def monster_generation(
+        self, env: str, env_name: str, room_level: int, story_context: str, total_rooms: int = 1
+    ) -> LLMRequest:
         scale_stats_line = (
             f"Scale stats to room_level (1=easy, {total_rooms}=hard).\n"
             if total_rooms > 1
             else "Scale stats so the mix includes easy fodder monsters and one challenging boss for a single-room dungeon.\n"
         )
-        context = json.dumps({
-            "environment": env,
-            "environment_name": env_name,
-            "room_level": room_level,
-            "story_context": story_context[:STORY_CONTEXT_LIMIT],
-        })
+        context = json.dumps(
+            {
+                "environment": env,
+                "environment_name": env_name,
+                "room_level": room_level,
+                "story_context": story_context[:STORY_CONTEXT_LIMIT],
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate monsters for a fantasy dungeon-crawling game room. "
@@ -584,74 +668,87 @@ class ClaudePromptSet(PromptSet):
                 "a unique proper name and title — NEVER 'Boss', 'Lieutenant', or a generic rank. "
                 "Their motivation must connect to the faction's goal in story_context.\n"
                 "- At least 1 monster should be night_only.\n"
-                "- " + scale_stats_line +
-                "- Use hp_range [min, max] and ac_range [min, max] instead of fixed values — "
+                "- " + scale_stats_line + "- Use hp_range [min, max] and ac_range [min, max] instead of fixed values — "
                 "actual stats will be rolled from these ranges at combat time.\n"
                 "- Include a weakness field — the element this monster is vulnerable to "
                 "(fire|water|forest|light|dark or null).\n\n"
                 "Each monster object:\n"
-                '{name, species, description, backstory (story-grounded lore paragraph), '
-                'hp_range [min,max], ac_range [min,max], '
-                'damage_type (physical|fire|water|forest|light|dark), '
-                'elemental_affinity (fire|water|forest|light|dark|null), '
-                'weakness (fire|water|forest|light|dark|null), '
-                'time_availability (always|night_only|day_only), '
-                'abilities [{name, effect_type (damage|poison|stun), damage_dice, chance}], '
-                'is_boss (bool), portrait_prompt}\n\n'
-                "Be information-dense. Do not pad or ramble."
-                + _NO_FENCES
+                "{name, species, description, backstory (story-grounded lore paragraph), "
+                "hp_range [min,max], ac_range [min,max], "
+                "damage_type (physical|fire|water|forest|light|dark), "
+                "elemental_affinity (fire|water|forest|light|dark|null), "
+                "weakness (fire|water|forest|light|dark|null), "
+                "time_availability (always|night_only|day_only), "
+                "abilities [{name, effect_type (damage|poison|stun), damage_dice, chance}], "
+                "is_boss (bool), portrait_prompt}\n\n"
+                "Be information-dense. Do not pad or ramble." + _NO_FENCES
             ),
             examples=[
                 (
-                    json.dumps({
-                        "environment": "cave",
-                        "environment_name": "Stonebiter Caverns",
-                        "room_level": 1,
-                        "story_context": "Faction: The Brackwater Guild, led by Harrowmaster Veln. They use extortion and debt-binding to control trade. Room boss: Shrike, the Guild's Route-Closer.",
-                    }),
-                    json.dumps([
+                    json.dumps(
                         {
-                            "name": "Debt-Bound Miner",
-                            "species": "coerced human",
-                            "description": "A miner forced into Guild service through debt contracts. Hollow-eyed and malnourished, they fight with pick-axes and no hope of escape.",
-                            "backstory": "These miners signed Brackwater Guild contracts promising fair wages but found the terms adjusted weekly until every shift added to their debt. Now they swing picks at anyone who threatens the Guild's operation, knowing refusal means their family's debts double.",
-                            "hp_range": [7, 12],
-                            "ac_range": [8, 10],
-                            "damage_type": "physical",
-                            "elemental_affinity": None,
-                            "weakness": "light",
-                            "time_availability": "always",
-                            "abilities": [{"name": "Desperate Strike", "effect_type": "damage", "damage_dice": "1d6", "chance": 0.3}],
-                            "is_boss": False,
-                            "portrait_prompt": "a gaunt miner in worn leather armor, hollow eyes, raising a cracked pickaxe, pixel art fantasy"
-                        },
-                        {
-                            "name": "Shrike, the Guild's Route-Closer",
-                            "species": "Guild enforcer",
-                            "description": "Compact and precise, Shrike carries a ledger of every debt she has collected. She fights with twin short blades and treats violence as an accounting entry.",
-                            "backstory": "Shrike rose through the Brackwater Guild by being the agent Harrowmaster Veln trusted to close problematic operations quietly. She views Stonebiter Caverns as a routine assignment — extract the shipment, eliminate complications, report back. Failure is not something she has ever logged.",
-                            "hp_range": [28, 38],
-                            "ac_range": [13, 15],
-                            "damage_type": "physical",
-                            "elemental_affinity": None,
-                            "weakness": "forest",
-                            "time_availability": "always",
-                            "abilities": [
-                                {"name": "Twin Slash", "effect_type": "damage", "damage_dice": "1d6", "chance": 0.4},
-                                {"name": "Ledger Mark", "effect_type": "stun", "damage_dice": "0d0", "chance": 0.2}
-                            ],
-                            "is_boss": True,
-                            "portrait_prompt": "a compact woman in dark leather armor with a brass-clasped ledger at her hip and two short blades drawn, pixel art fantasy villain"
+                            "environment": "cave",
+                            "environment_name": "Stonebiter Caverns",
+                            "room_level": 1,
+                            "story_context": "Faction: The Brackwater Guild, led by Harrowmaster Veln. They use extortion and debt-binding to control trade. Room boss: Shrike, the Guild's Route-Closer.",
                         }
-                    ])
+                    ),
+                    json.dumps(
+                        [
+                            {
+                                "name": "Debt-Bound Miner",
+                                "species": "coerced human",
+                                "description": "A miner forced into Guild service through debt contracts. Hollow-eyed and malnourished, they fight with pick-axes and no hope of escape.",
+                                "backstory": "These miners signed Brackwater Guild contracts promising fair wages but found the terms adjusted weekly until every shift added to their debt. Now they swing picks at anyone who threatens the Guild's operation, knowing refusal means their family's debts double.",
+                                "hp_range": [7, 12],
+                                "ac_range": [8, 10],
+                                "damage_type": "physical",
+                                "elemental_affinity": None,
+                                "weakness": "light",
+                                "time_availability": "always",
+                                "abilities": [
+                                    {
+                                        "name": "Desperate Strike",
+                                        "effect_type": "damage",
+                                        "damage_dice": "1d6",
+                                        "chance": 0.3,
+                                    }
+                                ],
+                                "is_boss": False,
+                                "portrait_prompt": "a gaunt miner in worn leather armor, hollow eyes, raising a cracked pickaxe, pixel art fantasy",
+                            },
+                            {
+                                "name": "Shrike, the Guild's Route-Closer",
+                                "species": "Guild enforcer",
+                                "description": "Compact and precise, Shrike carries a ledger of every debt she has collected. She fights with twin short blades and treats violence as an accounting entry.",
+                                "backstory": "Shrike rose through the Brackwater Guild by being the agent Harrowmaster Veln trusted to close problematic operations quietly. She views Stonebiter Caverns as a routine assignment — extract the shipment, eliminate complications, report back. Failure is not something she has ever logged.",
+                                "hp_range": [28, 38],
+                                "ac_range": [13, 15],
+                                "damage_type": "physical",
+                                "elemental_affinity": None,
+                                "weakness": "forest",
+                                "time_availability": "always",
+                                "abilities": [
+                                    {
+                                        "name": "Twin Slash",
+                                        "effect_type": "damage",
+                                        "damage_dice": "1d6",
+                                        "chance": 0.4,
+                                    },
+                                    {"name": "Ledger Mark", "effect_type": "stun", "damage_dice": "0d0", "chance": 0.2},
+                                ],
+                                "is_boss": True,
+                                "portrait_prompt": "a compact woman in dark leather armor with a brass-clasped ledger at her hip and two short blades drawn, pixel art fantasy villain",
+                            },
+                        ]
+                    ),
                 )
             ],
             user_message=context,
             max_tokens=2000,
         )
 
-    def npc_backstory_generation(self, npc_data: dict,
-                                 story_context: str) -> LLMRequest:
+    def npc_backstory_generation(self, npc_data: dict, story_context: str) -> LLMRequest:
         return LLMRequest(
             system=(
                 "You write NPC backstories for a fantasy game. Given NPC details and world context, "
@@ -671,28 +768,29 @@ class ClaudePromptSet(PromptSet):
                     "ever since the Shadow Cult drove her family from the surface. She forges "
                     "weapons for the resistance, hiding them in false walls. Her masterwork — "
                     "a silver-edged blade — was stolen by a cult spy, and she'll pay handsomely "
-                    "to get it back."
+                    "to get it back.",
                 ),
             ],
             user_message=json.dumps(npc_data),
             max_tokens=200,
         )
 
-
     # ------------------------------------------------------------------
     # Phase 3C: Batched NPC generation
     # ------------------------------------------------------------------
 
-    def npc_batch_generation(self, room_env: dict, room_story: str,
-                             npc_slots: list[dict],
-                             story_context: str) -> LLMRequest:
+    def npc_batch_generation(
+        self, room_env: dict, room_story: str, npc_slots: list[dict], story_context: str
+    ) -> LLMRequest:
         npc_count = len(npc_slots)
-        context = json.dumps({
-            "environment": room_env,
-            "room_story": room_story,
-            "npc_slots": npc_slots,
-            "world_context": story_context[:STORY_CONTEXT_LIMIT],
-        })
+        context = json.dumps(
+            {
+                "environment": room_env,
+                "room_story": room_story,
+                "npc_slots": npc_slots,
+                "world_context": story_context[:STORY_CONTEXT_LIMIT],
+            }
+        )
         return LLMRequest(
             system=(
                 f"You generate a batch of exactly {npc_count} unique NPCs for a fantasy game room.\n\n"
@@ -713,26 +811,33 @@ class ClaudePromptSet(PromptSet):
                 "specific situation),\n"
                 "  backstory (3-5 sentences grounded in the room_story and world_context),\n"
                 "  portrait_prompt (vivid visual description for pixel art generation)\n\n"
-                "Respond with ONLY a JSON array of NPC objects."
-                + _NO_FENCES
+                "Respond with ONLY a JSON array of NPC objects." + _NO_FENCES
             ),
             examples=[
                 (
-                    json.dumps({
-                        "environment": {"type": "cave", "name": "Stonebiter Caverns"},
-                        "room_story": "The Iron Pact bandit gang has occupied these caves for months, using them as a smuggling hub. Local miners are trapped or working as forced labor. The gang's enforcer, a woman called Shrike, keeps order through fear. One miner has been secretly organizing an escape.",
-                        "npc_slots": [{"position": [8, 12], "role": "quest", "quest_type": "combat_event", "max_exchanges": 5}],
-                        "world_context": "Faction: The Iron Pact, led by Warden Greiss. They control trade routes through extortion and violence."
-                    }),
-                    json.dumps([{
-                        "name": "Torval Duskpick",
-                        "job": "lead miner, secretly organizing the escape",
-                        "personality": "exhausted but resolute — he has kept hope alive in the others for three months through small acts of defiance",
-                        "hobby": "carving small figures from cave stone to pass time and calm his nerves",
-                        "opening_greeting": "Keep moving and don't look at me. If Shrike sees us talking she'll put you in the deep shaft with the others.",
-                        "backstory": "Torval was the first miner taken when the Iron Pact arrived at Stonebiter Caverns. He watched Warden Greiss shoot his crew foreman for refusing to cooperate and decided then that open resistance was suicide — instead he has spent months memorizing guard rotations, counting weapons, and quietly identifying which fellow captives still have fight left in them. He has a plan to collapse the north tunnel as a distraction while the others escape through the sump passage, but he needs someone to deal with Shrike first or she'll hunt them all down before they reach the surface.",
-                        "portrait_prompt": "a stocky middle-aged miner with a cracked leather helmet and coal-dusted hands, haunted but determined eyes, hiding a small carved stone figure in his fist, pixel art fantasy portrait"
-                    }])
+                    json.dumps(
+                        {
+                            "environment": {"type": "cave", "name": "Stonebiter Caverns"},
+                            "room_story": "The Iron Pact bandit gang has occupied these caves for months, using them as a smuggling hub. Local miners are trapped or working as forced labor. The gang's enforcer, a woman called Shrike, keeps order through fear. One miner has been secretly organizing an escape.",
+                            "npc_slots": [
+                                {"position": [8, 12], "role": "quest", "quest_type": "combat_event", "max_exchanges": 5}
+                            ],
+                            "world_context": "Faction: The Iron Pact, led by Warden Greiss. They control trade routes through extortion and violence.",
+                        }
+                    ),
+                    json.dumps(
+                        [
+                            {
+                                "name": "Torval Duskpick",
+                                "job": "lead miner, secretly organizing the escape",
+                                "personality": "exhausted but resolute — he has kept hope alive in the others for three months through small acts of defiance",
+                                "hobby": "carving small figures from cave stone to pass time and calm his nerves",
+                                "opening_greeting": "Keep moving and don't look at me. If Shrike sees us talking she'll put you in the deep shaft with the others.",
+                                "backstory": "Torval was the first miner taken when the Iron Pact arrived at Stonebiter Caverns. He watched Warden Greiss shoot his crew foreman for refusing to cooperate and decided then that open resistance was suicide — instead he has spent months memorizing guard rotations, counting weapons, and quietly identifying which fellow captives still have fight left in them. He has a plan to collapse the north tunnel as a distraction while the others escape through the sump passage, but he needs someone to deal with Shrike first or she'll hunt them all down before they reach the surface.",
+                                "portrait_prompt": "a stocky middle-aged miner with a cracked leather helmet and coal-dusted hands, haunted but determined eyes, hiding a small carved stone figure in his fist, pixel art fantasy portrait",
+                            }
+                        ]
+                    ),
                 )
             ],
             user_message=context,
@@ -743,13 +848,18 @@ class ClaudePromptSet(PromptSet):
     # Phase 4A: Batched event generation
     # ------------------------------------------------------------------
 
-    def event_batch_generation(self, room_env: dict, room_story: str,
-                               event_type: str, event_slots: list[dict],
-                               story_context: str,
-                               previous_summaries: list[str] | None = None,
-                               available_abilities: list[str] | None = None,
-                               available_spells: list[str] | None = None,
-                               available_tools: list[str] | None = None) -> LLMRequest:
+    def event_batch_generation(
+        self,
+        room_env: dict,
+        room_story: str,
+        event_type: str,
+        event_slots: list[dict],
+        story_context: str,
+        previous_summaries: list[str] | None = None,
+        available_abilities: list[str] | None = None,
+        available_spells: list[str] | None = None,
+        available_tools: list[str] | None = None,
+    ) -> LLMRequest:
         tool_list = ", ".join(available_tools or ["bludgeon", "cutting", "digging", "climbing"])
         ability_list = ", ".join(available_abilities or [])
         spell_list = ", ".join(available_spells or [])
@@ -810,9 +920,8 @@ class ClaudePromptSet(PromptSet):
 
         previous_note = ""
         if previous_summaries:
-            previous_note = (
-                "\n\nExisting encounters in this room (avoid duplicating these):\n"
-                + "\n".join(f"- {s}" for s in previous_summaries[-15:])
+            previous_note = "\n\nExisting encounters in this room (avoid duplicating these):\n" + "\n".join(
+                f"- {s}" for s in previous_summaries[-15:]
             )
 
         max_tokens = max(4000, len(event_slots) * 500)
@@ -824,9 +933,7 @@ class ClaudePromptSet(PromptSet):
                 "Story-related events (marked is_story_related) should reference the "
                 "faction, room story, or overarching narrative.\n"
                 f"Generate EXACTLY {len(event_slots)} events.\n\n"
-                "Respond with ONLY a JSON array of event objects."
-                + _NO_FENCES
-                + previous_note
+                "Respond with ONLY a JSON array of event objects." + _NO_FENCES + previous_note
             ),
             examples=[],
             user_message=context,
@@ -837,15 +944,17 @@ class ClaudePromptSet(PromptSet):
     # Phase 4B: Dialogue generation
     # ------------------------------------------------------------------
 
-    def dialogue_context_generation(self, room_env: dict, room_story: str,
-                                    npc_data: list[dict],
-                                    story_context: str) -> LLMRequest:
-        context = json.dumps({
-            "environment": room_env,
-            "room_story": room_story,
-            "npcs": npc_data,
-            "world_context": story_context[:STORY_CONTEXT_LIMIT],
-        })
+    def dialogue_context_generation(
+        self, room_env: dict, room_story: str, npc_data: list[dict], story_context: str
+    ) -> LLMRequest:
+        context = json.dumps(
+            {
+                "environment": room_env,
+                "room_story": room_story,
+                "npcs": npc_data,
+                "world_context": story_context[:STORY_CONTEXT_LIMIT],
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate dialogue context for NPCs in an online fantasy game. "
@@ -856,8 +965,7 @@ class ClaudePromptSet(PromptSet):
                 "personal opinions).\n\n"
                 "Each NPC object: {npc_name, greeting, exhausted_dialogue, "
                 "personality_notes (array of strings)}\n\n"
-                "Respond with ONLY a JSON array."
-                + _NO_FENCES
+                "Respond with ONLY a JSON array." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
@@ -868,13 +976,14 @@ class ClaudePromptSet(PromptSet):
     # Phase 3A: Weapon, Spell, and Ability database generation
     # ------------------------------------------------------------------
 
-    def weapon_database_generation(self, environments: list[dict],
-                                   num_rooms: int) -> LLMRequest:
-        context = json.dumps({
-            "environments": environments,
-            "num_rooms": num_rooms,
-            "class_archetypes": ["warrior", "mage", "healer", "jester"],
-        })
+    def weapon_database_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
+        context = json.dumps(
+            {
+                "environments": environments,
+                "num_rooms": num_rooms,
+                "class_archetypes": ["warrior", "mage", "healer", "jester"],
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate a complete weapon database for a fantasy RPG. "
@@ -888,29 +997,28 @@ class ClaudePromptSet(PromptSet):
                 "rarity (common|uncommon|rare|legendary), attack_dice (e.g. '1d6'), "
                 "stat_modifier (STR|DEX|INT|WIS), flavor_text, portrait_prompt}\n\n"
                 "Respond with ONLY a JSON array of weapon objects. "
-                "Theme weapons to each room's environment."
-                + _NO_FENCES
+                "Theme weapons to each room's environment." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=2000,
         )
 
-    def spell_database_generation(self, class_type: str,
-                                  environments: list[dict],
-                                  num_rooms: int) -> LLMRequest:
+    def spell_database_generation(self, class_type: str, environments: list[dict], num_rooms: int) -> LLMRequest:
         element_system = "fire > forest > water > fire; light <> dark (mutual weakness)"
-        context = json.dumps({
-            "class_type": class_type,
-            "environments": environments,
-            "num_rooms": num_rooms,
-            "element_system": element_system,
-        })
+        context = json.dumps(
+            {
+                "class_type": class_type,
+                "environments": environments,
+                "num_rooms": num_rooms,
+                "element_system": element_system,
+            }
+        )
         spell_guidance = {
             "mage": "4 starting spells (2 damage, 2 utility) + 4 level-up spells. "
-                    "Pick 1 element for the class. damage_single, damage_multi, buff_stat, buff_sustain.",
+            "Pick 1 element for the class. damage_single, damage_multi, buff_stat, buff_sustain.",
             "healer": "4 starting spells (1 heal, 1 buff, 1 damage, 1 utility) + 4 level-up spells. "
-                      "Pick 1 element. heal, buff_stat, damage_single, buff_sustain.",
+            "Pick 1 element. heal, buff_stat, damage_single, buff_sustain.",
         }
         return LLMRequest(
             system=(
@@ -923,21 +1031,21 @@ class ClaudePromptSet(PromptSet):
                 "die sides e.g. 8 for 1d8), spell_type, hunger_cost, thirst_cost, "
                 "targets (single|multi|self), heal_amount (for heal spells), "
                 "available_at_room (0 = starting, 1+ = level-up)}\n\n"
-                "Respond with ONLY a JSON array of spell objects."
-                + _NO_FENCES
+                "Respond with ONLY a JSON array of spell objects." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=1500,
         )
 
-    def utility_ability_generation(self, environments: list[dict],
-                                   num_rooms: int) -> LLMRequest:
-        context = json.dumps({
-            "environments": environments,
-            "num_rooms": num_rooms,
-            "tool_attributes": ["bludgeon", "cutting", "digging", "climbing"],
-        })
+    def utility_ability_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
+        context = json.dumps(
+            {
+                "environments": environments,
+                "num_rooms": num_rooms,
+                "tool_attributes": ["bludgeon", "cutting", "digging", "climbing"],
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate utility abilities for a fantasy RPG. These are non-combat "
@@ -948,8 +1056,7 @@ class ClaudePromptSet(PromptSet):
                 "persuading NPCs, detecting traps, etc.\n\n"
                 "Each ability: {name, description, stat (STR|DEX|CON|INT|WIS|CHA), "
                 "cost_hunger (int), cost_thirst (int), available_at_room (int)}\n\n"
-                "Respond with ONLY a JSON array of ability objects."
-                + _NO_FENCES
+                "Respond with ONLY a JSON array of ability objects." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
@@ -960,8 +1067,7 @@ class ClaudePromptSet(PromptSet):
     # Phase 0 + Phase 1: Environment sequence & two-pass story generation
     # ------------------------------------------------------------------
 
-    def environment_sequence_generation(self, story_seed: str, num_rooms: int,
-                                        known_types: list[str]) -> LLMRequest:
+    def environment_sequence_generation(self, story_seed: str, num_rooms: int, known_types: list[str]) -> LLMRequest:
         return LLMRequest(
             system=(
                 "You plan the environment progression for a fantasy dungeon-crawling game. "
@@ -974,31 +1080,33 @@ class ClaudePromptSet(PromptSet):
                 '[{"type": "village", "name": "Lilac Village"}, '
                 '{"type": "forest", "name": "Thornwood"}, ...]\n'
                 "The sequence should feel like a journey — start small and escalate toward "
-                "the story's climax."
-                + _NO_FENCES
+                "the story's climax." + _NO_FENCES
             ),
             examples=[
                 (
                     "story_seed: 'A fire cult plans to infiltrate the castle nobility', num_rooms: 5",
-                    json.dumps([
-                        {"type": "village", "name": "Ashen Meadow"},
-                        {"type": "forest", "name": "Thornwood"},
-                        {"type": "mountain", "name": "Ember Peak"},
-                        {"type": "city", "name": "Irongate"},
-                        {"type": "castle", "name": "Pyrespire Keep"},
-                    ]),
+                    json.dumps(
+                        [
+                            {"type": "village", "name": "Ashen Meadow"},
+                            {"type": "forest", "name": "Thornwood"},
+                            {"type": "mountain", "name": "Ember Peak"},
+                            {"type": "city", "name": "Irongate"},
+                            {"type": "castle", "name": "Pyrespire Keep"},
+                        ]
+                    ),
                 ),
             ],
             user_message=f"story_seed: '{story_seed}', num_rooms: {num_rooms}",
             max_tokens=300,
         )
 
-    def overarching_story_generation(self, story_seed: str,
-                                     environments: list[dict]) -> LLMRequest:
-        context = json.dumps({
-            "story_seed": story_seed,
-            "environments": environments,
-        })
+    def overarching_story_generation(self, story_seed: str, environments: list[dict]) -> LLMRequest:
+        context = json.dumps(
+            {
+                "story_seed": story_seed,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate the overarching story for a fantasy dungeon-crawling game. "
@@ -1020,23 +1128,23 @@ class ClaudePromptSet(PromptSet):
                 '  "key_npc_names": ["important character 1", "..."]\n'
                 "}\n\n"
                 "Do NOT include per-room story beats or entity details — those come later. "
-                "Focus on the faction, the arc, and the climax."
-                + _NO_FENCES
+                "Focus on the faction, the arc, and the climax." + _NO_FENCES
             ),
             examples=[],
             user_message=context,
             max_tokens=1200,
         )
 
-    def room_story_beat_generation(self, overarching_story: dict,
-                                   room_env: dict, room_index: int,
-                                   prior_beats: list[dict],
-                                   num_rooms: int = 5) -> LLMRequest:
-        context = json.dumps({
-            "overarching_story": overarching_story,
-            "room": {"index": room_index, "environment": room_env},
-            "prior_beats": prior_beats,
-        })
+    def room_story_beat_generation(
+        self, overarching_story: dict, room_env: dict, room_index: int, prior_beats: list[dict], num_rooms: int = 5
+    ) -> LLMRequest:
+        context = json.dumps(
+            {
+                "overarching_story": overarching_story,
+                "room": {"index": room_index, "environment": room_env},
+                "prior_beats": prior_beats,
+            }
+        )
         return LLMRequest(
             system=(
                 "You write a detailed story beat for one room in a fantasy dungeon-crawling game.\n\n"
@@ -1059,55 +1167,73 @@ class ClaudePromptSet(PromptSet):
                 "`summary` MUST reference the climax from overarching_story.\n"
                 "- Build on prior_beats: reference named characters or events from earlier rooms when "
                 "narratively logical. Show consequence.\n\n"
-                "Respond with ONLY a JSON object."
-                + _NO_FENCES
+                "Respond with ONLY a JSON object." + _NO_FENCES
             ),
             examples=[
                 (
-                    json.dumps({
-                        "overarching_story": {
-                            "title": "The Sunken Ledger",
-                            "faction_name": "The Brackwater Guild",
-                            "leader": "Harrowmaster Veln",
-                            "climax": "Harrowmaster Veln completes the debt-binding ritual in the harbor vault, enslaving the entire merchant class",
-                            "escalation_arc": ["Guild enforcers arrive in the fishing district", "Guild takeover of the cave smuggling routes"]
-                        },
-                        "room": {"index": 0, "environment": {"type": "cave", "name": "Stonebiter Caverns"}},
-                        "prior_beats": []
-                    }),
-                    json.dumps({
-                        "summary": "The Brackwater Guild has seized Stonebiter Caverns as the cornerstone of their new smuggling operation. Miners who once extracted copper for the city now haul contraband under armed watch, their wages confiscated as 'debt repayment.' The cavern's foreman, a soft-spoken man named Torval Duskpick, has been keeping a quiet count of how many guards patrol each shift — waiting for someone capable of tipping the scales. Guild enforcer Shrike paces the upper gallery with visible impatience, aware that the longer they stay, the more locals learn the Guild's methods.",
-                        "faction_presence": "The Brackwater Guild has posted four enforcers at the cavern entrance and converted the ore-sorting hall into a contraband depot. They are extorting the miners' labor as debt repayment while moving goods stolen from surface merchants through the cave's hidden sump passage.",
-                        "characters": [
-                            {"name": "Torval Duskpick", "role": "resistance_leader", "motivation": "Free his fellow miners and collapse the Guild's route before Shrike ships the next contraband load"},
-                            {"name": "Mira Coalseam", "role": "betrayer", "motivation": "Trading information about the escape plan to Shrike in exchange for her family's debts being forgiven"},
-                            {"name": "Old Fenwick", "role": "ally", "motivation": "Too broken to fight but knows every tunnel in these caves and will guide anyone who treats him kindly"}
-                        ],
-                        "mini_boss": {
-                            "name": "Shrike, the Guild's Route-Closer",
-                            "description": "A compact, precise woman who carries a ledger of every debt she has collected. She fights with two short blades and treats violence as an accounting entry.",
-                            "motivation": "Close the Stonebiter route cleanly and return to Harrowmaster Veln with a full shipment — anything less is a failure she refuses to report"
-                        },
-                        "conflicts": [
-                            "Torval needs Shrike eliminated before Mira's betrayal is acted upon — he does not yet know Mira has turned",
-                            "Old Fenwick is locked in the deep shaft as punishment for slow work; freeing him would give the resistance a critical guide but requires dealing with the shaft guard",
-                            "The contraband shipment is already packed — if it leaves the cave tonight, the Guild gains enough funds to hire twice as many enforcers for the next stage"
-                        ],
-                        "escalation": 1
-                    })
+                    json.dumps(
+                        {
+                            "overarching_story": {
+                                "title": "The Sunken Ledger",
+                                "faction_name": "The Brackwater Guild",
+                                "leader": "Harrowmaster Veln",
+                                "climax": "Harrowmaster Veln completes the debt-binding ritual in the harbor vault, enslaving the entire merchant class",
+                                "escalation_arc": [
+                                    "Guild enforcers arrive in the fishing district",
+                                    "Guild takeover of the cave smuggling routes",
+                                ],
+                            },
+                            "room": {"index": 0, "environment": {"type": "cave", "name": "Stonebiter Caverns"}},
+                            "prior_beats": [],
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "summary": "The Brackwater Guild has seized Stonebiter Caverns as the cornerstone of their new smuggling operation. Miners who once extracted copper for the city now haul contraband under armed watch, their wages confiscated as 'debt repayment.' The cavern's foreman, a soft-spoken man named Torval Duskpick, has been keeping a quiet count of how many guards patrol each shift — waiting for someone capable of tipping the scales. Guild enforcer Shrike paces the upper gallery with visible impatience, aware that the longer they stay, the more locals learn the Guild's methods.",
+                            "faction_presence": "The Brackwater Guild has posted four enforcers at the cavern entrance and converted the ore-sorting hall into a contraband depot. They are extorting the miners' labor as debt repayment while moving goods stolen from surface merchants through the cave's hidden sump passage.",
+                            "characters": [
+                                {
+                                    "name": "Torval Duskpick",
+                                    "role": "resistance_leader",
+                                    "motivation": "Free his fellow miners and collapse the Guild's route before Shrike ships the next contraband load",
+                                },
+                                {
+                                    "name": "Mira Coalseam",
+                                    "role": "betrayer",
+                                    "motivation": "Trading information about the escape plan to Shrike in exchange for her family's debts being forgiven",
+                                },
+                                {
+                                    "name": "Old Fenwick",
+                                    "role": "ally",
+                                    "motivation": "Too broken to fight but knows every tunnel in these caves and will guide anyone who treats him kindly",
+                                },
+                            ],
+                            "mini_boss": {
+                                "name": "Shrike, the Guild's Route-Closer",
+                                "description": "A compact, precise woman who carries a ledger of every debt she has collected. She fights with two short blades and treats violence as an accounting entry.",
+                                "motivation": "Close the Stonebiter route cleanly and return to Harrowmaster Veln with a full shipment — anything less is a failure she refuses to report",
+                            },
+                            "conflicts": [
+                                "Torval needs Shrike eliminated before Mira's betrayal is acted upon — he does not yet know Mira has turned",
+                                "Old Fenwick is locked in the deep shaft as punishment for slow work; freeing him would give the resistance a critical guide but requires dealing with the shaft guard",
+                                "The contraband shipment is already packed — if it leaves the cave tonight, the Guild gains enough funds to hire twice as many enforcers for the next stage",
+                            ],
+                            "escalation": 1,
+                        }
+                    ),
                 )
             ],
             user_message=context,
             max_tokens=1500,
         )
 
-
-    def music_prompt_generation(self, story_summary: dict,
-                                environments: list[str]) -> LLMRequest:
-        context = json.dumps({
-            "story": story_summary,
-            "environments": environments,
-        })
+    def music_prompt_generation(self, story_summary: dict, environments: list[str]) -> LLMRequest:
+        context = json.dumps(
+            {
+                "story": story_summary,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You write music prompts for a synthwave video game soundtrack. "
@@ -1126,58 +1252,62 @@ class ClaudePromptSet(PromptSet):
                 "the world is dangerous. Example: village music is warm and pastoral with occasional "
                 "swells of unease; cave music is deep and atmospheric with lurking dread.\n\n"
                 "Respond with ONLY a JSON object. Keys: 'combat', and 'maze_{env}' for each env in the list. "
-                "Set puzzle_event, start_screen, victory, game_over to null (handled separately)."
-                + _NO_FENCES
+                "Set puzzle_event, start_screen, victory, game_over to null (handled separately)." + _NO_FENCES
             ),
             examples=[
                 (
-                    json.dumps({
-                        "story": {
-                            "title": "The Sunken Ledger",
-                            "faction_name": "The Brackwater Guild",
-                            "faction_description": "A criminal guild controlling trade routes through extortion and debt bondage",
-                            "climax": "Harrowmaster Veln completes a debt-binding ritual enslaving the merchant class",
-                        },
-                        "environments": ["cave"],
-                    }),
-                    json.dumps({
-                        "combat": (
-                            "[0:00-0:20] Tense synthwave bass pulse in a minor key, slow and ominous. "
-                            "The cold precision of hired enforcers. "
-                            "[0:20-1:10] Driving drum machine at 130 BPM, sharp arpeggiated synth leads, "
-                            "dark and business-like — violence as transaction. "
-                            "[1:10-1:40] Escalation: dissonant synth stabs, faster arpeggios, relentless momentum. "
-                            "[1:40-2:00] Return to opening bass pulse for seamless loop. "
-                            "Synthwave, retrowave, instrumental only, no vocals."
-                        ),
-                        "maze_cave": (
-                            "[0:00-0:20] Deep cave drone, low analog bass hum, cavernous reverb. "
-                            "[0:20-1:00] Slow atmospheric synthwave pad, dripping echo, minor key. "
-                            "Feels like exploring tunnels where something lurks. "
-                            "[1:00-1:30] Tension rises: deeper bass pulse, hint of a melody that resolves nowhere. "
-                            "[1:30-2:00] Return to opening drone for seamless loop. "
-                            "Synthwave, analog synths, instrumental only, no vocals."
-                        ),
-                        "puzzle_event": None,
-                        "start_screen": None,
-                        "victory": None,
-                        "game_over": None,
-                    }),
+                    json.dumps(
+                        {
+                            "story": {
+                                "title": "The Sunken Ledger",
+                                "faction_name": "The Brackwater Guild",
+                                "faction_description": "A criminal guild controlling trade routes through extortion and debt bondage",
+                                "climax": "Harrowmaster Veln completes a debt-binding ritual enslaving the merchant class",
+                            },
+                            "environments": ["cave"],
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "combat": (
+                                "[0:00-0:20] Tense synthwave bass pulse in a minor key, slow and ominous. "
+                                "The cold precision of hired enforcers. "
+                                "[0:20-1:10] Driving drum machine at 130 BPM, sharp arpeggiated synth leads, "
+                                "dark and business-like — violence as transaction. "
+                                "[1:10-1:40] Escalation: dissonant synth stabs, faster arpeggios, relentless momentum. "
+                                "[1:40-2:00] Return to opening bass pulse for seamless loop. "
+                                "Synthwave, retrowave, instrumental only, no vocals."
+                            ),
+                            "maze_cave": (
+                                "[0:00-0:20] Deep cave drone, low analog bass hum, cavernous reverb. "
+                                "[0:20-1:00] Slow atmospheric synthwave pad, dripping echo, minor key. "
+                                "Feels like exploring tunnels where something lurks. "
+                                "[1:00-1:30] Tension rises: deeper bass pulse, hint of a melody that resolves nowhere. "
+                                "[1:30-2:00] Return to opening drone for seamless loop. "
+                                "Synthwave, analog synths, instrumental only, no vocals."
+                            ),
+                            "puzzle_event": None,
+                            "start_screen": None,
+                            "victory": None,
+                            "game_over": None,
+                        }
+                    ),
                 )
             ],
             user_message=context,
             max_tokens=2000,
         )
 
-
-    def sfx_prompt_generation(self, story_summary: dict,
-                              environments: list[dict],
-                              spell_elements: list[str]) -> LLMRequest:
-        context = json.dumps({
-            "story": story_summary,
-            "environments": environments,
-            "spell_elements": spell_elements,
-        })
+    def sfx_prompt_generation(
+        self, story_summary: dict, environments: list[dict], spell_elements: list[str]
+    ) -> LLMRequest:
+        context = json.dumps(
+            {
+                "story": story_summary,
+                "environments": environments,
+                "spell_elements": spell_elements,
+            }
+        )
         return LLMRequest(
             system=(
                 "You write sound effect prompts for a fantasy video game. "
@@ -1214,81 +1344,98 @@ class ClaudePromptSet(PromptSet):
                 "- Keep prompts concise (1-3 sentences each)\n"
                 "- All durations in seconds\n"
                 "- Only ambience tracks get loop=true; all others loop=false\n"
-                "- No screaming, yelling, or vocal sounds. Chatter/murmurs are OK for ambience only."
-                + _NO_FENCES
+                "- No screaming, yelling, or vocal sounds. Chatter/murmurs are OK for ambience only." + _NO_FENCES
             ),
             examples=[
                 (
-                    json.dumps({
-                        "story": {
-                            "title": "The Sunken Ledger",
-                            "faction_name": "The Brackwater Guild",
-                            "faction_description": "A criminal guild controlling trade routes",
-                            "climax": "Harrowmaster Veln enslaves the merchant class",
-                        },
-                        "environments": [
-                            {"type": "cave", "name": "Stonebiter Caverns"},
-                        ],
-                        "spell_elements": ["water", "dark"],
-                    }),
-                    json.dumps({
-                        "weapon_light_swing": {
-                            "prompt": "A quick sharp blade cutting through damp air with a wet metallic whoosh. Fast and precise, like a debt collector's razor.",
-                            "duration": 1.5, "loop": False,
-                        },
-                        "weapon_light_hit": {
-                            "prompt": "A short wet slap of steel on flesh. Quick blade impact, sharp and clinical.",
-                            "duration": 0.5, "loop": False,
-                        },
-                        "weapon_heavy_swing": {
-                            "prompt": "A heavy iron tool swinging through air with a deep whoosh and chain rattle. Slow, brutal, like a dockworker's maul.",
-                            "duration": 2.0, "loop": False,
-                        },
-                        "weapon_heavy_hit": {
-                            "prompt": "A crushing impact of heavy metal on bone. Deep thud with a crunch. Devastating.",
-                            "duration": 0.75, "loop": False,
-                        },
-                        "weapon_simple_swing": {
-                            "prompt": "A wooden staff cutting through air with a smooth whoosh. Light and swift, with a faint hum of energy.",
-                            "duration": 1.5, "loop": False,
-                        },
-                        "weapon_simple_hit": {
-                            "prompt": "A hollow wooden thud of a staff striking armor. Resonant impact.",
-                            "duration": 0.5, "loop": False,
-                        },
-                        "spell_heal_cast": {
-                            "prompt": "Rushing water sounds swirling upward, building to a gentle splash and warm shimmer. Healing water magic.",
-                            "duration": 2.0, "loop": False,
-                        },
-                        "spell_damage_single_cast": {
-                            "prompt": "A dark water jet pressurizing and firing: building rush then sharp crack of a water lance.",
-                            "duration": 1.5, "loop": False,
-                        },
-                        "spell_damage_single_impact": {
-                            "prompt": "A pressurized water blast impacting a surface. Wet explosive hit.",
-                            "duration": 1.0, "loop": False,
-                        },
-                        "spell_damage_multi_cast": {
-                            "prompt": "Dark tidal energy swelling outward: rising rush of cursed water, building to a roaring wave burst.",
-                            "duration": 2.0, "loop": False,
-                        },
-                        "spell_damage_multi_impact": {
-                            "prompt": "Multiple impacts of dark water bursts hitting stone and metal. Scattered wet explosions.",
-                            "duration": 1.5, "loop": False,
-                        },
-                        "spell_buff_cast": {
-                            "prompt": "A protective shell of flowing water encasing something: gentle rush building to a sealed dome of liquid energy.",
-                            "duration": 2.0, "loop": False,
-                        },
-                        "spell_reveal_cast": {
-                            "prompt": "Dark whispers dissolving into clarity: shadowy murmur fading as hidden things become visible. Eerie then clear.",
-                            "duration": 2.0, "loop": False,
-                        },
-                        "ambience_cave": {
-                            "prompt": "Deep cave ambience in smuggler tunnels: distant water dripping, echoing footsteps, faint clinking of contraband chains, occasional low wind moaning through stone passages. Tense and claustrophobic.",
-                            "duration": 15.0, "loop": True,
-                        },
-                    }),
+                    json.dumps(
+                        {
+                            "story": {
+                                "title": "The Sunken Ledger",
+                                "faction_name": "The Brackwater Guild",
+                                "faction_description": "A criminal guild controlling trade routes",
+                                "climax": "Harrowmaster Veln enslaves the merchant class",
+                            },
+                            "environments": [
+                                {"type": "cave", "name": "Stonebiter Caverns"},
+                            ],
+                            "spell_elements": ["water", "dark"],
+                        }
+                    ),
+                    json.dumps(
+                        {
+                            "weapon_light_swing": {
+                                "prompt": "A quick sharp blade cutting through damp air with a wet metallic whoosh. Fast and precise, like a debt collector's razor.",
+                                "duration": 1.5,
+                                "loop": False,
+                            },
+                            "weapon_light_hit": {
+                                "prompt": "A short wet slap of steel on flesh. Quick blade impact, sharp and clinical.",
+                                "duration": 0.5,
+                                "loop": False,
+                            },
+                            "weapon_heavy_swing": {
+                                "prompt": "A heavy iron tool swinging through air with a deep whoosh and chain rattle. Slow, brutal, like a dockworker's maul.",
+                                "duration": 2.0,
+                                "loop": False,
+                            },
+                            "weapon_heavy_hit": {
+                                "prompt": "A crushing impact of heavy metal on bone. Deep thud with a crunch. Devastating.",
+                                "duration": 0.75,
+                                "loop": False,
+                            },
+                            "weapon_simple_swing": {
+                                "prompt": "A wooden staff cutting through air with a smooth whoosh. Light and swift, with a faint hum of energy.",
+                                "duration": 1.5,
+                                "loop": False,
+                            },
+                            "weapon_simple_hit": {
+                                "prompt": "A hollow wooden thud of a staff striking armor. Resonant impact.",
+                                "duration": 0.5,
+                                "loop": False,
+                            },
+                            "spell_heal_cast": {
+                                "prompt": "Rushing water sounds swirling upward, building to a gentle splash and warm shimmer. Healing water magic.",
+                                "duration": 2.0,
+                                "loop": False,
+                            },
+                            "spell_damage_single_cast": {
+                                "prompt": "A dark water jet pressurizing and firing: building rush then sharp crack of a water lance.",
+                                "duration": 1.5,
+                                "loop": False,
+                            },
+                            "spell_damage_single_impact": {
+                                "prompt": "A pressurized water blast impacting a surface. Wet explosive hit.",
+                                "duration": 1.0,
+                                "loop": False,
+                            },
+                            "spell_damage_multi_cast": {
+                                "prompt": "Dark tidal energy swelling outward: rising rush of cursed water, building to a roaring wave burst.",
+                                "duration": 2.0,
+                                "loop": False,
+                            },
+                            "spell_damage_multi_impact": {
+                                "prompt": "Multiple impacts of dark water bursts hitting stone and metal. Scattered wet explosions.",
+                                "duration": 1.5,
+                                "loop": False,
+                            },
+                            "spell_buff_cast": {
+                                "prompt": "A protective shell of flowing water encasing something: gentle rush building to a sealed dome of liquid energy.",
+                                "duration": 2.0,
+                                "loop": False,
+                            },
+                            "spell_reveal_cast": {
+                                "prompt": "Dark whispers dissolving into clarity: shadowy murmur fading as hidden things become visible. Eerie then clear.",
+                                "duration": 2.0,
+                                "loop": False,
+                            },
+                            "ambience_cave": {
+                                "prompt": "Deep cave ambience in smuggler tunnels: distant water dripping, echoing footsteps, faint clinking of contraband chains, occasional low wind moaning through stone passages. Tense and claustrophobic.",
+                                "duration": 15.0,
+                                "loop": True,
+                            },
+                        }
+                    ),
                 )
             ],
             user_message=context,

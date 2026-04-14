@@ -1,6 +1,6 @@
 from src.models.encounter import CombatEvent, LootEntry
+from src.models.items import ItemStats, Weapon
 from src.models.player import PlayerCharacter, PlayerClass, Stats
-from src.models.items import Weapon, ItemStats
 
 
 def _make_player(**kwargs):
@@ -68,11 +68,14 @@ class TestLootTable:
         player = _make_player()
         # Give the player a class with STR 18 -> modifier +4
         player.player_class = PlayerClass(
-            name="Fighter", archetype="warrior",
+            name="Fighter",
+            archetype="warrior",
             stats=Stats(STR=18, DEX=10, CON=10, INT=10, WIS=10, CHA=10, LUCK=10),
         )
         weapon = Weapon(
-            category="weapon", name="big sword", desc="test",
+            category="weapon",
+            name="big sword",
+            desc="test",
             weapon_type="heavy",
             item_stats=ItemStats(attack_dice="1d12", stat_modifier="STR"),
         )
@@ -88,7 +91,9 @@ class TestLootTable:
         event = _make_combat_event(difficulty=3)  # threshold = 9
         player = _make_player()
         weapon = Weapon(
-            category="weapon", name="plain stick", desc="test",
+            category="weapon",
+            name="plain stick",
+            desc="test",
             weapon_type="simple",
             item_stats=ItemStats(attack_dice="1d4"),
         )

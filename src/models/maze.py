@@ -1,14 +1,23 @@
 import json
 import math
 import random
-from dataclasses import dataclass, field
-from src.registry import registry
-from src.data.world_data import ENVIRONMENT_TYPES
+from dataclasses import dataclass
+
 from config import (
-    MAZE_HEIGHT, MAZE_WIDTH, WORLD_SEED, MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE,
-    EVENT_PERCENT, EVENT_DENSITY, ITEM_DENSITY, NPC_DENSITY,
-    COMBAT_CHANCE, PUZZLE_CHANCE, EVENT_CHANCE, TIME_GATE_FRACTION,
+    COMBAT_CHANCE,
+    EVENT_DENSITY,
+    EVENT_PERCENT,
+    ITEM_DENSITY,
+    MAX_HALLWAY_SIZE,
+    MAZE_HEIGHT,
+    MAZE_WIDTH,
+    MIN_HALLWAY_SIZE,
+    NPC_DENSITY,
+    PUZZLE_CHANCE,
+    TIME_GATE_FRACTION,
+    WORLD_SEED,
 )
+from src.data.world_data import ENVIRONMENT_TYPES
 
 # Set seed for deterministic mazes
 if WORLD_SEED != -1:
@@ -47,6 +56,7 @@ REQUIREMENT_TYPES = ["tool", "ability", "spell", "item"]
 @dataclass
 class TileMeta:
     """Metadata for a single tile on the maze, assigned during Phase 2 layout."""
+
     position: tuple[int, int]
     tile_type: str  # "event" | "npc" | "item" | "door" | "start" | "path" | "wall"
     # Event-specific
@@ -56,8 +66,8 @@ class TileMeta:
     is_story_related: bool = False
     time_gate: str | None = None
     # Requirement slots (Phase 2 rolls type, enrichment pass fills ref)
-    requires_type: str | None = None   # "tool" | "ability" | "spell" | "item"
-    requires_ref: str | None = None    # filled by enrichment: actual DB name
+    requires_type: str | None = None  # "tool" | "ability" | "spell" | "item"
+    requires_ref: str | None = None  # filled by enrichment: actual DB name
     # Combat assignment (filled by enrichment pass from monster DB)
     assigned_monsters: list | None = None
     assigned_monster_count: int = 1
@@ -75,8 +85,7 @@ class TileMeta:
 
 
 class Maze:
-    def __init__(self, environment: str | None = None,
-                 environment_name: str = ""):
+    def __init__(self, environment: str | None = None, environment_name: str = ""):
         """Initialize the maze object with a grid.
 
         Parameters
@@ -113,10 +122,10 @@ class Maze:
             # Randomly choose a hallway size but keep it between the min and max limits
             if random.random() < 0.4:
                 hallway_width = random.choices(
-                population=range(MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE + 1),
-                weights=[MAX_HALLWAY_SIZE + 1 - w for w in range(MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE + 1)],
-                k=1
-            )[0]
+                    population=range(MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE + 1),
+                    weights=[MAX_HALLWAY_SIZE + 1 - w for w in range(MIN_HALLWAY_SIZE, MAX_HALLWAY_SIZE + 1)],
+                    k=1,
+                )[0]
             else:
                 hallway_width = MIN_HALLWAY_SIZE
 
@@ -155,7 +164,7 @@ class Maze:
         """Generate the maze starting from the top-left corner."""
         self.grid = self.initialize_maze()  # Reset the grid
         self.carve_passages_from(1, 1)
-                    
+
     def is_wall(self, x, y):
         """Check if the given position (x, y) is a wall or out of bounds."""
         # Check if the coordinates are out of bounds (boundary check)
@@ -173,35 +182,35 @@ class Maze:
                 if cell == 0:  # 0 means open space
                     open_spaces.append((x, y))
         return open_spaces
-    
+
     def get_random_open_space(self):
         """Get a random open space from the maze - use to place entities."""
         open_spaces = self.find_open_spaces()
         return random.choice(open_spaces)
-    
+
     def place_character(self):
         """Place a character in the maze."""
         open_spaces = self.find_open_spaces()
         space = random.choice(open_spaces)
         return space[0], space[1]
-    
+
     def place_event_tiles(self, random_var: float = 0.05):
         """Place event tiles in the maze."""
         open_spaces = self.find_open_spaces()
-        
-        #Randomly vary event percent - later
+
+        # Randomly vary event percent - later
         if WORLD_SEED == -1:
-            event_percent = random.uniform(self.event_percent -random_var, self.event_percent + random_var)
+            event_percent = random.uniform(self.event_percent - random_var, self.event_percent + random_var)
 
         else:
             event_percent = self.event_percent
-        
+
         num_events = math.ceil(len(open_spaces) * event_percent)
         for _ in range(num_events):
             x, y = random.choice(open_spaces)
             self.grid[y][x] = self.event_tile_id
             open_spaces.remove((x, y))
-        
+
     def place_door(self, player_start: tuple[int, int]) -> tuple[int, int] | None:
         """Place an exit door far from the player start. Returns door position."""
         open_spaces = self.find_open_spaces()
@@ -255,10 +264,12 @@ class Maze:
                 used.add(pos)
 
         num_time_gated = math.ceil(len(event_positions) * TIME_GATE_FRACTION)
-        time_gated_indices = set(random.sample(
-            range(len(event_positions)),
-            min(num_time_gated, len(event_positions)),
-        ))
+        time_gated_indices = set(
+            random.sample(
+                range(len(event_positions)),
+                min(num_time_gated, len(event_positions)),
+            )
+        )
 
         for idx, pos in enumerate(event_positions):
             roll = random.random()
@@ -283,17 +294,19 @@ class Maze:
             if etype in ("puzzle", "event") and random.random() < 0.10:
                 req_type = random.choice(REQUIREMENT_TYPES)
 
-            meta.append(TileMeta(
-                position=pos,
-                tile_type="event",
-                event_type=etype,
-                is_multi_combat=is_multi,
-                multi_combat_count=multi_count,
-                is_story_related=(random.random() < 0.10),
-                time_gate=tg,
-                requires_type=req_type,
-                assigned_monster_count=multi_count if etype == "combat" else 1,
-            ))
+            meta.append(
+                TileMeta(
+                    position=pos,
+                    tile_type="event",
+                    event_type=etype,
+                    is_multi_combat=is_multi,
+                    multi_combat_count=multi_count,
+                    is_story_related=(random.random() < 0.10),
+                    time_gate=tg,
+                    requires_type=req_type,
+                    assigned_monster_count=multi_count if etype == "combat" else 1,
+                )
+            )
             self.grid[pos[1]][pos[0]] = self.event_tile_id
 
         # -- NPCs: NPC_DENSITY of open cells, ceil --
@@ -323,26 +336,26 @@ class Maze:
 
             target_tile = None
             if qt == "solve":
-                event_tiles = [m for m in meta if m.tile_type == "event"
-                               and m.position not in assigned_solve_tiles]
+                event_tiles = [m for m in meta if m.tile_type == "event" and m.position not in assigned_solve_tiles]
                 if event_tiles:
                     chosen = random.choice(event_tiles)
                     target_tile = chosen.position
                     assigned_solve_tiles.add(target_tile)
             elif qt == "escort":
-                far_tiles = [p for p in open_cells if p not in used
-                             and abs(p[0] - pos[0]) + abs(p[1] - pos[1]) > 10]
+                far_tiles = [p for p in open_cells if p not in used and abs(p[0] - pos[0]) + abs(p[1] - pos[1]) > 10]
                 if far_tiles:
-                    target_tile = random.choice(far_tiles[:max(1, len(far_tiles) // 3)])
+                    target_tile = random.choice(far_tiles[: max(1, len(far_tiles) // 3)])
 
-            meta.append(TileMeta(
-                position=pos,
-                tile_type="npc",
-                npc_role=role,
-                npc_max_exchanges=max_ex,
-                quest_type=qt,
-                quest_target_tile=target_tile,
-            ))
+            meta.append(
+                TileMeta(
+                    position=pos,
+                    tile_type="npc",
+                    npc_role=role,
+                    npc_max_exchanges=max_ex,
+                    quest_type=qt,
+                    quest_target_tile=target_tile,
+                )
+            )
 
         # Mark 2-5 random quest NPCs as story NPCs
         quest_npc_tiles = [t for t in meta if t.tile_type == "npc" and t.quest_type]
@@ -361,11 +374,13 @@ class Maze:
         cat_weights = [0.30, 0.30, 0.25, 0.15]
         for pos in item_positions:
             cat = random.choices(categories, weights=cat_weights, k=1)[0]
-            meta.append(TileMeta(
-                position=pos,
-                tile_type="item",
-                item_category=cat,
-            ))
+            meta.append(
+                TileMeta(
+                    position=pos,
+                    tile_type="item",
+                    item_category=cat,
+                )
+            )
 
         # -- Player start --
         meta.append(TileMeta(position=player_start, tile_type="start"))
@@ -387,6 +402,7 @@ class Maze:
     def save_to_json(self, path: str, extra: dict | None = None):
         """Persist the maze grid and metadata to a JSON file."""
         import os
+
         os.makedirs(os.path.dirname(path), exist_ok=True)
         data = {
             "grid": self.grid,

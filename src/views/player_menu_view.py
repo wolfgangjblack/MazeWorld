@@ -4,7 +4,8 @@ Opened with Tab key during normal gameplay (not during combat/events).
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.views.save_load_panel import SaveLoadPanel
 
 TABS = ["Save/Load", "Quest Log", "Followers"]
@@ -29,8 +30,7 @@ FOLLOWER_DETAIL_COLOR = (180, 180, 180)
 class PlayerMenuView:
     """Player menu with tabs: Save/Load, Quest Log, Followers."""
 
-    def __init__(self, screen, font, can_save=True, has_saves=False,
-                 quest_log=None, follower_info=None, saves=None):
+    def __init__(self, screen, font, can_save=True, has_saves=False, quest_log=None, follower_info=None, saves=None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
@@ -48,7 +48,10 @@ class PlayerMenuView:
 
         # Embedded save/load panel
         self.save_load_panel = SaveLoadPanel(
-            screen, font, saves or [], can_save=can_save,
+            screen,
+            font,
+            saves or [],
+            can_save=can_save,
         )
 
     def set_status(self, message: str, is_error: bool = False):
@@ -98,8 +101,7 @@ class PlayerMenuView:
             self.screen.blit(text, (x, tab_y))
 
         # Separator line
-        pygame.draw.line(self.screen, (80, 80, 80),
-                         (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
+        pygame.draw.line(self.screen, (80, 80, 80), (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
 
     # ------------------------------------------------------------------
     # Tab 1: Quest Log
@@ -192,40 +194,39 @@ class PlayerMenuView:
             self.screen.blit(empty, (empty_x, SCREEN_HEIGHT // 2 - 20))
             return
 
-        count_text = self.small_font.render(
-            f"({len(self.follower_info)}/{2} slots)", True, DISABLED_COLOR)
+        count_text = self.small_font.render(f"({len(self.follower_info)}/{2} slots)", True, DISABLED_COLOR)
         self.screen.blit(count_text, (SCREEN_WIDTH - margin - count_text.get_width(), 80))
 
         for i, info in enumerate(self.follower_info):
-            is_selected = (i == self.follower_selected)
+            is_selected = i == self.follower_selected
             prefix = "> " if is_selected else "  "
 
             # Name
             name_color = SELECTED_COLOR if is_selected else FOLLOWER_NAME_COLOR
-            name_surface = self.font.render(
-                f"{prefix}{info['name']}", True, name_color)
+            name_surface = self.font.render(f"{prefix}{info['name']}", True, name_color)
             self.screen.blit(name_surface, (margin, y))
             y += line_h
 
             # Quest summary
             if info.get("quest_summary"):
                 quest_surface = self.small_font.render(
-                    f"    Quest: {info['quest_summary']}", True, FOLLOWER_DETAIL_COLOR)
+                    f"    Quest: {info['quest_summary']}", True, FOLLOWER_DETAIL_COLOR
+                )
                 self.screen.blit(quest_surface, (margin, y))
                 y += line_h - 2
 
             # Destination
             dest = info.get("destination_room", 0)
             dest_text = f"Room {dest}" if dest > 0 else "This room"
-            dest_surface = self.small_font.render(
-                f"    Destination: {dest_text}", True, FOLLOWER_DETAIL_COLOR)
+            dest_surface = self.small_font.render(f"    Destination: {dest_text}", True, FOLLOWER_DETAIL_COLOR)
             self.screen.blit(dest_surface, (margin, y))
             y += line_h - 2
 
             # Personality
             if info.get("personality"):
                 pers_surface = self.small_font.render(
-                    f"    Personality: {info['personality'][:50]}", True, FOLLOWER_DETAIL_COLOR)
+                    f"    Personality: {info['personality'][:50]}", True, FOLLOWER_DETAIL_COLOR
+                )
                 self.screen.blit(pers_surface, (margin, y))
                 y += line_h - 2
 
@@ -233,8 +234,7 @@ class PlayerMenuView:
 
         # Talk hint
         if self.follower_info:
-            talk_hint = self.small_font.render(
-                "Enter: Talk to selected follower", True, (100, 100, 100))
+            talk_hint = self.small_font.render("Enter: Talk to selected follower", True, (100, 100, 100))
             self.screen.blit(talk_hint, (margin, SCREEN_HEIGHT - 60))
 
     # ------------------------------------------------------------------
@@ -296,8 +296,7 @@ class PlayerMenuView:
         if event.key == pygame.K_UP:
             self.follower_selected = max(0, self.follower_selected - 1)
         elif event.key == pygame.K_DOWN:
-            self.follower_selected = min(
-                len(self.follower_info) - 1, self.follower_selected + 1)
+            self.follower_selected = min(len(self.follower_info) - 1, self.follower_selected + 1)
         elif event.key == pygame.K_RETURN:
             return f"talk_follower_{self.follower_selected}"
         return None

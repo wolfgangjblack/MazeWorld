@@ -7,6 +7,7 @@ uses the same loader and shares cached surfaces.
 
 import logging
 import os
+
 import pygame
 
 logger = logging.getLogger(__name__)

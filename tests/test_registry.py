@@ -1,5 +1,5 @@
+from src.models.items import Drink, Food, SpellScroll, Tool, Weapon
 from src.registry import GameRegistry
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll
 from tests.conftest import requires_data
 
 
@@ -62,5 +62,3 @@ def test_npc_templates(reg):
     for t in reg.npc_templates:
         assert "id" in t
         assert "type" in t
-
-

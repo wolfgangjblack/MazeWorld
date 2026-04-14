@@ -1,12 +1,14 @@
 import random
+from typing import List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from src.models.monster import Monster, _roll_dice
 
 
 class EventChoice(BaseModel):
     """A single choice in a puzzle or event encounter."""
+
     text: str
     stat_check: Optional[str] = None
     tool_attribute: Optional[str] = None
@@ -18,6 +20,7 @@ class EventChoice(BaseModel):
 
 class Event(BaseModel):
     """Base event model placed on event tiles in the maze."""
+
     id: int
     type: str  # "combat" | "puzzle" | "event"
     name: str
@@ -34,6 +37,7 @@ class Event(BaseModel):
 
 class LootEntry(BaseModel):
     """A single entry in a loot table."""
+
     item_id: int
     drop_chance: float = 0.5  # 0.0 to 1.0
 
@@ -43,18 +47,23 @@ def _encounter_stat_mod(player, stat_name: str) -> int:
 
     Jesters silently use whichever is higher: the required stat or LUCK.
     """
-    if not hasattr(player, 'get_stat_mod'):
+    if not hasattr(player, "get_stat_mod"):
         return 0
     mod = player.get_stat_mod(stat_name)
-    pc = getattr(player, 'player_class', None)
-    if pc and getattr(pc, 'archetype', '') == 'jester' and stat_name != 'LUCK':
-        luck_mod = player.get_stat_mod('LUCK')
+    pc = getattr(player, "player_class", None)
+    if pc and getattr(pc, "archetype", "") == "jester" and stat_name != "LUCK":
+        luck_mod = player.get_stat_mod("LUCK")
         mod = max(mod, luck_mod)
     return mod
 
 
-def _roll_reward(player, money_drop: List[int], loot_table: List[LootEntry],
-                 reward_chance: float, consumed_tool_attr: Optional[str] = None) -> dict:
+def _roll_reward(
+    player,
+    money_drop: List[int],
+    loot_table: List[LootEntry],
+    reward_chance: float,
+    consumed_tool_attr: Optional[str] = None,
+) -> dict:
     """Single reward roll: either gold OR item, never both. Chance of nothing.
 
     Returns dict with ``money_dropped`` (int) and ``loot_item_ids`` (list[int]).
@@ -64,7 +73,7 @@ def _roll_reward(player, money_drop: List[int], loot_table: List[LootEntry],
     if random.random() > reward_chance:
         return result
 
-    luck_mod = player.get_stat_mod('LUCK') if hasattr(player, 'get_stat_mod') else 0
+    luck_mod = player.get_stat_mod("LUCK") if hasattr(player, "get_stat_mod") else 0
 
     # 60 % gold, 40 % item
     if not loot_table or random.random() < 0.6:
@@ -72,8 +81,7 @@ def _roll_reward(player, money_drop: List[int], loot_table: List[LootEntry],
             result["money_dropped"] = max(0, random.randint(money_drop[0], money_drop[1]) + luck_mod)
         return result
 
-    eligible = [e for e in loot_table
-                if not (consumed_tool_attr and _loot_matches_tool(e, consumed_tool_attr))]
+    eligible = [e for e in loot_table if not (consumed_tool_attr and _loot_matches_tool(e, consumed_tool_attr))]
     if not eligible:
         if money_drop[1] > 0:
             result["money_dropped"] = max(0, random.randint(money_drop[0], money_drop[1]) + luck_mod)
@@ -92,18 +100,22 @@ def _loot_matches_tool(entry: LootEntry, tool_attr: str) -> bool:
     """Check if a loot entry's item has the same attribute as the consumed tool."""
     try:
         from src.registry import registry
+
         item = registry.get_item(entry.item_id)
         if item:
-            stats = getattr(item, 'item_stats', None)
-            if stats and getattr(stats, 'attribute', None) == tool_attr:
+            stats = getattr(item, "item_stats", None)
+            if stats and getattr(stats, "attribute", None) == tool_attr:
                 return True
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).warning("Failed loot-tool check for item %d: %s", entry.item_id, exc)
     return False
 
+
 class CombatEvent(Event):
     """Multi-turn combat encounter with 1-N monsters."""
+
     type: str = "combat"
     monster_ids: List[int] = Field(default_factory=list)
     monsters: List[Monster] = Field(default_factory=list)
@@ -132,7 +144,7 @@ class CombatEvent(Event):
 
         entries = []
         # Player initiative
-        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, "get_stat_mod") else 0
         player_init = random.randint(1, 20) + dex_mod
         entries.append({"type": "player", "index": -1, "initiative": player_init})
         self.combat_log.append(f"You roll initiative: {player_init}")
@@ -184,7 +196,7 @@ class CombatEvent(Event):
         if not monster.is_alive:
             return {"success": False, "message": f"{monster.name} is already defeated."}
 
-        str_mod = player.get_stat_mod("STR") if hasattr(player, 'get_stat_mod') else 0
+        str_mod = player.get_stat_mod("STR") if hasattr(player, "get_stat_mod") else 0
         attack_roll = random.randint(1, 20) + str_mod
         defense_dc = 10 + monster.ac + monster.dex_mod
 
@@ -192,8 +204,8 @@ class CombatEvent(Event):
             damage = max(1, random.randint(1, 6) + str_mod)
             # Check for tool bonus
             for item in player.inventory.values():
-                stats = getattr(item, 'item_stats', None)
-                if stats and getattr(stats, 'attribute', None) == 'bludgeon':
+                stats = getattr(item, "item_stats", None)
+                if stats and getattr(stats, "attribute", None) == "bludgeon":
                     damage += 2
                     break
 
@@ -234,7 +246,13 @@ class CombatEvent(Event):
                 player.health = max(0, player.health - damage)
                 msg = f"{monster.name} uses {ability.name}! You take {damage} poison damage and are poisoned for {ability.duration} turns."
                 self.combat_log.append(msg)
-                return {"success": True, "message": msg, "damage": damage, "effect": "poison", "duration": ability.duration}
+                return {
+                    "success": True,
+                    "message": msg,
+                    "damage": damage,
+                    "effect": "poison",
+                    "duration": ability.duration,
+                }
             elif ability.effect_type == "stun":
                 msg = f"{monster.name} uses {ability.name}! You are stunned for 1 turn!"
                 self.combat_log.append(msg)
@@ -248,7 +266,7 @@ class CombatEvent(Event):
 
         # Basic attack
         attack_roll = monster.roll_attack()
-        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, "get_stat_mod") else 0
         defense_dc = 10 + dex_mod
 
         if attack_roll >= defense_dc:
@@ -264,9 +282,11 @@ class CombatEvent(Event):
 
     def try_flee(self, player) -> dict:
         """Player attempts to flee. 1d20 + DEX vs DC 12 + avg monster level."""
-        avg_level = sum(m.level for m in self.monsters if m.is_alive) / max(1, sum(1 for m in self.monsters if m.is_alive))
+        avg_level = sum(m.level for m in self.monsters if m.is_alive) / max(
+            1, sum(1 for m in self.monsters if m.is_alive)
+        )
         flee_dc = int(12 + avg_level)
-        dex_mod = player.get_stat_mod("DEX") if hasattr(player, 'get_stat_mod') else 0
+        dex_mod = player.get_stat_mod("DEX") if hasattr(player, "get_stat_mod") else 0
         roll = random.randint(1, 20) + dex_mod
 
         if roll >= flee_dc:
@@ -306,9 +326,11 @@ class CombatEvent(Event):
 
         threshold = self.difficulty * 3
         weapon_bonus = 0
-        weapon = player.get_equipped_weapon() if hasattr(player, 'get_equipped_weapon') else None
+        weapon = player.get_equipped_weapon() if hasattr(player, "get_equipped_weapon") else None
         if weapon and weapon.item_stats.stat_modifier:
-            weapon_bonus = player.get_stat_mod(weapon.item_stats.stat_modifier) if hasattr(player, 'get_stat_mod') else 0
+            weapon_bonus = (
+                player.get_stat_mod(weapon.item_stats.stat_modifier) if hasattr(player, "get_stat_mod") else 0
+            )
 
         total = dice_roll + weapon_bonus
         if total >= threshold:
@@ -355,6 +377,7 @@ class PuzzleEvent(Event):
     (costs stamina, auto-success), or roll dice on a stat-check choice.
     Walk away is always available.
     """
+
     type: str = "puzzle"
     choices: List[EventChoice] = Field(default_factory=list)
     reward_item_id: Optional[int] = None
@@ -369,9 +392,9 @@ class PuzzleEvent(Event):
     def _find_matching_ability(self, player):
         if not self.correct_ability:
             return None
-        for ability in getattr(player, 'abilities', []):
-            if getattr(ability, 'name', '') == self.correct_ability:
-                cost = getattr(ability, 'stamina_cost', 0)
+        for ability in getattr(player, "abilities", []):
+            if getattr(ability, "name", "") == self.correct_ability:
+                cost = getattr(ability, "stamina_cost", 0)
                 if player.stamina >= cost:
                     return ability
         return None
@@ -381,8 +404,8 @@ class PuzzleEvent(Event):
         if not self.correct_tool:
             return None, None
         for item_name, item in player.inventory.items():
-            stats = getattr(item, 'item_stats', None)
-            if stats and getattr(stats, 'attribute', None) == self.correct_tool:
+            stats = getattr(item, "item_stats", None)
+            if stats and getattr(stats, "attribute", None) == self.correct_tool:
                 return item_name, item
         return None, None
 
@@ -393,8 +416,7 @@ class PuzzleEvent(Event):
             return {"success": False, "message": "You don't have the right tool."}
         player.remove_from_inventory(tool_name)
         self.resolved = True
-        reward = _roll_reward(player, self.money_drop, self.loot_table,
-                              self.reward_chance, self.correct_tool)
+        reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance, self.correct_tool)
         return {
             "success": True,
             "message": f"Your {tool_name} makes short work of the {self.name}! (consumed)",
@@ -409,11 +431,10 @@ class PuzzleEvent(Event):
         ability = self._find_matching_ability(player)
         if not ability:
             return {"success": False, "message": "You can't use that ability right now."}
-        cost = getattr(ability, 'stamina_cost', 0)
+        cost = getattr(ability, "stamina_cost", 0)
         player.stamina = max(0, player.stamina - cost)
         self.resolved = True
-        reward = _roll_reward(player, self.money_drop, self.loot_table,
-                              self.reward_chance)
+        reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
         return {
             "success": True,
@@ -445,8 +466,8 @@ class PuzzleEvent(Event):
         consumed_tool = None
         if choice.tool_attribute:
             for item_name, item in list(player.inventory.items()):
-                stats = getattr(item, 'item_stats', None)
-                if stats and getattr(stats, 'attribute', None) == choice.tool_attribute:
+                stats = getattr(item, "item_stats", None)
+                if stats and getattr(stats, "attribute", None) == choice.tool_attribute:
                     consumed_tool = item_name
                     player.remove_from_inventory(item_name)
                     modifier += 5
@@ -456,9 +477,13 @@ class PuzzleEvent(Event):
         effective_dc = choice.dc or 10
         if total >= effective_dc:
             self.resolved = True
-            reward = _roll_reward(player, self.money_drop, self.loot_table,
-                                  self.reward_chance,
-                                  choice.tool_attribute if consumed_tool else None)
+            reward = _roll_reward(
+                player,
+                self.money_drop,
+                self.loot_table,
+                self.reward_chance,
+                choice.tool_attribute if consumed_tool else None,
+            )
             msg = f"Success! You overcame the {self.name}."
             if consumed_tool:
                 msg += f" (Your {consumed_tool} was consumed.)"
@@ -490,6 +515,7 @@ class EventEncounter(Event):
       3 — item/tool (consume item, +5 to roll vs DC)
       4 — walk away (auto_success, event stays active)
     """
+
     type: str = "event"
     choices: List[EventChoice] = Field(default_factory=list)
     reward_item_id: Optional[int] = None
@@ -511,9 +537,9 @@ class EventEncounter(Event):
     def _find_ability(self, player):
         if not self.correct_ability:
             return None
-        for ability in getattr(player, 'abilities', []):
-            if getattr(ability, 'name', '') == self.correct_ability:
-                cost = getattr(ability, 'stamina_cost', 0)
+        for ability in getattr(player, "abilities", []):
+            if getattr(ability, "name", "") == self.correct_ability:
+                cost = getattr(ability, "stamina_cost", 0)
                 if player.stamina >= cost:
                     return ability
         return None
@@ -521,9 +547,9 @@ class EventEncounter(Event):
     def _find_spell(self, player):
         if not self.correct_spell:
             return None
-        for spell in getattr(player, 'spells', []):
-            if getattr(spell, 'name', '') == self.correct_spell:
-                cost = getattr(spell, 'stamina_cost', 0)
+        for spell in getattr(player, "spells", []):
+            if getattr(spell, "name", "") == self.correct_spell:
+                cost = getattr(spell, "stamina_cost", 0)
                 if player.stamina >= cost:
                     return spell
         return None
@@ -533,11 +559,10 @@ class EventEncounter(Event):
         ability = self._find_ability(player)
         if not ability:
             return {"success": False, "message": "You can't use that ability right now."}
-        cost = getattr(ability, 'stamina_cost', 0)
+        cost = getattr(ability, "stamina_cost", 0)
         player.stamina = max(0, player.stamina - cost)
         self.resolved = True
-        reward = _roll_reward(player, self.money_drop, self.loot_table,
-                              self.reward_chance)
+        reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
         msg = self.ability_success_text or f"You use {ability.name}{cost_msg} and resolve the situation!"
         return {
@@ -553,11 +578,10 @@ class EventEncounter(Event):
         spell = self._find_spell(player)
         if not spell:
             return {"success": False, "message": "You can't cast that spell right now."}
-        cost = getattr(spell, 'stamina_cost', 0)
+        cost = getattr(spell, "stamina_cost", 0)
         player.stamina = max(0, player.stamina - cost)
         self.resolved = True
-        reward = _roll_reward(player, self.money_drop, self.loot_table,
-                              self.reward_chance)
+        reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
         msg = self.spell_success_text or f"You cast {spell.name}{cost_msg} and turn the tide!"
         return {
@@ -590,8 +614,8 @@ class EventEncounter(Event):
         consumed_tool = None
         if choice.tool_attribute:
             for item_name, item in list(player.inventory.items()):
-                stats = getattr(item, 'item_stats', None)
-                if stats and getattr(stats, 'attribute', None) == choice.tool_attribute:
+                stats = getattr(item, "item_stats", None)
+                if stats and getattr(stats, "attribute", None) == choice.tool_attribute:
                     consumed_tool = item_name
                     player.remove_from_inventory(item_name)
                     modifier += 5
@@ -602,9 +626,13 @@ class EventEncounter(Event):
 
         if total >= effective_dc:
             self.resolved = True
-            reward = _roll_reward(player, self.money_drop, self.loot_table,
-                                  self.reward_chance,
-                                  choice.tool_attribute if consumed_tool else None)
+            reward = _roll_reward(
+                player,
+                self.money_drop,
+                self.loot_table,
+                self.reward_chance,
+                choice.tool_attribute if consumed_tool else None,
+            )
             msg = f"Success! {choice.text}"
             if consumed_tool:
                 msg += f" (Your {consumed_tool} was consumed.)"
@@ -649,20 +677,12 @@ def create_event_from_data(data: dict) -> Event:
     data = dict(data)
 
     if event_type in ("puzzle", "event") and "choices" in data:
-        data["choices"] = [
-            EventChoice(**c) if isinstance(c, dict) else c
-            for c in data["choices"]
-        ]
+        data["choices"] = [EventChoice(**c) if isinstance(c, dict) else c for c in data["choices"]]
 
     if event_type == "event" and "choices" in data:
         cleaned = []
         for c in data["choices"]:
-            is_placeholder = (
-                not c.stat_check
-                and not c.tool_attribute
-                and not c.auto_success
-                and not c.dc
-            )
+            is_placeholder = not c.stat_check and not c.tool_attribute and not c.auto_success and not c.dc
             if is_placeholder:
                 if data.get("correct_ability") and not data.get("ability_text"):
                     data["ability_text"] = c.text
@@ -677,6 +697,7 @@ def create_event_from_data(data: dict) -> Event:
     if event_type == "combat" and "monster_ids" in data:
         from src.models.monster import instantiate_monster
         from src.registry import registry
+
         room_level = data.get("room_level", 1)
         data["monsters"] = [
             instantiate_monster(registry.get_monster_template(mid), room_level)
@@ -684,14 +705,8 @@ def create_event_from_data(data: dict) -> Event:
             if registry.get_monster_template(mid) is not None
         ]
     elif event_type == "combat" and "monsters" in data:
-        data["monsters"] = [
-            Monster.from_dict(m) if isinstance(m, dict) else m
-            for m in data["monsters"]
-        ]
+        data["monsters"] = [Monster.from_dict(m) if isinstance(m, dict) else m for m in data["monsters"]]
     if "loot_table" in data:
-        data["loot_table"] = [
-            LootEntry(**e) if isinstance(e, dict) else e
-            for e in data["loot_table"]
-        ]
+        data["loot_table"] = [LootEntry(**e) if isinstance(e, dict) else e for e in data["loot_table"]]
 
     return cls(**data)

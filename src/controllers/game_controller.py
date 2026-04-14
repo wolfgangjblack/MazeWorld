@@ -1,23 +1,25 @@
-import random
 import pygame
-from src.controllers.combat_controller import CombatController, CombatState
+
 from src.controllers.combat_input_handler import CombatInputHandler
 from src.controllers.event_input_handler import EventInputHandler
+from src.models.npc import AggressiveNPC, MerchantNPC, RandomNPC
+from src.models.time import DayNightCycle
+from src.registry import registry
+from src.systems.day_night import (
+    apply_rest,
+    consume_torch_use,
+    get_night_overlay_alpha,
+    is_event_active_at_time,
+    is_npc_available,
+    player_has_torch,
+)
+from src.systems.fog_of_war import FogOfWar
+from src.systems.follower_manager import FollowerManager
+from src.systems.quest_manager import QuestManager
+from src.systems.survival import SurvivalSystem
+from src.utils.conversation_utils import has_dialogue_choices
 from src.views.gameplay_view import GameView
 from src.views.shop_view import ShopView
-from src.models.npc import RandomNPC, AggressiveNPC, MerchantNPC
-from src.models.time import DayNightCycle
-from src.systems.fog_of_war import FogOfWar
-from src.systems.day_night import (
-    apply_rest, player_has_torch,
-    consume_torch_use, is_event_active_at_time, is_npc_available,
-    get_night_overlay_alpha,
-)
-from src.registry import registry
-from src.utils.conversation_utils import has_dialogue_choices
-from src.systems.survival import SurvivalSystem
-from src.systems.quest_manager import QuestManager
-from src.systems.follower_manager import FollowerManager
 
 PERIOD_TRANSITION_MESSAGES = {
     "dawn": "The sun begins to rise. Dawn breaks.",
@@ -28,9 +30,22 @@ PERIOD_TRANSITION_MESSAGES = {
 
 
 class GameController:
-    def __init__(self, screen, font, maze, player, npcs, dialogue_box,
-                 events=None, quests=None, fog=None, day_night=None,
-                 current_room=0, total_rooms=1, sfx=None):
+    def __init__(
+        self,
+        screen,
+        font,
+        maze,
+        player,
+        npcs,
+        dialogue_box,
+        events=None,
+        quests=None,
+        fog=None,
+        day_night=None,
+        current_room=0,
+        total_rooms=1,
+        sfx=None,
+    ):
         self.screen = screen
         self.font = font
         self.maze = maze
@@ -48,6 +63,7 @@ class GameController:
         # Day/Night Cycle
         self.day_night = day_night or DayNightCycle()
         from config import DAY_NIGHT_REAL_TIME, DAY_NIGHT_REAL_TIME_SECONDS
+
         if DAY_NIGHT_REAL_TIME and not self.day_night.real_time:
             self.day_night.real_time_seconds_per_cycle = DAY_NIGHT_REAL_TIME_SECONDS
             self.day_night.enable_real_time()
@@ -120,14 +136,11 @@ class GameController:
         if story.synopsis:
             parts.append(story.synopsis)
         if story.faction:
-            parts.append(
-                f"A faction called '{story.faction.name}' is active: "
-                f"{story.faction.description}")
+            parts.append(f"A faction called '{story.faction.name}' is active: {story.faction.description}")
             if story.faction.leader:
                 parts.append(f"Their leader is {story.faction.leader}.")
         if story.final_boss_name:
-            parts.append(
-                f"Rumors speak of a powerful being called {story.final_boss_name}.")
+            parts.append(f"Rumors speak of a powerful being called {story.final_boss_name}.")
         if story.beats:
             last_beat = story.beats[-1]
             if last_beat.summary:
@@ -136,15 +149,14 @@ class GameController:
 
     def _count_total_encounters(self):
         self.total_encounters = sum(
-            1 for e in self.events.values()
-            if not getattr(e, 'is_gate', False)
-            and not getattr(e, 'is_climax_boss', False)
+            1
+            for e in self.events.values()
+            if not getattr(e, "is_gate", False) and not getattr(e, "is_climax_boss", False)
         )
         self.resolved_encounters = sum(
-            1 for e in self.events.values()
-            if e.resolved
-            and not getattr(e, 'is_gate', False)
-            and not getattr(e, 'is_climax_boss', False)
+            1
+            for e in self.events.values()
+            if e.resolved and not getattr(e, "is_gate", False) and not getattr(e, "is_climax_boss", False)
         )
 
     @property
@@ -155,13 +167,15 @@ class GameController:
 
     def _check_door_reveal(self):
         from config import DOOR_REVEAL_THRESHOLD
-        if (self.maze.door_position
-                and not self.maze.door_revealed
-                and self.total_rooms > 1
-                and self.encounter_clear_fraction >= DOOR_REVEAL_THRESHOLD):
+
+        if (
+            self.maze.door_position
+            and not self.maze.door_revealed
+            and self.total_rooms > 1
+            and self.encounter_clear_fraction >= DOOR_REVEAL_THRESHOLD
+        ):
             self.maze.reveal_door()
-            self.dialogue_box.set_item_message(
-                "An exit door has appeared! A gate guardian blocks the way.")
+            self.dialogue_box.set_item_message("An exit door has appeared! A gate guardian blocks the way.")
             self.item_message_active = True
             if self.sfx:
                 self.sfx.play("door_reveal")
@@ -169,8 +183,7 @@ class GameController:
     def reveal_door_from_quest(self):
         if self.maze.door_position and not self.maze.door_revealed:
             self.maze.reveal_door()
-            self.dialogue_box.set_item_message(
-                "A quest has revealed the exit door!")
+            self.dialogue_box.set_item_message("A quest has revealed the exit door!")
             self.item_message_active = True
             if self.sfx:
                 self.sfx.play("door_reveal")
@@ -178,13 +191,15 @@ class GameController:
     def _build_event_position_map(self):
         if not self.events:
             return
-        import os
         import logging
+        import os
+
         from src.utils.dataloader_utils import load_json_data
 
         _log = logging.getLogger(__name__)
 
         from config import DATA_DIR
+
         room_maze = os.path.join(DATA_DIR, "rooms", f"room_{self.current_room}", "maze.json")
         maze_path = room_maze
 
@@ -215,10 +230,10 @@ class GameController:
         for pos, eid in self.event_position_map.items():
             evt = self.events.get(eid)
             if evt:
-                self._event_type_map[pos] = getattr(evt, 'type', '')
-                if getattr(evt, 'is_climax_boss', False):
+                self._event_type_map[pos] = getattr(evt, "type", "")
+                if getattr(evt, "is_climax_boss", False):
                     self._event_flag_map[pos] = "climax_boss"
-                elif getattr(evt, 'is_gate', False):
+                elif getattr(evt, "is_gate", False):
                     self._event_flag_map[pos] = "gate"
 
     @property
@@ -238,7 +253,7 @@ class GameController:
             self.player,
             is_night=self.day_night.is_night,
             has_torch=player_has_torch(self.player),
-            time_period=period.value if hasattr(period, 'value') else str(period),
+            time_period=period.value if hasattr(period, "value") else str(period),
         )
 
     def _update_fog(self):
@@ -302,11 +317,11 @@ class GameController:
                         self.day_night.pause()
                         self.dialogue_box.start_event(event)
                 else:
-                    time_gate = getattr(event, 'time_gate', 'always')
-                    if time_gate == 'day':
+                    time_gate = getattr(event, "time_gate", "always")
+                    if time_gate == "day":
                         self.dialogue_box.set_item_message("This area stirs only during daylight...")
                         self.item_message_active = True
-                    elif time_gate == 'night':
+                    elif time_gate == "night":
                         self.dialogue_box.set_item_message("Something lurks here... but only at night.")
                         self.item_message_active = True
             else:
@@ -327,9 +342,11 @@ class GameController:
             self.item_message_active = True
 
     def _is_on_door_tile(self) -> bool:
-        return (self.maze.door_position is not None
-                and self.maze.door_revealed
-                and (self.player.x, self.player.y) == self.maze.door_position)
+        return (
+            self.maze.door_position is not None
+            and self.maze.door_revealed
+            and (self.player.x, self.player.y) == self.maze.door_position
+        )
 
     def _handle_door_interaction(self):
         gate_id = self.maze.gate_encounter_id
@@ -351,16 +368,18 @@ class GameController:
         if self.current_room >= self.total_rooms - 1:
             self.pending_action = "victory"
             return
-        undone = [q for q in self.quests.values()
-                  if getattr(q, 'is_story_quest', False)
-                  and q.status in ("not_started", "active")]
+        undone = [
+            q
+            for q in self.quests.values()
+            if getattr(q, "is_story_quest", False) and q.status in ("not_started", "active")
+        ]
         if undone:
             titles = ", ".join(q.title for q in undone[:3])
             self.dialogue_box.set_item_message(
-                f"Things left undone: {titles}. "
-                "Press Enter at the door again to continue anyway.")
+                f"Things left undone: {titles}. Press Enter at the door again to continue anyway."
+            )
             self.item_message_active = True
-            if not hasattr(self, '_undone_warned'):
+            if not hasattr(self, "_undone_warned"):
                 self._undone_warned = True
                 return
         self.stats["rooms_cleared"] += 1
@@ -433,7 +452,7 @@ class GameController:
                     node = nodes.get(current_id, nodes.get("start", {}))
                     choices = node.get("choices", [])
                     for i in range(min(len(choices), 9)):
-                        if event.key == getattr(pygame, f'K_{i+1}', None):
+                        if event.key == getattr(pygame, f"K_{i + 1}", None):
                             self.dialogue_box.update_dialogue(str(i + 1))
                             return
                     if event.key != pygame.K_ESCAPE:
@@ -498,8 +517,7 @@ class GameController:
 
         if event.key == pygame.K_r:
             self.rest_menu_active = True
-            self.dialogue_box.set_item_message(
-                "Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
+            self.dialogue_box.set_item_message("Rest: 1=3hr  2=6hr  3=12hr  Esc=Cancel")
             self.item_message_active = True
             return
 
@@ -536,15 +554,17 @@ class GameController:
             return None
         q = self.quests[quest_id]
         return {
-            "quest_id": q.id, "title": q.title, "type": q.type,
-            "status": q.status, "description": q.description,
+            "quest_id": q.id,
+            "title": q.title,
+            "type": q.type,
+            "status": q.status,
+            "description": q.description,
             "dc": getattr(q, "dc", 10),
         }
 
     def _handle_npc_interaction(self, npc):
         if not is_npc_available(npc, self.day_night.current_period):
-            self.dialogue_box.set_item_message(
-                f"{npc.name or 'NPC'} is not available right now.")
+            self.dialogue_box.set_item_message(f"{npc.name or 'NPC'} is not available right now.")
             self.item_message_active = True
             return
 
@@ -606,6 +626,7 @@ class GameController:
         log["total_encounters"] = self.total_encounters
         log["encounter_clear_fraction"] = self.encounter_clear_fraction
         from config import DOOR_REVEAL_THRESHOLD
+
         log["door_reveal_threshold"] = DOOR_REVEAL_THRESHOLD
         return log
 
@@ -663,7 +684,7 @@ class GameController:
 
     def _sync_inv_scroll(self, inv_length):
         visible = 15
-        scroll = getattr(self.player, '_inv_scroll', 0)
+        scroll = getattr(self.player, "_inv_scroll", 0)
         idx = self.player.selected_item_index
         if idx < scroll:
             scroll = idx
@@ -689,7 +710,7 @@ class GameController:
                     self.dialogue_box.set_item_message(msg)
                     self.item_message_active = True
 
-        if hasattr(self, '_last_survival_ms'):
+        if hasattr(self, "_last_survival_ms"):
             delta = current_time - self._last_survival_ms
         else:
             delta = 0
@@ -705,7 +726,7 @@ class GameController:
             self.dialogue_box.check_generation()
 
         for npc in self.npcs:
-            if hasattr(npc, 'update_position'):
+            if hasattr(npc, "update_position"):
                 if isinstance(npc, RandomNPC):
                     npc.update_position(self.maze, current_time)
                 elif isinstance(npc, AggressiveNPC):
@@ -718,7 +739,8 @@ class GameController:
     def _play_item_use_sfx(self):
         if not self.sfx:
             return
-        from src.models.items import Food, Drink
+        from src.models.items import Drink, Food
+
         inv = self.player.get_inventory()
         if not inv:
             return
@@ -742,9 +764,7 @@ class GameController:
             self.screen.fill((0, 0, 0))
             self.shop_view.draw()
             if self.item_message_active:
-                self.game_view.draw_dialogue_and_messages(
-                    self.player, self.maze,
-                    self.item_message_active, False)
+                self.game_view.draw_dialogue_and_messages(self.player, self.maze, self.item_message_active, False)
             return
 
         period = self.day_night.current_period

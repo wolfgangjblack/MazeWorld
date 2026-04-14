@@ -1,5 +1,6 @@
 import random
 from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -79,11 +80,11 @@ RANDOM_WEAPON_STATS = ["STR", "DEX", "INT"]
 
 # Room-by-room weapon dice progression (single attack)
 WEAPON_DICE_BY_ROOM: dict[int, dict[str, str]] = {
-    1: {"warrior": "1d8",  "mage": "1d4",  "healer": "1d6",  "jester": "1d6"},
-    2: {"warrior": "1d10", "mage": "1d6",  "healer": "1d6",  "jester": "1d8"},
-    3: {"warrior": "1d12", "mage": "1d6",  "healer": "1d8",  "jester": "1d8"},
-    4: {"warrior": "2d6",  "mage": "1d8",  "healer": "1d8",  "jester": "1d10"},
-    5: {"warrior": "2d8",  "mage": "1d8",  "healer": "1d10", "jester": "1d10"},
+    1: {"warrior": "1d8", "mage": "1d4", "healer": "1d6", "jester": "1d6"},
+    2: {"warrior": "1d10", "mage": "1d6", "healer": "1d6", "jester": "1d8"},
+    3: {"warrior": "1d12", "mage": "1d6", "healer": "1d8", "jester": "1d8"},
+    4: {"warrior": "2d6", "mage": "1d8", "healer": "1d8", "jester": "1d10"},
+    5: {"warrior": "2d8", "mage": "1d8", "healer": "1d10", "jester": "1d10"},
     6: {"warrior": "2d10", "mage": "1d10", "healer": "1d10", "jester": "1d12"},
 }
 
@@ -147,12 +148,13 @@ def roll_dice_expr(dice_expr: str) -> int:
     except (ValueError, TypeError):
         return random.randint(1, 6)
 
+
 # Weapon category -> archetypes that can equip and get the full stat bonus
 WEAPON_CATEGORY_ACCESS: dict[str, set[str]] = {
     "warrior": {"simple", "martial"},
-    "jester":  {"simple", "martial"},
-    "mage":    {"simple"},
-    "healer":  {"simple"},
+    "jester": {"simple", "martial"},
+    "mage": {"simple"},
+    "healer": {"simple"},
 }
 
 
@@ -165,8 +167,7 @@ def resolve_weapon_stat(weapon: Weapon | None) -> str:
     return weapon.stat
 
 
-def weapon_stat_bonus(player, weapon: Weapon | None,
-                      resolved_stat: str | None = None) -> int:
+def weapon_stat_bonus(player, weapon: Weapon | None, resolved_stat: str | None = None) -> int:
     """Compute the stat bonus a player gets from their weapon.
 
     - Matching category: full stat modifier from weapon.stat
@@ -200,10 +201,10 @@ def weapon_from_inventory_item(item) -> Weapon:
     """Convert an items.py::Weapon into a weapon.py::Weapon for combat use."""
     return Weapon(
         name=item.name,
-        weapon_type=getattr(item, 'weapon_type', 'simple'),
+        weapon_type=getattr(item, "weapon_type", "simple"),
         stat=item.item_stats.stat_modifier or "STR",
-        damage_dice=getattr(item.item_stats, 'damage_dice', 6),
-        damage_type=getattr(item, 'damage_type', 'physical'),
-        weapon_category=getattr(item, 'weapon_category', 'simple'),
-        magic_element=getattr(item, 'magic_element', None),
+        damage_dice=getattr(item.item_stats, "damage_dice", 6),
+        damage_type=getattr(item, "damage_type", "physical"),
+        weapon_category=getattr(item, "weapon_category", "simple"),
+        magic_element=getattr(item, "magic_element", None),
     )

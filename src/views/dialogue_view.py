@@ -1,8 +1,14 @@
 import os
+
 import pygame
+
 from config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE,
-    DIALOGUE_BOX_HEIGHT, DIALOGUE_BOX_HEIGHT_ACTIVE,
+    BLACK,
+    DIALOGUE_BOX_HEIGHT,
+    DIALOGUE_BOX_HEIGHT_ACTIVE,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    WHITE,
 )
 
 _portrait_cache: dict[str, pygame.Surface | None] = {}
@@ -47,8 +53,10 @@ class DialogueBoxView:
 
         padding = 10
         dialogue_box_rect = pygame.Rect(
-            0, SCREEN_HEIGHT - dialogue_box_height,
-            SCREEN_WIDTH, dialogue_box_height,
+            0,
+            SCREEN_HEIGHT - dialogue_box_height,
+            SCREEN_WIDTH,
+            dialogue_box_height,
         )
         pygame.draw.rect(self.screen, WHITE, dialogue_box_rect)
 
@@ -64,7 +72,7 @@ class DialogueBoxView:
             portrait_offset = 0
 
             npc = dialogue_box.current_npc
-            portrait = _load_portrait(getattr(npc, 'profile_image', None))
+            portrait = _load_portrait(getattr(npc, "profile_image", None))
             if portrait:
                 self.screen.blit(portrait, (padding, y))
                 portrait_offset = 74
@@ -78,8 +86,7 @@ class DialogueBoxView:
 
             wrapped_lines = []
             for message in dialogue_box.conversation_history:
-                wrapped_lines.extend(self.wrap_text(message, self.font,
-                                                    dialogue_box.max_width - portrait_offset))
+                wrapped_lines.extend(self.wrap_text(message, self.font, dialogue_box.max_width - portrait_offset))
 
             max_lines = available_height // line_height
             total_lines = len(wrapped_lines)
@@ -131,7 +138,7 @@ class DialogueBoxView:
             return
 
         # Monster status panel (right side)
-        monsters = getattr(event, 'monsters', [])
+        monsters = getattr(event, "monsters", [])
         monster_x = SCREEN_WIDTH // 2 + 20
         monster_y = SCREEN_HEIGHT - box_height + padding + line_height + 4
 
@@ -143,8 +150,15 @@ class DialogueBoxView:
                 # HP bar
                 hp_pct = monster.hp / monster.max_hp if monster.max_hp > 0 else 0
                 color = (0, 128, 0) if hp_pct > 0.5 else (200, 200, 0) if hp_pct > 0.25 else (200, 0, 0)
-                indicator = ">" if (phase == "player_turn" and hasattr(dialogue_box, '_controller_target')
-                                    and i == getattr(dialogue_box, '_controller_target', -1)) else " "
+                indicator = (
+                    ">"
+                    if (
+                        phase == "player_turn"
+                        and hasattr(dialogue_box, "_controller_target")
+                        and i == getattr(dialogue_box, "_controller_target", -1)
+                    )
+                    else " "
+                )
                 name_text = f"{indicator} {monster.name} HP:{monster.hp}/{monster.max_hp} AC:{monster.ac}"
 
             self.screen.blit(self.font.render(name_text, True, color), (monster_x, monster_y))
@@ -216,7 +230,7 @@ class DialogueBoxView:
         line_height = self.font.get_linesize()
         portrait_offset = 0
 
-        portrait = _load_portrait(getattr(event, 'profile_image', None))
+        portrait = _load_portrait(getattr(event, "profile_image", None))
         if portrait:
             self.screen.blit(portrait, (padding, y))
             portrait_offset = 74
@@ -233,8 +247,7 @@ class DialogueBoxView:
         y += line_height + 4
 
         # Description
-        for line in self.wrap_text(event.description, self.font,
-                                   SCREEN_WIDTH - 20 - portrait_offset):
+        for line in self.wrap_text(event.description, self.font, SCREEN_WIDTH - 20 - portrait_offset):
             text_surface = self.font.render(line, True, BLACK)
             self.screen.blit(text_surface, (padding + portrait_offset, y))
             y += line_height
@@ -265,7 +278,7 @@ class DialogueBoxView:
                 )
 
         elif event.type in ("puzzle", "event"):
-            choices = getattr(event, 'choices', [])
+            choices = getattr(event, "choices", [])
             selected = dialogue_box.event_context.get("selected_choice")
 
             if result:
@@ -306,7 +319,7 @@ class DialogueBoxView:
                         hint += f" [needs: {choice.tool_attribute}]"
                     if choice.auto_success:
                         hint += " [safe]"
-                    text = f"  {i+1}. {choice.text}{hint}"
+                    text = f"  {i + 1}. {choice.text}{hint}"
                     self.screen.blit(self.font.render(text, True, color), (padding, y))
                     y += line_height
                 y += 4
@@ -320,11 +333,11 @@ class DialogueBoxView:
         """Wrap text into multiple lines to fit within max_width."""
         if not text:
             return []
-        words = text.split(' ')
+        words = text.split(" ")
         lines = []
-        current_line = ''
+        current_line = ""
         for word in words:
-            test_line = current_line + (' ' if current_line else '') + word
+            test_line = current_line + (" " if current_line else "") + word
             line_width, _ = font.size(test_line)
             if line_width <= max_width:
                 current_line = test_line

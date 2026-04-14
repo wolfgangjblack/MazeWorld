@@ -17,7 +17,6 @@ Entry point: generate_world()
 
 import json
 import logging
-import math
 import os
 import random
 from datetime import datetime, timezone
@@ -25,23 +24,30 @@ from datetime import datetime, timezone
 from tqdm import tqdm
 
 from config import (
-    WORLD_SEED, STORY_SEED, GAME_MODE, MAZE_WIDTH, MAZE_HEIGHT,
-    NUM_ROOMS, EVENT_DENSITY, ITEM_DENSITY, NPC_DENSITY,
+    GAME_MODE,
+    MAZE_HEIGHT,
+    MAZE_WIDTH,
+    NUM_ROOMS,
+    STORY_SEED,
+    WORLD_SEED,
 )
 from src.data.world_data import ENVIRONMENT_TYPES
-from src.models.maze import Maze, TileMeta
-from src.models.world_bible import WorldBible, RoomBible, EntityLore
-from src.models.story import (
-    OverarchingStory, Faction, RoomStoryBeat,
+from src.generate.pipeline_utils import (
+    _build_items_list,
+    _event_fallback,
+    _generate_loot_table,
+    _generate_shop_inventory,
+    _validate_puzzle_abilities,
+    _validate_puzzle_tools,
 )
 from src.generate.validator import ValidationReport
-from src.generate.pipeline_utils import (
-    _retry_with_feedback, _build_items_json,
-    _validate_puzzle_tools, _validate_puzzle_abilities, _event_fallback,
-    _generate_shop_inventory, _generate_loot_table,
-    _consumable_mult, CONSUMABLE_SCALING, WEAPON_PRICE_BY_DICE,
-    _validate_quest,
+from src.models.maze import Maze, TileMeta
+from src.models.story import (
+    Faction,
+    OverarchingStory,
+    RoomStoryBeat,
 )
+from src.models.world_bible import EntityLore, RoomBible, WorldBible
 from src.registry import registry
 from src.utils.dataloader_utils import load_json_data
 
@@ -64,9 +70,14 @@ ITEM_ITEMS_PATH = os.path.join(DATA_DIR, "items", "items.json")
 _FALLBACK_STORY_SEED = "A dark cult is gathering power in the shadows, corrupting the land."
 
 _FALLBACK_ENV_NAMES = {
-    "forest": "Whisperwood", "cave": "Gloomhollow", "dungeon": "Dreadkeep",
-    "castle": "Whitespire", "house": "Hearthstead", "city": "Silverport",
-    "village": "Millhaven", "mountain": "Stonepeak",
+    "forest": "Whisperwood",
+    "cave": "Gloomhollow",
+    "dungeon": "Dreadkeep",
+    "castle": "Whitespire",
+    "house": "Hearthstead",
+    "city": "Silverport",
+    "village": "Millhaven",
+    "mountain": "Stonepeak",
 }
 
 PHASE_NAMES = [
@@ -88,11 +99,13 @@ PHASE_NAMES = [
 # Phase 0: Environment Sequence
 # ---------------------------------------------------------------------------
 
+
 def _phase0_environments(story_seed: str, num_rooms: int) -> list[dict]:
     """Generate a narrative environment sequence via LLM. Fallback: random."""
     logger.info("Generating environment sequence for %d rooms...", num_rooms)
     try:
         from src.generate.generators.llm_primitives import generate_environment_sequence
+
         envs = generate_environment_sequence(story_seed, num_rooms, ENVIRONMENT_TYPES)
         if envs and len(envs) >= num_rooms:
             logger.info("Environments: %s", [e.get("name", e.get("type")) for e in envs])
@@ -111,6 +124,7 @@ def _phase0_environments(story_seed: str, num_rooms: int) -> list[dict]:
 # Phase 1: Two-Pass Story Generation
 # ---------------------------------------------------------------------------
 
+
 def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[OverarchingStory, WorldBible]:
     """Generate overarching story (1 call) + per-room beats (N calls)."""
     num_rooms = len(environments)
@@ -119,6 +133,7 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
     overarching_data = None
     try:
         from src.generate.generators.llm_primitives import generate_overarching_story
+
         result = generate_overarching_story(story_seed, environments)
         if "error" not in result:
             overarching_data = result
@@ -129,8 +144,12 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         overarching_data = {
             "title": "The Shadow's Grasp",
             "synopsis": "A dark force spreads corruption through the land.",
-            "faction": {"name": "The Shadow Cult", "description": "A secretive order.",
-                        "history": "Born from despair.", "leader": "The Faceless One"},
+            "faction": {
+                "name": "The Shadow Cult",
+                "description": "A secretive order.",
+                "history": "Born from despair.",
+                "leader": "The Faceless One",
+            },
             "escalation_arc": [f"Escalation in room {i}" for i in range(num_rooms)],
             "climax": "Face the cult leader in a final showdown.",
             "final_boss_name": "The Faceless One",
@@ -139,12 +158,16 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         }
 
     faction_data = overarching_data.get("faction", {})
-    faction = Faction(
-        name=faction_data.get("name", "The Shadow Cult"),
-        description=faction_data.get("description", "A mysterious faction."),
-        history=faction_data.get("history", ""),
-        leader=faction_data.get("leader", "Unknown"),
-    ) if faction_data else None
+    faction = (
+        Faction(
+            name=faction_data.get("name", "The Shadow Cult"),
+            description=faction_data.get("description", "A mysterious faction."),
+            history=faction_data.get("history", ""),
+            leader=faction_data.get("leader", "Unknown"),
+        )
+        if faction_data
+        else None
+    )
 
     # Build a slim story summary to pass to beat generation — avoids sending the
     # full model dump (~1600 tokens of empty arrays) as input to each beat call.
@@ -165,36 +188,43 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
     for room_idx in tqdm(range(num_rooms), desc="  Room Beats", unit="beat", leave=True):
         try:
             from src.generate.generators.llm_primitives import generate_room_story_beat
-            beat_data = generate_room_story_beat(
-                story_summary, environments[room_idx], room_idx, room_beats, num_rooms)
+
+            beat_data = generate_room_story_beat(story_summary, environments[room_idx], room_idx, room_beats, num_rooms)
             if "error" not in beat_data:
                 room_beats.append(beat_data)
-                logger.info("Room %d beat: %s (escalation %d, boss: %s)",
-                            room_idx, environments[room_idx]["name"],
-                            beat_data.get("escalation", room_idx + 1),
-                            beat_data.get("mini_boss", {}).get("name", "none"))
+                logger.info(
+                    "Room %d beat: %s (escalation %d, boss: %s)",
+                    room_idx,
+                    environments[room_idx]["name"],
+                    beat_data.get("escalation", room_idx + 1),
+                    beat_data.get("mini_boss", {}).get("name", "none"),
+                )
                 continue
         except Exception as e:
             logger.warning("Room %d beat generation failed: %s", room_idx, e)
-        room_beats.append({
-            "summary": f"The story continues in {environments[room_idx]['name']}.",
-            "faction_presence": "The faction's influence grows.",
-            "escalation": min(num_rooms, room_idx + 1),
-            "characters": [],
-            "mini_boss": {"name": "Lieutenant", "description": "A faction enforcer."},
-            "conflicts": [],
-        })
+        room_beats.append(
+            {
+                "summary": f"The story continues in {environments[room_idx]['name']}.",
+                "faction_presence": "The faction's influence grows.",
+                "escalation": min(num_rooms, room_idx + 1),
+                "characters": [],
+                "mini_boss": {"name": "Lieutenant", "description": "A faction enforcer."},
+                "conflicts": [],
+            }
+        )
 
     beats = []
     for ri, bd in enumerate(room_beats):
-        beats.append(RoomStoryBeat(
-            room_id=f"room_{ri}",
-            summary=bd.get("summary", ""),
-            faction_presence=bd.get("faction_presence"),
-            escalation=bd.get("escalation", min(num_rooms, ri + 1)),
-            boss_name=bd.get("mini_boss", {}).get("name", ""),
-            boss_lore=bd.get("mini_boss", {}).get("description", ""),
-        ))
+        beats.append(
+            RoomStoryBeat(
+                room_id=f"room_{ri}",
+                summary=bd.get("summary", ""),
+                faction_presence=bd.get("faction_presence"),
+                escalation=bd.get("escalation", min(num_rooms, ri + 1)),
+                boss_name=bd.get("mini_boss", {}).get("name", ""),
+                boss_lore=bd.get("mini_boss", {}).get("description", ""),
+            )
+        )
 
     story = OverarchingStory(
         seed=story_seed,
@@ -209,8 +239,9 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
         beats=beats,
     )
 
-    logger.info("Story: %s (faction: %s, %d beats)",
-                story.title, story.faction.name if story.faction else "none", len(beats))
+    logger.info(
+        "Story: %s (faction: %s, %d beats)", story.title, story.faction.name if story.faction else "none", len(beats)
+    )
 
     bible = WorldBible(story=story)
     for ri, env in enumerate(environments):
@@ -234,8 +265,10 @@ def _phase1_story(story_seed: str, environments: list[dict]) -> tuple[Overarchin
 # Phase 2: Room Layouts
 # ---------------------------------------------------------------------------
 
-def _phase2_layouts(environments: list[dict], bible: WorldBible,
-                    story: "OverarchingStory") -> tuple[list[dict], dict, dict]:
+
+def _phase2_layouts(
+    environments: list[dict], bible: WorldBible, story: "OverarchingStory"
+) -> tuple[list[dict], dict, dict]:
     """Generate mazes + TileMeta for all rooms.
 
     Also generates music and SFX prompts at the end (two LLM calls) while all
@@ -256,23 +289,29 @@ def _phase2_layouts(environments: list[dict], bible: WorldBible,
         maze.build_tile_meta(player_start)
         maze.place_door(player_start)
 
-        logger.info("Room %d: %s (%s) — %d events, %d NPCs, %d items",
-                     room_idx, env["type"], env["name"],
-                     len(maze.get_tiles_by_type("event")),
-                     len(maze.get_tiles_by_type("npc")),
-                     len(maze.get_tiles_by_type("item")))
+        logger.info(
+            "Room %d: %s (%s) — %d events, %d NPCs, %d items",
+            room_idx,
+            env["type"],
+            env["name"],
+            len(maze.get_tiles_by_type("event")),
+            len(maze.get_tiles_by_type("npc")),
+            len(maze.get_tiles_by_type("item")),
+        )
 
-        layouts.append({
-            "room_id": f"room_{room_idx}",
-            "room_idx": room_idx,
-            "room_level": room_idx + 1,
-            "id_offset": room_idx * 1000,
-            "environment": env["type"],
-            "environment_name": env["name"],
-            "maze": maze,
-            "player_start": player_start,
-            "room_dir": room_dir,
-        })
+        layouts.append(
+            {
+                "room_id": f"room_{room_idx}",
+                "room_idx": room_idx,
+                "room_level": room_idx + 1,
+                "id_offset": room_idx * 1000,
+                "environment": env["type"],
+                "environment_name": env["name"],
+                "maze": maze,
+                "player_start": player_start,
+                "room_dir": room_dir,
+            }
+        )
 
     # Generate music + SFX prompts immediately after layouts are done —
     # this is the earliest point where both story and unique env types are known.
@@ -302,10 +341,7 @@ def _phase2_layouts(environments: list[dict], bible: WorldBible,
         from src.generate.generators.llm_primitives import generate_sfx_prompts
         from src.generate.sfx_client import build_full_sfx_prompt_dict
 
-        env_details = [
-            {"type": layout["environment"], "name": layout["environment_name"]}
-            for layout in layouts
-        ]
+        env_details = [{"type": layout["environment"], "name": layout["environment_name"]} for layout in layouts]
         seen = set()
         unique_env_details = []
         for ed in env_details:
@@ -313,15 +349,13 @@ def _phase2_layouts(environments: list[dict], bible: WorldBible,
                 seen.add(ed["type"])
                 unique_env_details.append(ed)
 
-        spell_elements = list({
-            rb.story_beat.split()[-1] if rb.story_beat else ""
-            for rb in bible.rooms.values()
-        } - {""})
+        spell_elements = list(
+            {rb.story_beat.split()[-1] if rb.story_beat else "" for rb in bible.rooms.values()} - {""}
+        )
         if not spell_elements:
             spell_elements = ["fire", "water", "forest"]
 
-        logger.info("Generating SFX prompts for envs=%s, elements=%s",
-                     unique_envs, spell_elements)
+        logger.info("Generating SFX prompts for envs=%s, elements=%s", unique_envs, spell_elements)
         llm_sfx = generate_sfx_prompts(story_summary, unique_env_details, spell_elements)
         sfx_prompts = build_full_sfx_prompt_dict(llm_sfx)
         logger.info("SFX prompts ready: %d effects", len(sfx_prompts))
@@ -335,8 +369,8 @@ def _phase2_layouts(environments: list[dict], bible: WorldBible,
 # Phase 3A: Classes, Weapons, Spells
 # ---------------------------------------------------------------------------
 
-def _phase3a_classes(environments: list[dict], story: OverarchingStory,
-                     bible: WorldBible) -> list:
+
+def _phase3a_classes(environments: list[dict], story: OverarchingStory, bible: WorldBible) -> list:
     """Generate player classes with stat rolling, weapons, spells, abilities."""
     from src.generate.class_gen import generate_classes
 
@@ -345,10 +379,14 @@ def _phase3a_classes(environments: list[dict], story: OverarchingStory,
     player_classes = generate_classes(first_env["type"], first_env["name"])
 
     for pc in player_classes:
-        bible.add_player_class(EntityLore(
-            entity_type="player_class", name=pc.name,
-            lore=pc.flavor_text, tags=[pc.archetype],
-        ))
+        bible.add_player_class(
+            EntityLore(
+                entity_type="player_class",
+                name=pc.name,
+                lore=pc.flavor_text,
+                tags=[pc.archetype],
+            )
+        )
 
     logger.info("Generated %d player classes.", len(player_classes))
     return player_classes
@@ -357,6 +395,7 @@ def _phase3a_classes(environments: list[dict], story: OverarchingStory,
 # ---------------------------------------------------------------------------
 # Phase 3B: Items (per room)
 # ---------------------------------------------------------------------------
+
 
 def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[dict]]:
     """Generate items for a room and distribute across item tiles."""
@@ -373,20 +412,19 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
     generated_items = None
     try:
         from src.generate.generators.llm_primitives import generate_item_primitive
+
         result = generate_item_primitive(
-            {"environment": {"type": env_type, "name": env_name}},
-            room_level, story_context=story_context)
+            {"environment": {"type": env_type, "name": env_name}}, room_level, story_context=story_context
+        )
         if "error" not in result:
-            generated_items = _build_items_json(result, room_level)
+            item_list = _build_items_list(result, room_level)
+            if item_list:
+                generated_items = {}
+                item_id_base = 200 + id_offset
+                for i, item_data in enumerate(item_list):
+                    generated_items[str(item_id_base + i)] = item_data
     except Exception as e:
         logger.warning("Room %d item generation failed: %s", room_idx, e)
-
-    item_id_base = 200 + id_offset
-    if generated_items:
-        rekeyed = {}
-        for i, (_, item_data) in enumerate(sorted(generated_items.items())):
-            rekeyed[str(item_id_base + i)] = item_data
-        generated_items = rekeyed
 
     items_path = os.path.join(layout["room_dir"], "items.json")
     if generated_items:
@@ -397,12 +435,17 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
         registry._loaded = True
 
         for item_id, item_data in generated_items.items():
-            bible.add_item(room_id, EntityLore(
-                entity_type="item", entity_id=item_id,
-                name=item_data.get("name", ""), room_id=room_id,
-                lore=item_data.get("desc", ""),
-                tags=[item_data.get("category", "misc")],
-            ))
+            bible.add_item(
+                room_id,
+                EntityLore(
+                    entity_type="item",
+                    entity_id=item_id,
+                    name=item_data.get("name", ""),
+                    room_id=room_id,
+                    lore=item_data.get("desc", ""),
+                    tags=[item_data.get("category", "misc")],
+                ),
+            )
 
     item_tiles = maze.get_tiles_by_type("item")
     item_placements = []
@@ -414,14 +457,14 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
             maze.grid[y][x] = chosen_id
             item_placements.append({"x": x, "y": y, "item_id": chosen_id})
 
-    logger.info("Room %d: %d items (%d placements).",
-                room_idx, len(generated_items or {}), len(item_placements))
+    logger.info("Room %d: %d items (%d placements).", room_idx, len(generated_items or {}), len(item_placements))
     return generated_items, item_placements
 
 
 # ---------------------------------------------------------------------------
 # Phase 3C: NPCs (per room, batched)
 # ---------------------------------------------------------------------------
+
 
 def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
@@ -441,16 +484,19 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
 
     npc_slots = []
     for tile in npc_tiles:
-        npc_slots.append({
-            "position": list(tile.position),
-            "role": tile.npc_role or "regular",
-            "quest_type": tile.quest_type,
-            "max_exchanges": tile.npc_max_exchanges,
-        })
+        npc_slots.append(
+            {
+                "position": list(tile.position),
+                "role": tile.npc_role or "regular",
+                "quest_type": tile.quest_type,
+                "max_exchanges": tile.npc_max_exchanges,
+            }
+        )
 
     npc_pool = []
     try:
         from src.generate.generators.llm_primitives import generate_npc_batch
+
         room_env = {"type": env_type, "name": env_name}
         llm_npcs = generate_npc_batch(room_env, room_story, npc_slots, story_context)
     except Exception as e:
@@ -497,11 +543,17 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
             npc_data["shop_inventory"] = _generate_shop_inventory(registry)
 
         npc_pool.append(npc_data)
-        bible.add_npc(room_id, EntityLore(
-            entity_type="npc", entity_id=str(npc_id_counter),
-            name=npc_data["name"], room_id=room_id,
-            lore=npc_data["backstory"], tags=[npc_data["type"]],
-        ))
+        bible.add_npc(
+            room_id,
+            EntityLore(
+                entity_type="npc",
+                entity_id=str(npc_id_counter),
+                name=npc_data["name"],
+                room_id=room_id,
+                lore=npc_data["backstory"],
+                tags=[npc_data["type"]],
+            ),
+        )
         npc_id_counter += 1
 
     logger.info("Room %d: %d NPCs generated.", room_idx, len(npc_pool))
@@ -511,6 +563,7 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Phase 3D: Monsters (per room)
 # ---------------------------------------------------------------------------
+
 
 def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
     """Generate monster database for a room via LLM."""
@@ -524,9 +577,10 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
     monster_db = []
     try:
         from src.generate.generators.llm_primitives import generate_monster_primitive
+
         monsters = generate_monster_primitive(
-            {"environment": {"type": env_type, "name": env_name}},
-            room_level, story_context)
+            {"environment": {"type": env_type, "name": env_name}}, room_level, story_context
+        )
         if monsters:
             monster_db = monsters
     except Exception as e:
@@ -534,18 +588,31 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
 
     if not monster_db:
         from src.models.monster import MONSTER_POOLS
+
         pool = MONSTER_POOLS.get(env_type, MONSTER_POOLS.get("city", ["Rat"]))
         for name in pool[:6]:
-            monster_db.append({"name": name, "species": name, "description": f"A {name}.",
-                               "level": room_level, "is_boss": False,
-                               "portrait_prompt": f"a {name.lower()} in a {env_type}, pixel art"})
+            monster_db.append(
+                {
+                    "name": name,
+                    "species": name,
+                    "description": f"A {name}.",
+                    "level": room_level,
+                    "is_boss": False,
+                    "portrait_prompt": f"a {name.lower()} in a {env_type}, pixel art",
+                }
+            )
 
     for m in monster_db:
-        bible.add_monster(room_id, EntityLore(
-            entity_type="monster", name=m.get("name", ""),
-            room_id=room_id, lore=m.get("backstory", m.get("description", "")),
-            tags=["boss"] if m.get("is_boss") else ["generated"],
-        ))
+        bible.add_monster(
+            room_id,
+            EntityLore(
+                entity_type="monster",
+                name=m.get("name", ""),
+                room_id=room_id,
+                lore=m.get("backstory", m.get("description", "")),
+                tags=["boss"] if m.get("is_boss") else ["generated"],
+            ),
+        )
 
     logger.info("Room %d: %d monsters generated.", room_idx, len(monster_db))
     return monster_db
@@ -555,8 +622,8 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
 # Enrichment pass: assign real DB objects to TileMeta after Phase 3
 # ---------------------------------------------------------------------------
 
-def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
-                      class_data_list: list[dict]):
+
+def _enrich_tile_meta(layouts: list[dict], room_results: list[dict], class_data_list: list[dict]):
     """Fill TileMeta requirement slots and combat assignments from real DBs.
 
     Called between Phase 3D and Phase 4A, after all databases are populated.
@@ -578,11 +645,14 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
 
     # Tool attributes from item registry
     from src.models.items import Tool
-    tool_attrs = list({
-        item.item_stats.attribute
-        for item in registry.item_registry.values()
-        if isinstance(item, Tool) and item.item_stats.attribute
-    }) or ["bludgeon", "cutting", "digging", "climbing"]
+
+    tool_attrs = list(
+        {
+            item.item_stats.attribute
+            for item in registry.item_registry.values()
+            if isinstance(item, Tool) and item.item_stats.attribute
+        }
+    ) or ["bludgeon", "cutting", "digging", "climbing"]
 
     for layout, rr in zip(layouts, room_results):
         maze = layout["maze"]
@@ -593,7 +663,7 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
             item_names = [v.get("name", "") for v in rr["generated_items"].values() if v.get("name")]
 
         tile_meta = maze.tile_meta
-        combat_tile_map: dict[tuple, 'TileMeta'] = {}
+        combat_tile_map: dict[tuple, "TileMeta"] = {}
 
         for tile in tile_meta:
             if tile.tile_type != "event":
@@ -633,7 +703,7 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict],
         if door_pos and combat_tile_map:
             room_idx = layout["room_idx"]
             num_rooms = len(layouts)
-            is_final = (room_idx == num_rooms - 1)
+            is_final = room_idx == num_rooms - 1
 
             boss_monsters = [m for m in monster_db if m.get("is_boss")]
             sorted_tiles = sorted(
@@ -681,6 +751,7 @@ _QUEST_FAILURE = {
 def _monster_dict_to_model(m: dict, room_level: int):
     """Convert an LLM monster dict (with hp_range/ac_range) to a Monster model."""
     from src.models.monster import Monster
+
     hp_range = m.get("hp_range", [8 + room_level * 2, 15 + room_level * 3])
     ac_range = m.get("ac_range", [9 + room_level, 12 + room_level])
     hp = random.randint(int(hp_range[0]), int(hp_range[1]))
@@ -733,22 +804,23 @@ def _item_has_attr(item_id: int, attr: str) -> bool:
     try:
         item = registry.get_item(item_id)
         if item:
-            stats = getattr(item, 'item_stats', None)
-            if stats and getattr(stats, 'attribute', None) == attr:
+            stats = getattr(item, "item_stats", None)
+            if stats and getattr(stats, "attribute", None) == attr:
                 return True
     except Exception:
         pass
     return False
 
 
-def _build_combat_event(tile, event_id, env_type, env_name, room_level,
-                        monster_db, story_related, faction_name=""):
+def _build_combat_event(tile, event_id, env_type, env_name, room_level, monster_db, story_related, faction_name=""):
     """Build a combat event programmatically from tile.assigned_monsters."""
     monster_names = tile.assigned_monsters or ["Unknown Creature"]
     count = len(monster_names)
 
     if count > 1:
-        monsters_str = f"{count} {monster_names[0]}s" if len(set(monster_names)) == 1 else ", ".join(dict.fromkeys(monster_names))
+        monsters_str = (
+            f"{count} {monster_names[0]}s" if len(set(monster_names)) == 1 else ", ".join(dict.fromkeys(monster_names))
+        )
     else:
         monsters_str = monster_names[0]
 
@@ -767,6 +839,7 @@ def _build_combat_event(tile, event_id, env_type, env_name, room_level,
             all_monsters.append(_monster_dict_to_model(m_data, room_level))
         else:
             from src.models.monster import generate_encounter_monsters
+
             all_monsters.extend(generate_encounter_monsters(env_type, room_level))
 
     first_desc = db_by_name.get(monster_names[0], {}).get("description", "")
@@ -798,10 +871,14 @@ def _build_combat_event(tile, event_id, env_type, env_name, room_level,
     return event_data
 
 
-def _phase4a_events(layout: dict, bible: WorldBible,
-                    monster_db: list[dict], npc_pool: list[dict],
-                    item_placements: list[dict],
-                    class_data_list: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
+def _phase4a_events(
+    layout: dict,
+    bible: WorldBible,
+    monster_db: list[dict],
+    npc_pool: list[dict],
+    item_placements: list[dict],
+    class_data_list: list[dict] | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Generate events by type + reconcile NPC quest stubs.
 
     Combat events are built programmatically from assigned monsters.
@@ -838,6 +915,7 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                     all_spells.append(n)
 
     from src.models.items import Tool
+
     registry_tools = [
         item.item_stats.attribute
         for item in registry.item_registry.values()
@@ -856,9 +934,14 @@ def _phase4a_events(layout: dict, bible: WorldBible,
     for tile in combat_tiles:
         idx = len(event_list)
         event_data = _build_combat_event(
-            tile, f"{event_id_prefix}evt_{idx:03d}",
-            env_type, env_name, room_level, monster_db,
-            tile.is_story_related, faction_name,
+            tile,
+            f"{event_id_prefix}evt_{idx:03d}",
+            env_type,
+            env_name,
+            room_level,
+            monster_db,
+            tile.is_story_related,
+            faction_name,
         )
         if tile.is_gate:
             event_data["is_gate"] = True
@@ -880,7 +963,7 @@ def _phase4a_events(layout: dict, bible: WorldBible,
         accumulated_summaries: list[str] = []
 
         for chunk_start in range(0, len(typed_tiles), EVENTS_PER_CHUNK):
-            chunk_tiles = typed_tiles[chunk_start:chunk_start + EVENTS_PER_CHUNK]
+            chunk_tiles = typed_tiles[chunk_start : chunk_start + EVENTS_PER_CHUNK]
             chunk_slots = []
             for t in chunk_tiles:
                 slot = {
@@ -896,19 +979,30 @@ def _phase4a_events(layout: dict, bible: WorldBible,
             llm_events = []
             try:
                 from src.generate.generators.llm_primitives import generate_event_batch
+
                 llm_events = generate_event_batch(
-                    room_env, room_story, event_type, chunk_slots,
-                    story_context, accumulated_summaries,
-                    all_abilities, all_spells, tool_attrs,
+                    room_env,
+                    room_story,
+                    event_type,
+                    chunk_slots,
+                    story_context,
+                    accumulated_summaries,
+                    all_abilities,
+                    all_spells,
+                    tool_attrs,
                 )
             except Exception as e:
-                logger.warning("Room %d %s chunk %d failed: %s",
-                               room_idx, event_type, chunk_start // EVENTS_PER_CHUNK, e)
+                logger.warning(
+                    "Room %d %s chunk %d failed: %s", room_idx, event_type, chunk_start // EVENTS_PER_CHUNK, e
+                )
 
             for i, tile in enumerate(chunk_tiles):
                 idx = len(event_list)
-                llm_data = llm_events[i] if i < len(llm_events) else _event_fallback(
-                    event_type, env_type, room_level, tool_attrs, all_abilities, all_spells)
+                llm_data = (
+                    llm_events[i]
+                    if i < len(llm_events)
+                    else _event_fallback(event_type, env_type, room_level, tool_attrs, all_abilities, all_spells)
+                )
 
                 event_data = {
                     "id": f"{event_id_prefix}evt_{idx:03d}",
@@ -916,8 +1010,9 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                     "name": llm_data.get("name", f"Event {idx}"),
                     "description": llm_data.get("description", "Something happens!"),
                     "difficulty": llm_data.get("difficulty", 3),
-                    "portrait_prompt": llm_data.get("portrait_prompt",
-                                                    f"a {event_type} scene in a {env_type}, pixel art"),
+                    "portrait_prompt": llm_data.get(
+                        "portrait_prompt", f"a {event_type} scene in a {env_type}, pixel art"
+                    ),
                     "profile_image": None,
                     "time_gate": tile.time_gate,
                     "x": tile.position[0],
@@ -938,9 +1033,11 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                         choices.append({"text": "Walk away", "auto_success": True})
                     event_data["choices"] = choices
                     event_data["correct_tool"] = llm_data.get("correct_tool") or (
-                        tile.requires_ref if tile.requires_type == "tool" else None)
+                        tile.requires_ref if tile.requires_type == "tool" else None
+                    )
                     event_data["correct_ability"] = llm_data.get("correct_ability") or (
-                        tile.requires_ref if tile.requires_type == "ability" else None)
+                        tile.requires_ref if tile.requires_type == "ability" else None
+                    )
                     correct_tool_attr = event_data.get("correct_tool")
 
                 elif event_type == "event":
@@ -949,9 +1046,11 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                         choices.append({"text": "Slip away quietly", "auto_success": True})
                     event_data["choices"] = choices
                     event_data["failure_damage_type"] = llm_data.get(
-                        "failure_damage_type", random.choice(["health", "stamina"]))
+                        "failure_damage_type", random.choice(["health", "stamina"])
+                    )
                     event_data["failure_damage_range"] = llm_data.get(
-                        "failure_damage_range", [3 + room_level, 8 + room_level * 2])
+                        "failure_damage_range", [3 + room_level, 8 + room_level * 2]
+                    )
                     event_data["correct_ability"] = llm_data.get("correct_ability")
                     event_data["correct_spell"] = llm_data.get("correct_spell")
 
@@ -959,15 +1058,12 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                     eligible_ids = all_item_ids
                     if correct_tool_attr:
                         from src.models.items import Tool
-                        eligible_ids = [
-                            iid for iid in all_item_ids
-                            if not _item_has_attr(iid, correct_tool_attr)
-                        ]
+
+                        eligible_ids = [iid for iid in all_item_ids if not _item_has_attr(iid, correct_tool_attr)]
                     if eligible_ids:
                         num = min(random.randint(1, 2), len(eligible_ids))
                         event_data["loot_table"] = [
-                            {"item_id": iid,
-                             "drop_chance": round(random.uniform(0.15, 0.35), 2)}
+                            {"item_id": iid, "drop_chance": round(random.uniform(0.15, 0.35), 2)}
                             for iid in random.sample(eligible_ids, num)
                         ]
 
@@ -1040,10 +1136,9 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                 base_quest["item_category"] = t.item_category
 
         elif qtype in ("follower_same", "follower_next"):
-            base_quest["target_position"] = (list(maze.door_position)
-                                              if maze.door_position else None)
+            base_quest["target_position"] = list(maze.door_position) if maze.door_position else None
             base_quest["escort_npc_id"] = npc["id"]
-            base_quest["crosses_room"] = (qtype == "follower_next")
+            base_quest["crosses_room"] = qtype == "follower_next"
 
         elif qtype == "combat_npc":
             # NPC is also a combatant — give them stats and add to monster_db
@@ -1059,8 +1154,7 @@ def _phase4a_events(layout: dict, bible: WorldBible,
                 "weakness": None,
                 "abilities": [],
                 "is_boss": False,
-                "portrait_prompt": npc.get("portrait_prompt",
-                                           "a hostile NPC, pixel art fantasy"),
+                "portrait_prompt": npc.get("portrait_prompt", "a hostile NPC, pixel art fantasy"),
             }
             monster_db.append(npc_monster)
             base_quest["target_npc_id"] = npc["id"]
@@ -1069,8 +1163,7 @@ def _phase4a_events(layout: dict, bible: WorldBible,
         npc["quest_id"] = base_quest["id"]
 
     story_count = sum(1 for q in quest_list if q.get("is_story_quest"))
-    logger.info("Room %d: %d events, %d quests (%d story).",
-                room_idx, len(event_list), len(quest_list), story_count)
+    logger.info("Room %d: %d events, %d quests (%d story).", room_idx, len(event_list), len(quest_list), story_count)
     return event_list, quest_list
 
 
@@ -1078,9 +1171,10 @@ def _phase4a_events(layout: dict, bible: WorldBible,
 # Phase 4B: Dialogue
 # ---------------------------------------------------------------------------
 
-def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
-                      bible: WorldBible,
-                      quest_list: list[dict] | None = None) -> list[dict]:
+
+def _phase4b_dialogue(
+    layout: dict, npc_pool: list[dict], bible: WorldBible, quest_list: list[dict] | None = None
+) -> list[dict]:
     """Generate dialogue context and dialogue trees for all NPCs.
 
     Both steps always run regardless of GAME_MODE — the pipeline generates
@@ -1098,13 +1192,18 @@ def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
     # Step A: dialogue context (greetings, personality notes, exhausted text)
     try:
         from src.generate.generators.llm_primitives import generate_dialogue_context
-        npc_data_for_llm = [{"npc_name": n["name"], "job": n["job"],
-                             "personality": n["personality"],
-                             "quest_type": n.get("quest_type"),
-                             "max_exchanges": n.get("max_exchanges", 5)}
-                            for n in npc_pool]
-        dialogue_data = generate_dialogue_context(
-            room_env, room_story, npc_data_for_llm, story_context)
+
+        npc_data_for_llm = [
+            {
+                "npc_name": n["name"],
+                "job": n["job"],
+                "personality": n["personality"],
+                "quest_type": n.get("quest_type"),
+                "max_exchanges": n.get("max_exchanges", 5),
+            }
+            for n in npc_pool
+        ]
+        dialogue_data = generate_dialogue_context(room_env, room_story, npc_data_for_llm, story_context)
         for i, npc in enumerate(npc_pool):
             if i < len(dialogue_data):
                 d = dialogue_data[i]
@@ -1119,12 +1218,12 @@ def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
 
     # Step B: dialogue trees (pre-generated for offline_static; stored for all modes)
     from src.generate.generators.llm_primitives import generate_dialogue_tree
+
     for npc in npc_pool:
         try:
             quest_ctx = None
             if npc.get("quest_id"):
-                quest_obj = next(
-                    (q for q in quest_list if q["id"] == npc["quest_id"]), None)
+                quest_obj = next((q for q in quest_list if q["id"] == npc["quest_id"]), None)
                 if quest_obj:
                     quest_ctx = {
                         "quest_id": quest_obj["id"],
@@ -1153,8 +1252,7 @@ def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
             elif "nodes" in tree:
                 npc["dialogue_tree"] = tree
         except Exception as e:
-            logger.warning("Room %d NPC %s dialogue tree failed: %s",
-                           room_idx, npc.get("name"), e)
+            logger.warning("Room %d NPC %s dialogue tree failed: %s", room_idx, npc.get("name"), e)
 
     logger.info("Room %d: Dialogue generated for %d NPCs.", room_idx, len(npc_pool))
     return npc_pool
@@ -1164,11 +1262,11 @@ def _phase4b_dialogue(layout: dict, npc_pool: list[dict],
 # Phase 5: Validation
 # ---------------------------------------------------------------------------
 
-def _phase5_validate(bible: WorldBible, room_results: list[dict],
-                     story: OverarchingStory) -> ValidationReport:
+
+def _phase5_validate(bible: WorldBible, room_results: list[dict], story: OverarchingStory) -> ValidationReport:
     """Run structural validation checks."""
     report = ValidationReport()
-    from src.generate.world_editor import editor_coherence_check, cross_validate, gameplay_audit
+    from src.generate.world_editor import cross_validate, editor_coherence_check, gameplay_audit
 
     editor_issues = editor_coherence_check(bible, room_results)
     if editor_issues:
@@ -1191,11 +1289,9 @@ def _phase5_validate(bible: WorldBible, room_results: list[dict],
         for issue in audit_issues:
             severity = issue.get("severity", "warning")
             if severity == "error":
-                report.add_major(issue["message"], entity_id=issue.get("entity_id", ""),
-                                 phase="gameplay_audit")
+                report.add_major(issue["message"], entity_id=issue.get("entity_id", ""), phase="gameplay_audit")
             else:
-                report.add_warning(issue["message"], entity_id=issue.get("entity_id", ""),
-                                   phase="gameplay_audit")
+                report.add_warning(issue["message"], entity_id=issue.get("entity_id", ""), phase="gameplay_audit")
     else:
         logger.info("Gameplay audit: all checks passed.")
 
@@ -1206,21 +1302,26 @@ def _phase5_validate(bible: WorldBible, room_results: list[dict],
 # Phase 6: Narrative
 # ---------------------------------------------------------------------------
 
+
 def _phase6_narrative(bible: WorldBible, room_results: list[dict]) -> dict:
     """Generate synopsis, room intros, game over, victory text."""
     narrative_data = {}
     try:
         from src.generate.summary_agent import (
-            generate_story_synopsis, generate_room_intro,
-            generate_game_over_text, generate_victory_text,
+            generate_game_over_text,
+            generate_room_intro,
+            generate_story_synopsis,
+            generate_victory_text,
         )
+
         narrative_data["synopsis"] = generate_story_synopsis(bible)
         narrative_data["game_over"] = generate_game_over_text(bible, "the hero", "adventurer")
         narrative_data["victory"] = generate_victory_text(bible, "the hero", "adventurer")
         for rr in room_results:
             rid = rr["room_id"]
             narrative_data[f"room_intro_{rid}"] = generate_room_intro(
-                bible, rid, rr["environment_name"], rr["environment"])
+                bible, rid, rr["environment_name"], rr["environment"]
+            )
         logger.info("Narrative generated: %d entries.", len(narrative_data))
     except Exception as e:
         logger.warning("Narrative generation failed: %s", e)
@@ -1235,10 +1336,14 @@ def _phase6_narrative(bible: WorldBible, room_results: list[dict]) -> dict:
 # Phase 7: Portraits
 # ---------------------------------------------------------------------------
 
-def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
-                      bible: WorldBible,
-                      music_prompts: dict[str, str] | None = None,
-                      sfx_prompts: dict[str, dict] | None = None):
+
+def _phase7_portraits(
+    room_results: list[dict],
+    class_data_list: list[dict],
+    bible: WorldBible,
+    music_prompts: dict[str, str] | None = None,
+    sfx_prompts: dict[str, dict] | None = None,
+):
     """Generate portrait images, music tracks, and SFX in a single event loop.
 
     Phase A (sync): build all entity databases and prompt-enrich them.
@@ -1248,19 +1353,23 @@ def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
     Returns (portraits_generated, player_portrait_path, gameover_path, victory_path, music_paths, sfx_paths).
     """
     import asyncio as _asyncio
+
+    from src.generate.generators.llm_primitives import generate_player_image_description
     from src.generate.image_client import (
-        generate_portraits_parallel_async,
-        generate_player_portrait,
         generate_and_save_image,
+        generate_player_portrait,
+        generate_portraits_parallel_async,
     )
     from src.generate.music_client import generate_all_music_async
     from src.generate.sfx_client import generate_all_sfx_async
-    from src.generate.generators.llm_primitives import generate_player_image_description
     from src.generate.summary_agent import (
-        build_npc_portrait_prompt, build_class_portrait_prompt,
-        build_room_portrait_prompt, build_game_over_portrait_prompt,
-        build_item_portrait_prompt, build_monster_portrait_prompt,
+        build_class_portrait_prompt,
         build_event_portrait_prompt,
+        build_game_over_portrait_prompt,
+        build_item_portrait_prompt,
+        build_monster_portrait_prompt,
+        build_npc_portrait_prompt,
+        build_room_portrait_prompt,
     )
 
     portraits_generated = False
@@ -1353,11 +1462,7 @@ def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
             tasks.append(generate_portraits_parallel_async(npc_db, save_dir, prefix))
         for event_db, save_dir, prefix in event_batches:
             tasks.append(generate_portraits_parallel_async(event_db, save_dir, prefix))
-        tasks.append(
-            generate_portraits_parallel_async(
-                class_portrait_db, "data/portraits/classes", "class_"
-            )
-        )
+        tasks.append(generate_portraits_parallel_async(class_portrait_db, "data/portraits/classes", "class_"))
         for mon_db, save_dir, prefix in monster_batches:
             tasks.append(generate_portraits_parallel_async(mon_db, save_dir, prefix))
         for item_db, save_dir, prefix in item_batches:
@@ -1465,11 +1570,12 @@ def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
 
     victory_path = os.path.join("data/portraits", "victory.png")
     victory_prompt = (
-        "A triumphant hero standing victorious, golden light, fantasy pixel art, "
-        "celebration scene, epic achievement"
+        "A triumphant hero standing victorious, golden light, fantasy pixel art, celebration scene, epic achievement"
     )
     if bible.story and bible.story.synopsis:
-        victory_prompt = f"Victory scene: {bible.story.synopsis[:100]}, triumphant hero, golden light, fantasy pixel art"
+        victory_prompt = (
+            f"Victory scene: {bible.story.synopsis[:100]}, triumphant hero, golden light, fantasy pixel art"
+        )
     generate_and_save_image(victory_prompt, victory_path)
 
     # Start screen / cover portrait
@@ -1484,12 +1590,21 @@ def _phase7_portraits(room_results: list[dict], class_data_list: list[dict],
         start_prompt = f"{', '.join(parts)}, dark fantasy pixel art, epic game cover"
     generate_and_save_image(start_prompt, start_portrait_path)
 
-    return portraits_generated, player_portrait_path, gameover_path, victory_path, start_portrait_path, music_paths, sfx_paths
+    return (
+        portraits_generated,
+        player_portrait_path,
+        gameover_path,
+        victory_path,
+        start_portrait_path,
+        music_paths,
+        sfx_paths,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Phase 8: Write Files & Manifest
 # ---------------------------------------------------------------------------
+
 
 def _flush_entity_db(room_results: list[dict], key: str, path: str):
     """Collect entities from all rooms by key and write to a global DB file."""
@@ -1499,8 +1614,7 @@ def _flush_entity_db(room_results: list[dict], key: str, path: str):
         json.dump(all_entities, f, indent=2)
 
 
-def _write_room_files(layout: dict, npc_pool: list, event_list: list,
-                      quest_list: list, item_placements: list):
+def _write_room_files(layout: dict, npc_pool: list, event_list: list, quest_list: list, item_placements: list):
     """Write per-room JSON files."""
     room_dir = layout["room_dir"]
     maze = layout["maze"]
@@ -1513,17 +1627,24 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list,
     event_position_map = []
     for e in event_list:
         if "x" in e and "y" in e:
-            event_position_map.append({
-                "x": e["x"], "y": e["y"], "event_id": e["id"],
-            })
+            event_position_map.append(
+                {
+                    "x": e["x"],
+                    "y": e["y"],
+                    "event_id": e["id"],
+                }
+            )
 
-    maze.save_to_json(os.path.join(room_dir, "maze.json"), extra={
-        "npc_positions": npc_positions,
-        "player_start": list(player_start),
-        "item_placements": item_placements,
-        "event_positions": event_position_map,
-        "quest_ids": [q["id"] for q in quest_list],
-    })
+    maze.save_to_json(
+        os.path.join(room_dir, "maze.json"),
+        extra={
+            "npc_positions": npc_positions,
+            "player_start": list(player_start),
+            "item_placements": item_placements,
+            "event_positions": event_position_map,
+            "quest_ids": [q["id"] for q in quest_list],
+        },
+    )
     with open(os.path.join(room_dir, "npcs.json"), "w") as f:
         json.dump(npc_pool, f, indent=2)
     with open(os.path.join(room_dir, "events.json"), "w") as f:
@@ -1536,18 +1657,20 @@ def _write_room_files(layout: dict, npc_pool: list, event_list: list,
 # Main entry point
 # ---------------------------------------------------------------------------
 
+
 def generate_world():
     """Phased world generation pipeline with progress tracking."""
-    from config import LLM_BACKEND, IMAGE_BACKEND, MUSIC_BACKEND
     import src.generate.backends.llm_api as _llm_api_mod
     import src.generate.backends.llm_local as _llm_local_mod
     import src.generate.image_client as _img_mod
     import src.generate.music_client as _music_mod
     import src.generate.sfx_client as _sfx_mod
+    from config import IMAGE_BACKEND, LLM_BACKEND, MUSIC_BACKEND
     from src.generate.generation_stats import GenerationStats
 
     stats = GenerationStats(
-        llm_backend=LLM_BACKEND, image_backend=IMAGE_BACKEND,
+        llm_backend=LLM_BACKEND,
+        image_backend=IMAGE_BACKEND,
         music_backend=MUSIC_BACKEND,
     )
     _llm_api_mod.set_stats(stats)
@@ -1566,8 +1689,7 @@ def generate_world():
     num_rooms = NUM_ROOMS
     story_seed = STORY_SEED or _FALLBACK_STORY_SEED
 
-    phase_bar = tqdm(total=len(PHASE_NAMES), desc="World Generation",
-                     unit="phase", position=0, leave=True)
+    phase_bar = tqdm(total=len(PHASE_NAMES), desc="World Generation", unit="phase", position=0, leave=True)
 
     def advance(name: str):
         phase_bar.set_description(f"World Gen: {name}")
@@ -1602,22 +1724,24 @@ def generate_world():
         npc_pool = _phase3c_npcs(layout, bible)
         monster_db = _phase3d_monsters(layout, bible)
         bible.persist(BIBLE_PATH)
-        room_results.append({
-            "room_id": layout["room_id"],
-            "room_idx": layout["room_idx"],
-            "room_level": layout["room_level"],
-            "environment": layout["environment"],
-            "environment_name": layout["environment_name"],
-            "maze": layout["maze"],
-            "player_start": layout["player_start"],
-            "room_dir": layout["room_dir"],
-            "npc_pool": npc_pool,
-            "monster_db": monster_db,
-            "generated_items": generated_items,
-            "item_placements": item_placements,
-            "event_list": [],
-            "quest_list": [],
-        })
+        room_results.append(
+            {
+                "room_id": layout["room_id"],
+                "room_idx": layout["room_idx"],
+                "room_level": layout["room_level"],
+                "environment": layout["environment"],
+                "environment_name": layout["environment_name"],
+                "maze": layout["maze"],
+                "player_start": layout["player_start"],
+                "room_dir": layout["room_dir"],
+                "npc_pool": npc_pool,
+                "monster_db": monster_db,
+                "generated_items": generated_items,
+                "item_placements": item_placements,
+                "event_list": [],
+                "quest_list": [],
+            }
+        )
     phase_bar.update(1)
 
     # --- Enrichment: assign real DB objects to TileMeta ---
@@ -1628,12 +1752,11 @@ def generate_world():
     for rr in tqdm(room_results, desc="  Content", unit="room", position=1, leave=True):
         layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
         event_list, quest_list = _phase4a_events(
-            layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"],
-            class_data_list=class_data_list)
+            layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"], class_data_list=class_data_list
+        )
         rr["event_list"] = event_list
         rr["quest_list"] = quest_list
-        rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible,
-                                              quest_list=rr["quest_list"])
+        rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible, quest_list=rr["quest_list"])
         _write_room_files(layout, rr["npc_pool"], event_list, quest_list, rr["item_placements"])
     phase_bar.update(1)
 
@@ -1649,15 +1772,20 @@ def generate_world():
 
     # --- Phase 7: Portraits + Music + SFX ---
     advance(PHASE_NAMES[8])
-    portraits_generated, player_portrait_path, gameover_path, victory_path, start_portrait_path, music_paths, sfx_paths = (
-        _phase7_portraits(room_results, class_data_list, bible,
-                          music_prompts=music_prompts, sfx_prompts=sfx_prompts))
+    (
+        portraits_generated,
+        player_portrait_path,
+        gameover_path,
+        victory_path,
+        start_portrait_path,
+        music_paths,
+        sfx_paths,
+    ) = _phase7_portraits(room_results, class_data_list, bible, music_prompts=music_prompts, sfx_prompts=sfx_prompts)
 
     # Rewrite room files with updated profile_image paths from portrait generation
     for rr in room_results:
         layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
-        _write_room_files(layout, rr["npc_pool"], rr["event_list"],
-                          rr["quest_list"], rr["item_placements"])
+        _write_room_files(layout, rr["npc_pool"], rr["event_list"], rr["quest_list"], rr["item_placements"])
     logger.info("Room files rewritten with portrait paths.")
     phase_bar.update(1)
 
@@ -1771,10 +1899,12 @@ def generate_world():
 
     # --- Phase 9: Player Guide (optional) ---
     from config import GENERATE_GUIDE
+
     if GENERATE_GUIDE:
         advance(PHASE_NAMES[10])
         try:
             from src.generate.guide_builder import build_guide
+
             build_guide(data_dir=DATA_DIR, generate_pdf=True)
         except Exception as e:
             logger.warning("Guide generation failed: %s", e)
@@ -1784,10 +1914,15 @@ def generate_world():
 
     logger.info("=== Generation Complete (%d rooms) ===", num_rooms)
     for rr in room_results:
-        logger.info("  Room %d: %s (%s) — %d NPCs, %d events, %d quests",
-                     rr["room_idx"], rr["environment"], rr["environment_name"],
-                     len(rr["npc_pool"]), len(rr["event_list"]),
-                     len(rr["quest_list"]))
+        logger.info(
+            "  Room %d: %s (%s) — %d NPCs, %d events, %d quests",
+            rr["room_idx"],
+            rr["environment"],
+            rr["environment_name"],
+            len(rr["npc_pool"]),
+            len(rr["event_list"]),
+            len(rr["quest_list"]),
+        )
     logger.info("  Manifest: %s", MANIFEST_PATH)
     logger.info("  World Bible: %s", BIBLE_PATH)
     stats.log_summary(logger)

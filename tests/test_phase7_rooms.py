@@ -1,20 +1,21 @@
 """Phase 7 tests — multi-room progression, doors, gates, level-up, victory."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from src.models.maze import Maze, DOOR_TILE_ID
-from src.models.player import PlayerCharacter, PlayerClass, Stats, Ability, Spell
+import pytest
 
+from src.models.maze import DOOR_TILE_ID, Maze
+from src.models.player import Ability, PlayerCharacter, PlayerClass, Spell, Stats
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def maze_with_door():
@@ -53,11 +54,34 @@ def mage_class():
         stats=Stats(STR=8, DEX=12, CON=10, INT=16, WIS=14, CHA=10, LUCK=10),
         starting_weapon="Staff",
         abilities=[],
-        spells=[Spell(name="Fireball", description="Hurl fire", element="fire", spell_type="damage_single", stat="INT", damage_dice=6)],
+        spells=[
+            Spell(
+                name="Fireball",
+                description="Hurl fire",
+                element="fire",
+                spell_type="damage_single",
+                stat="INT",
+                damage_dice=6,
+            )
+        ],
         ability_pool=[],
         spell_pool=[
-            Spell(name="Ice Shard", description="Frost attack", element="ice", spell_type="damage_single", stat="INT", damage_dice=4),
-            Spell(name="Lightning", description="Zap!", element="lightning", spell_type="damage_single", stat="INT", damage_dice=8),
+            Spell(
+                name="Ice Shard",
+                description="Frost attack",
+                element="ice",
+                spell_type="damage_single",
+                stat="INT",
+                damage_dice=4,
+            ),
+            Spell(
+                name="Lightning",
+                description="Zap!",
+                element="lightning",
+                spell_type="damage_single",
+                stat="INT",
+                damage_dice=8,
+            ),
         ],
     )
 
@@ -75,8 +99,7 @@ def jester_class():
             Ability(name="Shield Bash", description="From warrior pool", stat="STR"),
         ],
         spell_pool=[
-            Spell(name="Heal", description="From healer pool", element="light",
-                  spell_type="heal", stat="WIS"),
+            Spell(name="Heal", description="From healer pool", element="light", spell_type="heal", stat="WIS"),
         ],
     )
 
@@ -88,8 +111,7 @@ def player_with_class(warrior_class):
     return p
 
 
-def _make_mock_event(event_id=3000, resolved=False, is_gate=False,
-                     is_climax_boss=False):
+def _make_mock_event(event_id=3000, resolved=False, is_gate=False, is_climax_boss=False):
     """Create a mock event object for testing."""
     evt = MagicMock()
     evt.id = event_id
@@ -103,6 +125,7 @@ def _make_mock_event(event_id=3000, resolved=False, is_gate=False,
 # ---------------------------------------------------------------------------
 # Door reveal at 40% threshold
 # ---------------------------------------------------------------------------
+
 
 class TestDoorReveal:
     def test_door_hidden_initially(self, maze_with_door):
@@ -198,6 +221,7 @@ class TestDoorReveal:
 # Gate encounter blocks progression until resolved
 # ---------------------------------------------------------------------------
 
+
 class TestGateEncounter:
     def test_gate_blocks_door(self):
         """Gate encounter must be resolved before player can pass through door."""
@@ -266,6 +290,7 @@ class TestGateEncounter:
 # Gate failure applies survival penalty
 # ---------------------------------------------------------------------------
 
+
 class TestGateFailurePenalty:
     def test_flee_gate_does_not_clear(self):
         """Fleeing a gate encounter does NOT clear the gate (flee is blocked)."""
@@ -289,6 +314,7 @@ class TestGateFailurePenalty:
         gc.item_message_active = False
         gc.sfx = None
         from src.controllers.event_input_handler import EventInputHandler
+
         gc.event_handler = EventInputHandler(gc)
 
         gc.event_handler._finalize_combat(combat_event)
@@ -320,6 +346,7 @@ class TestGateFailurePenalty:
         gc.sfx = None
         gc.quest_manager = MagicMock()
         from src.controllers.event_input_handler import EventInputHandler
+
         gc.event_handler = EventInputHandler(gc)
 
         gc.event_handler._finalize_combat(combat_event)
@@ -330,6 +357,7 @@ class TestGateFailurePenalty:
 # ---------------------------------------------------------------------------
 # Level-up offers correct ability pool per class
 # ---------------------------------------------------------------------------
+
 
 class TestLevelUpPools:
     def test_warrior_level_up_offers_abilities(self, warrior_class):
@@ -388,6 +416,7 @@ class TestLevelUpPools:
 # Room transition renders portrait + story text (smoke test)
 # ---------------------------------------------------------------------------
 
+
 class TestRoomTransition:
     @pytest.fixture
     def mock_pygame(self):
@@ -404,12 +433,14 @@ class TestRoomTransition:
     def test_room_intro_view_renders(self, mock_pygame):
         """RoomIntroView can be created and drawn without error."""
         from src.views.room_intro_view import RoomIntroView
+
         screen, font = mock_pygame
         with patch("pygame.font.Font", return_value=font):
             with patch("pygame.Surface"):
                 with patch("pygame.draw.rect"):
                     view = RoomIntroView(
-                        screen, font,
+                        screen,
+                        font,
                         env_name="Darkwood Forest",
                         env_type="forest",
                         story_text="The shadows grow deeper as you press on.",
@@ -421,6 +452,7 @@ class TestRoomTransition:
 # ---------------------------------------------------------------------------
 # Final boss victory triggers victory screen
 # ---------------------------------------------------------------------------
+
 
 class TestVictoryScreen:
     def test_victory_view_renders(self):
@@ -453,6 +485,7 @@ class TestVictoryScreen:
         stats = {"monsters_killed": 10, "items_used": 5, "rooms_cleared": 3}
 
         from src.views.victory_view import VictoryView
+
         with patch("pygame.font.Font"):
             view = VictoryView(MagicMock(), MagicMock(), player, stats, total_rooms=3)
 
@@ -466,6 +499,7 @@ class TestVictoryScreen:
 # ---------------------------------------------------------------------------
 # Maze door placement
 # ---------------------------------------------------------------------------
+
 
 class TestDoorPlacement:
     def test_place_door_returns_position(self):
@@ -504,6 +538,7 @@ class TestClimaxBossVictory:
 
     def _make_gc(self, events=None, current_room=2, total_rooms=3):
         from src.controllers.game_controller import GameController
+
         gc = GameController.__new__(GameController)
         gc.maze = MagicMock()
         gc.maze.door_position = None
@@ -522,8 +557,9 @@ class TestClimaxBossVictory:
         gc.quest_manager = MagicMock()
         gc.sfx = None
         gc.quests = {}
-        from src.controllers.event_input_handler import EventInputHandler
         from src.controllers.combat_input_handler import CombatInputHandler
+        from src.controllers.event_input_handler import EventInputHandler
+
         gc.event_handler = EventInputHandler(gc)
         gc.combat_handler = CombatInputHandler(gc)
         return gc
@@ -607,8 +643,8 @@ class TestQuestDoorReveal:
     """Quest with door_reveal=True calls reveal_door_from_quest."""
 
     def test_quest_door_reveal_triggers_callback(self):
-        from src.systems.quest_manager import QuestManager
         from src.models.quest import Quest, QuestReward
+        from src.systems.quest_manager import QuestManager
 
         quest = Quest(
             id=4000,
@@ -631,8 +667,8 @@ class TestQuestDoorReveal:
         assert quest.status == "completed"
 
     def test_quest_without_door_reveal_no_callback(self):
-        from src.systems.quest_manager import QuestManager
         from src.models.quest import Quest, QuestReward
+        from src.systems.quest_manager import QuestManager
 
         quest = Quest(
             id=4001,
@@ -655,8 +691,8 @@ class TestQuestDoorReveal:
 
     def test_door_reveal_wired_in_game_controller(self):
         """QuestManager gets the callback when GameController sets it up."""
-        from src.systems.quest_manager import QuestManager
         from src.controllers.game_controller import GameController
+        from src.systems.quest_manager import QuestManager
 
         gc = GameController.__new__(GameController)
         gc.maze = MagicMock()
@@ -675,12 +711,15 @@ class TestQuestDoorReveal:
 # Config sanity checks
 # ---------------------------------------------------------------------------
 
+
 class TestConfig:
     def test_num_rooms_valid(self):
         from config import NUM_ROOMS
+
         assert isinstance(NUM_ROOMS, int)
         assert NUM_ROOMS >= 1
 
     def test_door_reveal_threshold(self):
         from config import DOOR_REVEAL_THRESHOLD
+
         assert DOOR_REVEAL_THRESHOLD == 0.4

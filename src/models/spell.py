@@ -1,7 +1,7 @@
 import random
 from typing import Optional
-from pydantic import BaseModel
 
+from pydantic import BaseModel
 
 # Elemental advantage chart
 # fire > forest > water > fire; light <> dark (mutual)
@@ -56,8 +56,7 @@ def physical_multiplier(attack_type: str, defender_type: Optional[str]) -> float
 SPELL_STAMINA_BY_DICE = {4: 2, 6: 4, 8: 5, 10: 7}
 
 
-def compute_stamina_cost(spell_type: str, damage_dice: int = 0,
-                         targets: str = "single") -> int:
+def compute_stamina_cost(spell_type: str, damage_dice: int = 0, targets: str = "single") -> int:
     """Derive stamina cost from spell type and damage dice."""
     if spell_type == "heal":
         return 5

@@ -4,35 +4,46 @@ validators, gameplay audit, and placement utilities."""
 import random
 from unittest.mock import patch
 
-from src.models.npc import StaticNPC
-from src.models.encounter import (
-    CombatEvent, PuzzleEvent, EventEncounter,
-)
-from src.models.story import OverarchingStory, Faction, RoomStoryBeat
-from src.models.world_bible import WorldBible, RoomBible
-
 from src.generate.checker import (
-    NPCChecker, MonsterChecker, ItemChecker, EventChecker,
+    EventChecker,
+    ItemChecker,
+    MonsterChecker,
+    NPCChecker,
+)
+from src.generate.placement import (
+    compute_zones,
+    find_open_cells,
+    get_player_start,
+    place_day_night_variants,
+    place_encounters,
+    place_items,
+    place_npcs,
 )
 from src.generate.validator import (
-    NPCValidator, MonsterValidator, ItemValidator, EventValidator,
+    EventValidator,
+    ItemValidator,
+    MonsterValidator,
+    NPCValidator,
     ValidationReport,
 )
 from src.generate.world_editor import gameplay_audit
-from src.generate.placement import (
-    find_open_cells, place_encounters, place_npcs, place_items,
-    place_day_night_variants, compute_zones, get_player_start,
+from src.models.encounter import (
+    CombatEvent,
+    EventEncounter,
+    PuzzleEvent,
 )
+from src.models.npc import StaticNPC
+from src.models.story import Faction, OverarchingStory, RoomStoryBeat
+from src.models.world_bible import RoomBible, WorldBible
 from src.utils.conversation_utils import check_dialogue_exhaustion
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────────
 
 
 def _make_npc(**overrides):
-    defaults = dict(x=0, y=0, id=1000, name="Arin", job="hunter",
-                    personality="cheerful", hobby="tracking",
-                    environment="forest")
+    defaults = dict(
+        x=0, y=0, id=1000, name="Arin", job="hunter", personality="cheerful", hobby="tracking", environment="forest"
+    )
     defaults.update(overrides)
     npc = StaticNPC(**defaults)
     npc.prepare()
@@ -54,7 +65,9 @@ def _make_grid(width=10, height=10, wall_id=1):
 class TestEventTimeGate:
     def test_event_has_time_gate_field(self):
         event = CombatEvent(
-            id=3000, name="Fight", description="A fight",
+            id=3000,
+            name="Fight",
+            description="A fight",
             time_gate="night",
         )
         assert event.time_gate == "night"
@@ -65,7 +78,9 @@ class TestEventTimeGate:
 
     def test_event_time_gate_day(self):
         event = EventEncounter(
-            id=3002, name="Shrine", description="A shrine",
+            id=3002,
+            name="Shrine",
+            description="A shrine",
             time_gate="day",
         )
         assert event.time_gate == "day"
@@ -129,6 +144,7 @@ class TestDialogueExhaustion:
     @patch("src.utils.conversation_utils.generate", return_value="I have nothing more to say.")
     def test_exhausted_npc_returns_finished_dialogue(self, _mock):
         from src.utils.conversation_utils import generate_npc_response
+
         npc = _make_npc()
         npc.has_met_player = True
         npc.dialogue_exhausted = True
@@ -151,8 +167,7 @@ class TestDialogueExhaustion:
 class TestNPCChecker:
     def test_valid_npc_passes(self):
         checker = NPCChecker()
-        npc = {"id": 1000, "name": "Alice", "type": "StaticNPC",
-               "selected": True, "opening_greeting": "Hello!"}
+        npc = {"id": 1000, "name": "Alice", "type": "StaticNPC", "selected": True, "opening_greeting": "Hello!"}
         result = checker.check(npc)
         assert result.passed
 
@@ -178,8 +193,7 @@ class TestNPCChecker:
 
     def test_merchant_missing_shop_fails(self):
         checker = NPCChecker()
-        npc = {"id": 1000, "name": "Shop", "type": "MerchantNPC",
-               "selected": True, "opening_greeting": "Welcome!"}
+        npc = {"id": 1000, "name": "Shop", "type": "MerchantNPC", "selected": True, "opening_greeting": "Welcome!"}
         result = checker.check(npc)
         assert not result.passed
         assert any("shop_inventory" in i for i in result.issues)
@@ -222,22 +236,19 @@ class TestMonsterChecker:
 class TestItemChecker:
     def test_valid_food_passes(self):
         checker = ItemChecker()
-        item = {"name": "Bread", "category": "food",
-                "item_stats": {"stamina_value": 15}}
+        item = {"name": "Bread", "category": "food", "item_stats": {"stamina_value": 15}}
         result = checker.check(item)
         assert result.passed
 
     def test_valid_weapon_passes(self):
         checker = ItemChecker()
-        item = {"name": "Sword", "category": "weapon",
-                "item_stats": {"attack_dice": "1d8", "stat_modifier": "STR"}}
+        item = {"name": "Sword", "category": "weapon", "item_stats": {"attack_dice": "1d8", "stat_modifier": "STR"}}
         result = checker.check(item)
         assert result.passed
 
     def test_invalid_category_fails(self):
         checker = ItemChecker()
-        item = {"name": "Magic Orb", "category": "artifact",
-                "item_stats": {}}
+        item = {"name": "Magic Orb", "category": "artifact", "item_stats": {}}
         result = checker.check(item)
         assert not result.passed
 
@@ -249,15 +260,13 @@ class TestItemChecker:
 
     def test_tool_missing_attribute_fails(self):
         checker = ItemChecker()
-        item = {"name": "Wrench", "category": "tool",
-                "item_stats": {"uses": 3}}
+        item = {"name": "Wrench", "category": "tool", "item_stats": {"uses": 3}}
         result = checker.check(item)
         assert not result.passed
 
     def test_tool_zero_uses_fails(self):
         checker = ItemChecker()
-        item = {"name": "Wrench", "category": "tool",
-                "item_stats": {"attribute": "bludgeon", "uses": 0}}
+        item = {"name": "Wrench", "category": "tool", "item_stats": {"attribute": "bludgeon", "uses": 0}}
         result = checker.check(item)
         assert not result.passed
 
@@ -268,15 +277,13 @@ class TestItemChecker:
 class TestEventCheckerTimeGate:
     def test_valid_time_gate_passes(self):
         checker = EventChecker()
-        event = {"name": "Night Ambush", "type": "combat",
-                 "monsters": [{"name": "Rat"}], "time_gate": "night"}
+        event = {"name": "Night Ambush", "type": "combat", "monsters": [{"name": "Rat"}], "time_gate": "night"}
         result = checker.check(event)
         assert result.passed
 
     def test_invalid_time_gate_fails(self):
         checker = EventChecker()
-        event = {"name": "Bad Event", "type": "combat",
-                 "monsters": [{"name": "Rat"}], "time_gate": "midnight"}
+        event = {"name": "Bad Event", "type": "combat", "monsters": [{"name": "Rat"}], "time_gate": "midnight"}
         result = checker.check(event)
         assert not result.passed
         assert any("time_gate" in i for i in result.issues)
@@ -288,31 +295,48 @@ class TestEventCheckerTimeGate:
 class TestNPCValidator:
     def test_valid_npc_passes(self):
         v = NPCValidator()
-        npc = {"id": 1000, "name": "Alice", "type": "StaticNPC",
-               "selected": True, "identity": "A hunter", "opening_greeting": "Hi!"}
+        npc = {
+            "id": 1000,
+            "name": "Alice",
+            "type": "StaticNPC",
+            "selected": True,
+            "identity": "A hunter",
+            "opening_greeting": "Hi!",
+        }
         result = v.validate(npc)
         assert result.passed
 
     def test_active_npc_missing_identity_fails(self):
         v = NPCValidator()
-        npc = {"id": 1000, "name": "Alice", "selected": True,
-               "opening_greeting": "Hi!"}
+        npc = {"id": 1000, "name": "Alice", "selected": True, "opening_greeting": "Hi!"}
         result = v.validate(npc)
         assert not result.passed
 
     def test_merchant_empty_shop_fails(self):
         v = NPCValidator()
-        npc = {"id": 1000, "name": "Shop", "type": "MerchantNPC",
-               "selected": True, "identity": "x", "opening_greeting": "x",
-               "shop_inventory": []}
+        npc = {
+            "id": 1000,
+            "name": "Shop",
+            "type": "MerchantNPC",
+            "selected": True,
+            "identity": "x",
+            "opening_greeting": "x",
+            "shop_inventory": [],
+        }
         result = v.validate(npc)
         assert not result.passed
 
     def test_merchant_invalid_price_fails(self):
         v = NPCValidator()
-        npc = {"id": 1000, "name": "Shop", "type": "MerchantNPC",
-               "selected": True, "identity": "x", "opening_greeting": "x",
-               "shop_inventory": [{"item_id": 2000, "price": 0, "stock": 1}]}
+        npc = {
+            "id": 1000,
+            "name": "Shop",
+            "type": "MerchantNPC",
+            "selected": True,
+            "identity": "x",
+            "opening_greeting": "x",
+            "shop_inventory": [{"item_id": 2000, "price": 0, "stock": 1}],
+        }
         result = v.validate(npc)
         assert not result.passed
 
@@ -341,8 +365,13 @@ class TestMonsterValidator:
 
     def test_invalid_ability_effect_fails(self):
         v = MonsterValidator()
-        monster = {"name": "Mage", "hp": 10, "ac": 10, "level": 1,
-                   "abilities": [{"name": "Zap", "effect_type": "teleport"}]}
+        monster = {
+            "name": "Mage",
+            "hp": 10,
+            "ac": 10,
+            "level": 1,
+            "abilities": [{"name": "Zap", "effect_type": "teleport"}],
+        }
         result = v.validate(monster)
         assert not result.passed
 
@@ -353,22 +382,19 @@ class TestMonsterValidator:
 class TestItemValidator:
     def test_valid_weapon_passes(self):
         v = ItemValidator()
-        item = {"name": "Sword", "category": "weapon",
-                "item_stats": {"attack_dice": "1d8", "stat_modifier": "STR"}}
+        item = {"name": "Sword", "category": "weapon", "item_stats": {"attack_dice": "1d8", "stat_modifier": "STR"}}
         result = v.validate(item)
         assert result.passed
 
     def test_weapon_bad_dice_format_fails(self):
         v = ItemValidator()
-        item = {"name": "Sword", "category": "weapon",
-                "item_stats": {"attack_dice": "8"}}
+        item = {"name": "Sword", "category": "weapon", "item_stats": {"attack_dice": "8"}}
         result = v.validate(item)
         assert not result.passed
 
     def test_food_restores_nothing_fails(self):
         v = ItemValidator()
-        item = {"name": "Stale Bread", "category": "food",
-                "item_stats": {"stamina_value": 0, "health_value": 0}}
+        item = {"name": "Stale Bread", "category": "food", "item_stats": {"stamina_value": 0, "health_value": 0}}
         result = v.validate(item)
         assert not result.passed
 
@@ -385,16 +411,25 @@ class TestItemValidator:
 class TestEventValidatorTimeGate:
     def test_valid_time_gate_passes(self):
         v = EventValidator()
-        event = {"name": "Night Fight", "description": "A fight at night.",
-                 "type": "combat", "monsters": [{"name": "Bat"}],
-                 "time_gate": "night"}
+        event = {
+            "name": "Night Fight",
+            "description": "A fight at night.",
+            "type": "combat",
+            "monsters": [{"name": "Bat"}],
+            "time_gate": "night",
+        }
         result = v.validate(event)
         assert result.passed
 
     def test_invalid_time_gate_fails(self):
         v = EventValidator()
-        event = {"name": "Bad", "description": "x", "type": "combat",
-                 "monsters": [{"name": "Bat"}], "time_gate": "dawn"}
+        event = {
+            "name": "Bad",
+            "description": "x",
+            "type": "combat",
+            "monsters": [{"name": "Bat"}],
+            "time_gate": "dawn",
+        }
         result = v.validate(event)
         assert not result.passed
 
@@ -405,7 +440,8 @@ class TestEventValidatorTimeGate:
 class TestGameplayAudit:
     def _make_world(self, **overrides):
         story = OverarchingStory(
-            title="Test Story", synopsis="Synopsis",
+            title="Test Story",
+            synopsis="Synopsis",
             faction=Faction(name="Evil Cult", description="Bad"),
             beats=[RoomStoryBeat(room_id="room_0", summary="Darkness")],
         )
@@ -419,12 +455,16 @@ class TestGameplayAudit:
                 {"id": 1001, "name": "Bob", "selected": True, "quest_id": None},
             ],
             "event_list": [
-                {"id": 3000, "type": "combat", "name": "Rat",
-                 "monsters": [{"name": "Rat"}]},
+                {"id": 3000, "type": "combat", "name": "Rat", "monsters": [{"name": "Rat"}]},
             ],
             "quest_list": [
-                {"id": 4000, "type": "fetch", "giver_npc_id": 1000,
-                 "target_items": [{"item_id": 2000}], "is_story_quest": True},
+                {
+                    "id": 4000,
+                    "type": "fetch",
+                    "giver_npc_id": 1000,
+                    "target_items": [{"item_id": 2000}],
+                    "is_story_quest": True,
+                },
             ],
             "item_placements": [{"item_id": 2000}],
         }
@@ -463,10 +503,14 @@ class TestGameplayAudit:
 
     def test_multi_step_missing_sub_quest(self):
         world = self._make_world()
-        world["quest_list"].append({
-            "id": 4100, "type": "multi_step", "giver_npc_id": 1000,
-            "sub_quest_ids": [4000, 4999],
-        })
+        world["quest_list"].append(
+            {
+                "id": 4100,
+                "type": "multi_step",
+                "giver_npc_id": 1000,
+                "sub_quest_ids": [4000, 4999],
+            }
+        )
         issues = gameplay_audit(**world)
         assert any("sub-quest" in i["message"] for i in issues)
 
@@ -502,10 +546,7 @@ class TestPlacement:
 
     def test_place_encounters(self):
         grid = _make_grid(10, 10)
-        events = [
-            {"id": 3000 + i, "type": "combat", "name": f"Fight {i}"}
-            for i in range(5)
-        ]
+        events = [{"id": 3000 + i, "type": "combat", "name": f"Fight {i}"} for i in range(5)]
         random.seed(42)
         positions = place_encounters(grid, events, density=0.1)
         assert len(positions) > 0
@@ -514,10 +555,7 @@ class TestPlacement:
 
     def test_place_encounters_assigns_time_gates(self):
         grid = _make_grid(20, 20)
-        events = [
-            {"id": 3000 + i, "type": "combat", "name": f"Fight {i}"}
-            for i in range(50)
-        ]
+        events = [{"id": 3000 + i, "type": "combat", "name": f"Fight {i}"} for i in range(50)]
         random.seed(42)
         place_encounters(grid, events, density=0.5, time_gate_ratio=0.5)
         gated = [e for e in events if e.get("time_gate")]

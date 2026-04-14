@@ -1,9 +1,8 @@
 from config import STORY_CONTEXT_LIMIT
-from src.prompts.base import PromptSet, LLMRequest
+from src.prompts.base import LLMRequest, PromptSet
 
 
 class LlamaPromptSet(PromptSet):
-
     def personality_generation(self, env: str, env_name: str) -> LLMRequest:
         return LLMRequest(
             system=(
@@ -17,23 +16,32 @@ class LlamaPromptSet(PromptSet):
                 "3. generate in a jsonic format"
             ),
             examples=[
-                ("environment: 'forest', env_name: 'Iron Oak'",
-                 "{'name': 'helena', 'job': 'herbalist', 'personality': 'mysterious', 'hobby': 'collecting herbs'}"),
-                ("environment: 'desert', env_name: 'Sandstone'",
-                 "{'name': 'khalid', 'job': 'merchant', 'personality': 'charming', 'hobby': 'haggling'}"),
-                ("environment: 'mountain', env_name: 'Frostpeak'",
-                 "{'name': 'greta', 'job': 'blacksmith', 'personality': 'gruff', 'hobby': 'forging'}"),
-                ("environment: 'city', env_name: 'Silverport'",
-                 "{'name': 'julius', 'job': 'guard', 'personality': 'stoic', 'hobby': 'training'}"),
-                ("environment: 'swamp', env_name: 'Mosswood'",
-                 "{'name': 'elara', 'job': 'alchemist', 'personality': 'eccentric', 'hobby': 'experimenting'}"),
+                (
+                    "environment: 'forest', env_name: 'Iron Oak'",
+                    "{'name': 'helena', 'job': 'herbalist', 'personality': 'mysterious', 'hobby': 'collecting herbs'}",
+                ),
+                (
+                    "environment: 'desert', env_name: 'Sandstone'",
+                    "{'name': 'khalid', 'job': 'merchant', 'personality': 'charming', 'hobby': 'haggling'}",
+                ),
+                (
+                    "environment: 'mountain', env_name: 'Frostpeak'",
+                    "{'name': 'greta', 'job': 'blacksmith', 'personality': 'gruff', 'hobby': 'forging'}",
+                ),
+                (
+                    "environment: 'city', env_name: 'Silverport'",
+                    "{'name': 'julius', 'job': 'guard', 'personality': 'stoic', 'hobby': 'training'}",
+                ),
+                (
+                    "environment: 'swamp', env_name: 'Mosswood'",
+                    "{'name': 'elara', 'job': 'alchemist', 'personality': 'eccentric', 'hobby': 'experimenting'}",
+                ),
             ],
             user_message=f"environment: '{env}', env_name: '{env_name}'",
             max_tokens=40,
         )
 
-    def conversation_identity(self, name: str, job: str, personality: str,
-                              hobby: str, env: str, env_name: str) -> str:
+    def conversation_identity(self, name: str, job: str, personality: str, hobby: str, env: str, env_name: str) -> str:
         return (
             f"##sys: You are playing a video game character. You are {name}, a {job} in a "
             f"{env} called {env_name}. This environment is in a fantasy setting, so limit "
@@ -52,17 +60,19 @@ class LlamaPromptSet(PromptSet):
         return LLMRequest(
             system=identity,
             examples=[],
-            user_message=(
-                "You see the player approaching you. "
-                "Greet them simply based on your personality."
-            ),
+            user_message=("You see the player approaching you. Greet them simply based on your personality."),
             max_tokens=50,
         )
 
-    def npc_response(self, identity: str, history: list[dict],
-                     npc_name: str, player_input: str,
-                     story_context: str = "",
-                     quest_context: dict | None = None) -> LLMRequest:
+    def npc_response(
+        self,
+        identity: str,
+        history: list[dict],
+        npc_name: str,
+        player_input: str,
+        story_context: str = "",
+        quest_context: dict | None = None,
+    ) -> LLMRequest:
         examples = _history_to_examples(history)
         system = identity
         if story_context:
@@ -109,34 +119,54 @@ class LlamaPromptSet(PromptSet):
             ),
             examples=[
                 (
-                    str({"name": "Duran", "job": "fighter", "personality": "brooding",
-                         "hobby": "swordsplay", "environment": "city",
-                         "environment_name": "Capital City"}),
+                    str(
+                        {
+                            "name": "Duran",
+                            "job": "fighter",
+                            "personality": "brooding",
+                            "hobby": "swordsplay",
+                            "environment": "city",
+                            "environment_name": "Capital City",
+                        }
+                    ),
                     "A precocious warrior, clad in steel armor with a great sword over his "
                     "shoulder. He has long red hair, untamed and wild. He stands in a bustling "
-                    "city square, scanning the crowd."
+                    "city square, scanning the crowd.",
                 ),
                 (
-                    str({"name": "Angela", "job": "mage", "personality": "princess",
-                         "hobby": "naughty", "environment": "city",
-                         "environment_name": "Magic Ice Kingdom of Altena"}),
+                    str(
+                        {
+                            "name": "Angela",
+                            "job": "mage",
+                            "personality": "princess",
+                            "hobby": "naughty",
+                            "environment": "city",
+                            "environment_name": "Magic Ice Kingdom of Altena",
+                        }
+                    ),
                     "A sexy mage with long flowing blonde hair, naughty and dressed in a "
                     "revealing short purple dress. She looks playful standing alone in a "
-                    "snowy town square"
+                    "snowy town square",
                 ),
                 (
-                    str({"name": "Kevin", "job": "monk", "personality": "mischievous",
-                         "hobby": "goofing off", "environment": "forest",
-                         "environment_name": "Dark Forest"}),
+                    str(
+                        {
+                            "name": "Kevin",
+                            "job": "monk",
+                            "personality": "mischievous",
+                            "hobby": "goofing off",
+                            "environment": "forest",
+                            "environment_name": "Dark Forest",
+                        }
+                    ),
                     "A mischievous half beast-half man monk with a playful grin, dressed in "
                     "animal skins. Half wolf man, he has shaggy brown fur and is standing in "
-                    "a dark forest, surrounded by tall trees and mist."
+                    "a dark forest, surrounded by tall trees and mist.",
                 ),
             ],
             user_message=str(personality_doc),
             max_tokens=40,
         )
-
 
     def environment_name_generation(self, env_type: str) -> LLMRequest:
         return LLMRequest(
@@ -155,8 +185,7 @@ class LlamaPromptSet(PromptSet):
             max_tokens=10,
         )
 
-    def event_generation(self, env: str, env_name: str, event_type: str,
-                         story_context: str = "") -> LLMRequest:
+    def event_generation(self, env: str, env_name: str, event_type: str, story_context: str = "") -> LLMRequest:
         ctx_suffix = ""
         if story_context:
             ctx_suffix = (
@@ -175,12 +204,16 @@ class LlamaPromptSet(PromptSet):
                     "faction creatures, story-relevant hazards."
                 ),
                 examples=[
-                    ("environment: 'forest', env_name: 'Shadowleaf'",
-                     '{"name": "Giant Spider", "description": "A massive spider drops from the canopy!", '
-                     '"difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}'),
-                    ("environment: 'cave', env_name: 'Gloomhollow'",
-                     '{"name": "Cave Troll", "description": "A hulking troll emerges from the shadows!", '
-                     '"difficulty": 4, "damage_type": "health", "damage_range": [8, 20]}'),
+                    (
+                        "environment: 'forest', env_name: 'Shadowleaf'",
+                        '{"name": "Giant Spider", "description": "A massive spider drops from the canopy!", '
+                        '"difficulty": 3, "damage_type": "health", "damage_range": [5, 15]}',
+                    ),
+                    (
+                        "environment: 'cave', env_name: 'Gloomhollow'",
+                        '{"name": "Cave Troll", "description": "A hulking troll emerges from the shadows!", '
+                        '"difficulty": 4, "damage_type": "health", "damage_range": [8, 20]}',
+                    ),
                 ],
                 user_message=f"environment: '{env}', env_name: '{env_name}'{ctx_suffix}",
                 max_tokens=80,
@@ -198,24 +231,33 @@ class LlamaPromptSet(PromptSet):
                     "Descriptions must be vivid scenes, not generic placeholders."
                 ),
                 examples=[
-                    ("environment: 'cave', env_name: 'Gloomhollow'",
-                     '{"name": "Collapsed Passage", "description": "Jagged rocks and shattered support beams block the narrow tunnel. '
-                     'Dust still settles from a recent cave-in, and faint air currents suggest open space beyond.", '
-                     '"difficulty": 2, "choices": ['
-                     '{"text": "Heave the largest stones aside with raw strength", "stat_check": "STR", "tool_attribute": null, "dc": 12, "auto_success": false}, '
-                     '{"text": "Carefully pick your way through the gaps", "stat_check": "DEX", "tool_attribute": null, "dc": 14, "auto_success": false}, '
-                     '{"text": "Turn back and find another route", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}'),
+                    (
+                        "environment: 'cave', env_name: 'Gloomhollow'",
+                        '{"name": "Collapsed Passage", "description": "Jagged rocks and shattered support beams block the narrow tunnel. '
+                        'Dust still settles from a recent cave-in, and faint air currents suggest open space beyond.", '
+                        '"difficulty": 2, "choices": ['
+                        '{"text": "Heave the largest stones aside with raw strength", "stat_check": "STR", "tool_attribute": null, "dc": 12, "auto_success": false}, '
+                        '{"text": "Carefully pick your way through the gaps", "stat_check": "DEX", "tool_attribute": null, "dc": 14, "auto_success": false}, '
+                        '{"text": "Turn back and find another route", "stat_check": null, "tool_attribute": null, "dc": 0, "auto_success": true}]}',
+                    ),
                 ],
                 user_message=f"environment: '{env}', env_name: '{env_name}'{ctx_suffix}",
                 max_tokens=200,
             )
 
-    def quest_generation(self, env: str, env_name: str,
-                         available_npcs: list[dict], available_items: list[dict],
-                         available_events: list[dict], quest_type: str,
-                         story_context: str = "") -> LLMRequest:
+    def quest_generation(
+        self,
+        env: str,
+        env_name: str,
+        available_npcs: list[dict],
+        available_items: list[dict],
+        available_events: list[dict],
+        quest_type: str,
+        story_context: str = "",
+    ) -> LLMRequest:
         ctx_data = {
-            "environment": env, "environment_name": env_name,
+            "environment": env,
+            "environment_name": env_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
@@ -244,19 +286,18 @@ class LlamaPromptSet(PromptSet):
             max_tokens=200,
         )
 
-    def dialogue_tree_generation(self, npc_personality: dict,
-                                 quest_context: dict | None = None) -> LLMRequest:
+    def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest:
         context = str({"npc": npc_personality, "quest": quest_context})
 
         if quest_context:
             system = (
                 "You generate dialogue trees for a quest NPC. Output JSON with THREE trees:\n"
-                "1. \"incomplete\" — while quest is active (3-5 nodes). Introduce NPC, describe quest.\n"
-                "2. \"complete_success\" — after success (2-3 nodes). Thank player, grateful farewell.\n"
-                "3. \"complete_failure\" — after failure (2-3 nodes). Acknowledge attempt, resigned farewell.\n"
-                "Format: {\"incomplete\": {\"nodes\": {\"start\": {\"prompt\": ..., \"choices\": [...]}, "
-                "\"end\": {\"prompt\": ..., \"choices\": []}}}, "
-                "\"complete_success\": {\"nodes\": {...}}, \"complete_failure\": {\"nodes\": {...}}}. "
+                '1. "incomplete" — while quest is active (3-5 nodes). Introduce NPC, describe quest.\n'
+                '2. "complete_success" — after success (2-3 nodes). Thank player, grateful farewell.\n'
+                '3. "complete_failure" — after failure (2-3 nodes). Acknowledge attempt, resigned farewell.\n'
+                'Format: {"incomplete": {"nodes": {"start": {"prompt": ..., "choices": [...]}, '
+                '"end": {"prompt": ..., "choices": []}}}, '
+                '"complete_success": {"nodes": {...}}, "complete_failure": {"nodes": {...}}}. '
                 "Stay in character."
             )
             max_tokens = 1000
@@ -275,8 +316,7 @@ class LlamaPromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int,
-                        story_context: str = "") -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "") -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -321,13 +361,10 @@ class LlamaPromptSet(PromptSet):
                     '"spell_scrolls": [{"name": "scroll of entangle", '
                     '"desc": "Vines ensnare your foes.", "spell_effect": "shield"}, '
                     '{"name": "scroll of regrowth", "desc": "Nature mends wounds.", '
-                    '"spell_effect": "heal"}]}'
+                    '"spell_effect": "heal"}]}',
                 ),
             ],
-            user_message=(
-                f"environment: '{env}', name: '{env_name}', room_level: {room_level}"
-                + lore_suffix
-            ),
+            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix),
             max_tokens=600,
         )
 
@@ -338,8 +375,10 @@ class LlamaPromptSet(PromptSet):
                 "Output a short visual description of the item, high fantasy style."
             ),
             examples=[
-                (str({"name": "hammer", "desc": "A craftsman's hammer"}),
-                 "A sturdy iron hammer with a worn leather grip, resting on a workbench."),
+                (
+                    str({"name": "hammer", "desc": "A craftsman's hammer"}),
+                    "A sturdy iron hammer with a worn leather grip, resting on a workbench.",
+                ),
             ],
             user_message=str(item_data),
             max_tokens=40,
@@ -352,8 +391,10 @@ class LlamaPromptSet(PromptSet):
                 "Output a short scene illustration description, high fantasy style."
             ),
             examples=[
-                (str({"name": "Giant Spider", "type": "combat"}),
-                 "A giant spider descending from dark forest canopy, silk threads glistening."),
+                (
+                    str({"name": "Giant Spider", "type": "combat"}),
+                    "A giant spider descending from dark forest canopy, silk threads glistening.",
+                ),
             ],
             user_message=str(event_data),
             max_tokens=40,
@@ -369,7 +410,6 @@ class LlamaPromptSet(PromptSet):
             user_message="Generate a default player character portrait.",
             max_tokens=40,
         )
-
 
     def class_generation(self, env: str, env_name: str) -> LLMRequest:
         return LLMRequest(
@@ -398,21 +438,23 @@ class LlamaPromptSet(PromptSet):
                 "Output a short visual description. High fantasy pixel art style."
             ),
             examples=[
-                (str({"name": "Ranger", "archetype": "warrior", "environment": "forest"}),
-                 "A rugged ranger in green leather, longbow on back, standing in a forest clearing."),
+                (
+                    str({"name": "Ranger", "archetype": "warrior", "environment": "forest"}),
+                    "A rugged ranger in green leather, longbow on back, standing in a forest clearing.",
+                ),
             ],
             user_message=str(class_data),
             max_tokens=60,
         )
 
-
-    def story_generation(self, story_seed: str, room_count: int,
-                         environments: list[str]) -> LLMRequest:
-        context = str({
-            "story_seed": story_seed,
-            "room_count": room_count,
-            "environments": environments,
-        })
+    def story_generation(self, story_seed: str, room_count: int, environments: list[str]) -> LLMRequest:
+        context = str(
+            {
+                "story_seed": story_seed,
+                "room_count": room_count,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate overarching stories for a fantasy game. "
@@ -426,16 +468,23 @@ class LlamaPromptSet(PromptSet):
             max_tokens=800,
         )
 
-    def story_quest_generation(self, env: str, env_name: str,
-                               story_beat: str, faction_name: str,
-                               available_npcs: list[dict],
-                               available_items: list[dict],
-                               available_events: list[dict],
-                               quest_type: str,
-                               story_context: str = "") -> LLMRequest:
+    def story_quest_generation(
+        self,
+        env: str,
+        env_name: str,
+        story_beat: str,
+        faction_name: str,
+        available_npcs: list[dict],
+        available_items: list[dict],
+        available_events: list[dict],
+        quest_type: str,
+        story_context: str = "",
+    ) -> LLMRequest:
         ctx_data = {
-            "environment": env, "environment_name": env_name,
-            "story_beat": story_beat, "faction_name": faction_name,
+            "environment": env,
+            "environment_name": env_name,
+            "story_beat": story_beat,
+            "faction_name": faction_name,
             "quest_type": quest_type,
             "npcs": [{"id": n["id"], "name": n.get("name", "NPC")} for n in available_npcs[:5]],
             "items": [{"id": i.get("id"), "name": i.get("name", "item")} for i in available_items[:5]],
@@ -459,14 +508,14 @@ class LlamaPromptSet(PromptSet):
             max_tokens=300,
         )
 
-
-    def full_story_generation(self, story_seed: str, room_count: int,
-                              environments: list[str]) -> LLMRequest:
-        context = str({
-            "story_seed": story_seed,
-            "room_count": room_count,
-            "environments": environments,
-        })
+    def full_story_generation(self, story_seed: str, room_count: int, environments: list[str]) -> LLMRequest:
+        context = str(
+            {
+                "story_seed": story_seed,
+                "room_count": room_count,
+                "environments": environments,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate a complete world story for a fantasy game. "
@@ -483,18 +532,21 @@ class LlamaPromptSet(PromptSet):
             max_tokens=2000,
         )
 
-    def monster_generation(self, env: str, env_name: str, room_level: int,
-                           story_context: str, total_rooms: int = 1) -> LLMRequest:
+    def monster_generation(
+        self, env: str, env_name: str, room_level: int, story_context: str, total_rooms: int = 1
+    ) -> LLMRequest:
         scale_stats_line = (
             f"Scale stats to room_level (1=easy, {total_rooms}=hard). "
             if total_rooms > 1
             else "Scale stats so the mix includes easy fodder monsters and one challenging boss for a single-room dungeon. "
         )
-        context = str({
-            "environment": env,
-            "environment_name": env_name,
-            "room_level": room_level,
-        })
+        context = str(
+            {
+                "environment": env,
+                "environment_name": env_name,
+                "room_level": room_level,
+            }
+        )
         return LLMRequest(
             system=(
                 "You generate monsters for a fantasy game.\n\n"
@@ -507,8 +559,9 @@ class LlamaPromptSet(PromptSet):
                 "abilities: [{name, effect_type, damage_dice, chance}], portrait_prompt}]\n\n"
                 "Each monster's description and backstory should tie to the faction or "
                 "environment. Scale lore depth to room_level. At least 1 monster should be "
-                "night_only. " + scale_stats_line +
-                "Be information-dense: every name and backstory should reinforce the world's "
+                "night_only. "
+                + scale_stats_line
+                + "Be information-dense: every name and backstory should reinforce the world's "
                 "lore. Do not pad or ramble."
             ),
             examples=[],
@@ -516,8 +569,7 @@ class LlamaPromptSet(PromptSet):
             max_tokens=800,
         )
 
-    def npc_backstory_generation(self, npc_data: dict,
-                                 story_context: str) -> LLMRequest:
+    def npc_backstory_generation(self, npc_data: dict, story_context: str) -> LLMRequest:
         return LLMRequest(
             system=(
                 "You write NPC backstories for a fantasy game.\n\n"
@@ -529,76 +581,84 @@ class LlamaPromptSet(PromptSet):
                 "should add unique narrative detail — do not pad or ramble."
             ),
             examples=[
-                (str({"name": "Greta", "job": "blacksmith"}),
-                 "Greta has hammered iron in Gloomhollow for twenty years, ever since "
-                 "the cult drove her family from the surface."),
+                (
+                    str({"name": "Greta", "job": "blacksmith"}),
+                    "Greta has hammered iron in Gloomhollow for twenty years, ever since "
+                    "the cult drove her family from the surface.",
+                ),
             ],
             user_message=str(npc_data),
             max_tokens=150,
         )
 
-
     # Stubs for new prompts — local model delegates to Claude prompt set
-    def npc_batch_generation(self, room_env: dict, room_story: str,
-                             npc_slots: list[dict], story_context: str) -> LLMRequest:
+    def npc_batch_generation(
+        self, room_env: dict, room_story: str, npc_slots: list[dict], story_context: str
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().npc_batch_generation(room_env, room_story, npc_slots, story_context)
 
-    def event_batch_generation(self, room_env: dict, room_story: str,
-                               event_type: str, event_slots: list[dict],
-                               story_context: str, **kwargs) -> LLMRequest:
+    def event_batch_generation(
+        self, room_env: dict, room_story: str, event_type: str, event_slots: list[dict], story_context: str, **kwargs
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
-        return ClaudePromptSet().event_batch_generation(
-            room_env, room_story, event_type, event_slots, story_context, **kwargs)
 
-    def dialogue_context_generation(self, room_env: dict, room_story: str,
-                                    npc_data: list[dict], story_context: str) -> LLMRequest:
+        return ClaudePromptSet().event_batch_generation(
+            room_env, room_story, event_type, event_slots, story_context, **kwargs
+        )
+
+    def dialogue_context_generation(
+        self, room_env: dict, room_story: str, npc_data: list[dict], story_context: str
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().dialogue_context_generation(room_env, room_story, npc_data, story_context)
 
-    def weapon_database_generation(self, environments: list[dict],
-                                   num_rooms: int) -> LLMRequest:
+    def weapon_database_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().weapon_database_generation(environments, num_rooms)
 
-    def spell_database_generation(self, class_type: str,
-                                  environments: list[dict],
-                                  num_rooms: int) -> LLMRequest:
+    def spell_database_generation(self, class_type: str, environments: list[dict], num_rooms: int) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().spell_database_generation(class_type, environments, num_rooms)
 
-    def utility_ability_generation(self, environments: list[dict],
-                                   num_rooms: int) -> LLMRequest:
+    def utility_ability_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().utility_ability_generation(environments, num_rooms)
 
-    def environment_sequence_generation(self, story_seed: str, num_rooms: int,
-                                        known_types: list[str]) -> LLMRequest:
+    def environment_sequence_generation(self, story_seed: str, num_rooms: int, known_types: list[str]) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().environment_sequence_generation(story_seed, num_rooms, known_types)
 
-    def overarching_story_generation(self, story_seed: str,
-                                     environments: list[dict]) -> LLMRequest:
+    def overarching_story_generation(self, story_seed: str, environments: list[dict]) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().overarching_story_generation(story_seed, environments)
 
-    def room_story_beat_generation(self, overarching_story: dict,
-                                   room_env: dict, room_index: int,
-                                   prior_beats: list[dict],
-                                   num_rooms: int = 5) -> LLMRequest:
+    def room_story_beat_generation(
+        self, overarching_story: dict, room_env: dict, room_index: int, prior_beats: list[dict], num_rooms: int = 5
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
-        return ClaudePromptSet().room_story_beat_generation(
-            overarching_story, room_env, room_index, prior_beats, num_rooms)
 
-    def music_prompt_generation(self, story_summary: dict,
-                                environments: list[str]) -> LLMRequest:
+        return ClaudePromptSet().room_story_beat_generation(
+            overarching_story, room_env, room_index, prior_beats, num_rooms
+        )
+
+    def music_prompt_generation(self, story_summary: dict, environments: list[str]) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().music_prompt_generation(story_summary, environments)
 
-    def sfx_prompt_generation(self, story_summary: dict,
-                              environments: list[dict],
-                              spell_elements: list[str]) -> LLMRequest:
+    def sfx_prompt_generation(
+        self, story_summary: dict, environments: list[dict], spell_elements: list[str]
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet().sfx_prompt_generation(story_summary, environments, spell_elements)
 
 

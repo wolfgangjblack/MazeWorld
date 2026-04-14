@@ -1,5 +1,6 @@
 import json
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll, Item, ItemStats
+
+from src.models.items import Drink, Food, Item, ItemStats, SpellScroll, Tool, Weapon
 
 
 def create_item_from_data(item_id: int, data: dict):
@@ -40,7 +41,7 @@ def create_item_from_data(item_id: int, data: dict):
 
     return cls(**kwargs)
 
+
 def load_json_data(file_path: str):
     with open(file_path, "r") as file:
         return json.load(file)
-    

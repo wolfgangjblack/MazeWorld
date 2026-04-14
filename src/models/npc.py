@@ -1,13 +1,15 @@
 import random
-from pydantic import BaseModel, Field
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 
+from pydantic import BaseModel, Field
+
+from src.data.world_data import ENVIRONMENT_TYPES, HOBBIES, JOBS, NAMES, PERSONALITIES
 from src.prompts import get_prompt_set
-from src.data.world_data import NAMES, PERSONALITIES, JOBS, HOBBIES, ENVIRONMENT_TYPES
 
 
 class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
+
     x: int
     y: int
     id: int
@@ -92,7 +94,7 @@ class NPC(BaseModel):
         return False
 
     def is_appropriate(self, response: str) -> bool:
-        banned_words = ['chibi', 'loli', 'shota', 'nsfw']
+        banned_words = ["chibi", "loli", "shota", "nsfw"]
         for word in banned_words:
             if word in response.lower():
                 return False
@@ -102,13 +104,14 @@ class NPC(BaseModel):
         fallback_responses = [
             "I'm not sure how to respond to that.",
             "Let's talk about something else.",
-            "I don't have anything to say about that."
+            "I don't have anything to say about that.",
         ]
         return random.choice(fallback_responses)
 
 
 class StaticNPC(NPC):
     """NPC that doesn't move."""
+
     color: tuple = (0, 255, 0)
 
     def prepare(self, maze_environment: str | None = None):
@@ -118,6 +121,7 @@ class StaticNPC(NPC):
 
 class RandomNPC(NPC):
     """NPC that moves randomly around a fixed point."""
+
     color: Tuple[int, int, int] = (0, 255, 255)
     home_x: int = 0
     home_y: int = 0
@@ -146,6 +150,7 @@ class RandomNPC(NPC):
 
 class MerchantNPC(NPC):
     """NPC that sells items. Stays in place like a StaticNPC."""
+
     color: Tuple[int, int, int] = (255, 215, 0)  # gold
     shop_inventory: List[dict] = Field(default_factory=list)
     # Each entry: {"item_id": int, "price": int, "stock": int}
@@ -168,6 +173,7 @@ class MerchantNPC(NPC):
         if not player.spend_money(price):
             return "You don't have enough money."
         from src.registry import registry
+
         item_template = registry.get_item(entry["item_id"])
         if not item_template:
             player.add_money(price)  # refund
@@ -181,6 +187,7 @@ class MerchantNPC(NPC):
         if item_name not in player.inventory:
             return "You don't have that item."
         from src.models.items import EscortItem
+
         item = player.inventory[item_name]
         if isinstance(item, EscortItem):
             return "You can't sell that."
@@ -195,6 +202,7 @@ class MerchantNPC(NPC):
 class AggressiveNPC(NPC):
     """NPC that moves randomly until the player is within 5 squares and in line of sight.
     After combat_defeated is set, reverts to random wandering."""
+
     color: Tuple[int, int, int] = (255, 0, 0)
     dist: int = 5
     combat_defeated: bool = False

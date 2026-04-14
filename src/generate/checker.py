@@ -11,7 +11,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.models.player import (
-    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES,
+    ARCHETYPE_STAT_ROLES,
+    STAT_BUDGET,
+    STAT_NAMES,
 )
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,7 @@ def check_quest_references(
 @dataclass
 class CheckResult:
     """Outcome of a check pass."""
+
     passed: bool
     issues: list[str] = field(default_factory=list)
     data: object = None  # Optionally return corrected data
@@ -160,9 +163,14 @@ class QuestChecker(BaseChecker):
         if missing:
             issues.append(f"Missing fields: {', '.join(sorted(missing))}")
 
-        issues.extend(check_quest_references(
-            data, npc_ids=npc_ids, item_ids=item_ids, event_ids=event_ids,
-        ))
+        issues.extend(
+            check_quest_references(
+                data,
+                npc_ids=npc_ids,
+                item_ids=item_ids,
+                event_ids=event_ids,
+            )
+        )
 
         return CheckResult(passed=len(issues) == 0, issues=issues, data=data)
 

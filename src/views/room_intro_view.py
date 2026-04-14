@@ -1,10 +1,11 @@
 """Room intro screen — full-screen environment portrait + story text overlay."""
 
 import os
-import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
-from src.utils.text_utils import draw_wrapped_text
 
+import pygame
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (220, 180, 60)
 TEXT_COLOR = (200, 200, 200)
@@ -14,8 +15,7 @@ PANEL_BG = (0, 0, 0, 180)  # semi-transparent
 class RoomIntroView:
     """Renders room entry intro: environment art + dialogue box with story text."""
 
-    def __init__(self, screen, font, env_name: str, env_type: str,
-                 story_text: str, portrait_path: str | None = None):
+    def __init__(self, screen, font, env_name: str, env_type: str, story_text: str, portrait_path: str | None = None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 56)
@@ -64,8 +64,7 @@ class RoomIntroView:
         pygame.draw.rect(self.screen, (80, 80, 120), (box_x, box_y, box_w, box_h), 2)
 
         # Story text wrapped
-        draw_wrapped_text(self.screen, self.story_text, box_x + 15, box_y + 15,
-                          box_w - 30, self.font, TEXT_COLOR)
+        draw_wrapped_text(self.screen, self.story_text, box_x + 15, box_y + 15, box_w - 30, self.font, TEXT_COLOR)
 
         # Continue hint
         hint = self.small_font.render("Press Enter to continue...", True, (150, 150, 150))
@@ -76,4 +75,3 @@ class RoomIntroView:
         if event.key in (pygame.K_RETURN, pygame.K_SPACE):
             return True
         return False
-
