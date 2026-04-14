@@ -23,6 +23,7 @@ class ApiLLMBackend(LLMBackend):
             return self._client
 
         from anthropic import Anthropic
+
         from config import ANTHROPIC_KEY_ENV
 
         api_key = os.getenv(ANTHROPIC_KEY_ENV)

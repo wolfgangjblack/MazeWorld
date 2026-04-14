@@ -244,7 +244,10 @@ class CombatEvent(Event):
                 # Poison the player: deal initial damage + lingering
                 damage = _roll_dice(ability.damage_dice)
                 player.health = max(0, player.health - damage)
-                msg = f"{monster.name} uses {ability.name}! You take {damage} poison damage and are poisoned for {ability.duration} turns."
+                msg = (
+                    f"{monster.name} uses {ability.name}! You take {damage} poison damage "
+                    f"and are poisoned for {ability.duration} turns."
+                )
                 self.combat_log.append(msg)
                 return {
                     "success": True,
@@ -272,7 +275,10 @@ class CombatEvent(Event):
         if attack_roll >= defense_dc:
             damage = monster.roll_damage()
             player.health = max(0, player.health - damage)
-            msg = f"{monster.name} {monster.attack_name}s you for {damage} damage! (Roll: {attack_roll} vs DC {defense_dc})"
+            msg = (
+                f"{monster.name} {monster.attack_name}s you for {damage} damage! "
+                f"(Roll: {attack_roll} vs DC {defense_dc})"
+            )
             self.combat_log.append(msg)
             return {"success": True, "message": msg, "damage": damage, "roll": attack_roll}
         else:

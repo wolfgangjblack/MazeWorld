@@ -7,6 +7,7 @@ not just structured data.
 
 import json
 from pathlib import Path
+
 from pydantic import BaseModel, Field
 
 from config import STORY_CONTEXT_LIMIT
@@ -113,7 +114,8 @@ class WorldBible(BaseModel):
             prev_room = self.rooms.get(prev_id)
             if not prev_room:
                 continue
-            header = f"\n--- Previously generated content (Room {prev_idx}: {prev_room.environment_name or prev_room.environment}) ---"
+            env_label = prev_room.environment_name or prev_room.environment
+            header = f"\n--- Previously generated content (Room {prev_idx}: {env_label}) ---"
             prev_parts = [header]
             for npc in prev_room.npcs:
                 if npc.name:

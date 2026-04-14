@@ -1,20 +1,17 @@
 """Tests for the stamina-based survival system."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.systems.survival import (
-    SurvivalSystem,
-    STAMINA_DRAIN_PER_CYCLE,
-    STAMINA_DRAIN_INTERVAL_MS,
-    THRESHOLD_WARNING,
-    THRESHOLD_PENALTY,
-    THRESHOLD_CRITICAL,
-    SPEED_PENALTY_FACTOR,
-)
 from src.models.player import PlayerCharacter
+from src.systems.survival import (
+    SPEED_PENALTY_FACTOR,
+    STAMINA_DRAIN_INTERVAL_MS,
+    STAMINA_DRAIN_PER_CYCLE,
+    SurvivalSystem,
+)
 
 
 def _make_player(stamina=100) -> PlayerCharacter:

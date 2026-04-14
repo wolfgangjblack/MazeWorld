@@ -3,6 +3,8 @@ import json
 import logging
 
 from src.generate.llm_client import generate
+from src.models.spell import ELEMENT_ADVANTAGE
+from src.models.weapon import WEAPON_DICE_BY_ROOM
 from src.prompts import get_prompt_set
 
 _logger = logging.getLogger(__name__)
@@ -159,9 +161,6 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
     raw = generate(request)
     return _parse_json_response(raw)
 
-
-from src.models.spell import ELEMENT_ADVANTAGE
-from src.models.weapon import WEAPON_DICE_BY_ROOM
 
 WEAPON_TYPE_TO_DAMAGE_TYPE: dict[str, list[str]] = {
     "heavy": ["slashing", "bludgeoning"],

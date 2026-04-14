@@ -28,6 +28,7 @@ class LocalImageBackend(ImageBackend):
         MPS/CPU -> SDXL Turbo (float16, MPS-native)
         """
         import torch
+
         from config import LOCAL_IMAGE_MODEL_CUDA, LOCAL_IMAGE_MODEL_MPS
 
         if device == "cuda":
@@ -68,7 +69,7 @@ class LocalImageBackend(ImageBackend):
     def generate_image(self, prompt: str, width: int | None = None,
                        height: int | None = None):
         """Returns a PIL Image at native resolution for the active model."""
-        from config import IMAGE_WIDTH, IMAGE_HEIGHT
+        from config import IMAGE_HEIGHT, IMAGE_WIDTH
         pipe = self._get_pipe()
 
         if width is None:

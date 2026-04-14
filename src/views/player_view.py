@@ -1,7 +1,9 @@
 import math
+
 import pygame
-from src.utils.display_utils import game_to_screen
+
 from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH
+from src.utils.display_utils import game_to_screen
 
 PERIOD_COLORS = {
     "dawn": (255, 180, 80),

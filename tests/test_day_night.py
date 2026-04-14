@@ -1,19 +1,25 @@
 """Tests for the Day/Night cycle system."""
 
-import sys
 import os
+import sys
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src.models.items import ItemStats, Tool
+from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.time import DayNightCycle, TimePeriod
 from src.systems.day_night import (
-    apply_rest, apply_combat_rest, player_has_torch, consume_torch_use,
-    is_event_active_at_time, is_npc_available, get_night_overlay_alpha,
     COMBAT_REST_HP,
+    apply_combat_rest,
+    apply_rest,
+    consume_torch_use,
+    get_night_overlay_alpha,
+    is_event_active_at_time,
+    is_npc_available,
+    player_has_torch,
 )
-from src.models.player import PlayerCharacter, PlayerClass, Stats
-from src.models.items import Tool, ItemStats
 
 
 def _make_player(x=5, y=5, health=50, max_health=100, stamina=80):

@@ -6,9 +6,9 @@ import os
 import pygame
 
 from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.utils.text_utils import draw_wrapped_text
 
 logger = logging.getLogger(__name__)
-from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (200, 50, 50)
 TEXT_COLOR = (180, 180, 180)

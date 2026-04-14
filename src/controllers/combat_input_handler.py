@@ -207,7 +207,6 @@ class CombatInputHandler:
             return
 
         _gate = getattr(self.combat_event, "is_gate", False) or getattr(self.combat_event, "is_climax_boss", False)
-        grid = CombatView.get_action_grid(cc, is_gate_fight=_gate)
         cur = self.selected_action
         row = cur // CombatView.GRID_COLS
         col = cur % CombatView.GRID_COLS

@@ -6,9 +6,9 @@ import os
 import pygame
 
 from config import SCREEN_HEIGHT, SCREEN_WIDTH
+from src.views.status_layout import draw_status_layout, estimate_status_height
 
 logger = logging.getLogger(__name__)
-from src.views.status_layout import draw_status_layout, estimate_status_height
 
 TITLE_COLOR = (220, 180, 60)
 TAB_ACTIVE_COLOR = (255, 255, 100)

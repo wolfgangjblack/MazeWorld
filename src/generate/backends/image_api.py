@@ -13,7 +13,8 @@ class ApiImageBackend(ImageBackend):
     def generate_image(self, prompt: str, width: int = 256, height: int = 256) -> str:
         """Returns a URL to the generated image."""
         import fal_client
-        from config import FAL_MODEL, FAL_KEY_ENV
+
+        from config import FAL_KEY_ENV, FAL_MODEL
 
         fal_key = os.getenv(FAL_KEY_ENV)
         if not fal_key:

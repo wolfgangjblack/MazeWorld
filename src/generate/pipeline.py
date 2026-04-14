@@ -1750,7 +1750,7 @@ def generate_world():
     # --- Phase 4: Events, Quests, Dialogue (per room) ---
     advance(PHASE_NAMES[5])
     for rr in tqdm(room_results, desc="  Content", unit="room", position=1, leave=True):
-        layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
+        layout = next(lay for lay in layouts if lay["room_id"] == rr["room_id"])
         event_list, quest_list = _phase4a_events(
             layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"], class_data_list=class_data_list
         )
@@ -1767,7 +1767,7 @@ def generate_world():
 
     # --- Phase 6: Narrative ---
     advance(PHASE_NAMES[7])
-    narrative_data = _phase6_narrative(bible, room_results)
+    _phase6_narrative(bible, room_results)
     phase_bar.update(1)
 
     # --- Phase 7: Portraits + Music + SFX ---
@@ -1784,7 +1784,7 @@ def generate_world():
 
     # Rewrite room files with updated profile_image paths from portrait generation
     for rr in room_results:
-        layout = next(l for l in layouts if l["room_id"] == rr["room_id"])
+        layout = next(lay for lay in layouts if lay["room_id"] == rr["room_id"])
         _write_room_files(layout, rr["npc_pool"], rr["event_list"], rr["quest_list"], rr["item_placements"])
     logger.info("Room files rewritten with portrait paths.")
     phase_bar.update(1)

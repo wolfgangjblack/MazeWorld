@@ -1,7 +1,8 @@
 """Story data models — OverarchingStory, RoomStoryBeat, Faction, and story entities."""
 
-from pydantic import BaseModel, Field
 from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class Faction(BaseModel):

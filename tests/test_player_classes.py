@@ -1,15 +1,20 @@
 """Tests for Phase 2: Player Classes & Stats."""
 
 import pytest
-from src.models.player import (
-    Stats, Ability, PlayerClass, PlayerCharacter,
-    STAT_BUDGET,
-)
-from src.generate.class_gen import (
-    _fix_stats, _check_classes, _validate_classes,
-    _fallback_class,
-)
 
+from src.generate.class_gen import (
+    _check_classes,
+    _fallback_class,
+    _fix_stats,
+    _validate_classes,
+)
+from src.models.player import (
+    STAT_BUDGET,
+    Ability,
+    PlayerCharacter,
+    PlayerClass,
+    Stats,
+)
 
 # ---------------------------------------------------------------------------
 # Stats tests

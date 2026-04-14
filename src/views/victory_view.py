@@ -1,10 +1,10 @@
 """Victory screen — end-of-game stats summary and final message."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 from src.utils.text_utils import draw_wrapped_text
 from src.views.portrait_utils import load_portrait
-
 
 GOLD = (220, 180, 60)
 DIM = (150, 150, 150)

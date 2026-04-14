@@ -4,7 +4,7 @@ Resolves backend instances by type (llm, image) based on config values.
 Backends are instantiated on first access and cached for the process lifetime.
 """
 
-from src.generate.backends.base import LLMBackend, ImageBackend
+from src.generate.backends.base import ImageBackend, LLMBackend
 
 
 class BackendRegistry:

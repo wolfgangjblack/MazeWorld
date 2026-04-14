@@ -1,13 +1,13 @@
 """Tests for the Fog of War system."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.systems.fog_of_war import FogOfWar, DEFAULT_VISIBILITY_RADIUS
 from config import FOG_NIGHT_PENALTY as NIGHT_VISIBILITY_PENALTY
 from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.systems.fog_of_war import DEFAULT_VISIBILITY_RADIUS, FogOfWar
 
 
 def _make_simple_maze(width=10, height=10):

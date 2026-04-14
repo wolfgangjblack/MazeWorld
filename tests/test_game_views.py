@@ -1,14 +1,15 @@
 """Tests for debug toggle, GameController, GameView, and MazeView."""
-import sys
 import os
-import pytest
-import pygame
+import sys
 from unittest.mock import MagicMock, patch
+
+import pygame
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
-from src.views.maze_view import MazeView, DEBUG_EVENT_FALLBACK
+from config import GRID_SIZE, HUD_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.views.maze_view import DEBUG_EVENT_FALLBACK, MazeView
 
 
 @pytest.fixture(autouse=True)

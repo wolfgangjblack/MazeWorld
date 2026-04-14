@@ -7,10 +7,8 @@ Covers the two pure-logic components:
 No API calls, no actual audio files, no pygame display required.
 """
 
-import pytest
-from src.generate.music_client import build_full_prompt_dict, FIXED_PROMPTS
+from src.generate.music_client import FIXED_PROMPTS, build_full_prompt_dict
 from src.systems.music_controller import MusicController
-
 
 # ---------------------------------------------------------------------------
 # MusicController: silent fallback tests

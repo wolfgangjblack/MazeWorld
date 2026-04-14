@@ -1,8 +1,8 @@
 """Level-up screen — player picks a new ability or spell from their class pool."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
 
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 
 GOLD = (220, 180, 60)
 HIGHLIGHT = (255, 220, 50)

@@ -1,10 +1,11 @@
 import os
-import pytest
-from unittest.mock import patch, MagicMock
-from src.prompts.base import LLMRequest
-from src.generate.backends.llm_local import LocalLLMBackend
-from src.generate.backends.llm_api import ApiLLMBackend
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from src.generate.backends.llm_api import ApiLLMBackend
+from src.generate.backends.llm_local import LocalLLMBackend
+from src.prompts.base import LLMRequest
 
 SAMPLE_REQUEST = LLMRequest(
     system="You are a test assistant.",

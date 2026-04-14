@@ -8,9 +8,14 @@ Line-of-sight raycasting ensures walls block visibility.
 from typing import List
 
 from config import (
-    MAZE_WIDTH, MAZE_HEIGHT, FOG_DEFAULT_RADIUS,
-    FOG_DAWN_BONUS, FOG_DAY_BONUS, FOG_DUSK_PENALTY, FOG_NIGHT_PENALTY,
+    FOG_DAWN_BONUS,
+    FOG_DAY_BONUS,
+    FOG_DEFAULT_RADIUS,
     FOG_DIM_EDGE,
+    FOG_DUSK_PENALTY,
+    FOG_NIGHT_PENALTY,
+    MAZE_HEIGHT,
+    MAZE_WIDTH,
 )
 
 DEFAULT_VISIBILITY_RADIUS = FOG_DEFAULT_RADIUS

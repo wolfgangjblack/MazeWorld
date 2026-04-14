@@ -1,7 +1,8 @@
 """Tutorial screen — controls reference card accessible from the start menu."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.views.pause_view import CONTROLS_TEXT
 
 TITLE_COLOR = (220, 180, 60)

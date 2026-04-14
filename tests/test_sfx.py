@@ -9,12 +9,10 @@ Covers:
 No API calls, no actual audio files, no pygame display required.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from src.generate.sfx_client import build_full_sfx_prompt_dict, FIXED_SFX_PROMPTS
+from src.generate.sfx_client import FIXED_SFX_PROMPTS, build_full_sfx_prompt_dict
 from src.systems.sfx_controller import SFXController
-
 
 # ---------------------------------------------------------------------------
 # FIXED_SFX_PROMPTS: structural contract

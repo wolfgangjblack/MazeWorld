@@ -1,7 +1,8 @@
 """Credits screen — accessible from the start menu."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
 TITLE_COLOR = (220, 180, 60)
 TEXT_COLOR = (200, 200, 200)
@@ -21,9 +22,14 @@ def build_credits_lines() -> list[tuple[str, str]]:
     reflect the actual generation setup.
     """
     from config import (
-        LLM_BACKEND, IMAGE_BACKEND, MUSIC_BACKEND, GAME_MODE,
-        ANTHROPIC_MODEL, LLM_MODEL_PATH, FAL_MODEL,
-        LOCAL_IMAGE_MODEL_MPS, LOCAL_IMAGE_MODEL_CUDA,
+        ANTHROPIC_MODEL,
+        FAL_MODEL,
+        GAME_MODE,
+        IMAGE_BACKEND,
+        LLM_BACKEND,
+        LLM_MODEL_PATH,
+        LOCAL_IMAGE_MODEL_MPS,
+        MUSIC_BACKEND,
     )
 
     lines: list[tuple[str, str]] = []

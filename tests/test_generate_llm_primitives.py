@@ -1,12 +1,12 @@
 import json
 from unittest.mock import patch
+
 from src.generate.generators.llm_primitives import (
-    generate_personality_primitive,
-    generate_npc_convo,
     generate_image_description,
+    generate_npc_convo,
+    generate_personality_primitive,
 )
 from src.prompts.base import LLMRequest
-
 
 SAMPLE_PERSONALITY = {
     "name": "Arin",

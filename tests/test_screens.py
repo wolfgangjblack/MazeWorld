@@ -1,18 +1,23 @@
 """Tests for StartView, ConfigView (tabbed), and screen state machine."""
 
-import sys
 import os
-import pytest
+import sys
+
 import pygame
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.controllers.screen_controller import ScreenController, ScreenState
-from src.views.start_view import StartView, MENU_ITEMS
-from src.views.config_view import (
-    ConfigView, EDITABLE_SETTINGS, GENERATION_SETTINGS,
-    _mask_secret, _update_dotenv,
-)
 import config as cfg
+from src.controllers.screen_controller import ScreenController, ScreenState
+from src.views.config_view import (
+    EDITABLE_SETTINGS,
+    GENERATION_SETTINGS,
+    ConfigView,
+    _mask_secret,
+    _update_dotenv,
+)
+from src.views.start_view import MENU_ITEMS, StartView
 
 
 @pytest.fixture(autouse=True)
@@ -651,6 +656,7 @@ def test_validation_report_to_dict_shape():
 def test_registry_manifest_seed_compat():
     """Registry handles both old 'world_seed' and new 'seed' key."""
     import warnings
+
     from src.registry import GameRegistry
 
     reg = GameRegistry()

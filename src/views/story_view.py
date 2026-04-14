@@ -1,7 +1,8 @@
 """Quick story screen — overarching story summary + current room intro."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (220, 180, 60)

@@ -1,9 +1,9 @@
 """Shop screen view — two-column buy/sell layout for MerchantNPC interaction."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT
-from src.registry import registry
 
+from config import SCREEN_HEIGHT, SCREEN_WIDTH
+from src.registry import registry
 
 # Colours
 BG_COLOR = (220, 210, 180)

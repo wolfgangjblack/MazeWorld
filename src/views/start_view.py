@@ -1,9 +1,10 @@
 """Start screen — New Game, Load Game, Tutorial, Config, Quit."""
 
 import os
-import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
+import pygame
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
 MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Credits", "Quit"]
 

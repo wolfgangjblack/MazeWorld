@@ -4,16 +4,16 @@ Each test validates a contract that downstream phases depend on.
 """
 
 import math
+import os
 import random
 import sys
-import os
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.models.maze import Maze, TileMeta
 from config import EVENT_DENSITY, ITEM_DENSITY, NPC_DENSITY, TIME_GATE_FRACTION
+from src.models.maze import Maze
 
 
 @pytest.fixture

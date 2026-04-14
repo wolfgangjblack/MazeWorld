@@ -6,13 +6,13 @@ import time
 import pytest
 
 from src.generate.generation_stats import (
-    GenerationStats,
     _CLAUDE_INPUT_COST_PER_M,
     _CLAUDE_OUTPUT_COST_PER_M,
-    _FAL_COST_PER_IMAGE,
-    _LYRIA_PRO_COST_PER_TRACK,
-    _LYRIA_CLIP_COST_PER_TRACK,
     _ELEVENLABS_COST_PER_SFX,
+    _FAL_COST_PER_IMAGE,
+    _LYRIA_CLIP_COST_PER_TRACK,
+    _LYRIA_PRO_COST_PER_TRACK,
+    GenerationStats,
 )
 
 

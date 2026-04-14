@@ -860,10 +860,6 @@ class ClaudePromptSet(PromptSet):
         available_spells: list[str] | None = None,
         available_tools: list[str] | None = None,
     ) -> LLMRequest:
-        tool_list = ", ".join(available_tools or ["bludgeon", "cutting", "digging", "climbing"])
-        ability_list = ", ".join(available_abilities or [])
-        spell_list = ", ".join(available_spells or [])
-
         type_guidance = {
             "puzzle": (
                 "Generate PUZZLE encounters — environmental/physical obstacles.\n"

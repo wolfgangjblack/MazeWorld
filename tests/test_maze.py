@@ -1,8 +1,8 @@
 import math
 import random
-from src.models.maze import Maze
 
-from config import MAZE_WIDTH, MAZE_HEIGHT, ITEM_DENSITY
+from config import ITEM_DENSITY, MAZE_HEIGHT, MAZE_WIDTH
+from src.models.maze import Maze
 
 
 def test_item_tiles_match_density():

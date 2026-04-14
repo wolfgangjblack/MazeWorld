@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import logging
 
-from src.models.world_bible import WorldBible
-from src.models.story import OverarchingStory
 from src.generate.llm_client import generate
+from src.models.story import OverarchingStory
+from src.models.world_bible import WorldBible
 from src.prompts.base import LLMRequest
 
 logger = logging.getLogger(__name__)

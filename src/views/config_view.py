@@ -5,8 +5,9 @@ import os
 import re
 
 import pygame
+
 import config as cfg
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
 # ── Tab 0: Editable Config (runtime) ────────────────────────────────────────
 # Each entry: (attr, label, choices | None, secret)

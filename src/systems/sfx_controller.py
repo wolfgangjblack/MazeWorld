@@ -46,7 +46,7 @@ class SFXController:
         pygame.mixer.set_num_channels(max(pygame.mixer.get_num_channels(), 16))
 
         try:
-            from config import SFX_VOLUME, MASTER_VOLUME
+            from config import MASTER_VOLUME, SFX_VOLUME
             self._volume = (SFX_VOLUME / 100.0) * (MASTER_VOLUME / 100.0)
         except Exception:
             self._volume = 0.7

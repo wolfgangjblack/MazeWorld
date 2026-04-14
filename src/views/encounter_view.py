@@ -12,7 +12,8 @@ Layout:
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 from src.views.portrait_utils import load_portrait as _load_portrait
 
 # Colors
@@ -523,7 +524,6 @@ class EncounterView:
             if spell:
                 cost = getattr(spell, 'stamina_cost', 0)
                 cost_text = f" (-{cost} stam)" if cost else ""
-                sp_choice = None
                 text = f"Cast {spell.name}"
                 rendered.insert(-1 if rendered else 0, {
                     "text": f"{text}{cost_text}",

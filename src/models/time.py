@@ -10,9 +10,9 @@ Supports two modes:
 """
 
 import time as _time
+from enum import Enum
 
 from pydantic import BaseModel, PrivateAttr
-from enum import Enum
 
 
 class TimePeriod(str, Enum):

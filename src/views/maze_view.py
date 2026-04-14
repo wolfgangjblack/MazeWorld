@@ -1,9 +1,9 @@
 import pygame
-from config import GRID_SIZE, WHITE, BLACK
-from src.models.items import Food, Drink, Tool
-from src.utils.display_utils import game_to_screen
-from src.registry import registry
 
+from config import BLACK, GRID_SIZE, WHITE
+from src.models.items import Drink, Food, Tool
+from src.registry import registry
+from src.utils.display_utils import game_to_screen
 
 EVENT_COLOR = (0, 0, 0)        # Black — events are invisible during normal gameplay
 DEBUG_COMBAT_COLOR = (200, 50, 50)    # Red — combat encounters

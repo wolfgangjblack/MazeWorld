@@ -12,7 +12,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.models.player import (
-    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES, Stats,
+    ARCHETYPE_STAT_ROLES,
+    STAT_BUDGET,
+    STAT_NAMES,
+    Stats,
 )
 
 logger = logging.getLogger(__name__)

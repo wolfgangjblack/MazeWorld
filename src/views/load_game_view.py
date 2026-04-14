@@ -4,7 +4,8 @@ Used both from the start screen and from the player menu.
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)

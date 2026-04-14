@@ -7,6 +7,7 @@ Layout (per wireframe):
 """
 
 import pygame
+
 from config import SCREEN_WIDTH
 from src.utils.text_utils import draw_wrapped_text
 
@@ -68,7 +69,6 @@ def draw_status_layout(screen, font, small_font, tiny_font,
 
     # Stats (right of portrait)
     stats_x = pad + portrait_size + pad
-    stats_w = full_w - portrait_size - pad
     sy = y
     stats_title = font.render("Stats", True, STAT_COLOR)
     screen.blit(stats_title, (stats_x, sy))
