@@ -69,9 +69,7 @@ class EncounterView:
         content_y = self._draw_portrait_and_description(event)
 
         # Type-specific content
-        if event.type == "combat":
-            self._draw_combat_trigger(event, dialogue_box, content_y)
-        elif event.type == "puzzle":
+        if event.type == "puzzle":
             self._draw_puzzle(event, dialogue_box, content_y)
         elif event.type == "event":
             self._draw_event(event, dialogue_box, content_y)
@@ -136,104 +134,6 @@ class EncounterView:
             desc_y += self.font.get_linesize()
 
         return max(y + 140, desc_y + 12)
-
-    # ------------------------------------------------------------------
-    # Combat trigger screen
-    # ------------------------------------------------------------------
-
-    def _draw_combat_trigger(self, event, dialogue_box, y):
-        """Combat encounter: show monster roster and begin prompt."""
-        monsters = getattr(event, "monsters", [])
-
-        # Section header
-        pygame.draw.line(self.screen, MED_GRAY, (20, y), (SCREEN_WIDTH - 20, y))
-        y += 8
-        roster_label = self.font.render("Enemies:", True, RED)
-        self.screen.blit(roster_label, (20, y))
-        y += 24
-
-        if monsters:
-            slot_w = min(160, (SCREEN_WIDTH - 60) // max(len(monsters), 1))
-            for i, monster in enumerate(monsters):
-                mx = 30 + i * slot_w
-                self._draw_monster_card(monster, mx, y, slot_w - 10)
-        else:
-            hint = self.font.render("Unknown foe", True, LIGHT_GRAY)
-            self.screen.blit(hint, (30, y))
-
-        # Bottom prompt
-        phase = dialogue_box.combat_phase
-        if phase == "initiative":
-            self._draw_prompt("Press Enter to begin combat  |  Escape to flee", YELLOW)
-        elif phase in ("victory", "defeat", "fled"):
-            banners = {
-                "victory": ("VICTORY!", GREEN),
-                "defeat": ("DEFEAT!", RED),
-                "fled": ("ESCAPED!", YELLOW),
-            }
-            text, color = banners[phase]
-            self._draw_banner(text, color)
-            self._draw_prompt("Press Enter to continue", LIGHT_GRAY)
-        else:
-            # During combat turns, show combat log + turn info
-            self._draw_combat_log(dialogue_box, y + 130)
-
-    def _draw_monster_card(self, monster, x, y, width):
-        """Draw a compact monster info card."""
-        # Portrait placeholder
-        elem = monster.elemental_affinity
-        color = ELEMENT_COLORS.get(elem, LIGHT_GRAY)
-        pygame.draw.rect(self.screen, color, (x, y, 48, 48))
-        pygame.draw.rect(self.screen, WHITE, (x, y, 48, 48), 1)
-
-        # Monster portrait if available
-        portrait = _load_portrait(getattr(monster, "profile_image", None), (48, 48))
-        if portrait:
-            self.screen.blit(portrait, (x, y))
-
-        # Name
-        name_surf = self.small_font.render(monster.display_name, True, WHITE)
-        self.screen.blit(name_surf, (x, y + 52))
-
-        # Level + HP
-        info = f"Lv{monster.level}  HP:{monster.hp}/{monster.max_hp}  AC:{monster.ac}"
-        info_surf = self.small_font.render(info, True, LIGHT_GRAY)
-        self.screen.blit(info_surf, (x, y + 68))
-
-        # HP bar
-        bar_w = min(width, 120)
-        bar_h = 6
-        hp_ratio = max(0, monster.hp / monster.max_hp) if monster.max_hp > 0 else 0
-        pygame.draw.rect(self.screen, (80, 0, 0), (x, y + 84, bar_w, bar_h))
-        pygame.draw.rect(self.screen, RED, (x, y + 84, int(bar_w * hp_ratio), bar_h))
-        pygame.draw.rect(self.screen, WHITE, (x, y + 84, bar_w, bar_h), 1)
-
-        # Abilities hint
-        if monster.abilities:
-            ab_names = ", ".join(a.name for a in monster.abilities[:2])
-            ab_surf = self.small_font.render(ab_names, True, ORANGE)
-            self.screen.blit(ab_surf, (x, y + 94))
-
-    def _draw_combat_log(self, dialogue_box, y):
-        """Draw recent combat log entries."""
-        log = dialogue_box.combat_log[-8:]
-        pygame.draw.rect(self.screen, BLACK, (15, y - 2, SCREEN_WIDTH - 30, len(log) * 18 + 10))
-        pygame.draw.rect(self.screen, MED_GRAY, (15, y - 2, SCREEN_WIDTH - 30, len(log) * 18 + 10), 1)
-        for msg in log:
-            display = msg[:100] + "..." if len(msg) > 100 else msg
-            surf = self.small_font.render(display, True, LIGHT_GRAY)
-            self.screen.blit(surf, (20, y))
-            y += 18
-
-        # Action hints based on phase
-        phase = dialogue_box.combat_phase
-        if phase == "player_turn":
-            if dialogue_box.player_stunned_turns > 0:
-                self._draw_prompt("Stunned! Press Enter to skip turn", ORANGE)
-            else:
-                self._draw_prompt("[A]ttack  [F]lee  [I]tem  |  Up/Down: select target", BLUE)
-        elif phase == "monster_turn":
-            self._draw_prompt("Enemy turn... Press Enter", RED)
 
     # ------------------------------------------------------------------
     # Puzzle encounter

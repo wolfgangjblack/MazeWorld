@@ -21,15 +21,6 @@ class DialogueBox:
         self.awaiting_roll = False
         self.event_context = {}
 
-        # Combat state
-        self.combat_active = False
-        self.combat_phase = (
-            None  # "initiative" | "player_turn" | "monster_turn" | "result" | "victory" | "defeat" | "fled"
-        )
-        self.combat_log = []
-        self.player_stunned_turns = 0
-        self.player_poison_turns = 0
-
         # Scroll state: top-anchored (0 = top of history)
         self.scroll_position = 0
         self.max_scroll = 0
@@ -158,22 +149,7 @@ class DialogueBox:
         self.dialogue_active = False
         self.input_active = False
 
-        self.combat_active = False
         self.awaiting_roll = False
-
-    def start_combat_turns(self, init_result: dict):
-        """Called after initiative is rolled to begin turn-based combat."""
-        self.combat_phase = "player_turn"  # Will be set correctly by controller
-        self.combat_log = list(self.current_event.combat_log)
-
-    def set_combat_phase(self, phase: str):
-        self.combat_phase = phase
-
-    def add_combat_log(self, message: str):
-        self.combat_log.append(message)
-        # Keep scrolled to bottom
-        self.auto_scroll = True
-        self._scroll_target = "bottom"
 
     def end_event(self):
         """Close the event panel."""
@@ -181,8 +157,3 @@ class DialogueBox:
         self.current_event = None
         self.awaiting_roll = False
         self.event_context = {}
-        self.combat_active = False
-        self.combat_phase = None
-        self.combat_log = []
-        self.player_stunned_turns = 0
-        self.player_poison_turns = 0

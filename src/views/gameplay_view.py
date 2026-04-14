@@ -463,10 +463,7 @@ class GameView:
             # Use full-screen encounter view for puzzle/event types,
             # and for combat initiative (trigger screen before combat starts).
             # Once multi-turn combat is underway, use the dialogue view's combat renderer.
-            if event and (
-                event.type in ("puzzle", "event")
-                or (event.type == "combat" and self.dialogue_box.combat_phase == "initiative")
-            ):
+            if event and event.type in ("puzzle", "event"):
                 self.encounter_view.draw(self.dialogue_box)
             else:
                 self.dialogue_view.draw(self.dialogue_box)

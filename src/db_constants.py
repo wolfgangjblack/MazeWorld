@@ -36,12 +36,3 @@ def next_id(category: str, db: dict | list) -> int:
     sequential room generation produces contiguous IDs.
     """
     return DB_BASE[category] + len(db)
-
-
-def category_of(entity_id: int) -> str:
-    """Given an XYYY id, return the category name."""
-    x = entity_id // 1000
-    for name, base in DB_BASE.items():
-        if base // 1000 == x:
-            return name
-    raise ValueError(f"Unknown category for id {entity_id}")

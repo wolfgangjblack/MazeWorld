@@ -35,8 +35,8 @@ class NPC(BaseModel):
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
-    exhausted_dialogue: str = "I have nothing more to say."
-    finished_dialogue: str = "I have nothing more to say."
+    exhausted_dialogue: str = "I have nothing more to say."  # mid-conversation exhaustion (pipeline)
+    finished_dialogue: str = "I have nothing more to say."  # post-quest completion (QuestManager)
     dialogue_exhausted: bool = False
     personality_notes: List[str] = Field(default_factory=list)
     max_dialogue_turns: int = 10

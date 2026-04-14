@@ -220,6 +220,7 @@ def serialize_npc(npc) -> dict:
     # Dialogue state
     data["dialogue_exhausted"] = npc.dialogue_exhausted
     data["finished_dialogue"] = npc.finished_dialogue
+    data["exhausted_dialogue"] = npc.exhausted_dialogue
     data["current_dc"] = getattr(npc, "current_dc", 10)
     if getattr(npc, "dialogue_tree_incomplete", None):
         data["_active_tree"] = (

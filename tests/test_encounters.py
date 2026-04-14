@@ -507,33 +507,7 @@ class TestEncounterViewRender:
         db.event_active = True
         db.awaiting_roll = False
         db.event_context = {}
-        db.combat_active = False
-        db.combat_phase = None
-        db.combat_log = []
-        db.player_stunned_turns = 0
-        db.player_poison_turns = 0
         return db
-
-    def test_render_combat_trigger(self):
-        from config import SCREEN_HEIGHT, SCREEN_WIDTH
-        from src.views.encounter_view import EncounterView
-
-        screen = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        font = pygame.font.SysFont(None, 24)
-        view = EncounterView(screen, font)
-
-        monsters = [_make_monster()]
-        event = CombatEvent(
-            id=3005,
-            name="Wolf Pack",
-            description="Wolves attack!",
-            monsters=monsters,
-            room_level=1,
-        )
-        db = self._make_dialogue_box(event)
-        db.combat_active = True
-        db.combat_phase = "initiative"
-        view.draw(db)  # Should not raise
 
     def test_render_puzzle(self):
         from config import SCREEN_HEIGHT, SCREEN_WIDTH

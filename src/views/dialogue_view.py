@@ -19,10 +19,7 @@ class DialogueBoxView:
     def draw(self, dialogue_box):
         """Render the dialogue box and its contents."""
         if dialogue_box.event_active:
-            if dialogue_box.combat_active:
-                self._draw_combat(dialogue_box)
-            else:
-                self._draw_event(dialogue_box)
+            self._draw_event(dialogue_box)
             return
 
         if dialogue_box.dialogue_active:
@@ -87,112 +84,6 @@ class DialogueBoxView:
             input_prompt = f"You: {dialogue_box.user_message}"
             text_surface = self.font.render(input_prompt, True, BLACK)
             self.screen.blit(text_surface, (padding, SCREEN_HEIGHT - line_height - padding))
-
-    def _draw_combat(self, dialogue_box):
-        """Render the multi-turn combat interface."""
-        event = dialogue_box.current_event
-        if not event:
-            return
-
-        box_height = DIALOGUE_BOX_HEIGHT_ACTIVE
-        padding = 10
-        box_rect = pygame.Rect(0, SCREEN_HEIGHT - box_height, SCREEN_WIDTH, box_height)
-        pygame.draw.rect(self.screen, WHITE, box_rect)
-
-        y = SCREEN_HEIGHT - box_height + padding
-        line_height = self.font.get_linesize()
-        phase = dialogue_box.combat_phase
-
-        # Header
-        header_color = (180, 0, 0)
-        header = f"[COMBAT] {event.name}"
-        self.screen.blit(self.font.render(header, True, header_color), (padding, y))
-        y += line_height + 2
-
-        if phase == "initiative":
-            self.screen.blit(
-                self.font.render("Press Enter to roll initiative", True, BLACK),
-                (padding, y),
-            )
-            return
-
-        # Monster status panel (right side)
-        monsters = getattr(event, "monsters", [])
-        monster_x = SCREEN_WIDTH // 2 + 20
-        monster_y = SCREEN_HEIGHT - box_height + padding + line_height + 4
-
-        for i, monster in enumerate(monsters):
-            if not monster.is_alive:
-                color = (128, 128, 128)
-                name_text = f"  {monster.name} [DEFEATED]"
-            else:
-                # HP bar
-                hp_pct = monster.hp / monster.max_hp if monster.max_hp > 0 else 0
-                color = (0, 128, 0) if hp_pct > 0.5 else (200, 200, 0) if hp_pct > 0.25 else (200, 0, 0)
-                indicator = (
-                    ">"
-                    if (
-                        phase == "player_turn"
-                        and hasattr(dialogue_box, "_controller_target")
-                        and i == getattr(dialogue_box, "_controller_target", -1)
-                    )
-                    else " "
-                )
-                name_text = f"{indicator} {monster.name} HP:{monster.hp}/{monster.max_hp} AC:{monster.ac}"
-
-            self.screen.blit(self.font.render(name_text, True, color), (monster_x, monster_y))
-            monster_y += line_height
-
-            # HP bar visual
-            if monster.is_alive:
-                bar_w = 120
-                bar_h = 6
-                bar_x = monster_x
-                bar_y_pos = monster_y
-                pygame.draw.rect(self.screen, (60, 60, 60), (bar_x, bar_y_pos, bar_w, bar_h))
-                pygame.draw.rect(self.screen, color, (bar_x, bar_y_pos, int(bar_w * hp_pct), bar_h))
-                monster_y += bar_h + 4
-
-        # Combat log (left side, scrollable)
-        log_max_lines = (box_height - line_height * 3 - padding * 2) // line_height
-        log_lines = dialogue_box.combat_log[-log_max_lines:] if dialogue_box.combat_log else []
-        log_y = y
-        for log_line in log_lines:
-            wrapped = self.wrap_text(log_line, self.font, SCREEN_WIDTH // 2 - padding * 2)
-            for wl in wrapped:
-                if log_y + line_height > SCREEN_HEIGHT - line_height - padding:
-                    break
-                self.screen.blit(self.font.render(wl, True, BLACK), (padding, log_y))
-                log_y += line_height
-
-        # Action prompt at bottom
-        prompt_y = SCREEN_HEIGHT - line_height - padding
-        if phase == "player_turn":
-            if dialogue_box.player_stunned_turns > 0:
-                prompt = "You are stunned! Press Enter to skip turn"
-            else:
-                prompt = "[A]ttack  [F]lee  [I]tem  | Up/Down: select target"
-            self.screen.blit(self.font.render(prompt, True, (0, 0, 180)), (padding, prompt_y))
-        elif phase == "monster_turn":
-            self.screen.blit(
-                self.font.render("Enemy turn... Press Enter to continue", True, (180, 0, 0)),
-                (padding, prompt_y),
-            )
-        elif phase == "victory":
-            self.screen.blit(
-                self.font.render("VICTORY! Press Enter to continue", True, (0, 128, 0)),
-                (padding, prompt_y),
-            )
-        elif phase == "defeat":
-            self.screen.blit(
-                self.font.render("DEFEATED! Press Enter to continue", True, (180, 0, 0)),
-                (padding, prompt_y),
-            )
-        elif phase == "fled":
-            self.screen.blit(
-                self.font.render("You fled! Press Enter to continue", True, (180, 128, 0)),
-                (padding, prompt_y),
-            )
 
     def _draw_event(self, dialogue_box):
         """Render the event interaction panel."""

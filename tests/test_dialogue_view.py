@@ -121,7 +121,6 @@ class TestDialogueViewPortraitIntegration:
     def _make_dialogue_box(self, npc=None):
         db = MagicMock()
         db.event_active = False
-        db.combat_active = False
         db.dialogue_active = True
         db.item_message = None
         db.current_npc = npc

@@ -289,7 +289,7 @@ class GameController:
                 self._handle_mousewheel(event)
 
     def _handle_mousewheel(self, event):
-        if self.dialogue_box.event_active and not self.dialogue_box.combat_active:
+        if self.dialogue_box.event_active:
             self.game_view.encounter_view.scroll_content(-event.y)
         elif self.combat_handler.active:
             self.combat_handler.handle_mousewheel(event)

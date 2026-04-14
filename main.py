@@ -240,6 +240,7 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             # Restore dialogue state
             npc.dialogue_exhausted = saved.get("dialogue_exhausted", False)
             npc.finished_dialogue = saved.get("finished_dialogue", npc.finished_dialogue)
+            npc.exhausted_dialogue = saved.get("exhausted_dialogue", npc.exhausted_dialogue)
             npc.current_dc = saved.get("current_dc", 10)
             active_tree = saved.get("_active_tree")
             if active_tree == "complete" and getattr(npc, "dialogue_tree_complete", None):
