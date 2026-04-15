@@ -497,7 +497,7 @@ def _phase3c_npcs(
     layout: dict, bible: WorldBible, existing_npc_names: list[str] | None = None, id_offset: int = 0
 ) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
-    from src.db_constants import DB_BASE, DB_PATHS
+    from src.db_constants import DB_BASE
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]

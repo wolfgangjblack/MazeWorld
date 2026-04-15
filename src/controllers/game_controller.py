@@ -881,3 +881,4 @@ class GameController:
             dialogue_choices=dlg_choices,
             dialogue_choice_index=self.dialogue_choice_index,
         )
+ 

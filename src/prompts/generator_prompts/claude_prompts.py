@@ -357,7 +357,9 @@ class ClaudePromptSet(PromptSet):
                 "- food: array of 4 items, each {name, desc}\n"
                 "- drink: array of 4 items, each {name, desc}\n"
                 "- tools: array of 3 items, each {name, desc, attribute (bludgeon|cutting|digging|climbing)}\n"
-                "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}\n"
+                "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), "
+                "damage_type (slashing|piercing|bludgeoning — swords/axes=slashing, daggers/spears=piercing, "
+                "hammers/clubs=bludgeoning), stat_modifier (STR|DEX|INT)}\n"
                 "- spell_scrolls: array of 2 items, each {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}\n\n"
                 "Environment theming examples:\n"
                 "- forest: berries, spring water, hatchet, wooden bow\n"
@@ -405,18 +407,21 @@ class ClaudePromptSet(PromptSet):
                                     "name": "wooden bow",
                                     "desc": "A short bow carved from yew wood.",
                                     "weapon_type": "light",
+                                    "damage_type": "piercing",
                                     "stat_modifier": "DEX",
                                 },
                                 {
                                     "name": "oak club",
                                     "desc": "A heavy club hewn from solid oak.",
                                     "weapon_type": "heavy",
+                                    "damage_type": "bludgeoning",
                                     "stat_modifier": "STR",
                                 },
                                 {
                                     "name": "thorn staff",
                                     "desc": "A staff wrapped in enchanted thorns.",
                                     "weapon_type": "simple",
+                                    "damage_type": "piercing",
                                     "stat_modifier": "INT",
                                 },
                             ],
@@ -1043,6 +1048,8 @@ class ClaudePromptSet(PromptSet):
                 "(up to legendary 1d10-1d12).\n"
                 "Generate ~3 weapons per room (1 heavy, 1 light, 1 simple).\n\n"
                 "Each weapon: {name, weapon_type (heavy|light|simple), "
+                "damage_type (slashing|piercing|bludgeoning — swords/axes=slashing, "
+                "daggers/spears=piercing, hammers/clubs=bludgeoning), "
                 "rarity (common|uncommon|rare|legendary), attack_dice (e.g. '1d6'), "
                 "stat_modifier (STR|DEX|INT|WIS), flavor_text, portrait_prompt}\n\n"
                 "Respond with ONLY a JSON array of weapon objects. "
