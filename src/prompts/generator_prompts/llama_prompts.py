@@ -318,8 +318,14 @@ class LlamaPromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "",
-                        weapon_skeletons: list[dict] | None = None) -> LLMRequest:
+    def item_generation(
+        self,
+        env: str,
+        env_name: str,
+        room_level: int,
+        story_context: str = "",
+        weapon_skeletons: list[dict] | None = None,
+    ) -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -336,7 +342,7 @@ class LlamaPromptSet(PromptSet):
                 parts = [ws.get("weapon_type", "heavy"), ws.get("damage_type", "slashing")]
                 if ws.get("magic_element"):
                     parts.append(f"magic: {ws['magic_element']}")
-                skeleton_summaries.append(f"  {i+1}. {', '.join(parts)}")
+                skeleton_summaries.append(f"  {i + 1}. {', '.join(parts)}")
             weapon_note = (
                 "\nWeapon skeletons (mechanics pre-rolled, generate ONLY name and desc for each):\n"
                 + "\n".join(skeleton_summaries)
@@ -379,7 +385,9 @@ class LlamaPromptSet(PromptSet):
                     '"spell_effect": "heal"}]}',
                 ),
             ],
-            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note),
+            user_message=(
+                f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note
+            ),
             max_tokens=800,
         )
 
@@ -426,11 +434,11 @@ class LlamaPromptSet(PromptSet):
             max_tokens=40,
         )
 
-    def class_generation(self, env: str, env_name: str,
-                         archetype_skeletons: dict | None = None) -> LLMRequest:
+    def class_generation(self, env: str, env_name: str, archetype_skeletons: dict | None = None) -> LLMRequest:
         skeleton_note = ""
         if archetype_skeletons:
             from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
             return ClaudePromptSet().class_generation(env, env_name, archetype_skeletons=archetype_skeletons)
         return LLMRequest(
             system=(
@@ -641,8 +649,12 @@ class LlamaPromptSet(PromptSet):
         return ClaudePromptSet().weapon_database_generation(environments, num_rooms)
 
     def spell_pool_generation(
-        self, pool_type: str, element: str, count: int,
-        existing_names: list[str], env_context: str,
+        self,
+        pool_type: str,
+        element: str,
+        count: int,
+        existing_names: list[str],
+        env_context: str,
     ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
 

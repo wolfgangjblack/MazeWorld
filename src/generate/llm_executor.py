@@ -35,9 +35,7 @@ def generate_batch(
     results: list[str | None] = [None] * len(requests)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_idx = {
-            pool.submit(generate, req): idx for idx, req in enumerate(requests)
-        }
+        future_to_idx = {pool.submit(generate, req): idx for idx, req in enumerate(requests)}
         for future in as_completed(future_to_idx):
             idx = future_to_idx[future]
             try:

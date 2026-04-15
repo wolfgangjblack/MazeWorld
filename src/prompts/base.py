@@ -68,8 +68,14 @@ class PromptSet(ABC):
     def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest: ...
 
     @abstractmethod
-    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "",
-                        weapon_skeletons: list[dict] | None = None) -> LLMRequest: ...
+    def item_generation(
+        self,
+        env: str,
+        env_name: str,
+        room_level: int,
+        story_context: str = "",
+        weapon_skeletons: list[dict] | None = None,
+    ) -> LLMRequest: ...
 
     @abstractmethod
     def item_image_description(self, item_data: dict) -> LLMRequest: ...
@@ -134,8 +140,12 @@ class PromptSet(ABC):
 
     @abstractmethod
     def spell_pool_generation(
-        self, pool_type: str, element: str, count: int,
-        existing_names: list[str], env_context: str,
+        self,
+        pool_type: str,
+        element: str,
+        count: int,
+        existing_names: list[str],
+        env_context: str,
     ) -> LLMRequest: ...
 
     @abstractmethod

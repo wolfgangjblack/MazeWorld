@@ -312,11 +312,13 @@ class PlayerCharacter(BaseModel):
             if hasattr(choice, "spell_type") and choice.spell_type in ("damage_single", "damage_multi", "heal"):
                 num_dice, die_sides = compute_spell_dice(room_level, choice.spell_type)
                 stamina = compute_stamina_cost(die_sides, num_dice, choice.targets, choice.spell_type)
-                choice = choice.model_copy(update={
-                    "num_dice": num_dice,
-                    "die_sides": die_sides,
-                    "stamina_cost": stamina,
-                })
+                choice = choice.model_copy(
+                    update={
+                        "num_dice": num_dice,
+                        "die_sides": die_sides,
+                        "stamina_cost": stamina,
+                    }
+                )
             self.spells.append(choice)
 
     def initialize_inventory(self):

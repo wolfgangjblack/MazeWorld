@@ -43,18 +43,10 @@ def _build_archetype_skeletons() -> dict[str, dict]:
 
     archetype_skeletons: dict[str, dict] = {}
     for arch in REQUIRED_ARCHETYPES:
-        element = (
-            class_element_mage if arch == "mage"
-            else class_element_healer if arch == "healer"
-            else "fire"
-        )
-        spell_skels = [
-            roll_spell_skeleton(arch, slot, 0, element)
-            for slot in SPELL_DISTRIBUTIONS[arch]["starting"]
-        ]
+        element = class_element_mage if arch == "mage" else class_element_healer if arch == "healer" else "fire"
+        spell_skels = [roll_spell_skeleton(arch, slot, 0, element) for slot in SPELL_DISTRIBUTIONS[arch]["starting"]]
         pool_skels = [
-            roll_spell_skeleton(arch, slot, i + 1, element)
-            for i, slot in enumerate(SPELL_DISTRIBUTIONS[arch]["pool"])
+            roll_spell_skeleton(arch, slot, i + 1, element) for i, slot in enumerate(SPELL_DISTRIBUTIONS[arch]["pool"])
         ]
         ability_skels = [roll_ability_skeleton(s) for s in ABILITY_DISTRIBUTIONS[arch]["starting"]]
         ability_pool_skels = [roll_ability_skeleton(s) for s in ABILITY_DISTRIBUTIONS[arch]["pool"]]
@@ -67,10 +59,7 @@ def _build_archetype_skeletons() -> dict[str, dict]:
         }
 
     # Jester steals 0-3 random spell skeletons from mage+healer pools
-    all_caster_pool = (
-        archetype_skeletons["mage"]["spell_pool"]
-        + archetype_skeletons["healer"]["spell_pool"]
-    )
+    all_caster_pool = archetype_skeletons["mage"]["spell_pool"] + archetype_skeletons["healer"]["spell_pool"]
     jester_stolen = roll_jester_spell_skeletons(all_caster_pool)
     archetype_skeletons["jester"]["spell_pool"] = jester_stolen
 
@@ -91,9 +80,7 @@ def generate_classes(env_type: str, env_name: str) -> tuple[list[PlayerClass], d
     return validated, class_elements
 
 
-def _llm_generate(
-    env_type: str, env_name: str, archetype_skeletons: dict[str, dict] | None = None
-) -> list[dict]:
+def _llm_generate(env_type: str, env_name: str, archetype_skeletons: dict[str, dict] | None = None) -> list[dict]:
     """Call LLM to generate 4 class definitions."""
     try:
         from src.generate.generators.llm_primitives import generate_player_classes
@@ -139,11 +126,13 @@ def _merge_spell_skeletons(llm_list: list[dict], skeletons: list[dict]) -> list[
         skel_copy = dict(skel)
         skel_copy.pop("available_at_room", None)
         try:
-            results.append(Spell(
-                name=llm.get("name", f"Spell {i + 1}"),
-                description=llm.get("description", ""),
-                **skel_copy,
-            ))
+            results.append(
+                Spell(
+                    name=llm.get("name", f"Spell {i + 1}"),
+                    description=llm.get("description", ""),
+                    **skel_copy,
+                )
+            )
         except Exception:
             logger.warning("Failed to merge spell skeleton %d, skipping", i, exc_info=True)
     return results
@@ -157,11 +146,13 @@ def _merge_ability_skeletons(llm_list: list[dict], skeletons: list[dict]) -> lis
         skel_copy = dict(skel)
         skel_copy.pop("purpose", None)
         try:
-            results.append(Ability(
-                name=llm.get("name", f"Ability {i + 1}"),
-                description=llm.get("description", ""),
-                **skel_copy,
-            ))
+            results.append(
+                Ability(
+                    name=llm.get("name", f"Ability {i + 1}"),
+                    description=llm.get("description", ""),
+                    **skel_copy,
+                )
+            )
         except Exception:
             logger.warning("Failed to merge ability skeleton %d, skipping", i, exc_info=True)
     return results

@@ -193,8 +193,7 @@ def _consumable_mult(room_level: int) -> float:
     return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
 
 
-def _build_items_list(llm_result: dict, room_level: int,
-                      weapon_skeletons: list[dict] | None = None) -> list[dict]:
+def _build_items_list(llm_result: dict, room_level: int, weapon_skeletons: list[dict] | None = None) -> list[dict]:
     """Convert LLM-generated item pools into a flat list of item dicts (no IDs).
 
     Weapon mechanics come from pre-rolled skeletons; LLM provides name+desc only.

@@ -143,9 +143,7 @@ class MenuView:
                 dt = getattr(starter, "damage_type", "physical")
                 dt_str = f"  |  {dt}" if dt and dt != "physical" else ""
                 weapon_info = (
-                    f"{wtype}  |  "
-                    f"Hit: {stat_mod:+d} ({starter.stat})  |  "
-                    f"Dmg: {starter.dice_expr}{bonus_str}{dt_str}"
+                    f"{wtype}  |  Hit: {stat_mod:+d} ({starter.stat})  |  Dmg: {starter.dice_expr}{bonus_str}{dt_str}"
                 )
 
         flavor = pc.flavor_text if pc else ""

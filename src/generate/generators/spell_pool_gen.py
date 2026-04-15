@@ -65,14 +65,13 @@ def _build_pool_skeletons(pool_type: str, element: str) -> list[dict]:
     overridden at acquisition time via compute_spell_dice)."""
     cfg = POOL_CONFIGS[pool_type]
     archetype = cfg["archetype"]
-    return [
-        roll_spell_skeleton(archetype, slot, available_at_room=0, class_element=element)
-        for slot in cfg["slots"]
-    ]
+    return [roll_spell_skeleton(archetype, slot, available_at_room=0, class_element=element) for slot in cfg["slots"]]
 
 
 def _merge_pool_results(
-    raw_list: list[dict], skeletons: list[dict], pool_type: str,
+    raw_list: list[dict],
+    skeletons: list[dict],
+    pool_type: str,
 ) -> list[dict]:
     """Merge LLM name/desc onto skeletons, returning serializable dicts."""
     results = []

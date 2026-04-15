@@ -368,7 +368,9 @@ def _phase2_layouts(
 
 
 def _phase3a_classes(
-    environments: list[dict], story: OverarchingStory, bible: WorldBible,
+    environments: list[dict],
+    story: OverarchingStory,
+    bible: WorldBible,
 ) -> tuple[list, dict[str, str]]:
     """Generate player classes with stat rolling, weapons, spells, abilities.
 

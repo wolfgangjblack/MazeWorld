@@ -338,8 +338,14 @@ class ClaudePromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "",
-                        weapon_skeletons: list[dict] | None = None) -> LLMRequest:
+    def item_generation(
+        self,
+        env: str,
+        env_name: str,
+        room_level: int,
+        story_context: str = "",
+        weapon_skeletons: list[dict] | None = None,
+    ) -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -356,7 +362,7 @@ class ClaudePromptSet(PromptSet):
                 parts = [ws.get("weapon_type", "heavy"), ws.get("damage_type", "slashing")]
                 if ws.get("magic_element"):
                     parts.append(f"magic: {ws['magic_element']}")
-                skeleton_summaries.append(f"  {i+1}. {', '.join(parts)}")
+                skeleton_summaries.append(f"  {i + 1}. {', '.join(parts)}")
             weapon_note = (
                 "\n\nWeapon skeletons (mechanics pre-rolled, you generate ONLY name and desc for each):\n"
                 + "\n".join(skeleton_summaries)
@@ -438,7 +444,9 @@ class ClaudePromptSet(PromptSet):
                     ),
                 ),
             ],
-            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note),
+            user_message=(
+                f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note
+            ),
             max_tokens=1200,
         )
 
@@ -496,8 +504,7 @@ class ClaudePromptSet(PromptSet):
             max_tokens=60,
         )
 
-    def class_generation(self, env: str, env_name: str,
-                         archetype_skeletons: dict | None = None) -> LLMRequest:
+    def class_generation(self, env: str, env_name: str, archetype_skeletons: dict | None = None) -> LLMRequest:
         skeleton_note = ""
         if archetype_skeletons:
             parts = []
@@ -534,8 +541,7 @@ class ClaudePromptSet(PromptSet):
                 parts.append("\n".join(lines))
             skeleton_note = (
                 "\n\nPre-rolled skeletons — all mechanics are decided. "
-                "Generate ONLY name and description for each spell and ability.\n"
-                + "\n".join(parts)
+                "Generate ONLY name and description for each spell and ability.\n" + "\n".join(parts)
             )
 
         return LLMRequest(
@@ -1071,8 +1077,14 @@ class ClaudePromptSet(PromptSet):
             {
                 "environments": environments,
                 "num_rooms": num_rooms,
-                "weapon_types": ["heavy (STR)", "light (DEX)", "sacred (CON)",
-                                 "arcane (INT)", "enchanted (WIS)", "wild (LUCK)"],
+                "weapon_types": [
+                    "heavy (STR)",
+                    "light (DEX)",
+                    "sacred (CON)",
+                    "arcane (INT)",
+                    "enchanted (WIS)",
+                    "wild (LUCK)",
+                ],
             }
         )
         return LLMRequest(
@@ -1094,8 +1106,12 @@ class ClaudePromptSet(PromptSet):
         )
 
     def spell_pool_generation(
-        self, pool_type: str, element: str, count: int,
-        existing_names: list[str], env_context: str,
+        self,
+        pool_type: str,
+        element: str,
+        count: int,
+        existing_names: list[str],
+        env_context: str,
     ) -> LLMRequest:
         pool_descriptions = {
             "mage_damage": "offensive damage spells (single-target and multi-target) for a mage",
@@ -1116,8 +1132,7 @@ class ClaudePromptSet(PromptSet):
                 "incorporate varied sub-themes (e.g., fire could include ember, magma, "
                 "inferno, searing, smoldering).\n\n"
                 f"Generate exactly {count} spells. Respond with ONLY a JSON array of "
-                "objects, each with {name, description}. Descriptions should be 1 sentence."
-                + _NO_FENCES
+                "objects, each with {name, description}. Descriptions should be 1 sentence." + _NO_FENCES
             ),
             examples=[],
             user_message=(

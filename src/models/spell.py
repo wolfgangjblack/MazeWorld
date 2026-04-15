@@ -132,9 +132,7 @@ ARCHETYPE_SPELL_STAT = {
 }
 
 
-def roll_spell_skeleton(
-    archetype: str, slot: dict, available_at_room: int = 0, class_element: str = "fire"
-) -> dict:
+def roll_spell_skeleton(archetype: str, slot: dict, available_at_room: int = 0, class_element: str = "fire") -> dict:
     """Pre-roll a spell's mechanical identity."""
     spell_type = slot["spell_type"]
     targets = slot["targets"]

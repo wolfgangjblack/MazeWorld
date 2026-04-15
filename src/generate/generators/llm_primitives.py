@@ -226,9 +226,7 @@ def generate_player_image_description() -> str:
     )
 
 
-def generate_player_classes(
-    environment: dict, archetype_skeletons: dict | None = None
-) -> list[dict]:
+def generate_player_classes(environment: dict, archetype_skeletons: dict | None = None) -> list[dict]:
     """Generate 4 player class options themed to the environment.
 
     Returns a list of 4 dicts, one per archetype.

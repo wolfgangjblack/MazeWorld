@@ -1452,10 +1452,12 @@ def _section_scaling_tables() -> str:
         lines.append(f"| {room}    | " + " | ".join(cells) + " |")
     lines.append("")
 
-    lines.extend([
-        "### Spell Damage by Room (at acquisition)",
-        "",
-    ])
+    lines.extend(
+        [
+            "### Spell Damage by Room (at acquisition)",
+            "",
+        ]
+    )
     spell_types = list(SPELL_TYPE_BASE_TIER.keys())
     header = "| Room | " + " | ".join(t.replace("_", " ").title() for t in spell_types) + " |"
     sep = "|------|" + "|".join("------" for _ in spell_types) + "|"
