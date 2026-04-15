@@ -175,7 +175,7 @@ data/events/
 data/quests/
 data/manifest.json
 data/saves/
-
+data/*
 # Gas Town (added by gt)
 .runtime/
 .claude/
