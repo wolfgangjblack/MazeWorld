@@ -466,8 +466,7 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 # ---------------------------------------------------------------------------
 
 
-def _phase3c_npcs(layout: dict, bible: WorldBible,
-                  existing_npc_names: list[str] | None = None) -> list[dict]:
+def _phase3c_npcs(layout: dict, bible: WorldBible, existing_npc_names: list[str] | None = None) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
     from src.db_constants import DB_PATHS, next_id
 
@@ -500,8 +499,9 @@ def _phase3c_npcs(layout: dict, bible: WorldBible,
         from src.generate.generators.llm_primitives import generate_npc_batch
 
         room_env = {"type": env_type, "name": env_name}
-        llm_npcs = generate_npc_batch(room_env, room_story, npc_slots, story_context,
-                                       existing_npc_names=existing_npc_names)
+        llm_npcs = generate_npc_batch(
+            room_env, room_story, npc_slots, story_context, existing_npc_names=existing_npc_names
+        )
     except Exception as e:
         logger.warning("Room %d NPC batch generation failed: %s", room_idx, e)
         llm_npcs = []

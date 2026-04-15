@@ -338,20 +338,29 @@ class Maze:
             if qt == "solve":
                 sub_roll = random.random()
                 if sub_roll < 0.30:
-                    candidates = [m for m in meta if m.tile_type == "event"
-                                  and m.event_type == "combat"
-                                  and m.position not in assigned_solve_tiles]
+                    candidates = [
+                        m
+                        for m in meta
+                        if m.tile_type == "event"
+                        and m.event_type == "combat"
+                        and m.position not in assigned_solve_tiles
+                    ]
                 elif sub_roll < 0.65:
-                    candidates = [m for m in meta if m.tile_type == "event"
-                                  and m.event_type == "puzzle"
-                                  and m.position not in assigned_solve_tiles]
+                    candidates = [
+                        m
+                        for m in meta
+                        if m.tile_type == "event"
+                        and m.event_type == "puzzle"
+                        and m.position not in assigned_solve_tiles
+                    ]
                 else:
-                    candidates = [m for m in meta if m.tile_type == "event"
-                                  and m.event_type == "event"
-                                  and m.position not in assigned_solve_tiles]
+                    candidates = [
+                        m
+                        for m in meta
+                        if m.tile_type == "event" and m.event_type == "event" and m.position not in assigned_solve_tiles
+                    ]
                 if not candidates:
-                    candidates = [m for m in meta if m.tile_type == "event"
-                                  and m.position not in assigned_solve_tiles]
+                    candidates = [m for m in meta if m.tile_type == "event" and m.position not in assigned_solve_tiles]
                 if candidates:
                     chosen = random.choice(candidates)
                     target_tile = chosen.position

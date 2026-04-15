@@ -298,12 +298,18 @@ def _parse_class_array(raw: str) -> list[dict]:
     return []
 
 
-def generate_npc_batch(room_env: dict, room_story: str, npc_slots: list[dict], story_context: str,
-                       existing_npc_names: list[str] | None = None) -> list[dict]:
+def generate_npc_batch(
+    room_env: dict,
+    room_story: str,
+    npc_slots: list[dict],
+    story_context: str,
+    existing_npc_names: list[str] | None = None,
+) -> list[dict]:
     """Generate all NPCs for a room in a single batched call."""
     prompts = get_prompt_set()
-    request = prompts.npc_batch_generation(room_env, room_story, npc_slots, story_context,
-                                            existing_npc_names=existing_npc_names)
+    request = prompts.npc_batch_generation(
+        room_env, room_story, npc_slots, story_context, existing_npc_names=existing_npc_names
+    )
     raw = generate(request)
     return _parse_json_array(raw)
 

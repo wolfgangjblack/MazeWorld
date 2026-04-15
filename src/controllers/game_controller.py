@@ -795,8 +795,12 @@ class GameController:
 
         if not self.combat_handler.active and not self.dialogue_box.event_active:
             for npc in self.npcs:
-                if (isinstance(npc, AggressiveNPC) and not npc.combat_defeated
-                        and npc.x == self.player.x and npc.y == self.player.y):
+                if (
+                    isinstance(npc, AggressiveNPC)
+                    and not npc.combat_defeated
+                    and npc.x == self.player.x
+                    and npc.y == self.player.y
+                ):
                     self._start_npc_combat(npc)
                     break
 

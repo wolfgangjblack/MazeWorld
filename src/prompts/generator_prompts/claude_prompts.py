@@ -808,7 +808,11 @@ class ClaudePromptSet(PromptSet):
     # ------------------------------------------------------------------
 
     def npc_batch_generation(
-        self, room_env: dict, room_story: str, npc_slots: list[dict], story_context: str,
+        self,
+        room_env: dict,
+        room_story: str,
+        npc_slots: list[dict],
+        story_context: str,
         existing_npc_names: list[str] | None = None,
     ) -> LLMRequest:
         npc_count = len(npc_slots)
@@ -822,9 +826,8 @@ class ClaudePromptSet(PromptSet):
         )
         dedup_note = ""
         if existing_npc_names:
-            dedup_note = (
-                "\n\nALREADY USED NPC NAMES (do NOT reuse any of these):\n"
-                + "\n".join(f"- {n}" for n in existing_npc_names)
+            dedup_note = "\n\nALREADY USED NPC NAMES (do NOT reuse any of these):\n" + "\n".join(
+                f"- {n}" for n in existing_npc_names
             )
         return LLMRequest(
             system=(
@@ -846,8 +849,7 @@ class ClaudePromptSet(PromptSet):
                 "specific situation),\n"
                 "  backstory (3-5 sentences grounded in the room_story and world_context),\n"
                 "  portrait_prompt (vivid visual description for pixel art generation)\n\n"
-                "Respond with ONLY a JSON array of NPC objects."
-                + dedup_note + _NO_FENCES
+                "Respond with ONLY a JSON array of NPC objects." + dedup_note + _NO_FENCES
             ),
             examples=[
                 (

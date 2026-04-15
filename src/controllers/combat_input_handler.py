@@ -455,8 +455,7 @@ class CombatInputHandler:
                 npc_source.combat_defeated = True
                 npc_source.color = (0, 255, 255)
                 for qid, quest in gc.quests.items():
-                    if (getattr(quest, "target_npc_id", None) == npc_source.id
-                            and quest.status == "active"):
+                    if getattr(quest, "target_npc_id", None) == npc_source.id and quest.status == "active":
                         gc.quest_manager.complete_quest(quest, gc.player)
                         break
 
