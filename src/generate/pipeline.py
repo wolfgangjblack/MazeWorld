@@ -466,7 +466,8 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 # ---------------------------------------------------------------------------
 
 
-def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
+def _phase3c_npcs(layout: dict, bible: WorldBible,
+                  existing_npc_names: list[str] | None = None) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
     from src.db_constants import DB_PATHS, next_id
 
@@ -499,7 +500,8 @@ def _phase3c_npcs(layout: dict, bible: WorldBible) -> list[dict]:
         from src.generate.generators.llm_primitives import generate_npc_batch
 
         room_env = {"type": env_type, "name": env_name}
-        llm_npcs = generate_npc_batch(room_env, room_story, npc_slots, story_context)
+        llm_npcs = generate_npc_batch(room_env, room_story, npc_slots, story_context,
+                                       existing_npc_names=existing_npc_names)
     except Exception as e:
         logger.warning("Room %d NPC batch generation failed: %s", room_idx, e)
         llm_npcs = []
@@ -753,24 +755,16 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict], class_data_
 
 # Quest success/failure templates — derived from quest type, no LLM call.
 _QUEST_SUCCESS = {
-    "combat_event": "You've done it. The threat is gone — here's what I promised.",
-    "solve_puzzle": "I knew you could figure it out. Take this for your trouble.",
-    "fetch_item": "You found it! This means more to me than you know. Please, take this.",
+    "combat": "You bested them. A deal is a deal — take your prize.",
+    "solve": "I knew you could handle it. Take this for your trouble.",
+    "fetch": "You found it! This means more to me than you know. Please, take this.",
     "escort": "We made it. I'm safe now, thanks to you. Take this for your bravery.",
-    "follower_same": "We made it. I'm safe now, thanks to you. Take this for your bravery.",
-    "follower_next": "You got me through. I won't forget this. Here is your reward.",
-    "combat_npc": "You bested me. I yield. A deal is a deal — take your prize.",
-    "solve_event": "I couldn't have done that alone. You've earned this.",
 }
 _QUEST_FAILURE = {
-    "combat_event": "It's over... they were too strong. I'm sorry, I have nothing left to give.",
-    "solve_puzzle": "It's still blocked. Come back when you have what you need.",
-    "fetch_item": "Without it, I can't help you. Maybe another time.",
+    "combat": "They were too strong. I'm sorry, I have nothing left to give.",
+    "solve": "It's still unresolved. Come back when you're ready.",
+    "fetch": "Without it, I can't help you. Maybe another time.",
     "escort": "I... I can't go on. Leave me here.",
-    "follower_same": "I... I can't go on. Leave me here.",
-    "follower_next": "We didn't make it. Perhaps fate has other plans.",
-    "combat_npc": "Ha — you weren't ready for me. Come back when you're stronger.",
-    "solve_event": "You couldn't handle it. The situation remains unsolved.",
 }
 
 
@@ -1196,32 +1190,29 @@ def _phase4a_events(
 
         target_pos = tuple(npc["quest_target_tile"]) if npc.get("quest_target_tile") else None
 
-        if qtype in ("combat_event", "solve_puzzle", "solve_event") and target_pos:
+        if qtype == "solve" and target_pos:
             target_event = pos_to_event.get(target_pos)
             base_quest["target_event_id"] = target_event["id"] if target_event else None
 
-        elif qtype == "fetch_item":
+        elif qtype == "fetch":
             item_tile_list = maze.get_tiles_by_type("item")
             if item_tile_list:
                 t = random.choice(item_tile_list)
                 base_quest["target_tile"] = list(t.position)
                 base_quest["item_category"] = t.item_category
+                cell_val = maze.grid[t.position[1]][t.position[0]]
+                if registry.is_item(cell_val):
+                    base_quest["target_items"] = [{"item_id": cell_val, "count": 1}]
 
-        elif qtype in ("escort", "follower_same", "follower_next"):
+        elif qtype == "escort":
             base_quest["type"] = "escort"
             base_quest["target_zone"] = list(maze.door_position) if maze.door_position else [0, 0]
             base_quest["escort_npc_id"] = npc["id"]
-            if qtype == "follower_next":
-                base_quest["destination_room"] = 1
-            elif qtype == "escort":
-                next_room_roll = random.random() < 0.20
-                is_final = layout["room_idx"] == layout.get("total_rooms", 99) - 1
-                base_quest["destination_room"] = 1 if (next_room_roll and not is_final) else 0
-            else:
-                base_quest["destination_room"] = 0
+            next_room_roll = random.random() < 0.30
+            is_final = layout["room_idx"] == layout.get("total_rooms", 99) - 1
+            base_quest["destination_room"] = 1 if (next_room_roll and not is_final) else 0
 
-        elif qtype == "combat_npc":
-            # NPC is also a combatant — give them stats and add to monster_db
+        elif qtype == "combat":
             npc["type"] = "AggressiveNPC"
             npc_monster = {
                 "name": npc.get("name", "Hostile NPC"),
@@ -1243,6 +1234,7 @@ def _phase4a_events(
             with open(DB_PATHS["monster"], "w") as f:
                 json.dump(monster_global, f, indent=2)
             monster_db.append(npc_monster)
+            npc["npc_monster"] = npc_monster
             base_quest["target_npc_id"] = npc["id"]
 
         quest_list.append(base_quest)
@@ -1801,9 +1793,11 @@ def generate_world():
     # --- Phase 3B-D: Entity Generation (per room) ---
     advance(PHASE_NAMES[4])
     room_results = []
+    all_prior_npc_names: list[str] = []
     for layout in tqdm(layouts, desc="  Entities", unit="room", position=1, leave=True):
         generated_items, item_placements = _phase3b_items(layout, bible)
-        npc_pool = _phase3c_npcs(layout, bible)
+        npc_pool = _phase3c_npcs(layout, bible, existing_npc_names=all_prior_npc_names)
+        all_prior_npc_names.extend(n.get("name", "") for n in npc_pool)
         monster_db = _phase3d_monsters(layout, bible)
         bible.persist(BIBLE_PATH)
         room_results.append(

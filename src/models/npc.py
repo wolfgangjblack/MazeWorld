@@ -208,6 +208,7 @@ class AggressiveNPC(NPC):
     color: Tuple[int, int, int] = (255, 0, 0)
     dist: int = 5
     combat_defeated: bool = False
+    npc_monster: Optional[dict] = None
 
     def prepare(self, maze_environment: str | None = None):
         self.generate_personality_document(maze_environment)

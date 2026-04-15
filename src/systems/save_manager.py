@@ -232,6 +232,9 @@ def serialize_npc(npc) -> dict:
         )
     if npc.dialogue_tree and "_current" in npc.dialogue_tree:
         data["_dialogue_current"] = npc.dialogue_tree["_current"]
+    if hasattr(npc, "combat_defeated"):
+        data["combat_defeated"] = npc.combat_defeated
+        data["color"] = list(npc.color)
     return data
 
 

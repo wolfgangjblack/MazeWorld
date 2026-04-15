@@ -588,7 +588,7 @@ def _card_npc(npc: dict, room_id: str, items_lookup: dict | None = None) -> str:
     has_portrait = os.path.exists(portrait)
 
     lines = [
-        f'<a id="npc-{npc_id}"></a>',
+        f'<a id="{room_id}-npc-{npc_id}"></a>',
         "",
     ]
     if has_portrait:
@@ -660,7 +660,7 @@ def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
         f"#### {quest.get('title', 'Quest')}",
         f"**Type:** `{qtype}` &nbsp; **Story Quest:** {'Yes' if quest.get('is_story_quest') else 'No'}",
         "",
-        f"**Quest Giver:** [{giver_name}](#npc-{npc_id})",
+        f"**Quest Giver:** [{giver_name}](#{room_id}-npc-{npc_id})",
         "",
         f"> *{quest.get('description', '')}*",
         "",

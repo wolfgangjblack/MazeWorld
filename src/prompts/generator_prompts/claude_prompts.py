@@ -270,7 +270,33 @@ class ClaudePromptSet(PromptSet):
     def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest:
         context = json.dumps({"npc": npc_personality, "quest": quest_context})
 
-        if quest_context:
+        if quest_context and quest_context.get("quest_type") == "combat":
+            system = (
+                "You generate dialogue trees for a HOSTILE NPC in a fantasy game. "
+                "This NPC is an enemy the player must defeat in combat. "
+                "Respond with ONLY a JSON object containing THREE dialogue trees:\n\n"
+                '1. "incomplete" — the NPC\'s taunt/threat before combat (1-2 nodes). '
+                "Aggressive, in-character. They challenge the player, explain why "
+                "they're hostile, reference their backstory and the faction conflict. "
+                "End with a combat declaration.\n\n"
+                '2. "complete_success" — shown AFTER the player defeats this NPC (2-3 nodes). '
+                "The NPC yields and is no longer hostile. They may share information, "
+                "express grudging respect, reveal lore about the faction, or offer a warning. "
+                "Use the success_dialogue hint as a tone guide. "
+                "The player should feel this NPC is now an ally or neutral.\n\n"
+                '3. "complete_failure" — shown if the player fled or failed (1-2 nodes). '
+                "The NPC taunts them for running. Still hostile, still dangerous. "
+                "Use the failure_dialogue hint as a tone guide.\n\n"
+                'Format: {"incomplete": {"nodes": {"start": {"prompt": "...", '
+                '"choices": [{"text": "...", "next_node_id": "..."}]}, ..., '
+                '"end": {"prompt": "...", "choices": []}}}, '
+                '"complete_success": {"nodes": {...}}, '
+                '"complete_failure": {"nodes": {...}}}.\n\n'
+                "Use the NPC's personality, job, and backstory to shape their voice. "
+                "Stay in character. Reference the story context." + _NO_FENCES
+            )
+            max_tokens = 1000
+        elif quest_context:
             system = (
                 "You generate dialogue trees for a fantasy game NPC who has a quest. "
                 "Respond with ONLY a JSON object containing THREE dialogue trees:\n\n"
@@ -782,7 +808,8 @@ class ClaudePromptSet(PromptSet):
     # ------------------------------------------------------------------
 
     def npc_batch_generation(
-        self, room_env: dict, room_story: str, npc_slots: list[dict], story_context: str
+        self, room_env: dict, room_story: str, npc_slots: list[dict], story_context: str,
+        existing_npc_names: list[str] | None = None,
     ) -> LLMRequest:
         npc_count = len(npc_slots)
         context = json.dumps(
@@ -793,6 +820,12 @@ class ClaudePromptSet(PromptSet):
                 "world_context": story_context[:STORY_CONTEXT_LIMIT],
             }
         )
+        dedup_note = ""
+        if existing_npc_names:
+            dedup_note = (
+                "\n\nALREADY USED NPC NAMES (do NOT reuse any of these):\n"
+                + "\n".join(f"- {n}" for n in existing_npc_names)
+            )
         return LLMRequest(
             system=(
                 f"You generate a batch of exactly {npc_count} unique NPCs for a fantasy game room.\n\n"
@@ -813,7 +846,8 @@ class ClaudePromptSet(PromptSet):
                 "specific situation),\n"
                 "  backstory (3-5 sentences grounded in the room_story and world_context),\n"
                 "  portrait_prompt (vivid visual description for pixel art generation)\n\n"
-                "Respond with ONLY a JSON array of NPC objects." + _NO_FENCES
+                "Respond with ONLY a JSON array of NPC objects."
+                + dedup_note + _NO_FENCES
             ),
             examples=[
                 (
@@ -822,7 +856,7 @@ class ClaudePromptSet(PromptSet):
                             "environment": {"type": "cave", "name": "Stonebiter Caverns"},
                             "room_story": "The Iron Pact bandit gang has occupied these caves for months, using them as a smuggling hub. Local miners are trapped or working as forced labor. The gang's enforcer, a woman called Shrike, keeps order through fear. One miner has been secretly organizing an escape.",
                             "npc_slots": [
-                                {"position": [8, 12], "role": "quest", "quest_type": "combat_event", "max_exchanges": 5}
+                                {"position": [8, 12], "role": "quest", "quest_type": "solve", "max_exchanges": 5}
                             ],
                             "world_context": "Faction: The Iron Pact, led by Warden Greiss. They control trade routes through extortion and violence.",
                         }
@@ -843,7 +877,7 @@ class ClaudePromptSet(PromptSet):
                 )
             ],
             user_message=context,
-            max_tokens=5000,
+            max_tokens=max(5000, npc_count * 400),
         )
 
     # ------------------------------------------------------------------
@@ -933,7 +967,7 @@ class ClaudePromptSet(PromptSet):
                 f"- {s}" for s in previous_summaries[-15:]
             )
 
-        max_tokens = max(4000, len(event_slots) * 500)
+        max_tokens = max(6000, len(event_slots) * 700)
 
         return LLMRequest(
             system=(
@@ -978,7 +1012,7 @@ class ClaudePromptSet(PromptSet):
             ),
             examples=[],
             user_message=context,
-            max_tokens=2000,
+            max_tokens=max(2000, len(npc_data) * 200),
         )
 
     # ------------------------------------------------------------------

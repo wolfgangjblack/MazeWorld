@@ -450,21 +450,15 @@ class CombatInputHandler:
                 gc.gate_cleared = True
             gc.quest_manager.on_event_resolved(combat_event.id, gc.player)
 
-            for qid, quest in gc.quests.items():
-                if (
-                    quest.type == "combat"
-                    and getattr(quest, "target_event_id", 0) == combat_event.id
-                    and quest.status == "completed"
-                ):
-                    target_npc_id = getattr(quest, "target_npc_id", None)
-                    if target_npc_id:
-                        from src.models.npc import AggressiveNPC
-
-                        for npc in gc.npcs:
-                            if npc.id == target_npc_id and isinstance(npc, AggressiveNPC):
-                                npc.combat_defeated = True
-                                npc.color = (0, 255, 255)
-                                break
+            npc_source = gc._npc_combat_map.pop(combat_event.id, None)
+            if npc_source:
+                npc_source.combat_defeated = True
+                npc_source.color = (0, 255, 255)
+                for qid, quest in gc.quests.items():
+                    if (getattr(quest, "target_npc_id", None) == npc_source.id
+                            and quest.status == "active"):
+                        gc.quest_manager.complete_quest(quest, gc.player)
+                        break
 
         self.end()
 

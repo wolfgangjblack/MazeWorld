@@ -120,6 +120,7 @@ class DialogueQuest(Quest):
 class CombatQuest(Quest):
     type: str = "combat"
     target_event_id: int = 0
+    target_npc_id: Optional[int] = None
     target_monster_name: Optional[str] = None
 
     def check_completion(self, event_resolved: bool) -> bool:
@@ -161,14 +162,6 @@ QUEST_TYPE_MAP = {
     "combat": CombatQuest,
     "solve": CombatQuest,
     "multi_step": MultiStepQuest,
-    # Legacy aliases
-    "fetch_item": FetchQuest,
-    "combat_event": CombatQuest,
-    "combat_npc": CombatQuest,
-    "solve_puzzle": CombatQuest,
-    "solve_event": CombatQuest,
-    "follower_same": EscortQuest,
-    "follower_next": EscortQuest,
 }
 
 

@@ -118,6 +118,7 @@ class GameController:
         self.pending_action = None
 
         self.gate_cleared = False
+        self._npc_combat_map: dict[int, object] = {}
         self._count_total_encounters()
 
         self.stats = {
@@ -582,7 +583,47 @@ class GameController:
             "dc": getattr(q, "dc", 10),
         }
 
+    def _start_npc_combat(self, npc):
+        """Start combat against an AggressiveNPC using their stored monster template."""
+        from src.models.encounter import CombatEvent
+        from src.models.monster import instantiate_monster
+
+        monster_data = getattr(npc, "npc_monster", None)
+        if not monster_data:
+            monster_data = {
+                "name": npc.name or "Hostile NPC",
+                "species": "npc",
+                "hp_range": [15, 20],
+                "ac_range": [10, 12],
+                "damage_type": "physical",
+            }
+        monster = instantiate_monster(monster_data, self.current_room + 1)
+
+        taunt = ""
+        tree = getattr(npc, "dialogue_tree_incomplete", None) or getattr(npc, "dialogue_tree", None)
+        if tree and "nodes" in tree:
+            start_node = tree["nodes"].get("start", {})
+            taunt = start_node.get("prompt", f"{npc.name} attacks!")
+
+        event_id = -(npc.id)
+        combat_event = CombatEvent(
+            id=event_id,
+            name=f"Fight: {npc.name}",
+            description=taunt or f"{npc.name} attacks!",
+            monsters=[monster],
+            room_level=self.current_room + 1,
+        )
+        self._npc_combat_map[event_id] = npc
+        self.combat_handler.start(combat_event)
+
     def _handle_npc_interaction(self, npc):
+        if self.combat_handler.active:
+            return
+
+        if isinstance(npc, AggressiveNPC) and not npc.combat_defeated:
+            self._start_npc_combat(npc)
+            return
+
         if not is_npc_available(npc, self.day_night.current_period):
             self.dialogue_box.set_item_message(f"{npc.name or 'NPC'} is not available right now.")
             self.item_message_active = True
@@ -751,6 +792,13 @@ class GameController:
                     npc.update_position(self.maze, current_time)
                 elif isinstance(npc, AggressiveNPC):
                     npc.update_position(self.maze, (self.player.x, self.player.y), current_time)
+
+        if not self.combat_handler.active and not self.dialogue_box.event_active:
+            for npc in self.npcs:
+                if (isinstance(npc, AggressiveNPC) and not npc.combat_defeated
+                        and npc.x == self.player.x and npc.y == self.player.y):
+                    self._start_npc_combat(npc)
+                    break
 
         if not self.inventory_active and not self.dialogue_box.dialogue_active:
             self.current_npc = self.player.get_nearby_npc(self.npcs)

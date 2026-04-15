@@ -251,6 +251,12 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
             if dialogue_current and npc.dialogue_tree:
                 npc.dialogue_tree["_current"] = dialogue_current
 
+            if isinstance(npc, AggressiveNPC):
+                npc.combat_defeated = saved.get("combat_defeated", False)
+                color = saved.get("color")
+                if color:
+                    npc.color = tuple(color)
+
             npc.prepare(maze_environment=maze.environment)
             npcs.append(npc)
 

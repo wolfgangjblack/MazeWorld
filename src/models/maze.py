@@ -43,10 +43,10 @@ WALL_COLORS = {
 }
 
 NPC_QUEST_TYPE_WEIGHTS = {
+    "combat": 0.10,
     "fetch": 0.30,
-    "combat": 0.25,
-    "solve": 0.30,
-    "escort": 0.15,
+    "escort": 0.20,
+    "solve": 0.40,
 }
 
 
@@ -336,9 +336,24 @@ class Maze:
 
             target_tile = None
             if qt == "solve":
-                event_tiles = [m for m in meta if m.tile_type == "event" and m.position not in assigned_solve_tiles]
-                if event_tiles:
-                    chosen = random.choice(event_tiles)
+                sub_roll = random.random()
+                if sub_roll < 0.30:
+                    candidates = [m for m in meta if m.tile_type == "event"
+                                  and m.event_type == "combat"
+                                  and m.position not in assigned_solve_tiles]
+                elif sub_roll < 0.65:
+                    candidates = [m for m in meta if m.tile_type == "event"
+                                  and m.event_type == "puzzle"
+                                  and m.position not in assigned_solve_tiles]
+                else:
+                    candidates = [m for m in meta if m.tile_type == "event"
+                                  and m.event_type == "event"
+                                  and m.position not in assigned_solve_tiles]
+                if not candidates:
+                    candidates = [m for m in meta if m.tile_type == "event"
+                                  and m.position not in assigned_solve_tiles]
+                if candidates:
+                    chosen = random.choice(candidates)
                     target_tile = chosen.position
                     assigned_solve_tiles.add(target_tile)
             elif qt == "escort":
