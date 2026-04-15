@@ -335,7 +335,10 @@ class CombatController:
                     eff = " (super effective!)"
                 elif mult < 1.0:
                     eff = " (resisted)"
-                hit_msg = f"{spell.name} hits {target.name} for {damage}{eff} [1d{spell.damage_dice}={base_damage}, roll {magic_roll} vs DC {dc}]"
+                hit_msg = (
+                    f"{spell.name} hits {target.name} for {damage}{eff}"
+                    f" [1d{spell.damage_dice}={base_damage}, roll {magic_roll} vs DC {dc}]"
+                )
                 if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"
                 messages.append(hit_msg)
@@ -380,7 +383,10 @@ class CombatController:
                 key=lambda m: m.level,
             )
             damage, _, m_roll, p_ac = self._monster_attack_player(attacker)
-            msg = f"Flee failed! [roll {flee_roll} vs DC {dc}] {attacker.name} strikes for {damage}! [roll {m_roll} vs AC {p_ac}]"
+            msg = (
+                f"Flee failed! [roll {flee_roll} vs DC {dc}]"
+                f" {attacker.name} strikes for {damage}! [roll {m_roll} vs AC {p_ac}]"
+            )
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
