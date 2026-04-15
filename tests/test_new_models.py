@@ -55,7 +55,8 @@ def test_player_class_with_abilities():
         description="Fire!",
         element="fire",
         stat="INT",
-        damage_dice=6,
+        num_dice=1,
+        die_sides=6,
         spell_type="damage_single",
         stamina_cost=10,
     )

@@ -284,15 +284,14 @@ def test_build_items_list_structure():
 
 
 def test_weapon_dice_scaling():
-    """Test that WEAPON_DICE_BY_ROOM maps room levels to per-archetype dice."""
-    from src.models.weapon import WEAPON_DICE_BY_ROOM
+    """Test that compute_weapon_dice returns valid (num_dice, die_sides) tuples."""
+    from src.models.weapon import WEAPON_TYPES, compute_weapon_dice
 
-    assert 1 in WEAPON_DICE_BY_ROOM
-    assert 4 in WEAPON_DICE_BY_ROOM
-    for level, archetypes in WEAPON_DICE_BY_ROOM.items():
-        assert isinstance(archetypes, dict)
-        for arch, dice in archetypes.items():
-            assert dice.startswith("1d") or dice.startswith("2d")
+    for room_level in range(1, 7):
+        for wtype in WEAPON_TYPES:
+            num, sides = compute_weapon_dice(room_level, wtype)
+            assert num >= 1
+            assert sides >= 4
 
 
 def test_validate_puzzle_tools():

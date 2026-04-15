@@ -193,10 +193,11 @@ def _consumable_mult(room_level: int) -> float:
     return CONSUMABLE_SCALING.get(room_level, CONSUMABLE_SCALING[4])
 
 
-def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
+def _build_items_list(llm_result: dict, room_level: int,
+                      weapon_skeletons: list[dict] | None = None) -> list[dict]:
     """Convert LLM-generated item pools into a flat list of item dicts (no IDs).
 
-    The caller assigns XYYY IDs from the global item DB counter.
+    Weapon mechanics come from pre-rolled skeletons; LLM provides name+desc only.
     """
     items: list[dict] = []
     mult = _consumable_mult(room_level)
@@ -262,25 +263,28 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
             }
         )
 
-    for raw in llm_result.get("weapons", [])[:3]:
-        dice = raw.get("attack_dice", "1d4")
+    skeletons = weapon_skeletons or []
+    for i, raw in enumerate(llm_result.get("weapons", [])[:6]):
+        skeleton = skeletons[i] if i < len(skeletons) else {}
+        dice = skeleton.get("attack_dice", raw.get("attack_dice", "1d4"))
         lo, hi = WEAPON_PRICE_BY_DICE.get(dice, (10, 30))
         weapon_entry = {
             "category": "weapon",
             "name": raw.get("name", "Unknown Item"),
             "desc": raw.get("desc", ""),
-            "weapon_type": raw.get("weapon_type", "simple"),
-            "damage_type": raw.get("damage_type", "physical"),
-            "weapon_category": raw.get("weapon_category", "simple"),
-            "room_level": room_level,
+            "weapon_type": skeleton.get("weapon_type", raw.get("weapon_type", "heavy")),
+            "damage_type": skeleton.get("damage_type", raw.get("damage_type", "slashing")),
+            "weapon_category": skeleton.get("weapon_category", raw.get("weapon_category", "simple")),
+            "room_level": skeleton.get("room_level", room_level),
             "item_stats": {
                 "attack_dice": dice,
-                "stat_modifier": raw.get("stat_modifier", "STR"),
+                "stat_modifier": skeleton.get("stat_modifier", raw.get("stat_modifier", "STR")),
                 "price": random.randint(lo, hi),
             },
         }
-        if raw.get("magic_element"):
-            weapon_entry["magic_element"] = raw["magic_element"]
+        magic = skeleton.get("magic_element") or raw.get("magic_element")
+        if magic:
+            weapon_entry["magic_element"] = magic
         items.append(weapon_entry)
 
     scroll_mult = 1.0 + (mult - 1.0) * 0.5
@@ -322,9 +326,48 @@ _FALLBACK_ITEM_POOLS = {
         {"name": "climbing rope", "desc": "Frayed but usable.", "attribute": "climbing"},
     ],
     "weapons": [
-        {"name": "short sword", "desc": "A simple blade.", "weapon_type": "light", "stat_modifier": "DEX"},
-        {"name": "wooden club", "desc": "A heavy bludgeon.", "weapon_type": "heavy", "stat_modifier": "STR"},
-        {"name": "hunting knife", "desc": "A basic knife.", "weapon_type": "simple", "stat_modifier": "DEX"},
+        {
+            "name": "iron greatsword",
+            "desc": "A heavy two-handed blade.",
+            "weapon_type": "heavy",
+            "damage_type": "slashing",
+            "stat_modifier": "STR",
+        },
+        {
+            "name": "steel dagger",
+            "desc": "A quick stabbing blade.",
+            "weapon_type": "light",
+            "damage_type": "piercing",
+            "stat_modifier": "DEX",
+        },
+        {
+            "name": "blessed mace",
+            "desc": "A mace imbued with holy light.",
+            "weapon_type": "sacred",
+            "damage_type": "bludgeoning",
+            "stat_modifier": "CON",
+        },
+        {
+            "name": "crystal wand",
+            "desc": "A wand that crackles with energy.",
+            "weapon_type": "arcane",
+            "damage_type": "bludgeoning",
+            "stat_modifier": "INT",
+        },
+        {
+            "name": "willow staff",
+            "desc": "A staff wrapped in silver thread.",
+            "weapon_type": "enchanted",
+            "damage_type": "bludgeoning",
+            "stat_modifier": "WIS",
+        },
+        {
+            "name": "juggler's blade",
+            "desc": "A blade that changes balance.",
+            "weapon_type": "wild",
+            "damage_type": "slashing",
+            "stat_modifier": "LUCK",
+        },
     ],
     "spell_scrolls": [
         {"name": "scroll of mending", "desc": "A basic heal scroll.", "spell_effect": "heal"},

@@ -338,7 +338,8 @@ class ClaudePromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "") -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "",
+                        weapon_skeletons: list[dict] | None = None) -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -347,6 +348,18 @@ class ClaudePromptSet(PromptSet):
                 f"{story_context[:STORY_CONTEXT_LIMIT]}\n"
                 "Be information-dense: item names and descriptions should reinforce "
                 "the world's lore. Do not pad or ramble."
+            )
+        weapon_note = ""
+        if weapon_skeletons:
+            skeleton_summaries = []
+            for i, ws in enumerate(weapon_skeletons):
+                parts = [ws.get("weapon_type", "heavy"), ws.get("damage_type", "slashing")]
+                if ws.get("magic_element"):
+                    parts.append(f"magic: {ws['magic_element']}")
+                skeleton_summaries.append(f"  {i+1}. {', '.join(parts)}")
+            weapon_note = (
+                "\n\nWeapon skeletons (mechanics pre-rolled, you generate ONLY name and desc for each):\n"
+                + "\n".join(skeleton_summaries)
             )
         return LLMRequest(
             system=(
@@ -357,9 +370,8 @@ class ClaudePromptSet(PromptSet):
                 "- food: array of 4 items, each {name, desc}\n"
                 "- drink: array of 4 items, each {name, desc}\n"
                 "- tools: array of 3 items, each {name, desc, attribute (bludgeon|cutting|digging|climbing)}\n"
-                "- weapons: array of 3 items, each {name, desc, weapon_type (heavy|light|simple), "
-                "damage_type (slashing|piercing|bludgeoning — swords/axes=slashing, daggers/spears=piercing, "
-                "hammers/clubs=bludgeoning), stat_modifier (STR|DEX|INT)}\n"
+                "- weapons: array of 6 items, each {name, desc}. Weapon mechanics are pre-rolled "
+                "(see weapon_skeletons below). Theme each weapon's name and desc to its type and the environment.\n"
                 "- spell_scrolls: array of 2 items, each {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}\n\n"
                 "Environment theming examples:\n"
                 "- forest: berries, spring water, hatchet, wooden bow\n"
@@ -403,27 +415,12 @@ class ClaudePromptSet(PromptSet):
                                 },
                             ],
                             "weapons": [
-                                {
-                                    "name": "wooden bow",
-                                    "desc": "A short bow carved from yew wood.",
-                                    "weapon_type": "light",
-                                    "damage_type": "piercing",
-                                    "stat_modifier": "DEX",
-                                },
-                                {
-                                    "name": "oak club",
-                                    "desc": "A heavy club hewn from solid oak.",
-                                    "weapon_type": "heavy",
-                                    "damage_type": "bludgeoning",
-                                    "stat_modifier": "STR",
-                                },
-                                {
-                                    "name": "thorn staff",
-                                    "desc": "A staff wrapped in enchanted thorns.",
-                                    "weapon_type": "simple",
-                                    "damage_type": "piercing",
-                                    "stat_modifier": "INT",
-                                },
+                                {"name": "wooden bow", "desc": "A short bow carved from yew wood."},
+                                {"name": "oak club", "desc": "A heavy club hewn from solid oak."},
+                                {"name": "thorn staff", "desc": "A staff wrapped in enchanted thorns."},
+                                {"name": "silver rapier", "desc": "A gleaming blade favored by duelists."},
+                                {"name": "willow wand", "desc": "A wand humming with forest energy."},
+                                {"name": "trick dagger", "desc": "A blade that shifts in your grip."},
                             ],
                             "spell_scrolls": [
                                 {
@@ -441,8 +438,8 @@ class ClaudePromptSet(PromptSet):
                     ),
                 ),
             ],
-            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix),
-            max_tokens=800,
+            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note),
+            max_tokens=1200,
         )
 
     def item_image_description(self, item_data: dict) -> LLMRequest:
@@ -499,7 +496,48 @@ class ClaudePromptSet(PromptSet):
             max_tokens=60,
         )
 
-    def class_generation(self, env: str, env_name: str) -> LLMRequest:
+    def class_generation(self, env: str, env_name: str,
+                         archetype_skeletons: dict | None = None) -> LLMRequest:
+        skeleton_note = ""
+        if archetype_skeletons:
+            parts = []
+            for arch in ("warrior", "mage", "healer", "jester"):
+                skels = archetype_skeletons.get(arch, {})
+                element = skels.get("element", "")
+                ab_skels = skels.get("abilities", [])
+                sp_skels = skels.get("spells", [])
+                ab_pool = skels.get("ability_pool", [])
+                sp_pool = skels.get("spell_pool", [])
+                lines = [f"\n{arch.upper()} (element: {element}):"]
+                if ab_skels:
+                    lines.append("  Starting abilities (generate name + description for each):")
+                    for j, a in enumerate(ab_skels, 1):
+                        lines.append(f"    {j}. purpose={a['purpose']}, stat={a['stat']}, cost={a['stamina_cost']}")
+                if sp_skels:
+                    lines.append("  Starting spells (generate name + description for each):")
+                    for j, s in enumerate(sp_skels, 1):
+                        dice = f"{s['num_dice']}d{s['die_sides']}" if s.get("num_dice") else "—"
+                        lines.append(
+                            f"    {j}. {s['spell_type']}, {dice}, targets={s['targets']}, cost={s['stamina_cost']}"
+                        )
+                if ab_pool:
+                    lines.append("  Level-up abilities (generate name + description for each):")
+                    for j, a in enumerate(ab_pool, 1):
+                        lines.append(f"    {j}. purpose={a['purpose']}, stat={a['stat']}, cost={a['stamina_cost']}")
+                if sp_pool:
+                    lines.append("  Level-up spells (generate name + description for each):")
+                    for j, s in enumerate(sp_pool, 1):
+                        dice = f"{s['num_dice']}d{s['die_sides']}" if s.get("num_dice") else "—"
+                        lines.append(
+                            f"    {j}. {s['spell_type']}, {dice}, targets={s['targets']}, cost={s['stamina_cost']}"
+                        )
+                parts.append("\n".join(lines))
+            skeleton_note = (
+                "\n\nPre-rolled skeletons — all mechanics are decided. "
+                "Generate ONLY name and description for each spell and ability.\n"
+                + "\n".join(parts)
+            )
+
         return LLMRequest(
             system=(
                 "You generate 4 player class options for a fantasy RPG themed to an environment. "
@@ -513,21 +551,19 @@ class ClaudePromptSet(PromptSet):
                 "  Mage: INT 14-18; WIS,DEX 11-14; STR,CON,CHA 6-10; LUCK 6-10\n"
                 "  Healer: WIS 14-18; CHA,CON 11-14; STR,DEX,INT 6-10; LUCK 6-10\n"
                 "  Jester: LUCK 14-18; all others 11-14 except 1 random dump stat 6-10\n"
-                "- abilities: array of {name, description, stat}\n"
-                "  Warrior gets 4 utility abilities (break door, intimidate, bash, rally type)\n"
-                "  Jester gets 0-3 random abilities from other classes\n"
-                "- spells: array of {name, description, element, spell_type, stat, targets (single|multi|self)}\n"
-                "  Do NOT include damage_dice, hunger_cost, thirst_cost, or stamina_cost — the system assigns these.\n"
-                "  Mage: 1 element + 4 spells (2 damage, 2 utility), elements: fire|water|forest|light|dark\n"
-                "  Healer: 1 element + 4 spells (1 heal, 1 buff, 1 damage, 1 utility)\n"
-                "  Warrior: no spells. Jester: random 0-3 from other classes\n"
+                "- abilities: array of {name, description}. Mechanics are pre-rolled (see skeletons below).\n"
+                "  Warrior: 4 starting abilities. Jester: 0-3.\n"
+                "- spells: array of {name, description}. Mechanics are pre-rolled (see skeletons below).\n"
+                "  Do NOT include damage_dice, stamina_cost, num_dice, or die_sides.\n"
+                "  Mage: 4 starting spells. Healer: 4 starting spells.\n"
+                "  Warrior: no spells. Jester: no starting spells.\n"
                 "- portrait_prompt: visual description for image generation\n"
-                "- ability_pool: 4 additional abilities/spells beyond starting set (for level-ups)\n"
-                "- spell_pool: 4 additional spells beyond starting set (for level-ups)\n"
+                "- ability_pool: array of {name, description} for level-up abilities (count matches skeletons)\n"
+                "- spell_pool: array of {name, description} for level-up spells (count matches skeletons)\n"
                 "Output order: warrior, mage, healer, jester." + _NO_FENCES
             ),
             examples=[],
-            user_message=f"environment: '{env}', name: '{env_name}'",
+            user_message=f"environment: '{env}', name: '{env_name}'" + skeleton_note,
             max_tokens=3500,
         )
 
@@ -1035,23 +1071,20 @@ class ClaudePromptSet(PromptSet):
             {
                 "environments": environments,
                 "num_rooms": num_rooms,
-                "class_archetypes": ["warrior", "mage", "healer", "jester"],
+                "weapon_types": ["heavy (STR)", "light (DEX)", "sacred (CON)",
+                                 "arcane (INT)", "enchanted (WIS)", "wild (LUCK)"],
             }
         )
         return LLMRequest(
             system=(
                 "You generate a complete weapon database for a fantasy RPG. "
-                "Create weapons for each room and class archetype.\n\n"
-                "Weapon types: heavy (warrior, STR), light (warrior, DEX), "
-                "simple (mage/healer, INT or WIS).\n"
-                "Scaling: room 0 = common (1d4-1d6), higher rooms = stronger "
-                "(up to legendary 1d10-1d12).\n"
-                "Generate ~3 weapons per room (1 heavy, 1 light, 1 simple).\n\n"
-                "Each weapon: {name, weapon_type (heavy|light|simple), "
-                "damage_type (slashing|piercing|bludgeoning — swords/axes=slashing, "
-                "daggers/spears=piercing, hammers/clubs=bludgeoning), "
-                "rarity (common|uncommon|rare|legendary), attack_dice (e.g. '1d6'), "
-                "stat_modifier (STR|DEX|INT|WIS), flavor_text, portrait_prompt}\n\n"
+                "Weapon mechanics (type, dice, damage_type, category, magic_element) are "
+                "pre-rolled by the system. You generate ONLY: name, flavor_text, portrait_prompt.\n\n"
+                "Weapon types: heavy (STR), light (DEX), sacred (CON), "
+                "arcane (INT), enchanted (WIS), wild (LUCK).\n"
+                "Categories: simple (any class) or martial (warrior/jester only).\n"
+                "Generate 6 weapons per room.\n\n"
+                "Each weapon: {name, flavor_text, portrait_prompt}\n\n"
                 "Respond with ONLY a JSON array of weapon objects. "
                 "Theme weapons to each room's environment." + _NO_FENCES
             ),
@@ -1060,62 +1093,38 @@ class ClaudePromptSet(PromptSet):
             max_tokens=2000,
         )
 
-    def spell_database_generation(self, class_type: str, environments: list[dict], num_rooms: int) -> LLMRequest:
-        element_system = "fire > forest > water > fire; light <> dark (mutual weakness)"
-        context = json.dumps(
-            {
-                "class_type": class_type,
-                "environments": environments,
-                "num_rooms": num_rooms,
-                "element_system": element_system,
-            }
-        )
-        spell_guidance = {
-            "mage": "4 starting spells (2 damage, 2 utility) + 4 level-up spells. "
-            "Pick 1 element for the class. damage_single, damage_multi, buff_stat, buff_sustain.",
-            "healer": "4 starting spells (1 heal, 1 buff, 1 damage, 1 utility) + 4 level-up spells. "
-            "Pick 1 element. heal, buff_stat, damage_single, buff_sustain.",
+    def spell_pool_generation(
+        self, pool_type: str, element: str, count: int,
+        existing_names: list[str], env_context: str,
+    ) -> LLMRequest:
+        pool_descriptions = {
+            "mage_damage": "offensive damage spells (single-target and multi-target) for a mage",
+            "healer_damage": "offensive damage spells (single-target) for a healer/cleric",
+            "heal": "healing spells that restore HP",
+            "buff": "buff spells that boost stats or restore stamina",
         }
+        desc = pool_descriptions.get(pool_type, "spells")
+        avoid_note = ""
+        if existing_names:
+            avoid_note = f"\n\nDo NOT reuse these names: {', '.join(existing_names)}"
         return LLMRequest(
             system=(
-                f"You generate a spell list for the {class_type} class in a fantasy RPG.\n\n"
-                f"Guidance: {spell_guidance.get(class_type, 'Generate 4 starting + 4 level-up spells.')}\n\n"
-                f"Element system: {element_system}\n"
-                "Elements: fire, water, forest, light, dark\n"
-                "Spell types: damage_single, damage_multi, heal, buff_stat, buff_sustain\n\n"
-                "Each spell: {name, description, element, stat (INT|WIS), damage_dice (int, "
-                "die sides e.g. 8 for 1d8), spell_type, hunger_cost, thirst_cost, "
-                "targets (single|multi|self), heal_amount (for heal spells), "
-                "available_at_room (0 = starting, 1+ = level-up)}\n\n"
-                "Respond with ONLY a JSON array of spell objects." + _NO_FENCES
+                f"You generate {desc} for a fantasy RPG.\n\n"
+                "All spell mechanics (damage dice, stamina cost, targets) are assigned by "
+                "the system. You generate ONLY name and description for each spell.\n\n"
+                f"Element theme: {element}. Spells should evoke this element but can "
+                "incorporate varied sub-themes (e.g., fire could include ember, magma, "
+                "inferno, searing, smoldering).\n\n"
+                f"Generate exactly {count} spells. Respond with ONLY a JSON array of "
+                "objects, each with {name, description}. Descriptions should be 1 sentence."
+                + _NO_FENCES
             ),
             examples=[],
-            user_message=context,
-            max_tokens=1500,
-        )
-
-    def utility_ability_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
-        context = json.dumps(
-            {
-                "environments": environments,
-                "num_rooms": num_rooms,
-                "tool_attributes": ["bludgeon", "cutting", "digging", "climbing"],
-            }
-        )
-        return LLMRequest(
-            system=(
-                "You generate utility abilities for a fantasy RPG. These are non-combat "
-                "abilities usable by any class for quests and puzzles.\n\n"
-                "Generate 4 starting abilities (available_at_room: 0) + 4 level-up abilities "
-                "(available_at_room: 1-4).\n\n"
-                "Abilities should be useful for solving puzzles: breaking doors, climbing walls, "
-                "persuading NPCs, detecting traps, etc.\n\n"
-                "Each ability: {name, description, stat (STR|DEX|CON|INT|WIS|CHA), "
-                "cost_hunger (int), cost_thirst (int), available_at_room (int)}\n\n"
-                "Respond with ONLY a JSON array of ability objects." + _NO_FENCES
+            user_message=(
+                f"pool_type: '{pool_type}', element: '{element}', count: {count}"
+                + avoid_note
+                + (f"\n\nWorld context: {env_context}" if env_context else "")
             ),
-            examples=[],
-            user_message=context,
             max_tokens=800,
         )
 

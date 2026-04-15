@@ -130,7 +130,7 @@ class MenuView:
             wtype = "Wild" if w.weapon_type == "wild" else w.weapon_type.title()
             dt = getattr(w, "damage_type", "physical")
             dt_str = f"  |  {dt}" if dt and dt != "physical" else ""
-            weapon_info = f"{wtype}  |  Hit: {stat_mod:+d} ({w.stat})  |  Dmg: 1d{w.damage_dice}{bonus_str}{dt_str}"
+            weapon_info = f"{wtype}  |  Hit: {stat_mod:+d} ({w.stat})  |  Dmg: {w.dice_expr}{bonus_str}{dt_str}"
         elif pc:
             from src.models.weapon import STARTER_WEAPONS
 
@@ -145,7 +145,7 @@ class MenuView:
                 weapon_info = (
                     f"{wtype}  |  "
                     f"Hit: {stat_mod:+d} ({starter.stat})  |  "
-                    f"Dmg: 1d{starter.damage_dice}{bonus_str}{dt_str}"
+                    f"Dmg: {starter.dice_expr}{bonus_str}{dt_str}"
                 )
 
         flavor = pc.flavor_text if pc else ""

@@ -61,7 +61,8 @@ def mage_class():
                 element="fire",
                 spell_type="damage_single",
                 stat="INT",
-                damage_dice=6,
+                num_dice=1,
+                die_sides=6,
             )
         ],
         ability_pool=[],
@@ -72,7 +73,8 @@ def mage_class():
                 element="ice",
                 spell_type="damage_single",
                 stat="INT",
-                damage_dice=4,
+                num_dice=1,
+                die_sides=4,
             ),
             Spell(
                 name="Lightning",
@@ -80,7 +82,8 @@ def mage_class():
                 element="lightning",
                 spell_type="damage_single",
                 stat="INT",
-                damage_dice=8,
+                num_dice=1,
+                die_sides=8,
             ),
         ],
     )

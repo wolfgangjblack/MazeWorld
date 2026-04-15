@@ -387,7 +387,8 @@ def _card_class(cls: dict, idx: int) -> str:
         lines.append("| Name | Type | Element | Damage | Targets | Stamina | Description |")
         lines.append("|------|------|---------|--------|---------|---------|-------------|")
         for s in spells:
-            dmg = f"1d{s.get('damage_dice', 0)}" if s.get("damage_dice") else "—"
+            nd, ds = s.get("num_dice", 0), s.get("die_sides", 0)
+            dmg = f"{nd}d{ds}" if nd > 0 and ds > 0 else "—"
             lines.append(
                 f"| {s.get('name', '')} | {s.get('spell_type', '')} "
                 f"| {s.get('element', '')} | {dmg} "
@@ -419,7 +420,6 @@ def _card_class(cls: dict, idx: int) -> str:
                 )
             lines.append("")
 
-    lines.append("---")
     lines.append("")
     return "\n".join(lines)
 
@@ -484,7 +484,6 @@ def _card_monster(mon: dict) -> str:
             lines.append(f"- **{ab_name}** ({effect}) — {dice} dmg, {chance_pct}% chance{dur_str}")
         lines.append("")
 
-    lines.append("---")
     lines.append("")
     return "\n".join(lines)
 
@@ -592,7 +591,6 @@ def _card_event(evt: dict, items_lookup: dict | None = None, monster_db: dict[in
             lines.append(f"**Failure Penalty:** {dmg_range[0]}–{dmg_range[1]} {dmg_type} damage")
             lines.append("")
 
-    lines.append("---")
     lines.append("")
     return "\n".join(lines)
 
@@ -651,7 +649,6 @@ def _card_npc(npc: dict, room_id: str, items_lookup: dict | None = None) -> str:
             lines.append(f"| {name} | {si.get('price', '?')}g | {si.get('stock', '?')} |")
         lines.append("")
 
-    lines.append("---")
     lines.append("")
     return "\n".join(lines)
 
@@ -777,7 +774,6 @@ def _card_quest(quest: dict, npcs: list[dict], room_id: str) -> str:
         lines.append(f'**On Failure:** "{failure}"')
         lines.append("")
 
-    lines.append("---")
     lines.append("")
     return "\n".join(lines)
 
@@ -846,9 +842,11 @@ def _section_toc(rooms: list[str], classes: list[dict], story: dict) -> str:
         lines.append(f"{offset + i}. [Room {room_idx}](#room-{room_idx})")
 
     offset += len(rooms)
-    lines.append(f"{offset}. [Appendices](#appendices)")
-    lines.append(f"{offset + 1}. [Technical Details](#technical-details)")
-    lines.append(f"{offset + 2}. [Credits](#credits)")
+    lines.append(f"{offset}. [Damage Scaling](#scaling)")
+    lines.append(f"{offset + 1}. [Available Spell Pools](#spell-pools)")
+    lines.append(f"{offset + 2}. [Appendices](#appendices)")
+    lines.append(f"{offset + 3}. [Technical Details](#technical-details)")
+    lines.append(f"{offset + 4}. [Credits](#credits)")
 
     lines.append("")
     lines.append("---")
@@ -1427,6 +1425,108 @@ def _section_room(
     return "\n".join(lines)
 
 
+def _section_scaling_tables() -> str:
+    """Weapon and spell damage scaling tables."""
+    from config import NUM_ROOMS
+    from src.models.spell import SPELL_TYPE_BASE_TIER, compute_spell_dice
+    from src.models.weapon import WEAPON_TYPE_BASE_TIER, compute_weapon_dice
+
+    lines = [
+        '<a id="scaling"></a>',
+        "",
+        "## Damage Scaling",
+        "",
+        "### Weapon Damage by Room",
+        "",
+    ]
+    weapon_types = list(WEAPON_TYPE_BASE_TIER.keys())
+    header = "| Room | " + " | ".join(t.title() for t in weapon_types) + " |"
+    sep = "|------|" + "|".join("------" for _ in weapon_types) + "|"
+    lines.append(header)
+    lines.append(sep)
+    for room in range(1, NUM_ROOMS + 1):
+        cells = []
+        for wt in weapon_types:
+            n, s = compute_weapon_dice(room, wt)
+            cells.append(f"{n}d{s}")
+        lines.append(f"| {room}    | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    lines.extend([
+        "### Spell Damage by Room (at acquisition)",
+        "",
+    ])
+    spell_types = list(SPELL_TYPE_BASE_TIER.keys())
+    header = "| Room | " + " | ".join(t.replace("_", " ").title() for t in spell_types) + " |"
+    sep = "|------|" + "|".join("------" for _ in spell_types) + "|"
+    lines.append(header)
+    lines.append(sep)
+    for room in range(1, NUM_ROOMS + 1):
+        cells = []
+        for st in spell_types:
+            n, s = compute_spell_dice(room, st)
+            cells.append(f"{n}d{s}")
+        lines.append(f"| {room}    | " + " | ".join(cells) + " |")
+    lines.append("")
+    lines.append(
+        "*Spell dice are locked when the spell is learned."
+        " A damage_single spell learned at room 3 keeps its"
+        " room-3 dice forever.*"
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _section_spell_pools(spell_pool_path: str) -> str:
+    """Render all available spells from the shared spell pools."""
+    lines = [
+        '<a id="spell-pools"></a>',
+        "",
+        "## Available Spell Pools",
+        "",
+        "These spells become available at level-up. Dice scale to the room you learn them in.",
+        "",
+    ]
+    pools = {}
+    if os.path.exists(spell_pool_path):
+        try:
+            pools = json.loads(open(spell_pool_path).read())
+        except Exception:
+            pass
+
+    pool_labels = {
+        "mage_damage": "Mage Damage Spells",
+        "healer_damage": "Healer Damage Spells",
+        "heal": "Healing Spells",
+        "buff": "Buff Spells",
+    }
+    for pool_key, label in pool_labels.items():
+        spells = pools.get(pool_key, [])
+        if not spells:
+            continue
+        lines.append(f"### {label}")
+        lines.append("")
+        lines.append("| Name | Type | Element | Targets | Description |")
+        lines.append("|------|------|---------|---------|-------------|")
+        for s in spells:
+            lines.append(
+                f"| {s.get('name', '?')} | {s.get('spell_type', '?')} "
+                f"| {s.get('element', '?')} | {s.get('targets', '?')} "
+                f"| {s.get('description', '')} |"
+            )
+        lines.append("")
+
+    if not pools:
+        lines.append("*No spell pools generated.*")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _section_appendices(
     all_monsters: list[dict], all_npcs: list[dict], all_items: dict, story: dict, narrative: dict
 ) -> str:
@@ -1870,13 +1970,20 @@ def build_guide(data_dir: str = DATA_DIR, output_dir: str = GUIDE_OUTPUT_DIR, ge
             )
         )
 
-    # 8. Appendices
+    # 8. Scaling tables
+    sections.append(_section_scaling_tables())
+
+    # 9. Spell pools
+    spell_pool_path = os.path.join(data_dir, "classes", "spell_pools.json")
+    sections.append(_section_spell_pools(spell_pool_path))
+
+    # 10. Appendices
     sections.append(_section_appendices(all_monsters, all_npcs, all_items_lookup, story, narrative))
 
-    # 9. Technical
+    # 11. Technical
     sections.append(_section_technical(gen_stats))
 
-    # 10. Credits
+    # 12. Credits
     sections.append(_section_credits())
 
     title = story.get("title", "Untitled")

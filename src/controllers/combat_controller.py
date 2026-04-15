@@ -10,7 +10,7 @@ from typing import List, Optional
 from src.models.combat import CombatState
 from src.models.monster import Monster
 from src.models.spell import Spell, elemental_multiplier, physical_multiplier
-from src.models.weapon import roll_dice_expr, step_down_weapon_dice, weapon_from_inventory_item
+from src.models.weapon import step_down_weapon_dice, weapon_from_inventory_item
 
 
 def _effectiveness_tag(mult: float) -> str:
@@ -171,8 +171,8 @@ class CombatController:
             target.take_damage(damage)
             self.player.combat_record["damage_dealt"] += damage
             eff = _effectiveness_tag(phys_mult * magic_mult)
-            dice_expr = self.player.weapon.damage_dice if self.player.weapon else "1d4"
-            msg = f"You hit {target.name} for {damage}{eff}! [{dice_expr}={base_damage}, roll {attack_roll} vs AC {dc}]"
+            w_dice = self.player.weapon.dice_expr if self.player.weapon else "1d4"
+            msg = f"You hit {target.name} for {damage}{eff}! [{w_dice}={base_damage}, roll {attack_roll} vs AC {dc}]"
             if not target.is_alive:
                 msg += f" {target.name} is slain!"
             self.log.append(msg)
@@ -206,7 +206,7 @@ class CombatController:
         else:
             targets = [alive[i] for i in target_indices if i < len(alive)]
 
-        dice_expr = step_down_weapon_dice(self.player.weapon)
+        sd_num, sd_sides = step_down_weapon_dice(self.player.weapon)
         stat = self.player._resolve_weapon_stat()
         stat_bonus = self.player._weapon_stat_bonus(stat)
 
@@ -219,7 +219,7 @@ class CombatController:
             target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
             dc = target_ac + target.dex_mod
             if attack_roll >= dc:
-                base_damage = max(1, roll_dice_expr(dice_expr) + stat_bonus)
+                base_damage = max(1, sum(random.randint(1, sd_sides) for _ in range(sd_num)) + stat_bonus)
                 phys_mult = physical_multiplier(
                     weapon.damage_type if weapon else "physical",
                     target.physical_type,
@@ -337,7 +337,7 @@ class CombatController:
                     eff = " (resisted)"
                 hit_msg = (
                     f"{spell.name} hits {target.name} for {damage}{eff}"
-                    f" [1d{spell.damage_dice}={base_damage}, roll {magic_roll} vs DC {dc}]"
+                    f" [{spell.dice_expr}={base_damage}, roll {magic_roll} vs DC {dc}]"
                 )
                 if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"

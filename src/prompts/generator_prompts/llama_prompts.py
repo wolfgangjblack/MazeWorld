@@ -318,7 +318,8 @@ class LlamaPromptSet(PromptSet):
             max_tokens=max_tokens,
         )
 
-    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "") -> LLMRequest:
+    def item_generation(self, env: str, env_name: str, room_level: int, story_context: str = "",
+                        weapon_skeletons: list[dict] | None = None) -> LLMRequest:
         lore_suffix = ""
         if story_context:
             lore_suffix = (
@@ -328,15 +329,27 @@ class LlamaPromptSet(PromptSet):
                 "Be information-dense: item names and descriptions should reinforce "
                 "the world's lore. Do not pad or ramble."
             )
+        weapon_note = ""
+        if weapon_skeletons:
+            skeleton_summaries = []
+            for i, ws in enumerate(weapon_skeletons):
+                parts = [ws.get("weapon_type", "heavy"), ws.get("damage_type", "slashing")]
+                if ws.get("magic_element"):
+                    parts.append(f"magic: {ws['magic_element']}")
+                skeleton_summaries.append(f"  {i+1}. {', '.join(parts)}")
+            weapon_note = (
+                "\nWeapon skeletons (mechanics pre-rolled, generate ONLY name and desc for each):\n"
+                + "\n".join(skeleton_summaries)
+            )
         return LLMRequest(
             system=(
                 "You generate environment-themed items for a fantasy game. "
                 "Output a JSON object with keys: food (4 items), drink (4 items), "
-                "tools (3 items), weapons (3 items), spell_scrolls (2 items). "
+                "tools (3 items), weapons (6 items), spell_scrolls (2 items). "
                 "Each food: {name, desc}. "
                 "Each drink: {name, desc}. "
                 "Each tool: {name, desc, attribute (bludgeon|cutting|digging|climbing)}. "
-                "Each weapon: {name, desc, weapon_type (heavy|light|simple), stat_modifier (STR|DEX|INT)}. "
+                "Each weapon: {name, desc}. Weapon mechanics are pre-rolled. "
                 "Each spell_scroll: {name, desc, spell_effect (heal|damage|shield|reveal|sustain)}. "
                 "Items must be thematic to the environment and world lore."
             ),
@@ -366,8 +379,8 @@ class LlamaPromptSet(PromptSet):
                     '"spell_effect": "heal"}]}',
                 ),
             ],
-            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix),
-            max_tokens=600,
+            user_message=(f"environment: '{env}', name: '{env_name}', room_level: {room_level}" + lore_suffix + weapon_note),
+            max_tokens=800,
         )
 
     def item_image_description(self, item_data: dict) -> LLMRequest:
@@ -413,23 +426,28 @@ class LlamaPromptSet(PromptSet):
             max_tokens=40,
         )
 
-    def class_generation(self, env: str, env_name: str) -> LLMRequest:
+    def class_generation(self, env: str, env_name: str,
+                         archetype_skeletons: dict | None = None) -> LLMRequest:
+        skeleton_note = ""
+        if archetype_skeletons:
+            from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+            return ClaudePromptSet().class_generation(env, env_name, archetype_skeletons=archetype_skeletons)
         return LLMRequest(
             system=(
                 "You generate 4 player classes for a fantasy RPG. Output a JSON array of 4 objects. "
                 "Each: name, archetype (warrior|mage|healer|jester), flavor_text, starting_weapon, "
                 "stats ({STR,DEX,CON,INT,WIS,CHA,LUCK} totaling 72), "
-                "abilities [{name,description,stat}], "
-                "spells [{name,description,element,spell_type,stat,targets (single|multi|self)}]. "
+                "abilities [{name,description}], "
+                "spells [{name,description}]. "
                 "Do NOT include damage_dice, hunger_cost, thirst_cost, or stamina_cost — the system assigns these. "
-                "portrait_prompt, ability_pool (4 extra abilities), spell_pool (4 extra spells). "
+                "portrait_prompt, ability_pool (level-up abilities), spell_pool (level-up spells). "
                 "Warrior: STR/CON 14-18, 4 abilities, no spells. "
                 "Mage: INT 14-18, 4 spells (2 damage, 2 utility). "
                 "Healer: WIS 14-18, 4 spells (1 heal, 1 buff, 1 damage, 1 utility). "
                 "Jester: LUCK 14-18, random 0-3 from others."
             ),
             examples=[],
-            user_message=f"environment: '{env}', env_name: '{env_name}'",
+            user_message=f"environment: '{env}', env_name: '{env_name}'" + skeleton_note,
             max_tokens=2000,
         )
 
@@ -622,15 +640,13 @@ class LlamaPromptSet(PromptSet):
 
         return ClaudePromptSet().weapon_database_generation(environments, num_rooms)
 
-    def spell_database_generation(self, class_type: str, environments: list[dict], num_rooms: int) -> LLMRequest:
+    def spell_pool_generation(
+        self, pool_type: str, element: str, count: int,
+        existing_names: list[str], env_context: str,
+    ) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
 
-        return ClaudePromptSet().spell_database_generation(class_type, environments, num_rooms)
-
-    def utility_ability_generation(self, environments: list[dict], num_rooms: int) -> LLMRequest:
-        from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
-
-        return ClaudePromptSet().utility_ability_generation(environments, num_rooms)
+        return ClaudePromptSet().spell_pool_generation(pool_type, element, count, existing_names, env_context)
 
     def environment_sequence_generation(self, story_seed: str, num_rooms: int, known_types: list[str]) -> LLMRequest:
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet

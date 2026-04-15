@@ -427,7 +427,7 @@ class CombatView:
             controls = "Left/Right  |  Enter  |  Esc"
         else:
             target_name = alive[selected_target].display_name if alive else "?"
-            dice = f"1d{player.weapon.damage_dice}" if player.weapon else "1d4"
+            dice = player.weapon.dice_expr if player.weapon else "1d4"
             stat = resolve_weapon_stat(player.weapon)
             bonus = weapon_stat_bonus(player, player.weapon, stat)
             sign = "+" if bonus >= 0 else ""

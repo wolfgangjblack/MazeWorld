@@ -60,7 +60,7 @@ def draw_status_layout(
     weapon_info : str  (e.g. "Heavy | 1d8 | STR")
     abilities : list of objects with .name, .description, .stat, .stamina_cost
     spells : list of objects with .name, .description, .spell_type, .element,
-             .damage_dice, .stamina_cost, .targets, .stat
+             .num_dice, .die_sides, .stamina_cost, .targets, .stat
     base_y : int — top of the content area (scrolled)
     pad : int — horizontal padding
     """
@@ -148,8 +148,8 @@ def draw_status_layout(
             if sp.element:
                 meta_parts.append(sp.element.title())
             meta_parts.append(f"Stat: {sp.stat}")
-            if sp.damage_dice and sp.spell_type.startswith("damage"):
-                meta_parts.append(f"d{sp.damage_dice}")
+            if sp.die_sides > 0 and sp.spell_type.startswith("damage"):
+                meta_parts.append(sp.dice_expr)
             if sp.stamina_cost:
                 meta_parts.append(f"Cost: {sp.stamina_cost}")
             if sp.targets:

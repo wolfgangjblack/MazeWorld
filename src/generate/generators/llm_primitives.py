@@ -3,8 +3,6 @@ import json
 import logging
 
 from src.generate.llm_client import generate
-from src.models.spell import ELEMENT_ADVANTAGE
-from src.models.weapon import WEAPON_DICE_BY_ROOM
 from src.prompts import get_prompt_set
 
 _logger = logging.getLogger(__name__)
@@ -162,50 +160,29 @@ def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = N
     return _parse_json_response(raw)
 
 
-WEAPON_TYPE_TO_DAMAGE_TYPE: dict[str, list[str]] = {
-    "heavy": ["slashing", "bludgeoning"],
-    "light": ["piercing", "slashing"],
-    "simple": ["bludgeoning", "piercing"],
-    "wild": ["slashing", "piercing", "bludgeoning"],
-}
+def generate_item_primitive(
+    environment: dict,
+    room_level: int = 1,
+    story_context: str = "",
+    weapon_skeletons: list[dict] | None = None,
+) -> dict:
+    """Generate environment-themed items via LLM. Returns dict with category arrays.
 
-WEAPON_TYPE_TO_CATEGORY: dict[str, str] = {
-    "heavy": "martial",
-    "light": "martial",
-    "simple": "simple",
-    "wild": "martial",
-}
-
-_ELEMENTAL_TYPES = list(ELEMENT_ADVANTAGE.keys())
-
-
-def _weapon_dice_for_level(room_level: int) -> list[str]:
-    capped = min(room_level, max(WEAPON_DICE_BY_ROOM.keys()))
-    return list(set(WEAPON_DICE_BY_ROOM.get(capped, WEAPON_DICE_BY_ROOM[1]).values()))
-
-
-def generate_item_primitive(environment: dict, room_level: int = 1, story_context: str = "") -> dict:
-    """Generate environment-themed items via LLM. Returns dict with category arrays."""
-    import random as _rng
-
+    Weapon mechanics are pre-rolled via weapon_skeletons. The LLM only generates
+    name and desc for weapons; all mechanical fields come from the skeletons.
+    """
     prompts = get_prompt_set()
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.item_generation(env, env_name, room_level, story_context=story_context)
+    request = prompts.item_generation(
+        env, env_name, room_level, story_context=story_context, weapon_skeletons=weapon_skeletons
+    )
     raw = generate(request)
     result = _parse_json_response(raw)
 
     if "error" in result:
         return result
-
-    dice_pool = _weapon_dice_for_level(room_level)
-    for weapon in result.get("weapons", []):
-        weapon["attack_dice"] = _rng.choice(dice_pool)
-        wt = weapon.get("weapon_type", "simple")
-        weapon["damage_type"] = _rng.choice(WEAPON_TYPE_TO_DAMAGE_TYPE.get(wt, ["bludgeoning"]))
-        weapon["weapon_category"] = WEAPON_TYPE_TO_CATEGORY.get(wt, "simple")
-        weapon["magic_element"] = _rng.choice(_ELEMENTAL_TYPES) if _rng.random() < 0.05 else None
 
     return result
 
@@ -249,7 +226,9 @@ def generate_player_image_description() -> str:
     )
 
 
-def generate_player_classes(environment: dict) -> list[dict]:
+def generate_player_classes(
+    environment: dict, archetype_skeletons: dict | None = None
+) -> list[dict]:
     """Generate 4 player class options themed to the environment.
 
     Returns a list of 4 dicts, one per archetype.
@@ -258,7 +237,7 @@ def generate_player_classes(environment: dict) -> list[dict]:
     env = environment.get("environment", {}).get("type", "city")
     env_name = environment.get("environment", {}).get("name", "city")
 
-    request = prompts.class_generation(env, env_name)
+    request = prompts.class_generation(env, env_name, archetype_skeletons=archetype_skeletons)
     raw = generate(request)
     return _parse_class_array(raw)
 
@@ -361,22 +340,6 @@ def generate_weapon_database(environments: list[dict], num_rooms: int) -> list[d
     """Generate the full weapon database across all rooms."""
     prompts = get_prompt_set()
     request = prompts.weapon_database_generation(environments, num_rooms)
-    raw = generate(request)
-    return _parse_json_array(raw)
-
-
-def generate_spell_database(class_type: str, environments: list[dict], num_rooms: int) -> list[dict]:
-    """Generate spells for a class (mage or healer)."""
-    prompts = get_prompt_set()
-    request = prompts.spell_database_generation(class_type, environments, num_rooms)
-    raw = generate(request)
-    return _parse_json_array(raw)
-
-
-def generate_utility_abilities(environments: list[dict], num_rooms: int) -> list[dict]:
-    """Generate utility abilities usable by any class."""
-    prompts = get_prompt_set()
-    request = prompts.utility_ability_generation(environments, num_rooms)
     raw = generate(request)
     return _parse_json_array(raw)
 

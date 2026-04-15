@@ -968,10 +968,8 @@ class SessionManager:
                 if result:
                     if result["action"] == "chosen":
                         player = self.game_controller.player
-                        if player.player_class and player.player_class.archetype == "jester":
-                            player.apply_level_up(result["type"], result["choice"])
-                        else:
-                            player.apply_level_up(result["type"], result["choice"])
+                        room_level = self.current_room_index + 1
+                        player.apply_level_up(result["type"], result["choice"], room_level=room_level)
                     elif result["action"] == "skip":
                         if self.game_controller:
                             self.game_controller.player.level += 1

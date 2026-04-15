@@ -4,7 +4,7 @@ unified Spell model, weapon swapping, prompt framing, and API client caching.
 
 from src.controllers.combat_controller import CombatController
 from src.generate.backends.llm_api import ApiLLMBackend
-from src.generate.class_gen import _parse_damage_dice, _parse_spells
+from src.generate.class_gen import _parse_dice_fields, _parse_spells
 from src.models.combat import CombatAction, CombatState
 from src.models.monster import Monster
 from src.models.player import PlayerCharacter, PlayerClass, Stats
@@ -62,7 +62,8 @@ class TestUnifiedSpell:
             spell_type="damage_single",
             element="fire",
             stat="INT",
-            damage_dice=8,
+            num_dice=1,
+            die_sides=8,
             stamina_cost=5,
         )
         assert s.stamina_cost == 5
@@ -75,7 +76,8 @@ class TestUnifiedSpell:
             spell_type="damage_single",
             element="fire",
             stat="INT",
-            damage_dice=8,
+            num_dice=1,
+            die_sides=8,
             stamina_cost=5,
         )
         assert p.can_afford_spell(s)
@@ -101,29 +103,28 @@ class TestUnifiedSpell:
 
         assert PlayerSpell is Spell
 
-    def test_parse_damage_dice_int(self):
-        """Integer input passes through unchanged."""
-        assert _parse_damage_dice(8) == 8
-        assert _parse_damage_dice(0) == 0
-        assert _parse_damage_dice(12) == 12
+    def test_parse_dice_fields_int(self):
+        """Integer damage_dice maps to (1, N)."""
+        assert _parse_dice_fields({"damage_dice": 8}) == (1, 8)
+        assert _parse_dice_fields({"damage_dice": 0}) == (0, 0)
+        assert _parse_dice_fields({"damage_dice": 12}) == (1, 12)
 
-    def test_parse_damage_dice_str_dice(self):
-        """Dice notation extracts the die size (number of sides)."""
-        assert _parse_damage_dice("1d8") == 8
-        assert _parse_damage_dice("2d6") == 6
-        assert _parse_damage_dice("1d4") == 4
-        assert _parse_damage_dice("3d10") == 10
+    def test_parse_dice_fields_str(self):
+        """Dice notation parses to (num, sides)."""
+        assert _parse_dice_fields({"damage_dice": "1d8"}) == (1, 8)
+        assert _parse_dice_fields({"damage_dice": "2d6"}) == (2, 6)
+        assert _parse_dice_fields({"damage_dice": "3d10"}) == (3, 10)
 
-    def test_parse_damage_dice_str_number(self):
-        """Plain numeric string parses to integer."""
-        assert _parse_damage_dice("0") == 0
-        assert _parse_damage_dice("6") == 6
+    def test_parse_dice_fields_new_format(self):
+        """New format with num_dice + die_sides passes through."""
+        assert _parse_dice_fields({"num_dice": 2, "die_sides": 8}) == (2, 8)
 
     def test_parse_spells_with_dice_notation(self):
         raw = [{"name": "Bolt", "element": "fire", "damage_dice": "1d8", "spell_type": "damage"}]
         result = _parse_spells(raw)
         assert len(result) == 1
-        assert result[0].damage_dice == 8
+        assert result[0].num_dice == 1
+        assert result[0].die_sides == 8
         assert result[0].spell_type == "damage_single"
         assert result[0].stamina_cost >= 0
 
@@ -161,7 +162,7 @@ class TestWeaponSwap:
             category="weapon",
             name="Silver Sword",
             desc="A silver sword.",
-            item_stats=ItemStats(stat_modifier="STR", damage_dice=8),
+            item_stats=ItemStats(stat_modifier="STR", attack_dice="1d8"),
         )
         p.inventory = {"Silver Sword": sword}
         p.equipped_weapon = "fists"
@@ -277,7 +278,8 @@ class TestCombatControllerWiring:
                 spell_type="damage_single",
                 element="fire",
                 stat="INT",
-                damage_dice=12,
+                num_dice=1,
+                die_sides=12,
                 stamina_cost=5,
                 targets="single",
             ),
@@ -305,6 +307,9 @@ class TestCombatControllerWiring:
 
     def test_combat_controller_flee_flow(self):
         """Player can flee through CombatController."""
+        import random as _rng
+
+        _rng.seed(42)
         p = _make_player("warrior")
         p.player_class.stats.DEX = 30
         m = _weak_monster()

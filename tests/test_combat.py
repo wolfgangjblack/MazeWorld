@@ -66,7 +66,8 @@ def mage():
             spell_type="damage_single",
             element="fire",
             stat="INT",
-            damage_dice=8,
+            num_dice=1,
+            die_sides=8,
             stamina_cost=5,
             targets="single",
         ),
@@ -75,7 +76,8 @@ def mage():
             spell_type="damage_multi",
             element="fire",
             stat="INT",
-            damage_dice=6,
+            num_dice=1,
+            die_sides=6,
             stamina_cost=10,
             targets="multi",
         ),
@@ -729,13 +731,13 @@ class TestMonsterModel:
 
 class TestWeaponModel:
     def test_damage_roll_in_range(self):
-        w = Weapon(name="Sword", weapon_type="heavy", stat="STR", damage_dice=8)
+        w = Weapon(name="Sword", weapon_type="heavy", stat="STR", die_sides=8)
         for _ in range(50):
             d = w.roll_damage()
             assert 1 <= d <= 8
 
     def test_damage_bonus(self):
-        w = Weapon(name="Magic Sword", weapon_type="heavy", stat="STR", damage_dice=8, damage_bonus=3)
+        w = Weapon(name="Magic Sword", weapon_type="heavy", stat="STR", die_sides=8, damage_bonus=3)
         for _ in range(50):
             d = w.roll_damage()
             assert 4 <= d <= 11
@@ -780,7 +782,7 @@ class TestJesterRandomWeapon:
         for seed in range(50):
             random.seed(seed)
             stats_seen.add(jester._resolve_weapon_stat())
-        assert stats_seen == {"STR", "DEX", "INT"}
+        assert stats_seen == {"STR", "DEX", "CON", "INT", "WIS"}
 
     def test_resolve_attack_stat_random_type(self, jester):
         """resolve_attack_stat with a random weapon returns a stat from the pool."""
@@ -866,7 +868,7 @@ class TestMeleeMultiplierInCombat:
             name="Test Sword",
             weapon_type="heavy",
             stat="STR",
-            damage_dice=6,
+            die_sides=6,
             damage_type="slashing",
             weapon_category="martial",
         )
@@ -889,7 +891,7 @@ class TestMeleeMultiplierInCombat:
             name="Test Sword",
             weapon_type="heavy",
             stat="STR",
-            damage_dice=6,
+            die_sides=6,
             damage_type="slashing",
             weapon_category="martial",
         )
@@ -911,7 +913,7 @@ class TestMeleeMultiplierInCombat:
             name="Fire Sword",
             weapon_type="heavy",
             stat="STR",
-            damage_dice=6,
+            die_sides=6,
             damage_type="slashing",
             weapon_category="martial",
             magic_element="fire",
@@ -940,7 +942,7 @@ class TestMonsterPhysicalWeakness:
             name="Sword",
             weapon_type="heavy",
             stat="STR",
-            damage_dice=6,
+            die_sides=6,
             damage_type="slashing",
             weapon_category="martial",
         )

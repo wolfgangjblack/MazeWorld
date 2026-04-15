@@ -53,7 +53,8 @@ def _fireball():
         spell_type="damage_single",
         element="fire",
         stat="INT",
-        damage_dice=8,
+        num_dice=1,
+        die_sides=8,
         stamina_cost=5,
     )
 

@@ -367,13 +367,18 @@ def _phase2_layouts(
 # ---------------------------------------------------------------------------
 
 
-def _phase3a_classes(environments: list[dict], story: OverarchingStory, bible: WorldBible) -> list:
-    """Generate player classes with stat rolling, weapons, spells, abilities."""
+def _phase3a_classes(
+    environments: list[dict], story: OverarchingStory, bible: WorldBible,
+) -> tuple[list, dict[str, str]]:
+    """Generate player classes with stat rolling, weapons, spells, abilities.
+
+    Returns (player_classes, class_elements).
+    """
     from src.generate.class_gen import generate_classes
 
     first_env = environments[0] if environments else {"type": "forest", "name": "Unknown"}
     logger.info("Generating player classes for %s...", first_env["name"])
-    player_classes = generate_classes(first_env["type"], first_env["name"])
+    player_classes, class_elements = generate_classes(first_env["type"], first_env["name"])
 
     for pc in player_classes:
         bible.add_player_class(
@@ -386,7 +391,36 @@ def _phase3a_classes(environments: list[dict], story: OverarchingStory, bible: W
         )
 
     logger.info("Generated %d player classes.", len(player_classes))
-    return player_classes
+    return player_classes, class_elements
+
+
+def _phase3a_spell_pools(
+    class_elements: dict[str, str],
+    starting_spell_names: list[str],
+    bible: WorldBible,
+) -> dict[str, list[dict]]:
+    """Generate spell pools for level-up selection."""
+    from src.generate.generators.spell_pool_gen import generate_spell_pools
+
+    story_context = bible.get_cumulative_context("room_0") if bible.rooms else ""
+    mage_element = class_elements.get("mage", "fire")
+    healer_element = class_elements.get("healer", "water")
+
+    spell_pools = generate_spell_pools(
+        mage_element=mage_element,
+        healer_element=healer_element,
+        existing_spell_names=starting_spell_names,
+        env_context=story_context,
+    )
+
+    pool_path = os.path.join(DATA_DIR, "classes", "spell_pools.json")
+    os.makedirs(os.path.dirname(pool_path), exist_ok=True)
+    with open(pool_path, "w") as f:
+        json.dump(spell_pools, f, indent=2)
+
+    total = sum(len(v) for v in spell_pools.values())
+    logger.info("Generated spell pools: %d total spells across %d pools", total, len(spell_pools))
+    return spell_pools
 
 
 # ---------------------------------------------------------------------------
@@ -407,15 +441,27 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 
     story_context = bible.get_cumulative_context(room_id)
 
+    from src.models.weapon import roll_weapon_skeleton
+
+    weapon_skeletons = [
+        roll_weapon_skeleton(
+            room_level, room_idx=room_idx, room_id=room_id, environment=env_type, environment_name=env_name
+        )
+        for _ in range(6)
+    ]
+
     generated_items = None
     try:
         from src.generate.generators.llm_primitives import generate_item_primitive
 
         result = generate_item_primitive(
-            {"environment": {"type": env_type, "name": env_name}}, room_level, story_context=story_context
+            {"environment": {"type": env_type, "name": env_name}},
+            room_level,
+            story_context=story_context,
+            weapon_skeletons=weapon_skeletons,
         )
         if "error" not in result:
-            item_list = _build_items_list(result, room_level)
+            item_list = _build_items_list(result, room_level, weapon_skeletons=weapon_skeletons)
             if item_list:
                 global_path = DB_PATHS["item"]
                 existing_db = load_json_data(global_path) if os.path.exists(global_path) else {}
@@ -1827,8 +1873,14 @@ def generate_world():
 
     # --- Phase 3A: Classes & Equipment ---
     advance(PHASE_NAMES[3])
-    player_classes = _phase3a_classes(environments, story, bible)
+    player_classes, class_elements = _phase3a_classes(environments, story, bible)
     class_data_list = [pc.model_dump() for pc in player_classes]
+
+    # --- Phase 3A-ii: Spell Pools ---
+    starting_spell_names = []
+    for pc in player_classes:
+        starting_spell_names.extend(s.name for s in pc.spells)
+    _phase3a_spell_pools(class_elements, starting_spell_names, bible)
     phase_bar.update(1)
 
     # --- Phase 3B-D: Entity Generation (per room) ---

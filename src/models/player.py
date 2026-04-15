@@ -29,6 +29,50 @@ ARCHETYPE_WEAPON_CATEGORIES: dict[str, set[str]] = {
 }
 
 
+ABILITY_DISTRIBUTIONS = {
+    "warrior": {
+        "starting": [
+            {"purpose": "break", "stat": "STR"},
+            {"purpose": "intimidate", "stat": "CHA"},
+            {"purpose": "bash", "stat": "STR"},
+            {"purpose": "rally", "stat": "CHA"},
+        ],
+        "pool": [
+            {"purpose": "climb", "stat": "STR"},
+            {"purpose": "detect", "stat": "WIS"},
+            {"purpose": "grapple", "stat": "STR"},
+            {"purpose": "warcry", "stat": "CHA"},
+        ],
+    },
+    "mage": {"starting": [], "pool": []},
+    "healer": {"starting": [], "pool": []},
+    "jester": {"starting": [], "pool": []},
+}
+
+ABILITY_STAMINA_BY_PURPOSE = {
+    "break": 8,
+    "bash": 5,
+    "intimidate": 3,
+    "rally": 5,
+    "climb": 4,
+    "detect": 3,
+    "grapple": 6,
+    "warcry": 7,
+}
+
+
+def roll_ability_skeleton(slot: dict) -> dict:
+    """Pre-roll an ability's mechanical identity."""
+    purpose = slot["purpose"]
+    stat = slot["stat"]
+    stamina_cost = ABILITY_STAMINA_BY_PURPOSE.get(purpose, 4)
+    return {
+        "purpose": purpose,
+        "stat": stat,
+        "stamina_cost": stamina_cost,
+    }
+
+
 def stat_modifier(value: int) -> int:
     """D&D-style modifier: (stat - 10) // 2."""
     return (value - 10) // 2
@@ -191,26 +235,88 @@ class PlayerCharacter(BaseModel):
             return self.player_class.stats.modifier(stat)
         return 0
 
-    def level_up_choices(self) -> list:
-        """Return available abilities/spells to pick from on level-up."""
+    def level_up_choices(self, max_choices: int = 4) -> list:
+        """Return available abilities/spells to pick from on level-up.
+
+        Draws from ability_pool, spell_pool, and the shared spell pools file
+        (if it exists). Results are capped at *max_choices* via random sampling.
+        """
         if not self.player_class:
             return []
+
         known_names = {a.name for a in self.abilities} | {s.name for s in self.spells}
-        choices = []
+        choices: list[tuple[str, object]] = []
+
         for a in self.player_class.ability_pool:
             if a.name not in known_names:
                 choices.append(("ability", a))
+
         for s in self.player_class.spell_pool:
             if s.name not in known_names:
                 choices.append(("spell", s))
+
+        # Load shared spell pools from disk
+        pool_spells = self._load_spell_pool_choices(known_names)
+        choices.extend(pool_spells)
+
+        if len(choices) > max_choices:
+            choices = random.sample(choices, max_choices)
         return choices
 
-    def apply_level_up(self, choice_type: str, choice):
-        """Apply a level-up choice (ability or spell)."""
+    def _load_spell_pool_choices(self, known_names: set[str]) -> list[tuple[str, Spell]]:
+        """Load the shared spell pools and filter by archetype visibility."""
+        import json
+        import os
+
+        pool_path = os.path.join(os.getenv("DATA_DIR", "data"), "classes", "spell_pools.json")
+        if not os.path.exists(pool_path):
+            return []
+
+        try:
+            with open(pool_path) as f:
+                pools = json.load(f)
+        except Exception:
+            return []
+
+        archetype = self.player_class.archetype if self.player_class else ""
+        visible_pools = {
+            "mage": ["mage_damage", "buff"],
+            "healer": ["healer_damage", "heal", "buff"],
+            "jester": ["mage_damage", "healer_damage", "heal", "buff"],
+        }.get(archetype, [])
+
+        results: list[tuple[str, Spell]] = []
+        for pool_key in visible_pools:
+            for sd in pools.get(pool_key, []):
+                if sd.get("name", "") in known_names:
+                    continue
+                skel = dict(sd)
+                skel.pop("available_at_room", None)
+                try:
+                    results.append(("spell", Spell(**skel)))
+                except Exception:
+                    pass
+        return results
+
+    def apply_level_up(self, choice_type: str, choice, room_level: int = 1):
+        """Apply a level-up choice (ability or spell).
+
+        For spells, dice are scaled to *room_level* at acquisition time.
+        """
+        from src.models.spell import compute_spell_dice, compute_stamina_cost
+
         self.level += 1
         if choice_type == "ability":
             self.abilities.append(choice)
         elif choice_type == "spell":
+            if hasattr(choice, "spell_type") and choice.spell_type in ("damage_single", "damage_multi", "heal"):
+                num_dice, die_sides = compute_spell_dice(room_level, choice.spell_type)
+                stamina = compute_stamina_cost(die_sides, num_dice, choice.targets, choice.spell_type)
+                choice = choice.model_copy(update={
+                    "num_dice": num_dice,
+                    "die_sides": die_sides,
+                    "stamina_cost": stamina,
+                })
             self.spells.append(choice)
 
     def initialize_inventory(self):
