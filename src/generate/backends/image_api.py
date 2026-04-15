@@ -14,7 +14,7 @@ class ApiImageBackend(ImageBackend):
         """Returns a URL to the generated image."""
         import fal_client
 
-        from config import FAL_KEY_ENV, FAL_MODEL
+        from config import FAL_KEY_ENV, FAL_MODEL, FAL_NEGATIVE_SUFFIX
 
         fal_key = os.getenv(FAL_KEY_ENV)
         if not fal_key:
@@ -25,8 +25,8 @@ class ApiImageBackend(ImageBackend):
         result = fal_client.subscribe(
             FAL_MODEL,
             arguments={
-                "prompt": prompt,
-                "image_size": {"width": width, "height": height},
+                "prompt": prompt + FAL_NEGATIVE_SUFFIX,
+                "aspect_ratio": "1:1",
                 "num_images": 1,
             },
         )

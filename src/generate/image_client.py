@@ -71,16 +71,15 @@ async def _generate_one_async(fal_model: str, prompt: str, filepath: str, entity
     import aiohttp
     import fal_client
 
-    from config import IMAGE_HEIGHT, IMAGE_WIDTH
+    from config import FAL_NEGATIVE_SUFFIX
 
     for attempt in range(3):
         try:
             result = await fal_client.subscribe_async(
                 fal_model,
                 arguments={
-                    "prompt": prompt,
-                    "negative_prompt": "text, words, letters, watermark, signature, banana, fruit",
-                    "image_size": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT},
+                    "prompt": prompt + FAL_NEGATIVE_SUFFIX,
+                    "aspect_ratio": "1:1",
                     "num_images": 1,
                 },
             )
