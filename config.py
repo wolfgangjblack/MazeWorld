@@ -119,6 +119,5 @@ LOCAL_IMAGE_MODEL_CUDA = "black-forest-labs/FLUX.1-schnell"
 FAL_MODEL = "fal-ai/nano-banana"
 FAL_KEY_ENV = "FAL_KEY"
 FAL_NEGATIVE_SUFFIX = (
-    " Do not include any text, words, letters, numbers,"
-    " watermarks, signatures, bananas, or fruit in the image."
+    " Do not include any text, words, letters, numbers, watermarks, signatures, bananas, or fruit in the image."
 )

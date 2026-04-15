@@ -1,6 +1,6 @@
 from src.models.items import Drink, Food, SpellScroll, Tool, Weapon
 from src.registry import GameRegistry
-from tests.conftest import requires_data
+from tests.conftest import requires_data, requires_npc_data
 
 
 def test_singleton():
@@ -56,7 +56,7 @@ def test_items_by_class(reg):
     assert all(isinstance(v, Tool) for v in tools.values())
 
 
-@requires_data
+@requires_npc_data
 def test_npc_templates(reg):
     assert len(reg.npc_templates) >= 1
     for t in reg.npc_templates:

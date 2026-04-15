@@ -14,6 +14,12 @@ requires_data = pytest.mark.skipif(
     reason="Requires generated world data (run pipeline first)",
 )
 
+HAS_NPC_DATA = os.path.exists(os.path.join(DATA_DIR, "npcs", "npcs.json"))
+requires_npc_data = pytest.mark.skipif(
+    not HAS_NPC_DATA,
+    reason="Requires generated NPC data (run pipeline first)",
+)
+
 
 @pytest.fixture(scope="session", autouse=True)
 def load_registry():
