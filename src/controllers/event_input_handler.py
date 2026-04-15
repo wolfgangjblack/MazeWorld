@@ -45,6 +45,7 @@ class EventInputHandler:
                 if gc.sfx:
                     gc.sfx.play("dice_roll")
                 dice_roll = random.randint(1, 20)
+                gc.dialogue_box.event_context["dice_roll"] = dice_roll
                 if current_event.type == "puzzle":
                     choice_idx = gc.dialogue_box.event_context.get("selected_choice", 0)
                     result = current_event.resolve(choice_idx, dice_roll, gc.player)
@@ -148,6 +149,10 @@ class EventInputHandler:
         gc = self.gc
         gc.dialogue_box.event_context["result"] = result
         gc.dialogue_box.event_context.setdefault("dice_roll", 0)
+        if "roll_dc" in result:
+            gc.dialogue_box.event_context["roll_dc"] = result["roll_dc"]
+        if "roll_total" in result:
+            gc.dialogue_box.event_context["roll_total"] = result["roll_total"]
         gc.dialogue_box.awaiting_roll = False
 
         if result.get("success"):

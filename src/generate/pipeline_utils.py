@@ -211,7 +211,7 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         items.append(
             {
                 "category": "food",
-                "name": raw["name"],
+                "name": raw.get("name", "Unknown Item"),
                 "desc": raw.get("desc", ""),
                 "room_level": room_level,
                 "item_stats": {
@@ -233,7 +233,7 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         items.append(
             {
                 "category": "drink",
-                "name": raw["name"],
+                "name": raw.get("name", "Unknown Item"),
                 "desc": raw.get("desc", ""),
                 "room_level": room_level,
                 "item_stats": {
@@ -249,7 +249,7 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         items.append(
             {
                 "category": "tool",
-                "name": raw["name"],
+                "name": raw.get("name", "Unknown Item"),
                 "desc": raw.get("desc", ""),
                 "room_level": room_level,
                 "item_stats": {
@@ -267,7 +267,7 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         lo, hi = WEAPON_PRICE_BY_DICE.get(dice, (10, 30))
         weapon_entry = {
             "category": "weapon",
-            "name": raw["name"],
+            "name": raw.get("name", "Unknown Item"),
             "desc": raw.get("desc", ""),
             "weapon_type": raw.get("weapon_type", "simple"),
             "damage_type": raw.get("damage_type", "physical"),
@@ -288,7 +288,7 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         items.append(
             {
                 "category": "spell_scroll",
-                "name": raw["name"],
+                "name": raw.get("name", "Unknown Item"),
                 "desc": raw.get("desc", ""),
                 "spell_effect": raw.get("spell_effect", "generic"),
                 "room_level": room_level,
@@ -301,6 +301,41 @@ def _build_items_list(llm_result: dict, room_level: int) -> list[dict]:
         )
 
     return items
+
+
+_FALLBACK_ITEM_POOLS = {
+    "food": [
+        {"name": "trail rations", "desc": "Dried provisions."},
+        {"name": "stale bread", "desc": "Hard but filling."},
+        {"name": "dried meat", "desc": "Preserved jerky."},
+        {"name": "foraged berries", "desc": "Wild berries."},
+    ],
+    "drink": [
+        {"name": "water skin", "desc": "Fresh water."},
+        {"name": "herbal brew", "desc": "A bitter tonic."},
+        {"name": "mushroom tea", "desc": "An earthy drink."},
+        {"name": "old wine", "desc": "Vinegary but wet."},
+    ],
+    "tools": [
+        {"name": "rusty hatchet", "desc": "A worn cutting tool.", "attribute": "cutting"},
+        {"name": "iron pickaxe", "desc": "Good for digging.", "attribute": "digging"},
+        {"name": "climbing rope", "desc": "Frayed but usable.", "attribute": "climbing"},
+    ],
+    "weapons": [
+        {"name": "short sword", "desc": "A simple blade.", "weapon_type": "light", "stat_modifier": "DEX"},
+        {"name": "wooden club", "desc": "A heavy bludgeon.", "weapon_type": "heavy", "stat_modifier": "STR"},
+        {"name": "hunting knife", "desc": "A basic knife.", "weapon_type": "simple", "stat_modifier": "DEX"},
+    ],
+    "spell_scrolls": [
+        {"name": "scroll of mending", "desc": "A basic heal scroll.", "spell_effect": "heal"},
+        {"name": "scroll of protection", "desc": "A shield scroll.", "spell_effect": "shield"},
+    ],
+}
+
+
+def _build_fallback_items(room_level: int) -> list[dict]:
+    """Generate fallback items when LLM item generation fails."""
+    return _build_items_list(_FALLBACK_ITEM_POOLS, room_level)
 
 
 # ---------------------------------------------------------------------------

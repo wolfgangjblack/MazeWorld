@@ -12,7 +12,7 @@ DEBUG_EVENT_COLOR = (50, 200, 100)  # Green — narrative events
 DEBUG_EVENT_FALLBACK = (128, 0, 128)  # Purple — unknown type
 DEBUG_GATE_COLOR = (180, 140, 30)  # Dark gold — gate encounter (debug)
 BOSS_TILE_COLOR = (140, 20, 20)  # Dark red — climax boss (always visible)
-DOOR_COLOR = (255, 215, 0)  # Gold for revealed exit doors
+DOOR_COLOR = (120, 40, 160)  # Dark purple for revealed exit doors
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
 
 # Fog of war colors
@@ -61,11 +61,11 @@ class MazeView:
                     pygame.draw.rect(screen, WHITE, rect)
                 elif cell == maze.event_tile_id:
                     eflag = (event_flag_map or {}).get((x, y), "")
-                    if eflag == "climax_boss":
+                    if eflag == "climax_boss" and (debug_reveal or maze.door_revealed):
                         pygame.draw.rect(screen, BLACK, rect)
                         inner = pygame.Rect(screen_x + 2, screen_y + 2, GRID_SIZE - 4, GRID_SIZE - 4)
                         pygame.draw.rect(screen, BOSS_TILE_COLOR, inner)
-                    elif eflag == "gate" and debug_reveal:
+                    elif eflag == "gate" and (debug_reveal or maze.door_revealed):
                         pygame.draw.rect(screen, BLACK, rect)
                         inner = pygame.Rect(screen_x + 2, screen_y + 2, GRID_SIZE - 4, GRID_SIZE - 4)
                         pygame.draw.rect(screen, DEBUG_GATE_COLOR, inner)
@@ -94,6 +94,9 @@ class MazeView:
                     pygame.draw.rect(screen, DOOR_COLOR, door_rect)
                 elif cell == 0:
                     pygame.draw.rect(screen, BLACK, rect)
+                    if debug_reveal and maze.door_position == (x, y):
+                        door_outline = pygame.Rect(screen_x + 3, screen_y + 3, GRID_SIZE - 6, GRID_SIZE - 6)
+                        pygame.draw.rect(screen, (120, 110, 50), door_outline, width=2)
                 elif registry.is_item(cell):
                     pygame.draw.rect(screen, BLACK, rect)
                     item = registry.get_item(cell)

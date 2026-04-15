@@ -171,13 +171,14 @@ class CombatController:
             target.take_damage(damage)
             self.player.combat_record["damage_dealt"] += damage
             eff = _effectiveness_tag(phys_mult * magic_mult)
-            msg = f"You hit {target.name} for {damage} damage{eff}! (roll {attack_roll} vs AC {dc})"
+            dice_expr = self.player.weapon.damage_dice if self.player.weapon else "1d4"
+            msg = f"You hit {target.name} for {damage}{eff}! [{dice_expr}={base_damage}, roll {attack_roll} vs AC {dc}]"
             if not target.is_alive:
                 msg += f" {target.name} is slain!"
             self.log.append(msg)
             result = {"success": True, "message": msg, "damage": damage}
         else:
-            msg = f"You miss {target.name}. (roll {attack_roll} vs AC {dc})"
+            msg = f"You miss {target.name}. [roll {attack_roll} vs AC {dc}]"
             self.log.append(msg)
             result = {"success": False, "message": msg}
 
@@ -232,14 +233,14 @@ class CombatController:
                 target.take_damage(damage)
                 total_damage += damage
                 eff = _effectiveness_tag(phys_mult * magic_mult)
-                hit_msg = f"Hit {target.name} for {damage}{eff}!"
+                hit_msg = f"Hit {target.name} for {damage}{eff} [roll {attack_roll} vs AC {dc}]"
                 if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"
                 messages.append(hit_msg)
             else:
-                messages.append(f"Miss {target.name}.")
+                messages.append(f"Miss {target.name} [roll {attack_roll} vs AC {dc}]")
 
-        msg = "Multi-Attack: " + " ".join(messages)
+        msg = f"Multi-Attack [-{cost} stam]: " + " ".join(messages)
         self.log.append(msg)
         self.player.combat_record["damage_dealt"] += total_damage
         self.player.tick_buffs()
@@ -269,7 +270,7 @@ class CombatController:
         if spell.spell_type == "heal":
             heal = spell.heal_amount if spell.heal_amount else random.randint(4, 12)
             self.player.health = min(self.player.max_health, self.player.health + heal)
-            msg = f"You cast {spell.name} and heal {heal} HP!"
+            msg = f"You cast {spell.name}! +{heal} HP [-{spell.stamina_cost} stam]"
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -279,7 +280,7 @@ class CombatController:
             stat = spell.buff_stat or "STR"
             duration = roll_buff_duration(self.player)
             self.player.apply_buff(stat, spell.buff_value, duration)
-            msg = f"You cast {spell.name}! +{spell.buff_value} {stat} for {duration} turns."
+            msg = f"You cast {spell.name}! +{spell.buff_value} {stat} for {duration} turns [-{spell.stamina_cost} stam]"
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -288,7 +289,7 @@ class CombatController:
         if spell.spell_type == "buff_sustain":
             restore = 3
             self.player.stamina = min(self.player.max_stamina, self.player.stamina + restore)
-            msg = f"You cast {spell.name}! Energy flows through you (+{restore} stamina)."
+            msg = f"You cast {spell.name}! +{restore} stamina [-{spell.stamina_cost} stam]"
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -334,14 +335,14 @@ class CombatController:
                     eff = " (super effective!)"
                 elif mult < 1.0:
                     eff = " (resisted)"
-                hit_msg = f"{spell.name} hits {target.name} for {damage}{eff}!"
+                hit_msg = f"{spell.name} hits {target.name} for {damage}{eff} [1d{spell.damage_dice}={base_damage}, roll {magic_roll} vs DC {dc}]"
                 if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"
                 messages.append(hit_msg)
             else:
-                messages.append(f"{spell.name} misses {target.name}. (roll {magic_roll} vs DC {dc})")
+                messages.append(f"{spell.name} misses {target.name} [roll {magic_roll} vs DC {dc}]")
 
-        msg = " ".join(messages)
+        msg = " ".join(messages) + f" [-{spell.stamina_cost} stam]"
         self.log.append(msg)
         self.player.combat_record["damage_dealt"] += total_damage
         self.player.tick_buffs()
@@ -378,8 +379,8 @@ class CombatController:
                 (m for m in self.monsters if m.is_alive),
                 key=lambda m: m.level,
             )
-            damage, _ = self._monster_attack_player(attacker)
-            msg = f"Flee failed! (roll {flee_roll} vs DC {dc}) {attacker.name} strikes you for {damage} damage!"
+            damage, _, m_roll, p_ac = self._monster_attack_player(attacker)
+            msg = f"Flee failed! [roll {flee_roll} vs DC {dc}] {attacker.name} strikes for {damage}! [roll {m_roll} vs AC {p_ac}]"
             self.log.append(msg)
             self.player.tick_buffs()
             self.advance_turn()
@@ -508,17 +509,17 @@ class CombatController:
             self.advance_turn()
             return {"success": True, "message": f"{monster.display_name} is dead, skipping."}
 
-        damage, phys_mult = self._monster_attack_player(monster)
+        damage, phys_mult, m_roll, p_ac = self._monster_attack_player(monster)
         combatant.tick_debuffs()
 
         if damage > 0:
             eff = _effectiveness_tag(phys_mult)
-            msg = f"{monster.display_name} attacks you for {damage} damage{eff}!"
+            msg = f"{monster.display_name} attacks for {damage}{eff}! [roll {m_roll} vs AC {p_ac}]"
             if not self.player.is_alive:
                 msg += " You have been slain!"
                 self.state = CombatState.DEFEAT
         else:
-            msg = f"{monster.display_name} misses!"
+            msg = f"{monster.display_name} misses! [roll {m_roll} vs AC {p_ac}]"
 
         self.log.append(msg)
         self.advance_turn()
@@ -555,12 +556,8 @@ class CombatController:
                 return c
         return None
 
-    def _monster_attack_player(self, monster: Monster) -> tuple[int, float]:
-        """Monster attacks the player. Returns (damage dealt, physical multiplier).
-
-        Applies physical type multiplier: monster's physical_type vs player's
-        weapon damage_type (player weakness).
-        """
+    def _monster_attack_player(self, monster: Monster) -> tuple[int, float, int, int]:
+        """Monster attacks the player. Returns (damage, phys_mult, attack_roll, player_ac)."""
         attack_roll = monster.roll_attack()
         player_ac = self.player.get_ac()
 
@@ -571,5 +568,5 @@ class CombatController:
             damage = max(1, int(base_damage * phys_mult))
             self.player.health = max(0, self.player.health - damage)
             self.player.combat_record["damage_taken"] += damage
-            return damage, phys_mult
-        return 0, 1.0
+            return damage, phys_mult, attack_roll, player_ac
+        return 0, 1.0, attack_roll, player_ac

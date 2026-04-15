@@ -301,6 +301,7 @@ def _phase2_layouts(
                 "room_idx": room_idx,
                 "room_level": room_idx + 1,
                 "id_offset": room_idx * 1000,
+                "total_rooms": len(environments),
                 "environment": env["type"],
                 "environment_name": env["name"],
                 "maze": maze,
@@ -429,6 +430,23 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
     except Exception as e:
         logger.warning("Room %d item generation failed: %s", room_idx, e)
 
+    if not generated_items:
+        from src.generate.pipeline_utils import _build_fallback_items
+
+        generated_items = _build_fallback_items(room_level)
+        global_path = DB_PATHS["item"]
+        existing_db = load_json_data(global_path) if os.path.exists(global_path) else {}
+        start_id = next_id("item", existing_db)
+        keyed = {}
+        for i, item_data in enumerate(generated_items):
+            keyed[str(start_id + i)] = item_data
+        existing_db.update(keyed)
+        os.makedirs(os.path.dirname(global_path), exist_ok=True)
+        with open(global_path, "w") as f:
+            json.dump(existing_db, f, indent=2)
+        generated_items = keyed
+        logger.info("Room %d: using %d fallback items.", room_idx, len(generated_items))
+
     if generated_items:
         registry._loaded = False
         registry._load_items_from(DB_PATHS["item"])
@@ -455,7 +473,16 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
             chosen_id = int(random.choice(item_ids))
             x, y = tile.position
             maze.grid[y][x] = chosen_id
-            item_placements.append({"x": x, "y": y, "item_id": chosen_id})
+            item_data = generated_items.get(str(chosen_id), {})
+            item_placements.append(
+                {
+                    "x": x,
+                    "y": y,
+                    "item_id": chosen_id,
+                    "name": item_data.get("name", ""),
+                    "portrait_prompt": item_data.get("portrait_prompt", ""),
+                }
+            )
 
     logger.info("Room %d: %d items (%d placements).", room_idx, len(generated_items or {}), len(item_placements))
     return generated_items, item_placements
@@ -466,9 +493,11 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
 # ---------------------------------------------------------------------------
 
 
-def _phase3c_npcs(layout: dict, bible: WorldBible, existing_npc_names: list[str] | None = None) -> list[dict]:
+def _phase3c_npcs(
+    layout: dict, bible: WorldBible, existing_npc_names: list[str] | None = None, id_offset: int = 0
+) -> list[dict]:
     """Generate all NPCs for a room in one batched LLM call."""
-    from src.db_constants import DB_PATHS, next_id
+    from src.db_constants import DB_BASE, DB_PATHS
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
@@ -506,9 +535,7 @@ def _phase3c_npcs(layout: dict, bible: WorldBible, existing_npc_names: list[str]
         logger.warning("Room %d NPC batch generation failed: %s", room_idx, e)
         llm_npcs = []
 
-    global_npc_path = DB_PATHS["npc"]
-    existing_npc_db = load_json_data(global_npc_path) if os.path.exists(global_npc_path) else []
-    npc_id_counter = next_id("npc", existing_npc_db)
+    npc_id_counter = DB_BASE["npc"] + id_offset
     for i, tile in enumerate(npc_tiles):
         llm_data = llm_npcs[i] if i < len(llm_npcs) else {}
         x, y = tile.position
@@ -570,9 +597,9 @@ def _phase3c_npcs(layout: dict, bible: WorldBible, existing_npc_names: list[str]
 # ---------------------------------------------------------------------------
 
 
-def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
+def _phase3d_monsters(layout: dict, bible: WorldBible, id_offset: int = 0) -> list[dict]:
     """Generate monster database for a room via LLM and write to global DB."""
-    from src.db_constants import DB_PATHS, next_id
+    from src.db_constants import DB_BASE, DB_PATHS
 
     room_idx = layout["room_idx"]
     room_id = layout["room_id"]
@@ -615,13 +642,15 @@ def _phase3d_monsters(layout: dict, bible: WorldBible) -> list[dict]:
 
     global_path = DB_PATHS["monster"]
     existing_global = load_json_data(global_path) if os.path.exists(global_path) else {}
-    start_id = next_id("monster", existing_global)
+    start_id = DB_BASE["monster"] + id_offset
 
     for i, m in enumerate(monster_db):
         m["id"] = start_id + i
         m.setdefault("level", room_level)
         m.setdefault("hp_range", [8 + room_level * 2, 15 + room_level * 3])
         m.setdefault("ac_range", [9 + room_level, 12 + room_level])
+        m.setdefault("physical_type", random.choice(["slashing", "piercing", "bludgeoning"]))
+        m.setdefault("damage_type", "physical")
         existing_global[str(start_id + i)] = m
 
     os.makedirs(os.path.dirname(global_path), exist_ok=True)
@@ -750,6 +779,16 @@ def _enrich_tile_meta(layouts: list[dict], room_results: list[dict], class_data_
                     gate_tile.assigned_monsters = [boss_monsters[0]["id"]]
                     gate_tile.assigned_monster_count = 1
 
+            gx, gy = gate_tile.position
+            adjacent = [(gx + 1, gy), (gx - 1, gy), (gx, gy + 1), (gx, gy - 1)]
+            open_adj = [
+                p
+                for p in adjacent
+                if 0 <= p[0] < len(maze.grid[0]) and 0 <= p[1] < len(maze.grid) and maze.grid[p[1]][p[0]] == 0
+            ]
+            if open_adj:
+                maze.door_position = open_adj[0]
+
     logger.info("Enrichment pass complete: assigned monsters, requirements, and gate/boss tiles.")
 
 
@@ -876,6 +915,8 @@ def _phase4a_events(
     npc_pool: list[dict],
     item_placements: list[dict],
     class_data_list: list[dict] | None = None,
+    event_id_offset: int = 0,
+    quest_id_offset: int = 0,
 ) -> tuple[list[dict], list[dict]]:
     """Generate events by type + reconcile NPC quest stubs.
 
@@ -927,8 +968,9 @@ def _phase4a_events(
     event_tiles = maze.get_tiles_by_type("event")
     event_list = []
 
-    existing_events = load_json_data(DB_PATHS["event"]) if os.path.exists(DB_PATHS["event"]) else []
-    event_counter = next_id("event", existing_events)
+    from src.db_constants import DB_BASE
+
+    event_counter = DB_BASE["event"] + event_id_offset
 
     # --- Combat: build programmatically, no LLM ---
     combat_tiles = [t for t in event_tiles if t.event_type == "combat"]
@@ -1162,8 +1204,7 @@ def _phase4a_events(
 
     # --- Quest reconciliation: handle all 7 quest types ---
     quest_list = []
-    existing_quests = load_json_data(DB_PATHS["quest"]) if os.path.exists(DB_PATHS["quest"]) else []
-    quest_counter = next_id("quest", existing_quests)
+    quest_counter = DB_BASE["quest"] + quest_id_offset
 
     for npc in npc_pool:
         qtype = npc.get("quest_type")
@@ -1794,11 +1835,15 @@ def generate_world():
     advance(PHASE_NAMES[4])
     room_results = []
     all_prior_npc_names: list[str] = []
+    npc_count_offset = 0
+    monster_count_offset = 0
     for layout in tqdm(layouts, desc="  Entities", unit="room", position=1, leave=True):
         generated_items, item_placements = _phase3b_items(layout, bible)
-        npc_pool = _phase3c_npcs(layout, bible, existing_npc_names=all_prior_npc_names)
+        npc_pool = _phase3c_npcs(layout, bible, existing_npc_names=all_prior_npc_names, id_offset=npc_count_offset)
         all_prior_npc_names.extend(n.get("name", "") for n in npc_pool)
-        monster_db = _phase3d_monsters(layout, bible)
+        npc_count_offset += len(npc_pool)
+        monster_db = _phase3d_monsters(layout, bible, id_offset=monster_count_offset)
+        monster_count_offset += len(monster_db)
         bible.persist(BIBLE_PATH)
         room_results.append(
             {
@@ -1825,11 +1870,22 @@ def generate_world():
 
     # --- Phase 4: Events, Quests, Dialogue (per room) ---
     advance(PHASE_NAMES[5])
+    event_count_offset = 0
+    quest_count_offset = 0
     for rr in tqdm(room_results, desc="  Content", unit="room", position=1, leave=True):
         layout = next(lay for lay in layouts if lay["room_id"] == rr["room_id"])
         event_list, quest_list = _phase4a_events(
-            layout, bible, rr["monster_db"], rr["npc_pool"], rr["item_placements"], class_data_list=class_data_list
+            layout,
+            bible,
+            rr["monster_db"],
+            rr["npc_pool"],
+            rr["item_placements"],
+            class_data_list=class_data_list,
+            event_id_offset=event_count_offset,
+            quest_id_offset=quest_count_offset,
         )
+        event_count_offset += len(event_list)
+        quest_count_offset += len(quest_list)
         rr["event_list"] = event_list
         rr["quest_list"] = quest_list
         rr["npc_pool"] = _phase4b_dialogue(layout, rr["npc_pool"], bible, quest_list=rr["quest_list"])

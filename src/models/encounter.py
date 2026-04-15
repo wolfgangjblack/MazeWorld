@@ -291,6 +291,8 @@ class PuzzleEvent(Event):
                 "message": msg,
                 "reward_item_id": self.reward_item_id,
                 "consumed_tool": consumed_tool,
+                "roll_dc": effective_dc,
+                "roll_total": total,
                 **reward,
             }
         else:
@@ -299,7 +301,7 @@ class PuzzleEvent(Event):
                 player.health = max(0, player.health - damage)
             elif self.failure_damage_type == "stamina":
                 player.stamina = max(0, player.stamina - damage)
-            msg = f"You failed! Took {damage} {self.failure_damage_type} damage. (Rolled {total} vs DC {effective_dc})"
+            msg = f"You failed! Took {damage} {self.failure_damage_type} damage."
             if consumed_tool:
                 msg = f"Your {consumed_tool} was consumed. " + msg
             return {
@@ -308,6 +310,8 @@ class PuzzleEvent(Event):
                 "consumed_tool": consumed_tool,
                 "damage": damage,
                 "damage_type": self.failure_damage_type,
+                "roll_dc": effective_dc,
+                "roll_total": total,
             }
 
 
@@ -447,6 +451,8 @@ class EventEncounter(Event):
                 "message": msg,
                 "reward_item_id": self.reward_item_id,
                 "consumed_tool": consumed_tool,
+                "roll_dc": effective_dc,
+                "roll_total": total,
                 **reward,
             }
         else:
@@ -456,7 +462,7 @@ class EventEncounter(Event):
             elif self.failure_damage_type == "stamina":
                 player.stamina = max(0, player.stamina - damage)
 
-            msg = f"You failed! Took {damage} {self.failure_damage_type} damage. (Rolled {total} vs DC {effective_dc})"
+            msg = f"You failed! Took {damage} {self.failure_damage_type} damage."
             if consumed_tool:
                 msg = f"Your {consumed_tool} was consumed. " + msg
             return {
@@ -465,6 +471,8 @@ class EventEncounter(Event):
                 "damage": damage,
                 "damage_type": self.failure_damage_type,
                 "consumed_tool": consumed_tool,
+                "roll_dc": effective_dc,
+                "roll_total": total,
             }
 
 

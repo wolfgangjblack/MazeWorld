@@ -227,11 +227,15 @@ class Maze:
         return self.door_position
 
     def reveal_door(self):
-        """Make the door visible on the map as a gold door tile."""
+        """Mark the door as revealed (boss becomes visible). Does not place the door tile."""
         if self.door_position and not self.door_revealed:
+            self.door_revealed = True
+
+    def place_door_tile(self):
+        """Place the actual door tile on the grid so the player can walk to it."""
+        if self.door_position:
             dx, dy = self.door_position
             self.grid[dy][dx] = self.door_tile_id
-            self.door_revealed = True
 
     def count_open_cells(self) -> int:
         """Count all open/path cells (value == 0) in the grid."""

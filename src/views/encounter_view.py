@@ -59,6 +59,14 @@ class EncounterView:
         self.big_font = pygame.font.SysFont(None, 48)
         self.content_scroll = 0
         self._max_content_h = 0
+        self._choice_y_positions: list[int] = []
+        self._scroll_top = self.HEADER_H + 12
+
+    def reset_scroll(self):
+        """Reset scroll state for a new encounter."""
+        self.content_scroll = 0
+        self._choice_y_positions = []
+        self._max_content_h = 0
 
     def draw(self, dialogue_box):
         """Draw the encounter screen based on current event state."""
@@ -69,13 +77,15 @@ class EncounterView:
         self.screen.fill(DARK_GRAY)
         self._draw_header(event)
 
-        clip_top = self.HEADER_H + 1
+        portrait_bottom = self._draw_portrait(event, self.HEADER_H + 12)
+
+        self._scroll_top = portrait_bottom
         clip_bottom = SCREEN_HEIGHT - self.PROMPT_H
-        clip_rect = pygame.Rect(0, clip_top, SCREEN_WIDTH, clip_bottom - clip_top)
+        clip_rect = pygame.Rect(0, self._scroll_top, SCREEN_WIDTH, clip_bottom - self._scroll_top)
         self.screen.set_clip(clip_rect)
 
-        base_y = clip_top + 12 - self.content_scroll
-        content_y = self._draw_portrait_and_description(event, base_y)
+        content_y = self._scroll_top + 4 - self.content_scroll
+        content_y = self._draw_description(event, content_y)
 
         if event.type == "puzzle":
             self._draw_puzzle(event, dialogue_box, content_y)
@@ -85,14 +95,24 @@ class EncounterView:
         self.screen.set_clip(None)
 
     def scroll_content(self, direction: int):
-        """Scroll the content area. Positive = down (reveal lower content)."""
+        """Scroll the description+choices area. Positive = down."""
         self.content_scroll = max(0, self.content_scroll + direction * 20)
-        max_scroll = max(0, self._max_content_h - (SCREEN_HEIGHT - self.HEADER_H - self.PROMPT_H - 20))
+        viewport_h = SCREEN_HEIGHT - self.PROMPT_H - self._scroll_top
+        max_scroll = max(0, self._max_content_h - viewport_h)
         self.content_scroll = min(self.content_scroll, max_scroll)
 
     def ensure_choice_visible(self, index: int):
-        """Placeholder — choices are already within the clipped viewport for typical counts."""
-        pass
+        """Auto-scroll so the highlighted choice is visible below the portrait."""
+        if not self._choice_y_positions or index >= len(self._choice_y_positions):
+            return
+        abs_y = self._choice_y_positions[index]
+        viewport_h = SCREEN_HEIGHT - self.PROMPT_H - self._scroll_top
+        content_y = abs_y - self._scroll_top
+        line_h = self.font.get_linesize() + self.small_font.get_linesize()
+        if content_y + line_h > self.content_scroll + viewport_h:
+            self.content_scroll = content_y + line_h - viewport_h + 10
+        elif content_y < self.content_scroll:
+            self.content_scroll = max(0, content_y - 10)
 
     # ------------------------------------------------------------------
     # Header
@@ -112,18 +132,18 @@ class EncounterView:
         self.screen.blit(name_surf, (SCREEN_WIDTH - name_surf.get_width() - 15, 8))
 
     # ------------------------------------------------------------------
-    # Portrait + description
+    # Portrait (fixed, never scrolls)
     # ------------------------------------------------------------------
 
-    def _draw_portrait_and_description(self, event, y: int = 58) -> int:
-        """Draw portrait centered above description. Returns y position after content."""
+    def _draw_portrait(self, event, y: int = 58) -> int:
+        """Draw portrait centered. Returns y position after portrait (fixed zone bottom)."""
         pw, ph = self.PORTRAIT_SIZE
         portrait = _load_portrait(getattr(event, "profile_image", None), size=self.PORTRAIT_SIZE)
 
         if portrait:
             px = (SCREEN_WIDTH - pw) // 2
             self.screen.blit(portrait, (px, y))
-            y += ph + 10
+            y += ph + 6
         else:
             type_color = TYPE_COLORS.get(event.type, LIGHT_GRAY)
             px = (SCREEN_WIDTH - pw) // 2
@@ -132,8 +152,16 @@ class EncounterView:
             icon_surf = self.big_font.render(icon_text, True, WHITE)
             icon_rect = icon_surf.get_rect(center=(px + pw // 2, y + ph // 2))
             self.screen.blit(icon_surf, icon_rect)
-            y += ph + 10
+            y += ph + 6
 
+        return y
+
+    # ------------------------------------------------------------------
+    # Description (scrollable)
+    # ------------------------------------------------------------------
+
+    def _draw_description(self, event, y: int) -> int:
+        """Draw difficulty + description text. Returns y after content."""
         desc_x = 30
         desc_max_w = SCREEN_WIDTH - 60
 
@@ -202,11 +230,12 @@ class EncounterView:
             rendered = self._build_puzzle_choices(event, dialogue_box)
             ctx["rendered_choices"] = rendered
             highlight = ctx.get("highlight", 0)
+            self._choice_y_positions = []
 
-            hint_col_x = SCREEN_WIDTH - 140
-            max_text_w = hint_col_x - 50
+            max_text_w = SCREEN_WIDTH - 80
 
             for i, rc in enumerate(rendered):
+                self._choice_y_positions.append(y + self.content_scroll)
                 available = rc.get("available", True)
                 is_highlighted = i == highlight
                 prefix = "> " if is_highlighted else "  "
@@ -220,14 +249,16 @@ class EncounterView:
                     choice_color = MED_GRAY
 
                 lines = self._wrap_text(text, self.font, max_text_w)
-                for li, line in enumerate(lines):
+                for line in lines:
                     choice_surf = self.font.render(line, True, choice_color)
                     self.screen.blit(choice_surf, (30, y))
-                    if li == 0 and rc.get("hint"):
-                        hint_surf = self.small_font.render(rc["hint"], True, GOLD)
-                        self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
                     y += self.font.get_linesize()
+                if rc.get("hint"):
+                    hint_surf = self.small_font.render(rc["hint"], True, GOLD)
+                    self.screen.blit(hint_surf, (50, y))
+                    y += self.small_font.get_linesize()
 
+            self._max_content_h = y + self.content_scroll
             y += 8
             self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to leave", LIGHT_GRAY)
 
@@ -271,7 +302,7 @@ class EncounterView:
             if choice.stat_check:
                 hints.append(f"[{choice.stat_check}]")
             if choice.tool_attribute:
-                hints.append(f"[tool: {choice.tool_attribute}, +5]")
+                hints.append(f"[+5 with {choice.tool_attribute} tool]")
             if choice.auto_success:
                 hints.append("[safe]")
             rendered.append(
@@ -342,11 +373,12 @@ class EncounterView:
             rendered = self._build_event_choices(event, dialogue_box)
             ctx["rendered_choices"] = rendered
             highlight = ctx.get("highlight", 0)
+            self._choice_y_positions = []
 
-            hint_col_x = SCREEN_WIDTH - 140
-            max_text_w = hint_col_x - 50
+            max_text_w = SCREEN_WIDTH - 80
 
             for i, rc in enumerate(rendered):
+                self._choice_y_positions.append(y + self.content_scroll)
                 available = rc.get("available", True)
                 is_highlighted = i == highlight
                 prefix = "> " if is_highlighted else "  "
@@ -359,17 +391,18 @@ class EncounterView:
                 else:
                     choice_color = MED_GRAY
 
-                # Wrap text if it would overlap hints
                 lines = self._wrap_text(text, self.font, max_text_w)
-                for li, line in enumerate(lines):
+                for line in lines:
                     choice_surf = self.font.render(line, True, choice_color)
                     self.screen.blit(choice_surf, (30, y))
-                    if li == 0 and rc.get("hint"):
-                        hint_color = GOLD if available else MED_GRAY
-                        hint_surf = self.small_font.render(rc["hint"], True, hint_color)
-                        self.screen.blit(hint_surf, (SCREEN_WIDTH - hint_surf.get_width() - 30, y + 3))
                     y += self.font.get_linesize()
+                if rc.get("hint"):
+                    hint_color = GOLD if available else MED_GRAY
+                    hint_surf = self.small_font.render(rc["hint"], True, hint_color)
+                    self.screen.blit(hint_surf, (50, y))
+                    y += self.small_font.get_linesize()
 
+            self._max_content_h = y + self.content_scroll
             y += 8
             self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to walk away", LIGHT_GRAY)
 
@@ -414,7 +447,7 @@ class EncounterView:
             if choice.stat_check:
                 hints.append(f"[{choice.stat_check}]")
             if choice.tool_attribute:
-                hints.append(f"[tool: {choice.tool_attribute}, +5]")
+                hints.append(f"[+5 with {choice.tool_attribute} tool]")
             if choice.auto_success:
                 hints.append("[safe]")
             rendered.append(
@@ -434,20 +467,33 @@ class EncounterView:
     # ------------------------------------------------------------------
 
     def _draw_dice_result(self, ctx, y):
-        """Draw the dice roll result display."""
+        """Draw the dice roll result display with DC comparison."""
         roll = ctx.get("dice_roll", 0)
         if not roll:
             return
 
-        # Dice icon area
+        result = ctx.get("result", {})
+        walked_away = result.get("walked_away", False)
+        auto_solved = result.get("auto_solved", False)
+
         dice_x = 30
-        pygame.draw.rect(self.screen, WHITE, (dice_x, y, 36, 36), border_radius=4)
-        roll_surf = self.title_font.render(str(roll), True, BLACK)
+        pygame.draw.rect(self.screen, MED_GRAY, (dice_x, y, 36, 36), border_radius=4)
+        pygame.draw.rect(self.screen, LIGHT_GRAY, (dice_x, y, 36, 36), width=2, border_radius=4)
+        roll_surf = self.title_font.render(str(roll), True, WHITE)
         roll_rect = roll_surf.get_rect(center=(dice_x + 18, y + 18))
         self.screen.blit(roll_surf, roll_rect)
 
-        roll_label = self.font.render(f"Rolled: {roll}", True, WHITE)
-        self.screen.blit(roll_label, (dice_x + 44, y + 8))
+        if walked_away or auto_solved:
+            roll_label = self.font.render(f"Rolled: {roll}", True, WHITE)
+            self.screen.blit(roll_label, (dice_x + 44, y + 8))
+        else:
+            dc = ctx.get("roll_dc", 0)
+            total = ctx.get("roll_total", roll)
+            success = result.get("success", False)
+            vs_color = GREEN if success else RED
+            vs_text = f"DC {dc}  vs  Roll {total}"
+            vs_surf = self.font.render(vs_text, True, vs_color)
+            self.screen.blit(vs_surf, (dice_x + 44, y + 8))
 
     def _draw_banner(self, text, color):
         """Draw a large centered banner text."""

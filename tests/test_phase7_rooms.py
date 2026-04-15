@@ -141,6 +141,8 @@ class TestDoorReveal:
         maze.reveal_door()
         assert maze.door_revealed is True
         dx, dy = maze.door_position
+        assert maze.grid[dy][dx] != DOOR_TILE_ID
+        maze.place_door_tile()
         assert maze.grid[dy][dx] == DOOR_TILE_ID
 
     def test_door_reveal_idempotent(self, maze_with_door):
@@ -224,36 +226,31 @@ class TestDoorReveal:
 
 class TestGateEncounter:
     def test_gate_blocks_door(self):
-        """Gate encounter must be resolved before player can pass through door."""
+        """Door tile doesn't exist until boss is defeated, preventing early transition."""
         from src.controllers.game_controller import GameController
 
         maze = Maze()
         maze.generate()
         maze.place_door((1, 1))
         maze.reveal_door()
-        gate_evt = _make_mock_event(3100, resolved=False, is_gate=True)
         maze.gate_encounter_id = 3100
 
         gc = GameController.__new__(GameController)
         gc.maze = maze
         gc.player = PlayerCharacter(x=1, y=1)
-        gc.events = {3100: gate_evt}
+        gc.events = {}
         gc.quests = {}
         gc.dialogue_box = MagicMock()
         gc.gate_cleared = False
         gc.total_rooms = 3
         gc.current_room = 0
         gc.pending_action = None
-        gc.item_message_active = False
-        gc.stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
-        gc.sfx = None
-        gc.combat_handler = MagicMock()
 
-        # Player steps on door — gate should trigger, not transition
         gc.player.x, gc.player.y = maze.door_position
-        gc._handle_door_interaction()
-        assert gc.pending_action is None  # No room transition yet
-        gc.combat_handler.start.assert_called_once_with(gate_evt)
+        assert not gc._is_on_door_tile()
+
+        maze.place_door_tile()
+        assert gc._is_on_door_tile()
 
     def test_gate_cleared_allows_transition(self):
         """After gate is resolved, stepping on door triggers room transition."""

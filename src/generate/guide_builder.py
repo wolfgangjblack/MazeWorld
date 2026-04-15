@@ -32,6 +32,13 @@ def _safe_filename(title: str) -> str:
     return re.sub(r"[\s]+", "_", clean)
 
 
+def _fmt_range(val) -> str:
+    """Format a [min, max] range list as 'min-max', or return the value as-is."""
+    if isinstance(val, list) and len(val) >= 2:
+        return f"{val[0]}-{val[1]}"
+    return str(val)
+
+
 # Map renderer constants
 TILE_SIZE = 16
 MAP_COLORS = {
@@ -432,6 +439,13 @@ def _card_monster(mon: dict) -> str:
     )
 
     phys_type = mon.get("physical_type", "physical")
+    weakness = mon.get("weakness", "none")
+
+    from src.models.monster import LEVEL_SCALING
+
+    mon_level = mon.get("level", 1)
+    scaling = LEVEL_SCALING.get(min(mon_level, max(LEVEL_SCALING)), LEVEL_SCALING[1])
+    dice_str = "/".join(scaling["damage_dice"])
 
     lines = [
         "<table><tr>",
@@ -440,10 +454,12 @@ def _card_monster(mon: dict) -> str:
         f"<h3>{mon.get('name', 'Unknown')}</h3>",
         f"<b>Species:</b> {mon.get('species', '?')}<br/>",
         f"<b>Level:</b> {mon.get('level', '?')}<br/>",
-        f"<b>HP:</b> {mon.get('hp', '?')} / {mon.get('max_hp', '?')} &nbsp; <b>AC:</b> {mon.get('ac', '?')}<br/>",
-        f"<b>Damage:</b> {mon.get('damage_dice_expr', '1d6')} {mon.get('damage_type', 'physical')}<br/>",
+        f"<b>HP:</b> {_fmt_range(mon.get('hp_range', [mon.get('hp', '?'), mon.get('max_hp', '?')]))} "
+        f"&nbsp; <b>AC:</b> {_fmt_range(mon.get('ac_range', [mon.get('ac', '?'), mon.get('ac', '?')]))}<br/>",
+        f"<b>Damage:</b> {dice_str} {mon.get('damage_type', 'physical')}<br/>",
         f"<b>Physical Type:</b> {phys_type}<br/>",
         f"<b>Element:</b> {mon.get('elemental_affinity', 'none')}<br/>",
+        f"<b>Weakness:</b> {weakness}<br/>",
         f"<b>Magic Resist:</b> {mon.get('magic_resistance', 0)}<br/>",
         f"<b>Encounters:</b> {count} &nbsp; <b>Rooms:</b> {room_str}",
         "</td>",
@@ -516,11 +532,11 @@ def _card_event(evt: dict, items_lookup: dict | None = None, monster_db: dict[in
                 elem_str = f", element: {elem}" if elem and elem != "none" else ""
                 hp_range = m.get("hp_range", ["?", "?"])
                 ac_range = m.get("ac_range", ["?", "?"])
+                weakness = m.get("weakness", "none")
                 lines.append(
                     f"- **{m.get('name', f'Monster #{mid}')}** — "
                     f"HP {hp_range[0]}-{hp_range[1]}, AC {ac_range[0]}-{ac_range[1]}, "
-                    f"{m.get('damage_type', 'physical')}, "
-                    f"weakness: {phys}{elem_str}"
+                    f"atk: {phys}{elem_str}, weakness: {weakness}"
                 )
             lines.append("")
 
@@ -1335,6 +1351,12 @@ def _section_room(
                 stat_parts.append(f"{st['uses']} uses")
             if st.get("attack_dice"):
                 stat_parts.append(f"{st['attack_dice']} dmg")
+            if item.get("weapon_type"):
+                stat_parts.append(item["weapon_type"])
+            if item.get("damage_type") and item.get("damage_type") != "physical":
+                stat_parts.append(item["damage_type"])
+            if st.get("stat_modifier"):
+                stat_parts.append(st["stat_modifier"])
             if st.get("price"):
                 stat_parts.append(f"{st['price']}g")
             stat_str = ", ".join(stat_parts) if stat_parts else "—"
@@ -1418,18 +1440,25 @@ def _section_appendices(
 
     lines.append("### A. Monster Index")
     lines.append("")
-    lines.append("| Name | Species | Level | HP | AC | Damage | Phys. Type | Element | Rooms |")
-    lines.append("|------|---------|-------|----|----|--------|-----------|---------|-------|")
+    lines.append("| Name | Species | Level | HP | AC | Damage | Phys. Type | Element | Weakness | Rooms |")
+    lines.append("|------|---------|-------|----|----|--------|-----------|---------|----------|-------|")
+
+    from src.models.monster import LEVEL_SCALING
+
     for mon in sorted(all_monsters, key=lambda m: m.get("name", "")):
         rooms = mon.get("_rooms", set())
         room_str = ", ".join(sorted(rooms)) if isinstance(rooms, set) else str(rooms)
+        mon_level = mon.get("level", 1)
+        scaling = LEVEL_SCALING.get(min(mon_level, max(LEVEL_SCALING)), LEVEL_SCALING[1])
+        dice_str = "/".join(scaling["damage_dice"])
         lines.append(
             f"| {mon.get('name', '?')} | {mon.get('species', '?')} "
-            f"| {mon.get('level', '?')} | {mon.get('hp', '?')} "
-            f"| {mon.get('ac', '?')} "
-            f"| {mon.get('damage_dice_expr', '1d6')} {mon.get('damage_type', '')} "
+            f"| {mon.get('level', '?')} | {_fmt_range(mon.get('hp_range', ['?', '?']))} "
+            f"| {_fmt_range(mon.get('ac_range', ['?', '?']))} "
+            f"| {dice_str} {mon.get('damage_type', '')} "
             f"| {mon.get('physical_type', 'physical')} "
-            f"| {mon.get('elemental_affinity', 'none')} | {room_str} |"
+            f"| {mon.get('elemental_affinity', 'none')} "
+            f"| {mon.get('weakness', 'none')} | {room_str} |"
         )
     lines.append("")
 
@@ -1460,6 +1489,12 @@ def _section_appendices(
             stat_parts.append(f"+{st['health_value']} HP")
         if st.get("attack_dice"):
             stat_parts.append(f"{st['attack_dice']} dmg")
+        if item.get("weapon_type"):
+            stat_parts.append(item["weapon_type"])
+        if item.get("damage_type") and item.get("damage_type") != "physical":
+            stat_parts.append(item["damage_type"])
+        if st.get("stat_modifier"):
+            stat_parts.append(st["stat_modifier"])
         if st.get("price"):
             stat_parts.append(f"{st['price']}g")
         stat_str = ", ".join(stat_parts) if stat_parts else "—"

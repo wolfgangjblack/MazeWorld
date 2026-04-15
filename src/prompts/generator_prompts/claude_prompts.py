@@ -704,6 +704,8 @@ class ClaudePromptSet(PromptSet):
                 "{name, species, description, backstory (story-grounded lore paragraph), "
                 "hp_range [min,max], ac_range [min,max], "
                 "damage_type (physical|fire|water|forest|light|dark), "
+                "physical_type (slashing|piercing|bludgeoning — based on natural attack: "
+                "claws/blades=slashing, fangs/spears=piercing, fists/clubs=bludgeoning), "
                 "elemental_affinity (fire|water|forest|light|dark|null), "
                 "weakness (fire|water|forest|light|dark|null), "
                 "time_availability (always|night_only|day_only), "
@@ -731,6 +733,7 @@ class ClaudePromptSet(PromptSet):
                                 "hp_range": [7, 12],
                                 "ac_range": [8, 10],
                                 "damage_type": "physical",
+                                "physical_type": "piercing",
                                 "elemental_affinity": None,
                                 "weakness": "light",
                                 "time_availability": "always",
@@ -753,6 +756,7 @@ class ClaudePromptSet(PromptSet):
                                 "hp_range": [28, 38],
                                 "ac_range": [13, 15],
                                 "damage_type": "physical",
+                                "physical_type": "slashing",
                                 "elemental_affinity": None,
                                 "weakness": "forest",
                                 "time_availability": "always",

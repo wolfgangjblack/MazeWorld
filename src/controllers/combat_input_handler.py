@@ -448,6 +448,12 @@ class CombatInputHandler:
                 gc._check_door_reveal()
             else:
                 gc.gate_cleared = True
+                if gc.maze.door_position:
+                    gc.maze.place_door_tile()
+                gc.dialogue_box.set_item_message("The guardian falls! The exit door appears!")
+                gc.item_message_active = True
+                if gc.sfx:
+                    gc.sfx.play("door_open")
             gc.quest_manager.on_event_resolved(combat_event.id, gc.player)
 
             npc_source = gc._npc_combat_map.pop(combat_event.id, None)

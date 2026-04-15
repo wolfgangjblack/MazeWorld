@@ -177,7 +177,7 @@ class GameController:
             and self.encounter_clear_fraction >= DOOR_REVEAL_THRESHOLD
         ):
             self.maze.reveal_door()
-            self.dialogue_box.set_item_message("An exit door has appeared! A gate guardian blocks the way.")
+            self.dialogue_box.set_item_message("A powerful presence stirs near the exit...")
             self.item_message_active = True
             if self.sfx:
                 self.sfx.play("door_reveal")
@@ -185,7 +185,7 @@ class GameController:
     def reveal_door_from_quest(self):
         if self.maze.door_position and not self.maze.door_revealed:
             self.maze.reveal_door()
-            self.dialogue_box.set_item_message("A quest has revealed the exit door!")
+            self.dialogue_box.set_item_message("A powerful presence stirs near the exit...")
             self.item_message_active = True
             if self.sfx:
                 self.sfx.play("door_reveal")
@@ -317,6 +317,7 @@ class GameController:
                         self.combat_handler.start(event)
                     else:
                         self.day_night.pause()
+                        self.game_view.encounter_view.reset_scroll()
                         self.dialogue_box.start_event(event)
                 else:
                     time_gate = getattr(event, "time_gate", "always")
@@ -344,24 +345,14 @@ class GameController:
             self.item_message_active = True
 
     def _is_on_door_tile(self) -> bool:
-        return (
-            self.maze.door_position is not None
-            and self.maze.door_revealed
-            and (self.player.x, self.player.y) == self.maze.door_position
-        )
+        if self.maze.door_position is None or not self.maze.door_revealed:
+            return False
+        px, py = self.player.x, self.player.y
+        if (px, py) != self.maze.door_position:
+            return False
+        return self.maze.grid[py][px] == self.maze.door_tile_id
 
     def _handle_door_interaction(self):
-        gate_id = self.maze.gate_encounter_id
-        if gate_id and not self.gate_cleared:
-            gate_event = self.events.get(gate_id)
-            if gate_event and not gate_event.resolved:
-                if gate_event.type == "combat":
-                    self.combat_handler.start(gate_event)
-                else:
-                    self.dialogue_box.start_event(gate_event)
-                return
-            else:
-                self.gate_cleared = True
         self._signal_room_transition()
 
     def _signal_room_transition(self):
@@ -548,6 +539,21 @@ class GameController:
 
         if event.key == pygame.K_F1:
             self.debug_reveal = not self.debug_reveal
+            return
+
+        if event.key == pygame.K_F2:
+            if self.maze.door_position and not self.maze.door_revealed:
+                self.maze.reveal_door()
+                self.dialogue_box.set_item_message("DEBUG: Boss revealed.")
+                self.item_message_active = True
+            return
+
+        if event.key == pygame.K_F3:
+            if self.maze.door_position:
+                self.gate_cleared = True
+                self.maze.place_door_tile()
+                self.dialogue_box.set_item_message("DEBUG: Door forced open.")
+                self.item_message_active = True
             return
 
         if event.key == pygame.K_ESCAPE:
