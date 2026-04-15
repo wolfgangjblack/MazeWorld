@@ -47,12 +47,18 @@ ELEMENT_COLORS = {
 class EncounterView:
     """Renders the full-screen encounter UI for all event types."""
 
+    PORTRAIT_SIZE = (350, 250)
+    HEADER_H = 44
+    PROMPT_H = 40
+
     def __init__(self, screen: pygame.Surface, font: pygame.font.Font):
         self.screen = screen
         self.font = font
         self.small_font = pygame.font.SysFont(None, 20)
         self.title_font = pygame.font.SysFont(None, 36)
         self.big_font = pygame.font.SysFont(None, 48)
+        self.content_scroll = 0
+        self._max_content_h = 0
 
     def draw(self, dialogue_box):
         """Draw the encounter screen based on current event state."""
@@ -61,18 +67,32 @@ class EncounterView:
             return
 
         self.screen.fill(DARK_GRAY)
-
-        # Header bar
         self._draw_header(event)
 
-        # Portrait + description area
-        content_y = self._draw_portrait_and_description(event)
+        clip_top = self.HEADER_H + 1
+        clip_bottom = SCREEN_HEIGHT - self.PROMPT_H
+        clip_rect = pygame.Rect(0, clip_top, SCREEN_WIDTH, clip_bottom - clip_top)
+        self.screen.set_clip(clip_rect)
 
-        # Type-specific content
+        base_y = clip_top + 12 - self.content_scroll
+        content_y = self._draw_portrait_and_description(event, base_y)
+
         if event.type == "puzzle":
             self._draw_puzzle(event, dialogue_box, content_y)
         elif event.type == "event":
             self._draw_event(event, dialogue_box, content_y)
+
+        self.screen.set_clip(None)
+
+    def scroll_content(self, direction: int):
+        """Scroll the content area. Positive = down (reveal lower content)."""
+        self.content_scroll = max(0, self.content_scroll + direction * 20)
+        max_scroll = max(0, self._max_content_h - (SCREEN_HEIGHT - self.HEADER_H - self.PROMPT_H - 20))
+        self.content_scroll = min(self.content_scroll, max_scroll)
+
+    def ensure_choice_visible(self, index: int):
+        """Placeholder — choices are already within the clipped viewport for typical counts."""
+        pass
 
     # ------------------------------------------------------------------
     # Header
@@ -95,45 +115,41 @@ class EncounterView:
     # Portrait + description
     # ------------------------------------------------------------------
 
-    def _draw_portrait_and_description(self, event) -> int:
-        """Draw portrait and description. Returns y position after content."""
-        y = 58
-        portrait = _load_portrait(getattr(event, "profile_image", None))
+    def _draw_portrait_and_description(self, event, y: int = 58) -> int:
+        """Draw portrait centered above description. Returns y position after content."""
+        pw, ph = self.PORTRAIT_SIZE
+        portrait = _load_portrait(getattr(event, "profile_image", None), size=self.PORTRAIT_SIZE)
 
         if portrait:
-            # Center portrait
-            px = 20
+            px = (SCREEN_WIDTH - pw) // 2
             self.screen.blit(portrait, (px, y))
-            pygame.draw.rect(self.screen, LIGHT_GRAY, (px, y, 128, 128), 1)
-            desc_x = 165
-            desc_max_w = SCREEN_WIDTH - desc_x - 20
+            y += ph + 10
         else:
-            # Placeholder colored rect
             type_color = TYPE_COLORS.get(event.type, LIGHT_GRAY)
-            pygame.draw.rect(self.screen, type_color, (20, y, 128, 128))
-            pygame.draw.rect(self.screen, LIGHT_GRAY, (20, y, 128, 128), 1)
+            px = (SCREEN_WIDTH - pw) // 2
+            pygame.draw.rect(self.screen, type_color, (px, y, pw, ph))
             icon_text = event.type[0].upper()
             icon_surf = self.big_font.render(icon_text, True, WHITE)
-            icon_rect = icon_surf.get_rect(center=(84, y + 64))
+            icon_rect = icon_surf.get_rect(center=(px + pw // 2, y + ph // 2))
             self.screen.blit(icon_surf, icon_rect)
-            desc_x = 165
-            desc_max_w = SCREEN_WIDTH - desc_x - 20
+            y += ph + 10
 
-        # Difficulty indicator
+        desc_x = 30
+        desc_max_w = SCREEN_WIDTH - 60
+
         diff = getattr(event, "difficulty", 3)
         diff_text = f"Difficulty: {'*' * min(diff, 10)}"
         diff_surf = self.small_font.render(diff_text, True, GOLD)
         self.screen.blit(diff_surf, (desc_x, y))
-        desc_y = y + 22
+        y += 22
 
-        # Description text (wrapped)
         lines = self._wrap_text(event.description, self.font, desc_max_w)
         for line in lines:
             surf = self.font.render(line, True, DIM_WHITE)
-            self.screen.blit(surf, (desc_x, desc_y))
-            desc_y += self.font.get_linesize()
+            self.screen.blit(surf, (desc_x, y))
+            y += self.font.get_linesize()
 
-        return max(y + 140, desc_y + 12)
+        return y + 12
 
     # ------------------------------------------------------------------
     # Puzzle encounter
@@ -216,33 +232,35 @@ class EncounterView:
             self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to leave", LIGHT_GRAY)
 
     def _build_puzzle_choices(self, event, dialogue_box) -> list[dict]:
-        """Build rendered choice list for puzzles, prepending tool/ability if available."""
+        """Build rendered choice list for puzzles with unified 5-slot structure."""
         rendered = []
         player = self._get_player(dialogue_box)
 
-        if event.correct_tool and player:
-            tool_name, _ = event.find_tool_item(player)
-            if tool_name:
+        if getattr(event, "correct_ability", None) and player:
+            ability = event._find_matching_ability(player)
+            if ability:
+                cost = getattr(ability, "stamina_cost", 0)
+                text = getattr(event, "ability_text", None) or f"Use {ability.name}"
                 rendered.append(
                     {
-                        "text": f"Use {tool_name} (consumed)",
-                        "kind": "tool",
-                        "hint": "[auto-success]",
+                        "text": text,
+                        "kind": "ability",
+                        "hint": f"[ability: {ability.name}, -{cost} stam]",
                         "available": True,
                         "choice_idx": -1,
                     }
                 )
 
-        if event.correct_ability and player:
-            ability = event._find_matching_ability(player)
-            if ability:
-                cost = getattr(ability, "stamina_cost", 0)
-                cost_text = f" (-{cost} stam)" if cost else ""
+        if getattr(event, "correct_spell", None) and player:
+            spell = event._find_spell(player)
+            if spell:
+                cost = getattr(spell, "stamina_cost", 0)
+                text = getattr(event, "spell_text", None) or f"Cast {spell.name}"
                 rendered.append(
                     {
-                        "text": f"Use {ability.name}{cost_text}",
-                        "kind": "ability",
-                        "hint": "[auto-success]",
+                        "text": text,
+                        "kind": "spell",
+                        "hint": f"[spell: {spell.name}, -{cost} stam]",
                         "available": True,
                         "choice_idx": -1,
                     }
@@ -253,7 +271,7 @@ class EncounterView:
             if choice.stat_check:
                 hints.append(f"[{choice.stat_check}]")
             if choice.tool_attribute:
-                hints.append(f"[needs: {choice.tool_attribute}]")
+                hints.append(f"[tool: {choice.tool_attribute}, +5]")
             if choice.auto_success:
                 hints.append("[safe]")
             rendered.append(
@@ -356,83 +374,22 @@ class EncounterView:
             self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to walk away", LIGHT_GRAY)
 
     def _build_event_choices(self, event, dialogue_box) -> list[dict]:
-        """Build rendered choice list for events with availability indicators."""
+        """Build rendered choice list for events with unified 5-slot structure."""
         rendered = []
         player = self._get_player(dialogue_box)
         choices = getattr(event, "choices", [])
-
-        for i, choice in enumerate(choices):
-            if choice.auto_success:
-                rendered.append(
-                    {
-                        "text": choice.text,
-                        "kind": "walk_away",
-                        "hint": "[safe]",
-                        "available": True,
-                        "choice_idx": i,
-                    }
-                )
-                continue
-
-            if choice.tool_attribute:
-                has_tool = False
-                tool_name = None
-                if player:
-                    for iname, item in player.inventory.items():
-                        stats = getattr(item, "item_stats", None)
-                        if stats and getattr(stats, "attribute", None) == choice.tool_attribute:
-                            has_tool = True
-                            tool_name = iname
-                            break
-                hint = f"[consumes: {tool_name}]" if has_tool else f"[requires: {choice.tool_attribute}]"
-                rendered.append(
-                    {
-                        "text": choice.text,
-                        "kind": "stat",
-                        "hint": hint,
-                        "available": True,
-                        "choice_idx": i,
-                    }
-                )
-                continue
-
-            rendered.append(
-                {
-                    "text": choice.text,
-                    "kind": "stat",
-                    "hint": f"[{choice.stat_check}]" if choice.stat_check else "",
-                    "available": True,
-                    "choice_idx": i,
-                }
-            )
 
         if event.correct_ability:
             ability = event._find_ability(player) if player else None
             if ability:
                 cost = getattr(ability, "stamina_cost", 0)
-                cost_text = f" (-{cost} stam)" if cost else ""
-                ab_choice = next(
-                    (c for c in choices if not c.auto_success and not c.tool_attribute and not c.stat_check), None
-                )
-                text = ab_choice.text if ab_choice else f"Use {ability.name}"
-                rendered.insert(
-                    -1 if rendered else 0,
+                text = getattr(event, "ability_text", None) or f"Use {ability.name}"
+                rendered.append(
                     {
-                        "text": f"{text}{cost_text}",
+                        "text": text,
                         "kind": "ability",
-                        "hint": "[ability]",
+                        "hint": f"[ability: {ability.name}, -{cost} stam]",
                         "available": True,
-                        "choice_idx": -1,
-                    },
-                )
-            else:
-                rendered.insert(
-                    -1 if rendered else 0,
-                    {
-                        "text": f"[Requires ability: {event.correct_ability}]",
-                        "kind": "ability",
-                        "hint": "[locked]",
-                        "available": False,
                         "choice_idx": -1,
                     },
                 )
@@ -441,29 +398,34 @@ class EncounterView:
             spell = event._find_spell(player) if player else None
             if spell:
                 cost = getattr(spell, "stamina_cost", 0)
-                cost_text = f" (-{cost} stam)" if cost else ""
-                text = f"Cast {spell.name}"
-                rendered.insert(
-                    -1 if rendered else 0,
+                text = getattr(event, "spell_text", None) or f"Cast {spell.name}"
+                rendered.append(
                     {
-                        "text": f"{text}{cost_text}",
+                        "text": text,
                         "kind": "spell",
-                        "hint": "[spell]",
+                        "hint": f"[spell: {spell.name}, -{cost} stam]",
                         "available": True,
                         "choice_idx": -1,
                     },
                 )
-            else:
-                rendered.insert(
-                    -1 if rendered else 0,
-                    {
-                        "text": f"[Requires spell: {event.correct_spell}]",
-                        "kind": "spell",
-                        "hint": "[locked]",
-                        "available": False,
-                        "choice_idx": -1,
-                    },
-                )
+
+        for i, choice in enumerate(choices):
+            hints = []
+            if choice.stat_check:
+                hints.append(f"[{choice.stat_check}]")
+            if choice.tool_attribute:
+                hints.append(f"[tool: {choice.tool_attribute}, +5]")
+            if choice.auto_success:
+                hints.append("[safe]")
+            rendered.append(
+                {
+                    "text": choice.text,
+                    "kind": "walk_away" if choice.auto_success else "stat",
+                    "hint": "  ".join(hints) if hints else "",
+                    "available": True,
+                    "choice_idx": i,
+                }
+            )
 
         return rendered
 

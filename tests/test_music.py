@@ -16,20 +16,23 @@ from src.systems.music_controller import MusicController
 
 
 class TestMusicControllerFallback:
-    def test_silent_on_nonexistent_file(self, tmp_path):
+    def test_silent_on_nonexistent_file(self, tmp_path, monkeypatch):
         """play() should not raise when the track file doesn't exist on disk."""
+        monkeypatch.chdir(tmp_path)
         mc = MusicController({"combat": str(tmp_path / "nonexistent.wav")})
         mc.play("combat")  # must not raise
         assert mc.current_track is None
 
-    def test_silent_on_missing_key(self):
+    def test_silent_on_missing_key(self, tmp_path, monkeypatch):
         """play() should not raise when track name isn't in the manifest at all."""
+        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         mc.play("combat")
         assert mc.current_track is None
 
-    def test_silent_on_empty_manifest(self):
+    def test_silent_on_empty_manifest(self, tmp_path, monkeypatch):
         """MusicController with no tracks silently accepts all play() calls."""
+        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         for track in ["start_screen", "combat", "maze_village", "puzzle_event", "victory", "game_over"]:
             mc.play(track)
@@ -70,12 +73,13 @@ class TestMusicControllerFallback:
         mc = MusicController({"combat": str(wav)})
         assert mc.has_track("combat") is True
 
-    def test_no_duplicate_play_on_same_track(self, tmp_path):
+    def test_no_duplicate_play_on_same_track(self, tmp_path, monkeypatch):
         """Calling play() twice with the same track name should be a no-op on the second call.
 
         We verify this by confirming current_track stays consistent and no exception
         is raised, rather than trying to load a real audio file.
         """
+        monkeypatch.chdir(tmp_path)
         mc = MusicController({"combat": str(tmp_path / "missing.wav")})
         mc.play("combat")  # sets current_track = None (file missing)
         mc.play("combat")  # should be a no-op since current_track already matches

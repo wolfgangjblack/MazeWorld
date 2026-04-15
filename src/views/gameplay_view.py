@@ -50,6 +50,8 @@ class GameView:
         item_detail_active=False,
         event_type_map=None,
         event_flag_map=None,
+        dialogue_choices=None,
+        dialogue_choice_index=0,
     ):
         self.screen.fill(BLACK)
 
@@ -114,7 +116,10 @@ class GameView:
             debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
             self.screen.blit(debug_surface, (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
-        self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
+        self.draw_dialogue_and_messages(
+            player, maze, item_message_active, player_at_item,
+            dialogue_choices=dialogue_choices, dialogue_choice_index=dialogue_choice_index,
+        )
 
     def _get_escort_zones(self, quests, player):
         """Return a list of (x, y) target zones for active escort quests."""
@@ -457,18 +462,20 @@ class GameView:
         exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (200, 200, 210))
         self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2, SCREEN_HEIGHT - 72))
 
-    def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
+    def draw_dialogue_and_messages(
+        self, player, maze, item_message_active, player_at_item,
+        dialogue_choices=None, dialogue_choice_index=0,
+    ):
         if self.dialogue_box.event_active:
             event = self.dialogue_box.current_event
-            # Use full-screen encounter view for puzzle/event types,
-            # and for combat initiative (trigger screen before combat starts).
-            # Once multi-turn combat is underway, use the dialogue view's combat renderer.
             if event and event.type in ("puzzle", "event"):
                 self.encounter_view.draw(self.dialogue_box)
             else:
                 self.dialogue_view.draw(self.dialogue_box)
         elif item_message_active or self.dialogue_box.dialogue_active:
-            self.dialogue_view.draw(self.dialogue_box)
+            self.dialogue_view.draw(
+                self.dialogue_box, choices=dialogue_choices, choice_index=dialogue_choice_index,
+            )
         elif player_at_item:
             item_id = maze.grid[player.y][player.x]
             item_name = registry.get_item_name(item_id)

@@ -41,10 +41,6 @@ def build_credits_lines() -> list[tuple[str, str]]:
     lines.append(("Wolfgang Black", "name"))
     lines.append(("", "blank"))
 
-    lines.append(("Writer", "role"))
-    lines.append(("Wolfgang Black", "name"))
-    lines.append(("", "blank"))
-
     lines.append(("Director", "role"))
     lines.append(("Wolfgang Black", "name"))
     lines.append(("", "blank"))

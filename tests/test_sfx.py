@@ -133,7 +133,8 @@ class TestSFXControllerFallback:
         sfx = SFXController({"dice_roll": str(mp3)})
         assert sfx.has_sfx("dice_roll") is True
 
-    def test_play_ambience_silent_on_missing_file(self):
+    def test_play_ambience_silent_on_missing_file(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
         sfx = SFXController({})
         sfx.play_ambience("village")
         assert sfx.current_ambience is None

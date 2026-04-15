@@ -98,6 +98,11 @@ async def _generate_track_async(
                     response_modalities=["AUDIO", "TEXT"],
                 ),
             )
+            if not response.candidates or not response.candidates[0].content:
+                logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, 3)
+                if attempt < 2:
+                    await asyncio.sleep(3 * (attempt + 1))
+                continue
             for part in response.candidates[0].content.parts:
                 if part.inline_data:
                     os.makedirs(save_dir, exist_ok=True)

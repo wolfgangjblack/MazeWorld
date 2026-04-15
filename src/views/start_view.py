@@ -31,27 +31,22 @@ class StartView:
             return
         try:
             img = pygame.image.load(path).convert_alpha()
-            max_w, max_h = SCREEN_WIDTH - 100, SCREEN_HEIGHT // 3
-            scale = min(max_w / img.get_width(), max_h / img.get_height(), 1.0)
-            w = int(img.get_width() * scale)
-            h = int(img.get_height() * scale)
-            self._portrait = pygame.transform.scale(img, (w, h))
+            self._portrait = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
         except Exception:
             self._portrait = None
 
     def draw(self):
         self.screen.fill(BLACK)
 
-        y_offset = 0
         if self._portrait:
-            px = (SCREEN_WIDTH - self._portrait.get_width()) // 2
-            py = 20
-            self.screen.blit(self._portrait, (px, py))
-            y_offset = self._portrait.get_height() + 10
+            self.screen.blit(self._portrait, (0, 0))
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 140))
+            self.screen.blit(overlay, (0, 0))
 
         title_surface = self.title_font.render("MazeWorld", True, TITLE_COLOR)
         title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
-        title_y = max(y_offset + 20, SCREEN_HEIGHT // 4 - 20) if self._portrait else SCREEN_HEIGHT // 4
+        title_y = SCREEN_HEIGHT // 3
         self.screen.blit(title_surface, (title_x, title_y))
 
         line_height = self.font.get_linesize()
@@ -67,7 +62,12 @@ class StartView:
             prefix = "> " if i == self.selected_index else "  "
             text_surface = self.font.render(f"{prefix}{item}", True, color)
             text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
-            self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
+            item_y = start_y + i * (line_height + 10)
+            if i == self.selected_index:
+                bg = pygame.Surface((text_surface.get_width() + 20, line_height + 6), pygame.SRCALPHA)
+                bg.fill((20, 20, 40, 200))
+                self.screen.blit(bg, (text_x - 10, item_y - 3))
+            self.screen.blit(text_surface, (text_x, item_y))
 
         selected_item = MENU_ITEMS[self.selected_index]
         if self._is_disabled(self.selected_index):

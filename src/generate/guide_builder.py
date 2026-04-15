@@ -73,15 +73,55 @@ def _discover_rooms(data_dir: str = DATA_DIR) -> list[str]:
     return entries
 
 
+_global_db_cache: dict[str, list | dict | None] = {}
+
+
+def _get_global_db(name: str, data_dir: str) -> list | dict:
+    """Load a global DB file once and cache it for subsequent rooms."""
+    key = f"{data_dir}:{name}"
+    if key not in _global_db_cache:
+        path_map = {
+            "npcs": os.path.join(data_dir, "npcs", "npcs.json"),
+            "events": os.path.join(data_dir, "events", "events.json"),
+            "quests": os.path.join(data_dir, "quests", "quests.json"),
+            "items": os.path.join(data_dir, "items", "items.json"),
+        }
+        _global_db_cache[key] = _load_json(path_map[name])
+    return _global_db_cache[key] or ([] if name != "items" else {})
+
+
 def _load_room_data(room_id: str, data_dir: str = DATA_DIR) -> dict:
-    """Load all JSON files for a single room."""
+    """Load maze.json per-room, then filter global entity DBs to this room."""
     room_dir = os.path.join(data_dir, "rooms", room_id)
+    maze = _load_json(os.path.join(room_dir, "maze.json")) or {}
+
+    npc_ids = {int(k) for k in maze.get("npc_positions", {}).keys()}
+    event_ids = {ep["event_id"] for ep in maze.get("event_positions", [])}
+    quest_ids = set(maze.get("quest_ids", []))
+    item_placements = maze.get("item_placements", [])
+    placed_item_ids = {p.get("item_id") for p in item_placements if p.get("item_id")}
+
+    all_npcs = _get_global_db("npcs", data_dir)
+    all_events = _get_global_db("events", data_dir)
+    all_quests = _get_global_db("quests", data_dir)
+    all_items = _get_global_db("items", data_dir)
+
+    npcs = [n for n in all_npcs if n.get("id") in npc_ids] if npc_ids else []
+    events = [e for e in all_events if e.get("id") in event_ids] if event_ids else []
+    quests = [q for q in all_quests if q.get("id") in quest_ids] if quest_ids else []
+
+    items: dict = {}
+    if isinstance(all_items, dict):
+        items = {k: v for k, v in all_items.items() if int(k) in placed_item_ids}
+    elif isinstance(all_items, list):
+        items = {str(it["id"]): it for it in all_items if it.get("id") in placed_item_ids}
+
     return {
-        "maze": _load_json(os.path.join(room_dir, "maze.json")) or {},
-        "npcs": _load_json(os.path.join(room_dir, "npcs.json")) or [],
-        "events": _load_json(os.path.join(room_dir, "events.json")) or [],
-        "quests": _load_json(os.path.join(room_dir, "quests.json")) or [],
-        "items": _load_json(os.path.join(room_dir, "items.json")) or {},
+        "maze": maze,
+        "npcs": npcs,
+        "events": events,
+        "quests": quests,
+        "items": items,
     }
 
 

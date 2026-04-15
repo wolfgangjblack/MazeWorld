@@ -5,11 +5,28 @@ import os
 import pygame
 
 from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
-from src.utils.text_utils import draw_wrapped_text
 
 TITLE_COLOR = (220, 180, 60)
 TEXT_COLOR = (200, 200, 200)
-PANEL_BG = (0, 0, 0, 180)  # semi-transparent
+SCROLL_ARROW_COLOR = (150, 150, 180)
+
+
+def _wrap_lines(text: str, font: pygame.font.Font, max_w: int) -> list[str]:
+    """Word-wrap *text* at *max_w* pixels. Returns list of line strings."""
+    words = text.split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        test = f"{current} {word}".strip()
+        if font.size(test)[0] <= max_w:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
 
 
 class RoomIntroView:
@@ -22,9 +39,16 @@ class RoomIntroView:
         self.small_font = pygame.font.Font(None, 24)
         self.env_name = env_name
         self.env_type = env_type
-        self.story_text = story_text
         self.bg_image = None
-        self.done = False
+        self.scroll_offset = 0
+
+        self._box_h = 200
+        self._box_x = 40
+        self._box_w = SCREEN_WIDTH - 80
+        self._text_max_w = self._box_w - 30
+        self._lines = _wrap_lines(story_text, font, self._text_max_w)
+        self._line_h = font.get_linesize()
+        self._max_visible = max(1, (self._box_h - 30) // self._line_h)
 
         if portrait_path and os.path.exists(portrait_path):
             try:
@@ -34,44 +58,61 @@ class RoomIntroView:
                 pass
 
     def draw(self):
-        # Background: environment portrait or dark fill
         if self.bg_image:
             self.screen.blit(self.bg_image, (0, 0))
-            # Darken overlay for readability
             overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 120))
             self.screen.blit(overlay, (0, 0))
         else:
             self.screen.fill(BLACK)
 
-        # Title: environment name
         title = self.title_font.render(self.env_name, True, TITLE_COLOR)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, SCREEN_HEIGHT // 4))
 
         subtitle = self.font.render(f"A {self.env_type} awaits...", True, TEXT_COLOR)
         self.screen.blit(subtitle, ((SCREEN_WIDTH - subtitle.get_width()) // 2, SCREEN_HEIGHT // 4 + 60))
 
-        # Dialogue box overlay at bottom
-        box_h = 200
-        box_y = SCREEN_HEIGHT - box_h - 20
-        box_x = 40
-        box_w = SCREEN_WIDTH - 80
+        box_y = SCREEN_HEIGHT - self._box_h - 20
 
-        # Semi-transparent panel
-        panel = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        panel = pygame.Surface((self._box_w, self._box_h), pygame.SRCALPHA)
         panel.fill((20, 20, 40, 200))
-        self.screen.blit(panel, (box_x, box_y))
-        pygame.draw.rect(self.screen, (80, 80, 120), (box_x, box_y, box_w, box_h), 2)
+        self.screen.blit(panel, (self._box_x, box_y))
+        pygame.draw.rect(self.screen, (80, 80, 120), (self._box_x, box_y, self._box_w, self._box_h), 2)
 
-        # Story text wrapped
-        draw_wrapped_text(self.screen, self.story_text, box_x + 15, box_y + 15, box_w - 30, self.font, TEXT_COLOR)
+        text_x = self._box_x + 15
+        text_y = box_y + 15
+        clip_rect = pygame.Rect(self._box_x, box_y, self._box_w, self._box_h)
+        self.screen.set_clip(clip_rect)
 
-        # Continue hint
-        hint = self.small_font.render("Press Enter to continue...", True, (150, 150, 150))
+        visible = self._lines[self.scroll_offset : self.scroll_offset + self._max_visible]
+        for line in visible:
+            surf = self.font.render(line, True, TEXT_COLOR)
+            self.screen.blit(surf, (text_x, text_y))
+            text_y += self._line_h
+
+        self.screen.set_clip(None)
+
+        if self.scroll_offset > 0:
+            arrow = self.small_font.render("^", True, SCROLL_ARROW_COLOR)
+            self.screen.blit(arrow, (self._box_x + self._box_w - 20, box_y + 4))
+        if self.scroll_offset + self._max_visible < len(self._lines):
+            arrow = self.small_font.render("v", True, SCROLL_ARROW_COLOR)
+            self.screen.blit(arrow, (self._box_x + self._box_w - 20, box_y + self._box_h - 18))
+
+        hint_parts = []
+        if len(self._lines) > self._max_visible:
+            hint_parts.append("Up/Down to scroll")
+        hint_parts.append("Enter to continue...")
+        hint = self.small_font.render("  |  ".join(hint_parts), True, (150, 150, 150))
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 15))
 
     def handle_input(self, event) -> bool:
         """Returns True when the player wants to proceed."""
         if event.key in (pygame.K_RETURN, pygame.K_SPACE):
             return True
+        max_scroll = max(0, len(self._lines) - self._max_visible)
+        if event.key == pygame.K_UP:
+            self.scroll_offset = max(0, self.scroll_offset - 1)
+        elif event.key == pygame.K_DOWN:
+            self.scroll_offset = min(max_scroll, self.scroll_offset + 1)
         return False

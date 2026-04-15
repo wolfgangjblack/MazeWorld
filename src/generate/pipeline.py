@@ -974,10 +974,30 @@ def _phase4a_events(
             chunk_tiles = typed_tiles[chunk_start : chunk_start + EVENTS_PER_CHUNK]
             chunk_slots = []
             for t in chunk_tiles:
+                dc = random.randint(10, 22)
+                stat = random.choice(["STR", "DEX", "CON", "INT", "WIS", "CHA"])
+                tool_attr = random.choice(tool_attrs) if tool_attrs else None
+                ability_name = random.choice(all_abilities) if all_abilities else None
+                spell_name = random.choice(all_spells) if all_spells else None
+
+                if t.requires_type == "tool" and t.requires_ref:
+                    tool_attr = t.requires_ref
+                elif t.requires_type == "ability" and t.requires_ref:
+                    ability_name = t.requires_ref
+                elif t.requires_type == "spell" and t.requires_ref:
+                    spell_name = t.requires_ref
+
                 slot = {
                     "position": list(t.position),
                     "is_story_related": t.is_story_related,
                     "time_gate": t.time_gate,
+                    "pre_built_choices": {
+                        "dc": dc,
+                        "stat": stat,
+                        "tool_attribute": tool_attr,
+                        "ability_name": ability_name,
+                        "spell_name": spell_name,
+                    },
                 }
                 if t.requires_type and t.requires_ref:
                     slot["requires_type"] = t.requires_type
@@ -1033,34 +1053,66 @@ def _phase4a_events(
                 event_data["reward_chance"] = min(0.8, 0.4 + difficulty * 0.1)
 
                 all_item_ids = registry.item_ids()
-                correct_tool_attr = None
 
-                if event_type == "puzzle":
-                    choices = llm_data.get("choices", [])
-                    if not any(c.get("auto_success") for c in choices):
-                        choices.append({"text": "Walk away", "auto_success": True})
-                    event_data["choices"] = choices
-                    event_data["correct_tool"] = llm_data.get("correct_tool") or (
-                        tile.requires_ref if tile.requires_type == "tool" else None
-                    )
-                    event_data["correct_ability"] = llm_data.get("correct_ability") or (
-                        tile.requires_ref if tile.requires_type == "ability" else None
-                    )
-                    correct_tool_attr = event_data.get("correct_tool")
+                pre_built = chunk_slots[i].get("pre_built_choices", {})
+                pbc_dc = pre_built.get("dc", 14)
+                pbc_stat = pre_built.get("stat", "STR")
+                pbc_tool = pre_built.get("tool_attribute")
+                pbc_ability = pre_built.get("ability_name")
+                pbc_spell = pre_built.get("spell_name")
 
-                elif event_type == "event":
-                    choices = llm_data.get("choices", [])
-                    if not any(c.get("auto_success") for c in choices):
-                        choices.append({"text": "Slip away quietly", "auto_success": True})
-                    event_data["choices"] = choices
-                    event_data["failure_damage_type"] = llm_data.get(
-                        "failure_damage_type", random.choice(["health", "stamina"])
-                    )
-                    event_data["failure_damage_range"] = llm_data.get(
-                        "failure_damage_range", [3 + room_level, 8 + room_level * 2]
-                    )
-                    event_data["correct_ability"] = llm_data.get("correct_ability")
-                    event_data["correct_spell"] = llm_data.get("correct_spell")
+                choice_texts = llm_data.get("choice_texts", [])
+                success_texts = llm_data.get("success_texts", [])
+
+                from src.generate.pipeline_utils import _STAT_ACTIONS, _EVENT_STAT_ACTIONS
+
+                fallback_stat_text = (
+                    _STAT_ACTIONS if event_type == "puzzle" else _EVENT_STAT_ACTIONS
+                ).get(pbc_stat, f"Overcome with {pbc_stat}")
+
+                choices = []
+                choices.append({
+                    "text": choice_texts[0] if len(choice_texts) > 0 else fallback_stat_text,
+                    "stat_check": pbc_stat,
+                    "dc": pbc_dc,
+                    "auto_success": False,
+                    "success_text": success_texts[0] if len(success_texts) > 0 else None,
+                })
+                if pbc_tool:
+                    choices.append({
+                        "text": choice_texts[1] if len(choice_texts) > 1 else f"Use {pbc_tool} equipment",
+                        "tool_attribute": pbc_tool,
+                        "stat_check": pbc_stat,
+                        "dc": pbc_dc,
+                        "auto_success": False,
+                        "success_text": success_texts[1] if len(success_texts) > 1 else None,
+                    })
+                if pbc_ability:
+                    choices.append({
+                        "text": choice_texts[2] if len(choice_texts) > 2 else f"Use {pbc_ability}",
+                        "stat_check": None,
+                        "dc": 0,
+                        "auto_success": False,
+                        "success_text": success_texts[2] if len(success_texts) > 2 else None,
+                    })
+                if pbc_spell:
+                    choices.append({
+                        "text": choice_texts[3] if len(choice_texts) > 3 else f"Cast {pbc_spell}",
+                        "stat_check": None,
+                        "dc": 0,
+                        "auto_success": False,
+                        "success_text": success_texts[3] if len(success_texts) > 3 else None,
+                    })
+                choices.append({"text": "Walk away", "auto_success": True})
+
+                event_data["choices"] = choices
+                event_data["correct_tool"] = pbc_tool
+                event_data["correct_ability"] = pbc_ability
+                correct_tool_attr = pbc_tool
+
+                event_data["failure_damage_type"] = random.choice(["health", "stamina"])
+                event_data["failure_damage_range"] = [3 + room_level, 8 + room_level * 2]
+                event_data["correct_spell"] = pbc_spell
 
                 if all_item_ids:
                     eligible_ids = all_item_ids
@@ -1309,6 +1361,8 @@ def _phase5_validate(bible: WorldBible, room_results: list[dict], story: Overarc
     xval_issues = cross_validate(bible, all_npcs, all_events, all_quests, all_placements)
     if xval_issues:
         logger.warning("Cross-validation: %d issues", len(xval_issues))
+        for issue in xval_issues:
+            logger.warning("  xval: %s", issue)
 
     audit_issues = gameplay_audit(bible, all_npcs, all_events, all_quests, all_placements)
     if audit_issues:
@@ -1875,7 +1929,7 @@ def generate_world():
     logger.info("Generation stats written to %s", stats_path)
 
     manifest = {
-        "world_seed": WORLD_SEED,
+        "seed": WORLD_SEED,
         "num_rooms": num_rooms,
         "environments": [e["type"] for e in environments],
         "environment_names": [e["name"] for e in environments],

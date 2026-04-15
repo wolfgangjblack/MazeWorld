@@ -106,6 +106,7 @@ class GameController:
         self.current_npc = None
         self.running = True
         self.debug_reveal = False
+        self.dialogue_choice_index = 0
 
         self.rest_menu_active = False
 
@@ -432,6 +433,39 @@ class GameController:
             if event.key == pygame.K_ESCAPE:
                 self.dialogue_box.end_dialogue()
                 self.current_npc = None
+                self.dialogue_choice_index = 0
+                return
+            if self.dialogue_box.generating:
+                return
+            if has_dialogue_choices(self.current_npc):
+                tree = self.current_npc.dialogue_tree
+                nodes = tree.get("nodes", {})
+                current_id = tree.get("_current", "start")
+                node = nodes.get(current_id, nodes.get("start", {}))
+                choices = node.get("choices", [])
+                num_choices = len(choices)
+                if event.key == pygame.K_UP:
+                    self.dialogue_choice_index = (self.dialogue_choice_index - 1) % max(num_choices, 1)
+                    return
+                if event.key == pygame.K_DOWN:
+                    self.dialogue_choice_index = (self.dialogue_choice_index + 1) % max(num_choices, 1)
+                    return
+                if event.key == pygame.K_RETURN and self.dialogue_box.input_active:
+                    self.dialogue_box.update_dialogue(str(self.dialogue_choice_index + 1))
+                    self.dialogue_choice_index = 0
+                    return
+                for i in range(min(num_choices, 9)):
+                    if event.key == getattr(pygame, f"K_{i + 1}", None):
+                        self.dialogue_choice_index = i
+                        self.dialogue_box.update_dialogue(str(i + 1))
+                        self.dialogue_choice_index = 0
+                        return
+                if event.key == pygame.K_PAGEUP:
+                    self.dialogue_box.scroll_up()
+                    return
+                if event.key == pygame.K_PAGEDOWN:
+                    self.dialogue_box.scroll_down()
+                    return
                 return
             if event.key == pygame.K_UP:
                 self.dialogue_box.scroll_up()
@@ -439,24 +473,10 @@ class GameController:
             if event.key == pygame.K_DOWN:
                 self.dialogue_box.scroll_down()
                 return
-            if self.dialogue_box.generating:
-                return
             if event.key == pygame.K_RETURN and self.dialogue_box.input_active:
                 self.dialogue_box.update_dialogue(self.dialogue_box.user_message)
                 return
             if self.dialogue_box.input_active:
-                if has_dialogue_choices(self.current_npc):
-                    tree = self.current_npc.dialogue_tree
-                    nodes = tree.get("nodes", {})
-                    current_id = tree.get("_current", "start")
-                    node = nodes.get(current_id, nodes.get("start", {}))
-                    choices = node.get("choices", [])
-                    for i in range(min(len(choices), 9)):
-                        if event.key == getattr(pygame, f"K_{i + 1}", None):
-                            self.dialogue_box.update_dialogue(str(i + 1))
-                            return
-                    if event.key != pygame.K_ESCAPE:
-                        return
                 if event.key == pygame.K_BACKSPACE:
                     self.dialogue_box.user_message = self.dialogue_box.user_message[:-1]
                 else:
@@ -770,6 +790,14 @@ class GameController:
         period = self.day_night.current_period
         night_alpha = get_night_overlay_alpha(period, self.day_night.period_progress)
 
+        dlg_choices = None
+        if has_dialogue_choices(self.current_npc):
+            tree = self.current_npc.dialogue_tree
+            nodes = tree.get("nodes", {})
+            current_id = tree.get("_current", "start")
+            node = nodes.get(current_id, nodes.get("start", {}))
+            dlg_choices = node.get("choices")
+
         self.game_view.draw_game(
             maze=self.maze,
             player=self.player,
@@ -792,4 +820,6 @@ class GameController:
             item_detail_active=self.item_detail_active,
             event_type_map=self._event_type_map if self.debug_reveal else None,
             event_flag_map=self._event_flag_map,
+            dialogue_choices=dlg_choices,
+            dialogue_choice_index=self.dialogue_choice_index,
         )

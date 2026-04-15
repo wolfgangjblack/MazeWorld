@@ -47,7 +47,7 @@ _ELEMENT_COLORS = {
     "dark": (100, 50, 150),
 }
 
-LOG_HEIGHT = 100
+LOG_HEIGHT = 60
 MENU_HEIGHT = 80
 PLAYER_STATS_HEIGHT = 50
 
@@ -113,7 +113,7 @@ class CombatView:
             browsing_log=browsing_log,
             log_browse_scroll=log_browse_scroll,
         )
-        self._draw_combat_log(combat)
+        self._draw_combat_log(combat, focused=browsing_log)
         self._draw_state_banner(combat, game_over_selection, loot_summary=loot_summary, showing_result=showing_result)
 
     # ------------------------------------------------------------------
@@ -124,9 +124,6 @@ class CombatView:
         y = 10
         bar_w = 200
         bar_h = 16
-
-        panel_w = SCREEN_WIDTH - 220
-        pygame.draw.rect(self.screen, MED_GRAY, (10, y - 4, panel_w, PLAYER_STATS_HEIGHT), 1)
 
         stats = [
             ("HP", player.health, player.max_health, RED),
@@ -141,7 +138,6 @@ class CombatView:
             bar_y = y + 20
             pygame.draw.rect(self.screen, (50, 50, 50), (x, bar_y, bar_w, bar_h))
             pygame.draw.rect(self.screen, color, (x, bar_y, int(bar_w * ratio), bar_h))
-            pygame.draw.rect(self.screen, WHITE, (x, bar_y, bar_w, bar_h), 1)
             val = self.small_font.render(f"{int(current)}/{maximum}", True, WHITE)
             self.screen.blit(val, (x + bar_w + 5, bar_y))
 
@@ -157,7 +153,6 @@ class CombatView:
 
         alive_count = sum(1 for c in combat.combatants if c.is_alive)
         panel_h = 24 + alive_count * line_h + 8
-        pygame.draw.rect(self.screen, MED_GRAY, (panel_x, panel_y, panel_w, panel_h), 1)
 
         label = self.font.render("Turn Order", True, YELLOW)
         self.screen.blit(label, (panel_x + 8, panel_y + 4))
@@ -328,10 +323,6 @@ class CombatView:
             self._draw_action_result(result_text, menu_y)
             return
 
-        if browsing_log:
-            self._draw_log_browser(combat, menu_y, log_browse_scroll)
-            return
-
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
             hint = self.font.render(
                 "Enemy turn..." if combat.state == CombatState.ONGOING else "",
@@ -383,7 +374,7 @@ class CombatView:
                 text = self.font.render(f"{prefix}{label}", True, color)
                 self.screen.blit(text, (cx, cy))
 
-        tab_hint = self.small_font.render("Tab: Combat Log", True, MED_GRAY)
+        tab_hint = self.small_font.render("Tab: scroll log", True, MED_GRAY)
         self.screen.blit(tab_hint, (SCREEN_WIDTH - tab_hint.get_width() - 25, menu_y + panel_h - 14))
 
     def _draw_target_selector(
@@ -600,55 +591,22 @@ class CombatView:
     # Log browser — full combat log in menu panel, scrollable
     # ------------------------------------------------------------------
 
-    def _draw_log_browser(self, combat: CombatController, y: int, scroll: int):
-        panel_h = self.GRID_ROWS * 36 + 16
-        pygame.draw.rect(self.screen, (20, 20, 30), (15, y, SCREEN_WIDTH - 30, panel_h))
-        pygame.draw.rect(self.screen, LIGHT_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
-
-        header = self.small_font.render("Combat Log  (Up/Down to scroll, Tab/Esc to close)", True, YELLOW)
-        self.screen.blit(header, (20, y + 3))
-
-        line_h = 16
-        content_top = y + 20
-        avail_h = panel_h - 24
-        max_lines = max(1, avail_h // line_h)
-
-        total = len(combat.log)
-        scroll = max(0, min(scroll, max(0, total - max_lines)))
-        start = max(0, total - max_lines - scroll)
-        end_idx = start + max_lines
-        visible = combat.log[start:end_idx]
-
-        clip = pygame.Rect(15, content_top, SCREEN_WIDTH - 30, avail_h)
-        self.screen.set_clip(clip)
-        for i, msg in enumerate(visible):
-            display = msg[:120] + "..." if len(msg) > 120 else msg
-            text = self.log_font.render(display, True, LIGHT_GRAY)
-            self.screen.blit(text, (20, content_top + i * line_h))
-        self.screen.set_clip(None)
-
-        if scroll > 0:
-            arrow = self.small_font.render("v", True, LIGHT_GRAY)
-            self.screen.blit(arrow, (SCREEN_WIDTH - 35, y + panel_h - 14))
-        if start > 0:
-            arrow = self.small_font.render("^", True, LIGHT_GRAY)
-            self.screen.blit(arrow, (SCREEN_WIDTH - 35, y + 3))
-
     # ------------------------------------------------------------------
     # Combat log — scrollable, bottom strip
     # ------------------------------------------------------------------
 
-    def _draw_combat_log(self, combat: CombatController):
+    def _draw_combat_log(self, combat: CombatController, focused: bool = False):
         log_y = SCREEN_HEIGHT - LOG_HEIGHT
         pygame.draw.rect(self.screen, BLACK, (10, log_y, SCREEN_WIDTH - 20, LOG_HEIGHT - 5))
-        pygame.draw.rect(self.screen, LIGHT_GRAY, (10, log_y, SCREEN_WIDTH - 20, LOG_HEIGHT - 5), 1)
-
-        label = self.small_font.render("Combat Log", True, YELLOW)
+        if focused:
+            pygame.draw.rect(self.screen, YELLOW, (10, log_y, SCREEN_WIDTH - 20, LOG_HEIGHT - 5), 1)
+        label_text = "Combat Log  (Up/Down scroll, Tab/Esc close)" if focused else "Combat Log"
+        label = self.small_font.render(label_text, True, YELLOW)
         self.screen.blit(label, (15, log_y + 3))
 
         max_lines = (LOG_HEIGHT - 25) // 16
         total = len(combat.log)
-        self.log_scroll = max(0, min(self.log_scroll, total - max_lines))
+        self.log_scroll = max(0, min(self.log_scroll, max(0, total - max_lines)))
         start = max(0, total - max_lines - self.log_scroll)
         end = start + max_lines
         visible = combat.log[start:end]

@@ -212,22 +212,31 @@ async def generate_all_sfx_async(
 
     client = ElevenLabs(api_key=key)
 
+    max_concurrent = 10
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def _throttled(coro):
+        async with semaphore:
+            return await coro
+
     tasks = []
     for name, spec in prompts.items():
         if not spec or not spec.get("prompt"):
             continue
         tasks.append(
-            _generate_sfx_async(
-                client,
-                spec["prompt"],
-                name,
-                save_dir,
-                spec.get("duration", 1.0),
-                spec.get("loop", False),
+            _throttled(
+                _generate_sfx_async(
+                    client,
+                    spec["prompt"],
+                    name,
+                    save_dir,
+                    spec.get("duration", 1.0),
+                    spec.get("loop", False),
+                )
             )
         )
 
-    logger.info("Generating %d SFX in parallel...", len(tasks))
+    logger.info("Generating %d SFX in parallel (max %d concurrent)...", len(tasks), max_concurrent)
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     sfx_paths: dict[str, str] = {}

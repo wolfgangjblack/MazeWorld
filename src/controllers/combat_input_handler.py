@@ -96,13 +96,14 @@ class CombatInputHandler:
             return
 
         if self.browsing_log:
-            if event.key == pygame.K_UP:
-                self.log_browse_scroll += 1
-            elif event.key == pygame.K_DOWN:
-                self.log_browse_scroll = max(0, self.log_browse_scroll - 1)
+            if event.key == pygame.K_UP and self.combat_view:
+                self.combat_view.scroll_log(1)
+            elif event.key == pygame.K_DOWN and self.combat_view:
+                self.combat_view.scroll_log(-1)
             elif event.key in (pygame.K_TAB, pygame.K_ESCAPE):
                 self.browsing_log = False
-                self.log_browse_scroll = 0
+                if self.combat_view:
+                    self.combat_view.log_scroll = 0
             return
 
         if cc.state != CombatState.ONGOING:

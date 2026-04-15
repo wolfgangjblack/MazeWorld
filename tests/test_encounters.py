@@ -341,15 +341,18 @@ class TestPuzzleEvent:
         assert not result["success"]
 
     def test_matching_tool_consumed_on_failure(self):
-        """When a matching tool is used and the roll fails, the tool is consumed."""
+        """When a matching tool is used and the roll fails, the tool is consumed and damage is applied."""
         event = self._make_puzzle_event()
-        player = _make_player()
+        player = _make_player(health=100)
         player.inventory = {"hammer": _make_tool(name="hammer", attribute="bludgeon")}
         # Bludgeon choice (index 1), very low roll to guarantee failure
         result = event.resolve(1, 1, player)  # roll 1 + 5 (tool) = 6 < dc 8
         assert not result["success"]
         assert result.get("consumed_tool") == "hammer"
         assert "hammer" not in player.inventory
+        assert result.get("damage") is not None
+        assert result["damage"] > 0
+        assert player.health < 100 or result.get("damage_type") == "stamina"
 
     def test_solvability_at_least_one_option(self):
         """Puzzle must have at least one completable solution."""

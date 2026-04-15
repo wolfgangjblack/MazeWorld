@@ -134,9 +134,9 @@ class CombatEvent(Event):
 class PuzzleEvent(Event):
     """Puzzle encounter — environmental/physical obstacles.
 
-    Player chooses: use a tool (consumed, auto-success), use an ability
-    (costs stamina, auto-success), or roll dice on a stat-check choice.
-    Walk away is always available.
+    Player chooses: use a tool (+5 modifier, consumed on roll), use an ability
+    (costs stamina, auto-success), use a spell (costs stamina, auto-success),
+    or roll dice on a stat-check choice. Walk away is always available.
     """
 
     type: str = "puzzle"
@@ -145,6 +145,14 @@ class PuzzleEvent(Event):
     required_tools: List[str] = Field(default_factory=list)
     correct_tool: Optional[str] = None
     correct_ability: Optional[str] = None
+    correct_spell: Optional[str] = None
+    ability_text: Optional[str] = None
+    ability_success_text: Optional[str] = None
+    spell_text: Optional[str] = None
+    spell_success_text: Optional[str] = None
+
+    failure_damage_type: str = "health"
+    failure_damage_range: List[int] = Field(default_factory=lambda: [3, 10])
 
     money_drop: List[int] = Field(default_factory=lambda: [0, 0])
     loot_table: List[LootEntry] = Field(default_factory=list)
@@ -158,6 +166,16 @@ class PuzzleEvent(Event):
                 cost = getattr(ability, "stamina_cost", 0)
                 if player.stamina >= cost:
                     return ability
+        return None
+
+    def _find_spell(self, player):
+        if not self.correct_spell:
+            return None
+        for spell in getattr(player, "spells", []):
+            if getattr(spell, "name", "") == self.correct_spell:
+                cost = getattr(spell, "stamina_cost", 0)
+                if player.stamina >= cost:
+                    return spell
         return None
 
     def find_tool_item(self, player) -> tuple:
@@ -197,9 +215,29 @@ class PuzzleEvent(Event):
         self.resolved = True
         reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance)
         cost_msg = f" (-{cost} stamina)" if cost else ""
+        msg = self.ability_success_text or f"You use {ability.name}{cost_msg} to overcome the {self.name}!"
         return {
             "success": True,
-            "message": f"You use {ability.name}{cost_msg} to overcome the {self.name}!",
+            "message": msg,
+            "reward_item_id": self.reward_item_id,
+            "auto_solved": True,
+            **reward,
+        }
+
+    def resolve_with_spell(self, player) -> dict:
+        """Player opts to use the correct spell — costs stamina, auto-success."""
+        spell = self._find_spell(player)
+        if not spell:
+            return {"success": False, "message": "You can't cast that spell right now."}
+        cost = getattr(spell, "stamina_cost", 0)
+        player.stamina = max(0, player.stamina - cost)
+        self.resolved = True
+        reward = _roll_reward(player, self.money_drop, self.loot_table, self.reward_chance)
+        cost_msg = f" (-{cost} stamina)" if cost else ""
+        msg = self.spell_success_text or f"You cast {spell.name}{cost_msg} to overcome the {self.name}!"
+        return {
+            "success": True,
+            "message": msg,
             "reward_item_id": self.reward_item_id,
             "auto_solved": True,
             **reward,
@@ -256,13 +294,20 @@ class PuzzleEvent(Event):
                 **reward,
             }
         else:
-            msg = f"You failed to overcome the {self.name}. (Rolled {total} vs DC {effective_dc})"
+            damage = random.randint(self.failure_damage_range[0], self.failure_damage_range[1])
+            if self.failure_damage_type == "health":
+                player.health = max(0, player.health - damage)
+            elif self.failure_damage_type == "stamina":
+                player.stamina = max(0, player.stamina - damage)
+            msg = f"You failed! Took {damage} {self.failure_damage_type} damage. (Rolled {total} vs DC {effective_dc})"
             if consumed_tool:
-                msg = f"Your {consumed_tool} was consumed in the attempt. " + msg
+                msg = f"Your {consumed_tool} was consumed. " + msg
             return {
                 "success": False,
                 "message": msg,
                 "consumed_tool": consumed_tool,
+                "damage": damage,
+                "damage_type": self.failure_damage_type,
             }
 
 
@@ -440,7 +485,7 @@ def create_event_from_data(data: dict) -> Event:
     if event_type in ("puzzle", "event") and "choices" in data:
         data["choices"] = [EventChoice(**c) if isinstance(c, dict) else c for c in data["choices"]]
 
-    if event_type == "event" and "choices" in data:
+    if event_type in ("puzzle", "event") and "choices" in data:
         cleaned = []
         for c in data["choices"]:
             is_placeholder = not c.stat_check and not c.tool_attribute and not c.auto_success and not c.dc
