@@ -148,11 +148,9 @@ class CombatView:
     def _draw_turn_order(self, combat: CombatController):
         panel_x = SCREEN_WIDTH - 210
         panel_y = 6
-        panel_w = 195
         line_h = 20
 
         alive_count = sum(1 for c in combat.combatants if c.is_alive)
-        panel_h = 24 + alive_count * line_h + 8
 
         label = self.font.render("Turn Order", True, YELLOW)
         self.screen.blit(label, (panel_x + 8, panel_y + 4))

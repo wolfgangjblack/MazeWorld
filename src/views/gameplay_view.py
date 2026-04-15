@@ -117,8 +117,12 @@ class GameView:
             self.screen.blit(debug_surface, (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
         self.draw_dialogue_and_messages(
-            player, maze, item_message_active, player_at_item,
-            dialogue_choices=dialogue_choices, dialogue_choice_index=dialogue_choice_index,
+            player,
+            maze,
+            item_message_active,
+            player_at_item,
+            dialogue_choices=dialogue_choices,
+            dialogue_choice_index=dialogue_choice_index,
         )
 
     def _get_escort_zones(self, quests, player):
@@ -463,8 +467,13 @@ class GameView:
         self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2, SCREEN_HEIGHT - 72))
 
     def draw_dialogue_and_messages(
-        self, player, maze, item_message_active, player_at_item,
-        dialogue_choices=None, dialogue_choice_index=0,
+        self,
+        player,
+        maze,
+        item_message_active,
+        player_at_item,
+        dialogue_choices=None,
+        dialogue_choice_index=0,
     ):
         if self.dialogue_box.event_active:
             event = self.dialogue_box.current_event
@@ -474,7 +483,9 @@ class GameView:
                 self.dialogue_view.draw(self.dialogue_box)
         elif item_message_active or self.dialogue_box.dialogue_active:
             self.dialogue_view.draw(
-                self.dialogue_box, choices=dialogue_choices, choice_index=dialogue_choice_index,
+                self.dialogue_box,
+                choices=dialogue_choices,
+                choice_index=dialogue_choice_index,
             )
         elif player_at_item:
             item_id = maze.grid[player.y][player.x]

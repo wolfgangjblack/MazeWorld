@@ -1066,43 +1066,51 @@ def _phase4a_events(
 
                 from src.generate.pipeline_utils import _STAT_ACTIONS, _EVENT_STAT_ACTIONS
 
-                fallback_stat_text = (
-                    _STAT_ACTIONS if event_type == "puzzle" else _EVENT_STAT_ACTIONS
-                ).get(pbc_stat, f"Overcome with {pbc_stat}")
+                fallback_stat_text = (_STAT_ACTIONS if event_type == "puzzle" else _EVENT_STAT_ACTIONS).get(
+                    pbc_stat, f"Overcome with {pbc_stat}"
+                )
 
                 choices = []
-                choices.append({
-                    "text": choice_texts[0] if len(choice_texts) > 0 else fallback_stat_text,
-                    "stat_check": pbc_stat,
-                    "dc": pbc_dc,
-                    "auto_success": False,
-                    "success_text": success_texts[0] if len(success_texts) > 0 else None,
-                })
-                if pbc_tool:
-                    choices.append({
-                        "text": choice_texts[1] if len(choice_texts) > 1 else f"Use {pbc_tool} equipment",
-                        "tool_attribute": pbc_tool,
+                choices.append(
+                    {
+                        "text": choice_texts[0] if len(choice_texts) > 0 else fallback_stat_text,
                         "stat_check": pbc_stat,
                         "dc": pbc_dc,
                         "auto_success": False,
-                        "success_text": success_texts[1] if len(success_texts) > 1 else None,
-                    })
+                        "success_text": success_texts[0] if len(success_texts) > 0 else None,
+                    }
+                )
+                if pbc_tool:
+                    choices.append(
+                        {
+                            "text": choice_texts[1] if len(choice_texts) > 1 else f"Use {pbc_tool} equipment",
+                            "tool_attribute": pbc_tool,
+                            "stat_check": pbc_stat,
+                            "dc": pbc_dc,
+                            "auto_success": False,
+                            "success_text": success_texts[1] if len(success_texts) > 1 else None,
+                        }
+                    )
                 if pbc_ability:
-                    choices.append({
-                        "text": choice_texts[2] if len(choice_texts) > 2 else f"Use {pbc_ability}",
-                        "stat_check": None,
-                        "dc": 0,
-                        "auto_success": False,
-                        "success_text": success_texts[2] if len(success_texts) > 2 else None,
-                    })
+                    choices.append(
+                        {
+                            "text": choice_texts[2] if len(choice_texts) > 2 else f"Use {pbc_ability}",
+                            "stat_check": None,
+                            "dc": 0,
+                            "auto_success": False,
+                            "success_text": success_texts[2] if len(success_texts) > 2 else None,
+                        }
+                    )
                 if pbc_spell:
-                    choices.append({
-                        "text": choice_texts[3] if len(choice_texts) > 3 else f"Cast {pbc_spell}",
-                        "stat_check": None,
-                        "dc": 0,
-                        "auto_success": False,
-                        "success_text": success_texts[3] if len(success_texts) > 3 else None,
-                    })
+                    choices.append(
+                        {
+                            "text": choice_texts[3] if len(choice_texts) > 3 else f"Cast {pbc_spell}",
+                            "stat_check": None,
+                            "dc": 0,
+                            "auto_success": False,
+                            "success_text": success_texts[3] if len(success_texts) > 3 else None,
+                        }
+                    )
                 choices.append({"text": "Walk away", "auto_success": True})
 
                 event_data["choices"] = choices
