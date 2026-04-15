@@ -1064,7 +1064,7 @@ def _phase4a_events(
                 choice_texts = llm_data.get("choice_texts", [])
                 success_texts = llm_data.get("success_texts", [])
 
-                from src.generate.pipeline_utils import _STAT_ACTIONS, _EVENT_STAT_ACTIONS
+                from src.generate.pipeline_utils import _EVENT_STAT_ACTIONS, _STAT_ACTIONS
 
                 fallback_stat_text = (_STAT_ACTIONS if event_type == "puzzle" else _EVENT_STAT_ACTIONS).get(
                     pbc_stat, f"Overcome with {pbc_stat}"
