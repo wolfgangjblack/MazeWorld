@@ -1,6 +1,6 @@
 """Follower data model — NPC companions that travel with the player."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,11 +11,14 @@ class Follower(BaseModel):
     npc_id: int
     name: str
     quest_id: Optional[int] = None
-    joined_in_room: int = 1
-    destination_room: int = 1  # max 1 room ahead
+    joined_in_room: int = 0
+    destination_room: int = 0
     personality: str = ""
     farewell_text: str = "Farewell, and thank you."
     dialogue_hints: List[str] = Field(default_factory=list)
+    profile_image: Optional[str] = None
+    description: str = ""
+    original_npc: Any = Field(default=None, exclude=True)
 
     def get_hint(self) -> str:
         """Return a random hint from this follower, or a generic line."""

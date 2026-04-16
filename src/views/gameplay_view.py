@@ -1,6 +1,6 @@
 import pygame
 
-from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from config import BLACK, GRID_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
 from src.registry import registry
 from src.views.dialogue_view import DialogueBoxView
 from src.views.encounter_view import EncounterView
@@ -79,11 +79,29 @@ class GameView:
             )
 
             for npc in npcs:
-                # Only draw NPCs in revealed/visible tiles (if fog active)
                 if fog and not debug_reveal:
                     if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y, visibility_radius, maze=maze):
                         continue
-                self.npc_view.draw_npc(self.screen, npc)
+                qt = None
+                if debug_reveal and quests and getattr(npc, "quest_id", None):
+                    q = quests.get(npc.quest_id)
+                    if q:
+                        qt = q.type
+                self.npc_view.draw_npc(self.screen, npc, quest_type=qt)
+
+            if followers and (player.prev_x != player.x or player.prev_y != player.y):
+                from src.utils.display_utils import game_to_screen
+
+                fx, fy = game_to_screen(player.prev_x, player.prev_y)
+                visible = True
+                if fog and not debug_reveal:
+                    visible = fog.is_currently_visible(
+                        player.prev_x, player.prev_y, player.x, player.y, visibility_radius, maze=maze
+                    )
+                if visible:
+                    inset = 3
+                    follower_rect = pygame.Rect(fx + inset, fy + inset, GRID_SIZE - inset * 2, GRID_SIZE - inset * 2)
+                    pygame.draw.rect(self.screen, (80, 120, 255), follower_rect)
 
             self.player_view.draw_player(self.screen, player)
             self.player_view.draw_hud(
@@ -107,10 +125,17 @@ class GameView:
             from src.models.npc import MerchantNPC
 
             if isinstance(current_npc, MerchantNPC):
-                text_surface = self.font.render("Enter: Talk  |  S: Shop", True, WHITE)
+                hint_text = "Enter: Talk  |  S: Shop"
             else:
-                text_surface = self.font.render("Press Enter to talk", True, WHITE)
-            self.screen.blit(text_surface, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT - 50))
+                hint_text = "Press Enter to talk"
+            text_surface = self.font.render(hint_text, True, WHITE)
+            tx = SCREEN_WIDTH // 2 - text_surface.get_width() // 2
+            ty = SCREEN_HEIGHT - 50
+            bg = pygame.Surface((text_surface.get_width() + 16, text_surface.get_height() + 6))
+            bg.fill((0, 0, 0))
+            bg.set_alpha(180)
+            self.screen.blit(bg, (tx - 8, ty - 3))
+            self.screen.blit(text_surface, (tx, ty))
 
         if debug_reveal:
             debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
@@ -278,11 +303,14 @@ class GameView:
 
     def draw_item_detail(self, player):
         """Draw item detail popup overlay for the currently selected inventory item."""
-        inventory_items = list(player.inventory.values())
-        if not inventory_items or player.selected_item_index >= len(inventory_items):
+        sorted_inv = player.get_inventory()
+        if not sorted_inv or player.selected_item_index >= len(sorted_inv):
             return
 
-        item = inventory_items[player.selected_item_index]
+        sel_name, _ = sorted_inv[player.selected_item_index]
+        if sel_name not in player.inventory:
+            return
+        item = player.inventory[sel_name]
 
         # Semi-transparent backdrop
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))

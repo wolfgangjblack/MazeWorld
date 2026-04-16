@@ -104,19 +104,33 @@ class DialogueBoxView:
         avail_conv_h = conversation_bottom - content_top
         max_conv_lines = max(1, avail_conv_h // line_height)
 
+        npc_name_prefix = f"{npc.name}:" if npc else ""
+        npc_color = getattr(npc, "color", TITLE_COLOR)
+        player_color = (0, 120, 255)
+
         wrapped_lines = []
+        line_colors = []
         for message in dialogue_box.conversation_history:
-            wrapped_lines.extend(self.wrap_text(message, self.font, SCREEN_WIDTH - 2 * padding))
+            if message.startswith(npc_name_prefix):
+                color = npc_color
+            elif message.startswith("You:"):
+                color = player_color
+            else:
+                color = TEXT_COLOR
+            lines = self.wrap_text(message, self.font, SCREEN_WIDTH - 2 * padding)
+            wrapped_lines.extend(lines)
+            line_colors.extend([color] * len(lines))
 
         total_lines = len(wrapped_lines)
         start_line, end_line = dialogue_box.get_display_window(total_lines, max_conv_lines)
         display_lines = wrapped_lines[start_line:end_line]
+        display_colors = line_colors[start_line:end_line]
 
         clip = pygame.Rect(0, content_top, SCREEN_WIDTH, avail_conv_h)
         self.screen.set_clip(clip)
         cy = content_top
-        for line in display_lines:
-            surf = self.font.render(line, True, TEXT_COLOR)
+        for line, color in zip(display_lines, display_colors):
+            surf = self.font.render(line, True, color)
             self.screen.blit(surf, (padding, cy))
             cy += line_height
         self.screen.set_clip(None)
@@ -272,17 +286,22 @@ class DialogueBoxView:
         """Wrap text into multiple lines to fit within max_width."""
         if not text:
             return []
-        words = text.split(" ")
-        lines = []
-        current_line = ""
-        for word in words:
-            test_line = current_line + (" " if current_line else "") + word
-            line_width, _ = font.size(test_line)
-            if line_width <= max_width:
-                current_line = test_line
-            else:
-                lines.append(current_line)
-                current_line = word
-        if current_line:
-            lines.append(current_line)
-        return lines
+        all_lines = []
+        for paragraph in text.split("\n"):
+            if not paragraph:
+                all_lines.append("")
+                continue
+            words = paragraph.split(" ")
+            current_line = ""
+            for word in words:
+                test_line = current_line + (" " if current_line else "") + word
+                line_width, _ = font.size(test_line)
+                if line_width <= max_width:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        all_lines.append(current_line)
+                    current_line = word
+            if current_line:
+                all_lines.append(current_line)
+        return all_lines

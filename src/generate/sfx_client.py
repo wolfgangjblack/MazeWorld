@@ -141,24 +141,30 @@ def _generate_one_sfx_sync(
     duration: float,
     loop: bool,
 ) -> tuple[str, str | None]:
-    """Generate one SFX synchronously via ElevenLabs. Returns (sfx_name, filepath_or_None)."""
-    try:
-        audio_iter = client.text_to_sound_effects.convert(
-            text=prompt,
-            duration_seconds=duration,
-            output_format="mp3_44100_128",
-            **({"loop": True} if loop else {}),
-        )
-        audio_bytes = b"".join(audio_iter)
+    """Generate one SFX synchronously via ElevenLabs with retries. Returns (sfx_name, filepath_or_None)."""
+    import time
 
-        os.makedirs(save_dir, exist_ok=True)
-        filepath = os.path.join(save_dir, f"{sfx_name}.mp3")
-        with open(filepath, "wb") as f:
-            f.write(audio_bytes)
-        logger.info("SFX saved: %s (%d bytes)", filepath, len(audio_bytes))
-        return sfx_name, filepath
-    except Exception as e:
-        logger.warning("SFX '%s' failed: %s", sfx_name, e)
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            audio_iter = client.text_to_sound_effects.convert(
+                text=prompt,
+                duration_seconds=duration,
+                output_format="mp3_44100_128",
+                **({"loop": True} if loop else {}),
+            )
+            audio_bytes = b"".join(audio_iter)
+
+            os.makedirs(save_dir, exist_ok=True)
+            filepath = os.path.join(save_dir, f"{sfx_name}.mp3")
+            with open(filepath, "wb") as f:
+                f.write(audio_bytes)
+            logger.info("SFX saved: %s (%d bytes)", filepath, len(audio_bytes))
+            return sfx_name, filepath
+        except Exception as e:
+            logger.warning("SFX '%s' attempt %d/%d failed: %s", sfx_name, attempt + 1, max_attempts, e)
+            if attempt < max_attempts - 1:
+                time.sleep(2 * (attempt + 1))
     return sfx_name, None
 
 

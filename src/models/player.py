@@ -157,6 +157,8 @@ class PlayerClass(BaseModel):
 class PlayerCharacter(BaseModel):
     x: int
     y: int
+    prev_x: int = 0
+    prev_y: int = 0
     name: str = "Adventurer"
     player_class: Optional[PlayerClass] = None
     level: int = 1
@@ -180,6 +182,13 @@ class PlayerCharacter(BaseModel):
     armor: int = 0  # flat armor value added to AC
     weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)
     active_buffs: List[ActiveBuff] = Field(default_factory=list)
+    cached_attack_stat: Optional[str] = Field(default=None, exclude=True)
+    last_attack_stat: str = Field(default="", exclude=True)
+    last_attack_bonus: int = Field(default=0, exclude=True)
+    last_attack_d20: int = Field(default=0, exclude=True)
+    last_damage_bonus: int = Field(default=0, exclude=True)
+    last_damage_stat: str = Field(default="", exclude=True)
+    last_damage_base: int = Field(default=0, exclude=True)
 
     # --- Phase 4: Items, Inventory & Shops ---
     money: int = 0
@@ -363,6 +372,8 @@ class PlayerCharacter(BaseModel):
         new_y = self.y + dy
 
         if not maze.is_wall(new_x, new_y):
+            self.prev_x = self.x
+            self.prev_y = self.y
             self.x = new_x
             self.y = new_y
 
@@ -496,17 +507,38 @@ class PlayerCharacter(BaseModel):
         return 0
 
     def roll_attack(self) -> int:
-        """1d20 + weapon stat bonus + level mod. Soft-restricted by class."""
+        """1d20 + weapon stat bonus + level mod. Soft-restricted by class.
+
+        Caches the resolved stat so roll_weapon_damage uses the same one.
+        After calling this, access last_attack_stat and last_attack_bonus
+        for combat log display.
+        """
         stat = self._resolve_weapon_stat()
-        return random.randint(1, 20) + self._weapon_stat_bonus(stat) + (self.level - 1)
+        self.cached_attack_stat = stat
+        bonus = self._weapon_stat_bonus(stat)
+        self.last_attack_stat = stat
+        self.last_attack_bonus = bonus
+        d20 = random.randint(1, 20)
+        self.last_attack_d20 = d20
+        return d20 + bonus + (self.level - 1)
 
     def roll_weapon_damage(self) -> int:
-        """Roll weapon damage dice + weapon stat bonus. Soft-restricted by class."""
-        stat = self._resolve_weapon_stat()
+        """Roll weapon damage dice + weapon stat bonus. Soft-restricted by class.
+
+        Uses the cached stat from roll_attack if available.
+        """
+        stat = self.cached_attack_stat or self._resolve_weapon_stat()
+        self.cached_attack_stat = None
+        bonus = self._weapon_stat_bonus(stat)
+        self.last_damage_bonus = bonus
+        self.last_damage_stat = stat
         if self.weapon is None:
-            return max(1, random.randint(1, 4) + self._weapon_stat_bonus(stat))
+            base = random.randint(1, 4)
+            self.last_damage_base = base
+            return max(1, base + bonus)
         base = self.weapon.roll_damage()
-        return max(1, base + self._weapon_stat_bonus(stat))
+        self.last_damage_base = base
+        return max(1, base + bonus)
 
     def roll_magic_attack(self) -> int:
         """1d20 + INT (mage) or WIS (healer) + level mod."""

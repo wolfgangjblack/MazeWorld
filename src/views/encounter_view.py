@@ -260,7 +260,7 @@ class EncounterView:
 
             self._max_content_h = y + self.content_scroll
             y += 8
-            self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to leave", LIGHT_GRAY)
+            self._draw_prompt("Up/Down: select  |  Enter: choose  |  PgUp/PgDn: scroll  |  Esc: leave", LIGHT_GRAY)
 
     def _build_puzzle_choices(self, event, dialogue_box) -> list[dict]:
         """Build rendered choice list for puzzles with unified 5-slot structure."""
@@ -404,7 +404,7 @@ class EncounterView:
 
             self._max_content_h = y + self.content_scroll
             y += 8
-            self._draw_prompt("Up/Down to select  |  Enter to choose  |  Escape to walk away", LIGHT_GRAY)
+            self._draw_prompt("Up/Down: select  |  Enter: choose  |  PgUp/PgDn: scroll  |  Esc: walk away", LIGHT_GRAY)
 
     def _build_event_choices(self, event, dialogue_box) -> list[dict]:
         """Build rendered choice list for events with unified 5-slot structure."""

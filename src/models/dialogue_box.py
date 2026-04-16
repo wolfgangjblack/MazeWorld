@@ -78,6 +78,7 @@ class DialogueBox:
                 lines.append(f"{npc.name}: {turn['content']}")
             elif turn["role"] == "user":
                 lines.append(f"You: {turn['content']}")
+            lines.append("")
         return lines
 
     def _start_generation(self, npc, user_input):
@@ -92,7 +93,8 @@ class DialogueBox:
                     npc, user_input, story_context=ctx, quest_context=qctx, player=player
                 )
             except Exception:
-                self._generation_result = f"{npc.name}: [Unable to generate response]"
+                name = npc.name if npc else "NPC"
+                self._generation_result = f"{name}: [Unable to generate response]"
 
         self._generation_thread = threading.Thread(target=_run, daemon=True)
         self._generation_thread.start()

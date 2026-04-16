@@ -93,6 +93,7 @@ class ShopView:
 
         # Draw BUY column
         buy_items = self._buy_items()
+        buy_name_max_w = mid_x - 100 - 50 - 8
         visible_buy = buy_items[self.buy_scroll : self.buy_scroll + self.MAX_VISIBLE]
         for i, entry in enumerate(visible_buy):
             real_idx = self.buy_scroll + i
@@ -104,17 +105,22 @@ class ShopView:
             x = 50
             y = item_top + i * line_h
 
-            name_surf = self.font.render(item.name, True, color)
-            price_surf = self.font.render(f"{entry['price']}g", True, color)
+            name_lines = self._wrap_name(item.name, buy_name_max_w)
+            for li, nl in enumerate(name_lines[:2]):
+                ns = self.small_font.render(nl, True, color)
+                self.screen.blit(ns, (x, y + li * 16))
+
+            price_surf = self.small_font.render(f"{entry['price']}g", True, color)
             stock_surf = self.small_font.render(f"x{entry['stock']}", True, color)
-            self.screen.blit(name_surf, (x, y))
-            self.screen.blit(price_surf, (mid_x - 100, y))
-            self.screen.blit(stock_surf, (mid_x - 40, y))
+            self.screen.blit(price_surf, (mid_x - 90, y + 2))
+            self.screen.blit(stock_surf, (mid_x - 40, y + 2))
 
             if selected:
-                desc = item.desc[:50] + ("..." if len(item.desc) > 50 else "")
-                desc_surf = self.small_font.render(desc, True, DESC_COLOR)
-                self.screen.blit(desc_surf, (x, y + 18))
+                desc_y = y + len(name_lines[:2]) * 16
+                desc_lines = self._wrap_name(item.desc, buy_name_max_w + 40)
+                for dl in desc_lines[:1]:
+                    ds = self.small_font.render(dl, True, DESC_COLOR)
+                    self.screen.blit(ds, (x, desc_y))
 
         # Scroll indicators for buy
         if self.buy_scroll > 0:
@@ -127,6 +133,7 @@ class ShopView:
 
         # Draw SELL column
         sell_items = self._sell_items()
+        sell_name_max_w = SCREEN_WIDTH - 130 - (mid_x + 20) - 8
         visible_sell = sell_items[self.sell_scroll : self.sell_scroll + self.MAX_VISIBLE]
         for i, (item_name, quantity) in enumerate(visible_sell):
             real_idx = self.sell_scroll + i
@@ -139,16 +146,22 @@ class ShopView:
             sell_price = max(1, item_obj.item_stats.price // 2) if item_obj else 0
 
             prefix = "[E] " if self.player.equipped_weapon == item_name else ""
-            name_surf = self.font.render(f"{prefix}{quantity}x {item_name}", True, color)
-            self.screen.blit(name_surf, (x, y))
+            full_name = f"{prefix}{quantity}x {item_name}"
+            name_lines = self._wrap_name(full_name, sell_name_max_w)
+            for li, nl in enumerate(name_lines[:2]):
+                ns = self.small_font.render(nl, True, color)
+                self.screen.blit(ns, (x, y + li * 16))
+
             if sell_price > 0:
                 price_surf = self.small_font.render(f"Sell: {sell_price}g", True, color)
-                self.screen.blit(price_surf, (SCREEN_WIDTH - 130, y))
+                self.screen.blit(price_surf, (SCREEN_WIDTH - 130, y + 2))
 
             if selected and item_obj:
-                desc = item_obj.desc[:50] + ("..." if len(item_obj.desc) > 50 else "")
-                desc_surf = self.small_font.render(desc, True, DESC_COLOR)
-                self.screen.blit(desc_surf, (x, y + 18))
+                desc_y = y + len(name_lines[:2]) * 16
+                desc_lines = self._wrap_name(item_obj.desc, sell_name_max_w + 40)
+                for dl in desc_lines[:1]:
+                    ds = self.small_font.render(dl, True, DESC_COLOR)
+                    self.screen.blit(ds, (x, desc_y))
 
         # Scroll indicators for sell
         if self.sell_scroll > 0:
@@ -165,13 +178,35 @@ class ShopView:
         if self.confirming and self.confirm_action:
             self._draw_confirm()
 
-        # Controls bar
+        # Controls bar with dark background for readability
+        ctrl_y = SCREEN_HEIGHT - 65
+        ctrl_bar = pygame.Surface((SCREEN_WIDTH - 60, 30))
+        ctrl_bar.fill((40, 35, 25))
+        ctrl_bar.set_alpha(220)
+        self.screen.blit(ctrl_bar, (30, ctrl_y))
         if self.confirming:
             ctrl = "Enter: Confirm  |  Esc: Cancel"
         else:
-            ctrl = "Left/Right: Switch column  |  Up/Down: Select  |  Enter: Buy/Sell  |  Esc: Close"
-        ctrl_surf = self.small_font.render(ctrl, True, CONTROLS_COLOR)
-        self.screen.blit(ctrl_surf, (SCREEN_WIDTH // 2 - ctrl_surf.get_width() // 2, SCREEN_HEIGHT - 60))
+            ctrl = "Left/Right: Switch  |  Up/Down: Select  |  Enter: Buy/Sell  |  Esc: Close"
+        ctrl_surf = self.small_font.render(ctrl, True, (200, 190, 160))
+        self.screen.blit(ctrl_surf, (SCREEN_WIDTH // 2 - ctrl_surf.get_width() // 2, ctrl_y + 6))
+
+    def _wrap_name(self, text: str, max_w: int) -> list[str]:
+        """Word-wrap a name string to fit within max_w using small_font."""
+        words = text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.small_font.size(test)[0] <= max_w:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines or [text]
 
     def _draw_confirm(self):
         """Draw a confirmation prompt overlay."""

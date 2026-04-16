@@ -71,7 +71,7 @@ class GameController:
         # Managers
         self.quest_manager = QuestManager(self.quests, self.events, self.npcs)
         self.quest_manager.door_reveal_callback = self.reveal_door_from_quest
-        self.follower_manager = FollowerManager(self.player, self.npcs, self.quests)
+        self.follower_manager = FollowerManager(self.player, self.npcs, self.quests, current_room_index=current_room)
 
         # Build a lookup from grid position to event id
         self.event_position_map: dict[tuple[int, int], int] = {}
@@ -109,6 +109,7 @@ class GameController:
         self.dialogue_choice_index = 0
 
         self.rest_menu_active = False
+        self.pending_quest_offer = None
 
         self.shop_active = False
         self.shop_npc = None
@@ -246,6 +247,8 @@ class GameController:
             or self.dialogue_box.event_active
             or self.dialogue_box.dialogue_active
             or self.shop_active
+            or self.inventory_active
+            or self.quest_log_active
         )
 
     # --- Fog of War & Day/Night helpers ---
@@ -338,7 +341,21 @@ class GameController:
 
         completed_escort = self.quest_manager.check_escort_zone(self.player)
         if completed_escort:
+            follower = self.player.get_follower_by_quest(completed_escort.id)
+            restored_npc = None
+            if follower and getattr(follower, "original_npc", None):
+                restored_npc = follower.original_npc
+                tz = getattr(completed_escort, "target_zone", [self.player.x, self.player.y])
+                restored_npc.x = tz[0]
+                restored_npc.y = tz[1]
+                restored_npc.dialogue_exhausted = False
+                self.quest_manager._swap_npc_dialogue_tree(completed_escort, "completed")
+
             farewell = self.follower_manager.remove_follower_for_quest(completed_escort.id)
+
+            if restored_npc:
+                self.npcs.append(restored_npc)
+
             msg = "Your escort has arrived safely!"
             if farewell:
                 msg += f" {farewell}"
@@ -376,6 +393,12 @@ class GameController:
             if not hasattr(self, "_undone_warned"):
                 self._undone_warned = True
                 return
+        next_room = self.current_room + 1
+        farewell_msgs = self.follower_manager.check_room_progression(next_room)
+        for fm in farewell_msgs:
+            self.dialogue_box.set_item_message(fm)
+            self.item_message_active = True
+        self.follower_manager.current_room_index = next_room
         self.stats["rooms_cleared"] += 1
         self.pending_action = "room_transition"
 
@@ -400,17 +423,51 @@ class GameController:
             self._handle_shop_input(event)
             return
 
-        if self.item_message_active:
+        if self.pending_quest_offer:
             if event.key == pygame.K_RETURN:
-                self.item_message_active = False
+                offer = self.pending_quest_offer
+                self.pending_quest_offer = None
+                quest = self.quest_manager.accept_quest_from_npc(offer["npc"], self.player)
+                if quest and quest.type == "escort":
+                    escort_msg = self.follower_manager.start_escort(quest, offer["npc"])
+                    if escort_msg:
+                        self.dialogue_box.set_item_message(escort_msg)
+                        self.item_message_active = True
+                    else:
+                        self.dialogue_box.clear_item_message()
+                        self.item_message_active = False
+                else:
+                    msg = f"Quest accepted: {quest.title}!" if quest else ""
+                    if msg:
+                        self.dialogue_box.set_item_message(msg)
+                        self.item_message_active = True
+                    else:
+                        self.dialogue_box.clear_item_message()
+                        self.item_message_active = False
+                self.current_npc = None
+                self.day_night.resume()
+            elif event.key == pygame.K_ESCAPE:
+                offer = self.pending_quest_offer
+                npc = offer["npc"] if offer else None
+                if npc:
+                    if hasattr(npc, "dialogue_tree") and npc.dialogue_tree:
+                        npc.dialogue_tree["_current"] = "start"
+                    npc.dialogue_exhausted = False
+                    npc.has_met_player = False
+                self.pending_quest_offer = None
                 self.dialogue_box.clear_item_message()
-                if self._pending_npc_combat:
-                    npc = self._pending_npc_combat
-                    self._pending_npc_combat = None
-                    self._start_npc_combat(npc)
-                return
-            if event.key == pygame.K_ESCAPE:
-                return
+                self.item_message_active = False
+                self.current_npc = None
+                self.day_night.resume()
+            return
+
+        if self.item_message_active:
+            self.item_message_active = False
+            self.dialogue_box.clear_item_message()
+            if self._pending_npc_combat:
+                npc = self._pending_npc_combat
+                self._pending_npc_combat = None
+                self._start_npc_combat(npc)
             return
 
         if self.inventory_active:
@@ -421,6 +478,7 @@ class GameController:
             if event.key == pygame.K_ESCAPE:
                 self.inventory_active = False
                 self.item_detail_active = False
+                self.day_night.resume()
                 return
             else:
                 self.handle_inventory_input(event)
@@ -428,9 +486,9 @@ class GameController:
 
         if self.dialogue_box.dialogue_active:
             if event.key == pygame.K_ESCAPE:
+                npc = self.dialogue_box.current_npc
                 self.dialogue_box.end_dialogue()
-                self.current_npc = None
-                self.dialogue_choice_index = 0
+                self._on_dialogue_end(npc)
                 return
             if self.dialogue_box.generating:
                 return
@@ -519,13 +577,23 @@ class GameController:
                 return
 
         if event.key == pygame.K_i:
+            was_active = self.inventory_active
             self.inventory_active = not self.inventory_active
             self.quest_log_active = False
+            if self.inventory_active:
+                self.day_night.pause()
+            elif was_active:
+                self.day_night.resume()
             return
 
         if event.key == pygame.K_q:
+            was_active = self.quest_log_active
             self.quest_log_active = not self.quest_log_active
             self.inventory_active = False
+            if self.quest_log_active:
+                self.day_night.pause()
+            elif was_active:
+                self.day_night.resume()
             return
 
         if event.key == pygame.K_t:
@@ -675,14 +743,24 @@ class GameController:
         self.dialogue_box.quest_context = qctx
         if qctx:
             npc.current_dc = qctx.get("dc", 10)
+        self.day_night.pause()
         self.dialogue_box.start_dialogue(npc)
 
-        offered = self.quest_manager.try_offer_quest(npc, self.player)
-        if offered and offered.type == "escort":
-            escort_msg = self.follower_manager.start_escort(offered, npc)
-            if escort_msg:
-                self.dialogue_box.set_item_message(escort_msg)
+    def _on_dialogue_end(self, npc):
+        """Post-dialogue hook: offer quest accept/reject if the NPC has one."""
+        self.dialogue_choice_index = 0
+        if npc:
+            quest = self.quest_manager.has_unoffered_quest(npc, self.player)
+            if quest:
+                desc = quest.description[:100] + ("..." if len(quest.description) > 100 else "")
+                self.dialogue_box.set_item_message(
+                    f"Quest: {quest.title}\n{desc}\n\nEnter: Accept  |  Escape: Decline"
+                )
                 self.item_message_active = True
+                self.pending_quest_offer = {"quest": quest, "npc": npc}
+                return
+        self.current_npc = None
+        self.day_night.resume()
 
     def _handle_rest_input(self, event):
         hour_map = {pygame.K_1: 3, pygame.K_2: 6, pygame.K_3: 12}
@@ -723,6 +801,7 @@ class GameController:
         self.shop_active = True
         self.shop_npc = merchant_npc
         self.shop_view = ShopView(self.screen, self.font, merchant_npc, self.player)
+        self.day_night.pause()
 
     def _handle_shop_input(self, event):
         result = self.shop_view.handle_input(event)
@@ -732,6 +811,7 @@ class GameController:
             self.shop_active = False
             self.shop_npc = None
             self.shop_view = None
+            self.day_night.resume()
             return
         if result["action"] == "buy":
             msg = self.shop_npc.buy_from(result["index"], self.player)
@@ -807,24 +887,25 @@ class GameController:
         else:
             delta = 0
         self._last_survival_ms = current_time
-        if delta > 0:
+        if delta > 0 and not self.has_active_overlay:
             warnings = self.survival.on_time_update(self.player, delta)
             for w in warnings:
-                if not self.has_active_overlay and not self.item_message_active:
+                if not self.item_message_active:
                     self.dialogue_box.set_item_message(w)
                     self.item_message_active = True
 
         if self.dialogue_box.generating:
             self.dialogue_box.check_generation()
 
-        for npc in self.npcs:
-            if hasattr(npc, "update_position"):
-                if isinstance(npc, RandomNPC):
-                    npc.update_position(self.maze, current_time)
-                elif isinstance(npc, AggressiveNPC):
-                    npc.update_position(self.maze, (self.player.x, self.player.y), current_time)
+        if not self.has_active_overlay:
+            for npc in self.npcs:
+                if hasattr(npc, "update_position"):
+                    if isinstance(npc, RandomNPC):
+                        npc.update_position(self.maze, current_time)
+                    elif isinstance(npc, AggressiveNPC):
+                        npc.update_position(self.maze, (self.player.x, self.player.y), current_time)
 
-        if not self.combat_handler.active and not self.dialogue_box.event_active and not self.item_message_active:
+        if not self.has_active_overlay and not self.item_message_active:
             for npc in self.npcs:
                 if (
                     isinstance(npc, AggressiveNPC)
@@ -835,7 +916,7 @@ class GameController:
                     self._show_npc_taunt(npc)
                     break
 
-        if not self.inventory_active and not self.dialogue_box.dialogue_active:
+        if not self.has_active_overlay:
             self.current_npc = self.player.get_nearby_npc(self.npcs)
             self.player_at_item = self.player.is_item_at_player_position(self.maze)
 

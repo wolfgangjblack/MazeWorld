@@ -180,6 +180,8 @@ class PlayerMenuView:
     # ------------------------------------------------------------------
 
     def _draw_followers(self):
+        from src.views.portrait_utils import load_portrait
+
         title_surface = self.title_font.render("Followers", True, TITLE_COLOR)
         title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
         self.screen.blit(title_surface, (title_x, 80))
@@ -187,6 +189,7 @@ class PlayerMenuView:
         y = 130
         margin = 40
         line_h = self.font.get_linesize() + 4
+        max_text_w = SCREEN_WIDTH - margin * 2 - 90
 
         if not self.follower_info:
             empty = self.font.render("No followers in your party.", True, DISABLED_COLOR)
@@ -201,38 +204,71 @@ class PlayerMenuView:
             is_selected = i == self.follower_selected
             prefix = "> " if is_selected else "  "
 
-            # Name
             name_color = SELECTED_COLOR if is_selected else FOLLOWER_NAME_COLOR
             name_surface = self.font.render(f"{prefix}{info['name']}", True, name_color)
             self.screen.blit(name_surface, (margin, y))
+
+            portrait = load_portrait(info.get("profile_image"), (64, 64))
+            text_x = margin
+            if portrait:
+                px = SCREEN_WIDTH - margin - 68
+                self.screen.blit(portrait, (px, y))
+                pygame.draw.rect(self.screen, (100, 100, 130), (px, y, 64, 64), 1)
             y += line_h
 
-            # Quest summary
             if info.get("quest_summary"):
                 quest_surface = self.small_font.render(
                     f"    Quest: {info['quest_summary']}", True, FOLLOWER_DETAIL_COLOR
                 )
-                self.screen.blit(quest_surface, (margin, y))
+                self.screen.blit(quest_surface, (text_x, y))
                 y += line_h - 2
 
-            # Destination
+            if info.get("quest_description") and is_selected:
+                desc = info["quest_description"]
+                words = desc.split()
+                lines, cur = [], ""
+                for w in words:
+                    test = f"{cur} {w}".strip()
+                    if self.small_font.size(test)[0] <= max_text_w:
+                        cur = test
+                    else:
+                        if cur:
+                            lines.append(cur)
+                        cur = w
+                if cur:
+                    lines.append(cur)
+                for dl in lines[:3]:
+                    ds = self.small_font.render(f"    {dl}", True, FOLLOWER_DETAIL_COLOR)
+                    self.screen.blit(ds, (text_x, y))
+                    y += self.small_font.get_linesize()
+
             dest = info.get("destination_room", 0)
-            dest_text = f"Room {dest}" if dest > 0 else "This room"
+            dest_text = f"Room {dest + 1}" if dest >= 0 else "This room"
             dest_surface = self.small_font.render(f"    Destination: {dest_text}", True, FOLLOWER_DETAIL_COLOR)
-            self.screen.blit(dest_surface, (margin, y))
+            self.screen.blit(dest_surface, (text_x, y))
             y += line_h - 2
 
-            # Personality
-            if info.get("personality"):
-                pers_surface = self.small_font.render(
-                    f"    Personality: {info['personality'][:50]}", True, FOLLOWER_DETAIL_COLOR
-                )
-                self.screen.blit(pers_surface, (margin, y))
-                y += line_h - 2
+            if info.get("description") and is_selected:
+                desc = info["description"]
+                words = desc.split()
+                lines, cur = [], ""
+                for w in words:
+                    test = f"{cur} {w}".strip()
+                    if self.small_font.size(test)[0] <= max_text_w:
+                        cur = test
+                    else:
+                        if cur:
+                            lines.append(cur)
+                        cur = w
+                if cur:
+                    lines.append(cur)
+                for dl in lines[:3]:
+                    ds = self.small_font.render(f"    {dl}", True, DISABLED_COLOR)
+                    self.screen.blit(ds, (text_x, y))
+                    y += self.small_font.get_linesize()
 
-            y += 10  # spacing between followers
+            y += 10
 
-        # Talk hint
         if self.follower_info:
             talk_hint = self.small_font.render("Enter: Talk to selected follower", True, (100, 100, 100))
             self.screen.blit(talk_hint, (margin, SCREEN_HEIGHT - 60))

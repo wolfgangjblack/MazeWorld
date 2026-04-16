@@ -155,8 +155,15 @@ class CombatController:
         target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
         dc = target_ac + target.dex_mod
 
+        atk_d20 = getattr(self.player, "last_attack_d20", 0)
+        atk_bonus = getattr(self.player, "last_attack_bonus", 0)
+        atk_stat = getattr(self.player, "last_attack_stat", "")
+
         if attack_roll >= dc:
             base_damage = self.player.roll_weapon_damage()
+            dmg_bonus = getattr(self.player, "last_damage_bonus", 0)
+            dmg_stat = getattr(self.player, "last_damage_stat", atk_stat)
+            dmg_base = getattr(self.player, "last_damage_base", base_damage)
             weapon = self.player.weapon
             phys_mult = physical_multiplier(
                 weapon.damage_type if weapon else "physical",
@@ -172,13 +179,20 @@ class CombatController:
             self.player.combat_record["damage_dealt"] += damage
             eff = _effectiveness_tag(phys_mult * magic_mult)
             w_dice = self.player.weapon.dice_expr if self.player.weapon else "1d4"
-            msg = f"You hit {target.name} for {damage}{eff}! [{w_dice}={base_damage}, roll {attack_roll} vs AC {dc}]"
+            bonus_sign = f"+{dmg_bonus}" if dmg_bonus >= 0 else str(dmg_bonus)
+            atk_sign = f"+{atk_bonus}" if atk_bonus >= 0 else str(atk_bonus)
+            msg = (
+                f"You hit {target.name} for {damage}{eff}! "
+                f"[{w_dice}={dmg_base} {bonus_sign} {dmg_stat}, "
+                f"d20{atk_sign}={attack_roll} vs AC {dc}]"
+            )
             if not target.is_alive:
                 msg += f" {target.name} is slain!"
             self.log.append(msg)
             result = {"success": True, "message": msg, "damage": damage}
         else:
-            msg = f"You miss {target.name}. [roll {attack_roll} vs AC {dc}]"
+            atk_sign = f"+{atk_bonus}" if atk_bonus >= 0 else str(atk_bonus)
+            msg = f"You miss {target.name}. [d20{atk_sign}={attack_roll} vs AC {dc}]"
             self.log.append(msg)
             result = {"success": False, "message": msg}
 

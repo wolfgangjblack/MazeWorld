@@ -280,6 +280,8 @@ class TestGateEncounter:
         gc.item_message_active = False
         gc.stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
         gc.sfx = None
+        gc.follower_manager = MagicMock()
+        gc.follower_manager.check_room_progression.return_value = []
 
         gc.player.x, gc.player.y = maze.door_position
         gc._handle_door_interaction()
@@ -565,6 +567,8 @@ class TestClimaxBossVictory:
         from src.controllers.combat_input_handler import CombatInputHandler
         from src.controllers.event_input_handler import EventInputHandler
 
+        gc.follower_manager = MagicMock()
+        gc.follower_manager.check_room_progression.return_value = []
         gc.event_handler = EventInputHandler(gc)
         gc.combat_handler = CombatInputHandler(gc)
         return gc
