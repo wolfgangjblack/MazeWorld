@@ -164,6 +164,49 @@ python main.py --dev
 python main.py --dev --skip-gen
 ```
 
+## Standalone Executable (macOS)
+
+A packaged `.app` is available for people who want to play without cloning the repo or installing Python. [Download a 2-room playthrough here](https://drive.google.com/file/d/1Bl5pt2WeFYGRUbwMpR_EeNpY7jtd_A3y/view?usp=sharing), unzip, and double-click `MazeWorld.app`.
+
+**Supported modes:** the executable runs in `offline_static` mode only -- pre-generated world, scripted dialogue trees, no API keys needed. `online` (Claude API dialogue) and `offline_local` (local LLM + torch) are intentionally excluded to keep the bundle small (~470MB vs 2GB+). To play in those modes, run from source with `python main.py --dev`.
+
+**First launch on macOS:** the `.app` is unsigned, so Gatekeeper will refuse to open it by default. Either right-click the app and choose **Open**, then confirm in the dialog, or run the following from the folder where you unzipped the download:
+
+```bash
+# After downloading and unzipping
+xattr -cr MazeWorld.app
+open MazeWorld.app
+```
+
+This clears the quarantine flag and launches the game in one step.
+
+**Save and crash locations:** when running as the packaged app, saves and crash logs live outside the bundle at:
+
+```
+~/Library/Application Support/MazeWorld/saves/
+```
+
+(including `crash.log` if the app fails to start, e.g. missing `data/` folder).
+
+### Building the executable yourself
+
+From the repo root, after generating a world:
+
+```bash
+python main.py --dev --exe
+```
+
+This runs generation if needed, then invokes PyInstaller to build `dist/MazeWorld.app`. Because PyInstaller requires a framework-built Python to produce `.app` bundles on macOS, the `--exe` flag uses a separate `.venv-build` virtualenv. Create it once with:
+
+```bash
+/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 -m venv .venv-build
+.venv-build/bin/pip install 'pygame>=2.6' 'pydantic>=2.9' 'python-dotenv>=1.1' 'Pillow>=10.0' 'protobuf>=4.25' 'pyinstaller>=6.11'
+```
+
+(Requires Python 3.12 installed from [python.org](https://www.python.org/downloads/macos/).)
+
+To distribute: `zip -r MazeWorld-macOS.zip dist/MazeWorld.app`.
+
 ## Requirements
 
 - Python 3.11+

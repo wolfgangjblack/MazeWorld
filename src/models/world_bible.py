@@ -6,12 +6,15 @@ not just structured data.
 """
 
 import json
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from config import STORY_CONTEXT_LIMIT
+from config import DATA_DIR, STORY_CONTEXT_LIMIT
 from src.models.story import OverarchingStory
+
+_DEFAULT_WORLD_BIBLE_PATH = os.path.join(DATA_DIR, "world_bible.json")
 
 
 class EntityRef(BaseModel):
@@ -164,14 +167,14 @@ class WorldBible(BaseModel):
 
     # --- Persistence ---
 
-    def persist(self, path: str = "data/world_bible.json"):
+    def persist(self, path: str = _DEFAULT_WORLD_BIBLE_PATH):
         """Write the Bible to disk."""
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
             json.dump(self.model_dump(), f, indent=2)
 
     @classmethod
-    def load(cls, path: str = "data/world_bible.json") -> "WorldBible":
+    def load(cls, path: str = _DEFAULT_WORLD_BIBLE_PATH) -> "WorldBible":
         """Load a Bible from disk."""
         with open(path) as f:
             return cls.model_validate(json.load(f))

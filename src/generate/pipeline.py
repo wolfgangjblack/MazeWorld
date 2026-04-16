@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from tqdm import tqdm
 
 from config import (
+    DATA_DIR,
     GAME_MODE,
     MAZE_HEIGHT,
     MAZE_WIDTH,
@@ -1657,13 +1658,13 @@ def _phase7_portraits(
         for nd in npc_db.values():
             if not nd.get("portrait_prompt"):
                 nd["portrait_prompt"] = build_npc_portrait_prompt(nd, bible, room_id=rid)
-        npc_batches.append((npc_db, "data/portraits/npcs", "npc_"))
+        npc_batches.append((npc_db, os.path.join(DATA_DIR, "portraits", "npcs"), "npc_"))
 
         event_db = {e["id"]: e for e in rr["event_list"]}
         for ed in event_db.values():
             if not ed.get("portrait_prompt") or _is_generic_portrait_prompt(ed["portrait_prompt"]):
                 ed["portrait_prompt"] = build_event_portrait_prompt(ed, bible, room_id=rid)
-        event_batches.append((event_db, "data/portraits/events", "evt_"))
+        event_batches.append((event_db, os.path.join(DATA_DIR, "portraits", "events"), "evt_"))
 
     # Monster portraits (deduplicate by name across rooms)
     monster_batches: list[tuple[dict, str, str]] = []
@@ -1683,7 +1684,7 @@ def _phase7_portraits(
                     "_source": m,
                 }
     if monster_portrait_db:
-        monster_batches.append((monster_portrait_db, "data/portraits/monsters", "mon_"))
+        monster_batches.append((monster_portrait_db, os.path.join(DATA_DIR, "portraits", "monsters"), "mon_"))
 
     # Item portraits (deduplicate by name across rooms)
     item_batches: list[tuple[dict, str, str]] = []
@@ -1702,7 +1703,7 @@ def _phase7_portraits(
                     "_source": item,
                 }
     if item_portrait_db:
-        item_batches.append((item_portrait_db, "data/portraits/items", "item_"))
+        item_batches.append((item_portrait_db, os.path.join(DATA_DIR, "portraits", "items"), "item_"))
 
     class_portrait_db: dict = {}
     for i, cd in enumerate(class_data_list):
@@ -1729,7 +1730,9 @@ def _phase7_portraits(
             tasks.append(generate_portraits_parallel_async(npc_db, save_dir, prefix))
         for event_db, save_dir, prefix in event_batches:
             tasks.append(generate_portraits_parallel_async(event_db, save_dir, prefix))
-        tasks.append(generate_portraits_parallel_async(class_portrait_db, "data/portraits/classes", "class_"))
+        tasks.append(
+            generate_portraits_parallel_async(class_portrait_db, os.path.join(DATA_DIR, "portraits", "classes"), "class_")
+        )
         for mon_db, save_dir, prefix in monster_batches:
             tasks.append(generate_portraits_parallel_async(mon_db, save_dir, prefix))
         for item_db, save_dir, prefix in item_batches:
@@ -1824,15 +1827,15 @@ def _phase7_portraits(
     player_portrait_path = generate_player_portrait(player_prompt)
 
     for rr in room_results:
-        portrait_path = os.path.join("data/portraits", f"environment_{rr['room_idx']}.png")
+        portrait_path = os.path.join(DATA_DIR, "portraits", f"environment_{rr['room_idx']}.png")
         room_prompt = build_room_portrait_prompt(rr["room_id"], bible)
         generate_and_save_image(room_prompt, portrait_path)
         rr["environment_portrait"] = portrait_path
 
-    gameover_path = os.path.join("data/portraits", "game_over.png")
+    gameover_path = os.path.join(DATA_DIR, "portraits", "game_over.png")
     generate_and_save_image(build_game_over_portrait_prompt(bible), gameover_path)
 
-    victory_path = os.path.join("data/portraits", "victory.png")
+    victory_path = os.path.join(DATA_DIR, "portraits", "victory.png")
     victory_prompt = (
         "A triumphant hero standing victorious, golden light, fantasy pixel art, celebration scene, epic achievement"
     )
@@ -1843,7 +1846,7 @@ def _phase7_portraits(
     generate_and_save_image(victory_prompt, victory_path)
 
     # Start screen / cover portrait
-    start_portrait_path = os.path.join("data/portraits", "start_screen.png")
+    start_portrait_path = os.path.join(DATA_DIR, "portraits", "start_screen.png")
     start_prompt = "A dark fantasy world, epic landscape, mysterious castle silhouette, pixel art, game cover art"
     if bible.story:
         parts = [bible.story.title]
