@@ -57,7 +57,6 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("anthropic").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-DATA_DIR = "data"
 STORY_PATH = os.path.join(DATA_DIR, "story", "story.json")
 CLASS_PATH = os.path.join(DATA_DIR, "classes", "classes.json")
 MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
@@ -1731,7 +1730,10 @@ def _phase7_portraits(
         for event_db, save_dir, prefix in event_batches:
             tasks.append(generate_portraits_parallel_async(event_db, save_dir, prefix))
         tasks.append(
-            generate_portraits_parallel_async(class_portrait_db, os.path.join(DATA_DIR, "portraits", "classes"), "class_")
+            generate_portraits_parallel_async(
+                class_portrait_db, os.path.join(DATA_DIR, "portraits", "classes"),
+                 "class_"
+            )
         )
         for mon_db, save_dir, prefix in monster_batches:
             tasks.append(generate_portraits_parallel_async(mon_db, save_dir, prefix))

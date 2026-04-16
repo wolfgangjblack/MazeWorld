@@ -134,9 +134,7 @@ def run_game_only():
     """
     registry.load()
     if not registry.has_manifest():
-        raise RuntimeError(
-            "Game data not found. Ensure the 'data/' folder is present inside the app bundle."
-        )
+        raise RuntimeError("Game data not found. Ensure the 'data/' folder is present inside the app bundle.")
     _start_game_loop()
 
 
