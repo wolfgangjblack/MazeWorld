@@ -322,8 +322,15 @@ class GameView:
         y += 35
 
         # Category / type
-        type_name = type(item).__name__
-        cat_surf = self.small_font.render(f"Type: {type_name}  |  Category: {item.category}", True, (160, 160, 160))
+        from src.models.items import Weapon as InvWeapon
+
+        if isinstance(item, InvWeapon):
+            wtype = getattr(item, "weapon_type", "heavy").capitalize()
+            wcat = getattr(item, "weapon_category", "simple").capitalize()
+            cat_text = f"{wtype} {wcat} Weapon"
+        else:
+            cat_text = item.category.replace("_", " ").title()
+        cat_surf = self.small_font.render(cat_text, True, (160, 160, 160))
         self.screen.blit(cat_surf, (content_x, y))
         y += 22
 
@@ -372,6 +379,13 @@ class GameView:
             stat_lines.append(f"Damage: {stats.attack_dice}")
         if stats.stat_modifier:
             stat_lines.append(f"Stat: {stats.stat_modifier}")
+        if isinstance(item, InvWeapon):
+            dmg_type = getattr(item, "damage_type", "")
+            if dmg_type:
+                stat_lines.append(f"Dmg Type: {dmg_type.capitalize()}")
+            magic_el = getattr(item, "magic_element", None)
+            if magic_el:
+                stat_lines.append(f"Element: {magic_el.capitalize()}")
         if stats.stamina_value:
             stat_lines.append(f"Stamina: {stats.stamina_value:+d}")
         if stats.health_value:

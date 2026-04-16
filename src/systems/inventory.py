@@ -33,9 +33,18 @@ class InventoryManager:
             if self._inventory[item_name].quantity == 0:
                 del self._inventory[item_name]
 
+    _CATEGORY_ORDER = {"weapon": 5, "food": 1, "drink": 2, "tool": 3, "spell_scroll": 4}
+
     def get_list(self) -> list[tuple[str, int]]:
-        """Return inventory as list of (name, quantity) tuples."""
-        return [(item.name, item.quantity) for item in self._inventory.values()]
+        """Return inventory sorted: equipped weapon first, then food/drink/tool/scroll/weapon."""
+        equipped = self._player.equipped_weapon
+        items = list(self._inventory.values())
+        items.sort(key=lambda it: (
+            0 if it.name == equipped else 1,
+            self._CATEGORY_ORDER.get(it.category, 6),
+            it.name,
+        ))
+        return [(item.name, item.quantity) for item in items]
 
     def use_selected(self, selected_index: int) -> str:
         """Use the item at the given index. Returns message."""

@@ -119,6 +119,7 @@ class GameController:
 
         self.gate_cleared = False
         self._npc_combat_map: dict[int, object] = {}
+        self._pending_npc_combat = None
         self._count_total_encounters()
 
         self.stats = {
@@ -403,6 +404,10 @@ class GameController:
             if event.key == pygame.K_RETURN:
                 self.item_message_active = False
                 self.dialogue_box.clear_item_message()
+                if self._pending_npc_combat:
+                    npc = self._pending_npc_combat
+                    self._pending_npc_combat = None
+                    self._start_npc_combat(npc)
                 return
             if event.key == pygame.K_ESCAPE:
                 return
@@ -551,6 +556,7 @@ class GameController:
         if event.key == pygame.K_F3:
             if self.maze.door_position:
                 self.gate_cleared = True
+                self.maze.door_revealed = True
                 self.maze.place_door_tile()
                 self.dialogue_box.set_item_message("DEBUG: Door forced open.")
                 self.item_message_active = True
@@ -622,12 +628,25 @@ class GameController:
         self._npc_combat_map[event_id] = npc
         self.combat_handler.start(combat_event)
 
+    def _show_npc_taunt(self, npc):
+        """Show the NPC's taunt dialogue before starting combat."""
+        taunt = ""
+        tree = getattr(npc, "dialogue_tree_incomplete", None) or getattr(npc, "dialogue_tree", None)
+        if tree and "nodes" in tree:
+            start_node = tree["nodes"].get("start", {})
+            taunt = start_node.get("prompt", "")
+        if not taunt:
+            taunt = f"{npc.name} challenges you to fight!"
+        self._pending_npc_combat = npc
+        self.dialogue_box.set_item_message(f"{npc.name}: \"{taunt}\"")
+        self.item_message_active = True
+
     def _handle_npc_interaction(self, npc):
         if self.combat_handler.active:
             return
 
         if isinstance(npc, AggressiveNPC) and not npc.combat_defeated:
-            self._start_npc_combat(npc)
+            self._show_npc_taunt(npc)
             return
 
         if not is_npc_available(npc, self.day_night.current_period):
@@ -750,7 +769,13 @@ class GameController:
             self.item_detail_active = True
 
     def _sync_inv_scroll(self, inv_length):
-        visible = 15
+        from config import SCREEN_HEIGHT
+
+        M, title_h, detail_h, ctrl_h = 20, 40, 155, 25
+        list_top = M + title_h + 5
+        list_bottom = SCREEN_HEIGHT - M - detail_h - ctrl_h - 10
+        stride = 26 + 8
+        visible = max(1, (list_bottom - list_top) // stride)
         scroll = getattr(self.player, "_inv_scroll", 0)
         idx = self.player.selected_item_index
         if idx < scroll:
@@ -799,7 +824,11 @@ class GameController:
                 elif isinstance(npc, AggressiveNPC):
                     npc.update_position(self.maze, (self.player.x, self.player.y), current_time)
 
-        if not self.combat_handler.active and not self.dialogue_box.event_active:
+        if (
+            not self.combat_handler.active
+            and not self.dialogue_box.event_active
+            and not self.item_message_active
+        ):
             for npc in self.npcs:
                 if (
                     isinstance(npc, AggressiveNPC)
@@ -807,7 +836,7 @@ class GameController:
                     and npc.x == self.player.x
                     and npc.y == self.player.y
                 ):
-                    self._start_npc_combat(npc)
+                    self._show_npc_taunt(npc)
                     break
 
         if not self.inventory_active and not self.dialogue_box.dialogue_active:

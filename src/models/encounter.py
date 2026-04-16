@@ -293,6 +293,8 @@ class PuzzleEvent(Event):
                 "consumed_tool": consumed_tool,
                 "roll_dc": effective_dc,
                 "roll_total": total,
+                "roll_raw": dice_roll,
+                "roll_modifier": modifier,
                 **reward,
             }
         else:
@@ -312,6 +314,8 @@ class PuzzleEvent(Event):
                 "damage_type": self.failure_damage_type,
                 "roll_dc": effective_dc,
                 "roll_total": total,
+                "roll_raw": dice_roll,
+                "roll_modifier": modifier,
             }
 
 
@@ -453,6 +457,8 @@ class EventEncounter(Event):
                 "consumed_tool": consumed_tool,
                 "roll_dc": effective_dc,
                 "roll_total": total,
+                "roll_raw": dice_roll,
+                "roll_modifier": modifier,
                 **reward,
             }
         else:
@@ -473,6 +479,8 @@ class EventEncounter(Event):
                 "consumed_tool": consumed_tool,
                 "roll_dc": effective_dc,
                 "roll_total": total,
+                "roll_raw": dice_roll,
+                "roll_modifier": modifier,
             }
 
 

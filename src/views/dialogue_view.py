@@ -53,8 +53,13 @@ class DialogueBoxView:
         pygame.draw.rect(self.screen, WHITE, dialogue_box_rect)
 
         if dialogue_box.item_message:
-            item_text_surface = self.font.render(dialogue_box.item_message, True, BLACK)
-            self.screen.blit(item_text_surface, (10, SCREEN_HEIGHT - dialogue_box_height + padding))
+            max_w = SCREEN_WIDTH - 20
+            lines = self.wrap_text(dialogue_box.item_message, self.font, max_w)
+            y = SCREEN_HEIGHT - dialogue_box_height + padding
+            for line in lines:
+                surf = self.font.render(line, True, BLACK)
+                self.screen.blit(surf, (10, y))
+                y += self.font.get_linesize()
 
     def _draw_fullscreen_dialogue(self, dialogue_box, choices=None, choice_index=0):
         """Full-screen NPC dialogue with large portrait above, dialogue below."""
@@ -72,13 +77,15 @@ class DialogueBoxView:
         else:
             name_y = portrait_y + 40
 
-        name_text = f"{npc.name}"
-        if hasattr(npc, "job") and npc.job:
-            name_text += f"  ({npc.job})"
-        name_surf = self.title_font.render(name_text, True, TITLE_COLOR)
+        name_surf = self.title_font.render(npc.name, True, TITLE_COLOR)
         self.screen.blit(name_surf, ((SCREEN_WIDTH - name_surf.get_width()) // 2, name_y))
+        bottom_y = name_y + name_surf.get_height()
+        if hasattr(npc, "job") and npc.job:
+            job_surf = self.small_font.render(f"({npc.job})", True, DIM)
+            self.screen.blit(job_surf, ((SCREEN_WIDTH - job_surf.get_width()) // 2, bottom_y + 2))
+            bottom_y += 2 + job_surf.get_height()
 
-        divider_y = name_y + name_surf.get_height() + 8
+        divider_y = bottom_y + 8
         pygame.draw.line(self.screen, MED_GRAY, (20, divider_y), (SCREEN_WIDTH - 20, divider_y))
 
         content_top = divider_y + 8

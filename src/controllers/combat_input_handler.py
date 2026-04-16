@@ -449,6 +449,7 @@ class CombatInputHandler:
             else:
                 gc.gate_cleared = True
                 if gc.maze.door_position:
+                    gc.maze.door_revealed = True
                     gc.maze.place_door_tile()
                 gc.dialogue_box.set_item_message("The guardian falls! The exit door appears!")
                 gc.item_message_active = True
@@ -459,7 +460,7 @@ class CombatInputHandler:
             npc_source = gc._npc_combat_map.pop(combat_event.id, None)
             if npc_source:
                 npc_source.combat_defeated = True
-                npc_source.color = (0, 255, 255)
+                npc_source.color = (180, 100, 40)
                 for qid, quest in gc.quests.items():
                     if getattr(quest, "target_npc_id", None) == npc_source.id and quest.status == "active":
                         gc.quest_manager.complete_quest(quest, gc.player)

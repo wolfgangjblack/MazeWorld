@@ -15,7 +15,7 @@ def test_random_npc_construction():
 def test_aggressive_npc_construction():
     npc = AggressiveNPC(x=7, y=7, id=1002)
     assert npc.dist == 5
-    assert npc.color == (255, 0, 0)
+    assert npc.color == (255, 140, 0)
 
 
 def test_prepare_sets_identity():

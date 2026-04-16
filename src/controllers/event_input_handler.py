@@ -153,6 +153,10 @@ class EventInputHandler:
             gc.dialogue_box.event_context["roll_dc"] = result["roll_dc"]
         if "roll_total" in result:
             gc.dialogue_box.event_context["roll_total"] = result["roll_total"]
+        if "roll_raw" in result:
+            gc.dialogue_box.event_context["roll_raw"] = result["roll_raw"]
+        if "roll_modifier" in result:
+            gc.dialogue_box.event_context["roll_modifier"] = result["roll_modifier"]
         gc.dialogue_box.awaiting_roll = False
 
         if result.get("success"):

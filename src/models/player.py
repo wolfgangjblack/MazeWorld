@@ -330,6 +330,34 @@ class PlayerCharacter(BaseModel):
             template = registry.get_item_by_name(self.equipped_weapon)
             if template:
                 self.inventory[self.equipped_weapon] = template.clone()
+            else:
+                self._create_starter_weapon_item()
+
+    def _create_starter_weapon_item(self):
+        """Create an inventory Weapon item from the archetype's starter weapon template."""
+        from src.models.items import ItemStats
+        from src.models.items import Weapon as InvWeapon
+        from src.models.weapon import STARTER_WEAPONS
+
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        template = STARTER_WEAPONS.get(archetype)
+        if not template:
+            return
+        weapon_name = self.equipped_weapon or template.name
+        inv_weapon = InvWeapon(
+            category="weapon",
+            name=weapon_name,
+            desc=template.description or "A sturdy starting weapon.",
+            weapon_type=template.weapon_type,
+            damage_type=template.damage_type,
+            weapon_category=template.weapon_category,
+            magic_element=template.magic_element,
+            item_stats=ItemStats(
+                attack_dice=f"{template.num_dice}d{template.die_sides}",
+                stat_modifier=template.stat,
+            ),
+        )
+        self.inventory[weapon_name] = inv_weapon
 
     def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
@@ -487,6 +515,17 @@ class PlayerCharacter(BaseModel):
         if archetype == "healer":
             return random.randint(1, 20) + self.get_stat_mod("WIS") + (self.level - 1)
         return random.randint(1, 20) + self.get_stat_mod("INT") + (self.level - 1)
+
+    def spell_stat_bonus(self, spell) -> int:
+        """Return the stat bonus for a spell based on its governing stat.
+
+        Uses spell.stat (INT/WIS/LUCK) and the jester averaging rule.
+        """
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        stat = getattr(spell, "stat", "INT")
+        if archetype == "jester":
+            return self.get_jester_mod(stat)
+        return self.get_stat_mod(stat)
 
     def get_jester_mod(self, normal_stat: str) -> int:
         """Jester modifier rule: avg(LUCK mod, normal stat mod)."""

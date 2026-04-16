@@ -489,9 +489,13 @@ class EncounterView:
         else:
             dc = ctx.get("roll_dc", 0)
             total = ctx.get("roll_total", roll)
+            raw = ctx.get("roll_raw", roll)
+            mod = ctx.get("roll_modifier", 0)
             success = result.get("success", False)
             vs_color = GREEN if success else RED
             vs_text = f"DC {dc}  vs  Roll {total}"
+            if mod != 0:
+                vs_text += f"  (d20: {raw} + mod: {mod:+d})"
             vs_surf = self.font.render(vs_text, True, vs_color)
             self.screen.blit(vs_surf, (dice_x + 44, y + 8))
 

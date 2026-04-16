@@ -268,7 +268,8 @@ class CombatController:
 
         # --- Healing / buff (no roll needed) ---
         if spell.spell_type == "heal":
-            heal = spell.heal_amount if spell.heal_amount else random.randint(4, 12)
+            base_heal = spell.heal_amount if spell.heal_amount else random.randint(4, 12)
+            heal = base_heal + max(0, self.player.spell_stat_bonus(spell))
             self.player.health = min(self.player.max_health, self.player.health + heal)
             msg = f"You cast {spell.name}! +{heal} HP [-{spell.stamina_cost} stam]"
             self.log.append(msg)
@@ -325,9 +326,10 @@ class CombatController:
             dc = 10 + target.magic_resistance
             if magic_roll >= dc:
                 base_damage = spell.roll_damage()
+                stat_bonus = self.player.spell_stat_bonus(spell)
                 mult = elemental_multiplier(spell.element, target.elemental_affinity)
                 effectiveness = self.survival.get_spell_effectiveness(self.player) if self.survival else 1.0
-                damage = max(1, int(base_damage * mult * effectiveness))
+                damage = max(1, int((base_damage + stat_bonus) * mult * effectiveness))
                 target.take_damage(damage)
                 total_damage += damage
                 eff = ""
@@ -335,9 +337,10 @@ class CombatController:
                     eff = " (super effective!)"
                 elif mult < 1.0:
                     eff = " (resisted)"
+                mod_text = f"+{stat_bonus}" if stat_bonus else ""
                 hit_msg = (
                     f"{spell.name} hits {target.name} for {damage}{eff}"
-                    f" [{spell.dice_expr}={base_damage}, roll {magic_roll} vs DC {dc}]"
+                    f" [{spell.dice_expr}={base_damage}{mod_text}, roll {magic_roll} vs DC {dc}]"
                 )
                 if not target.is_alive:
                     hit_msg += f" {target.name} is slain!"

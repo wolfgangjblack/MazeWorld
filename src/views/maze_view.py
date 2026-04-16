@@ -7,10 +7,10 @@ from src.utils.display_utils import game_to_screen
 
 EVENT_COLOR = (0, 0, 0)  # Black — events are invisible during normal gameplay
 DEBUG_COMBAT_COLOR = (200, 50, 50)  # Red — combat encounters
-DEBUG_PUZZLE_COLOR = (50, 150, 220)  # Blue — puzzles
-DEBUG_EVENT_COLOR = (50, 200, 100)  # Green — narrative events
+DEBUG_PUZZLE_COLOR = (0, 120, 60)  # Dark green — puzzles
+DEBUG_EVENT_COLOR = (160, 100, 200)  # Light purple — narrative events
 DEBUG_EVENT_FALLBACK = (128, 0, 128)  # Purple — unknown type
-DEBUG_GATE_COLOR = (180, 140, 30)  # Dark gold — gate encounter (debug)
+DEBUG_GATE_COLOR = (140, 20, 20)  # Dark red — gate encounter (matches climax boss)
 BOSS_TILE_COLOR = (140, 20, 20)  # Dark red — climax boss (always visible)
 DOOR_COLOR = (120, 40, 160)  # Dark purple for revealed exit doors
 ESCORT_HIGHLIGHT = (0, 180, 0, 100)  # Semi-transparent green for escort zones
@@ -101,9 +101,9 @@ class MazeView:
                     pygame.draw.rect(screen, BLACK, rect)
                     item = registry.get_item(cell)
                     if isinstance(item, Food):
-                        color = (255, 215, 0)
+                        color = (180, 120, 60)
                     elif isinstance(item, Drink):
-                        color = (30, 144, 255)
+                        color = (0, 180, 160)
                     elif isinstance(item, Tool):
                         color = (255, 0, 255)
                     else:

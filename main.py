@@ -273,8 +273,6 @@ def setup_game_from_save(screen, font, save_state, sfx=None):
                         if i < len(events[eid].monsters):
                             events[eid].monsters[i].hp = ms.get("hp", events[eid].monsters[i].hp)
                             events[eid].monsters[i].status_effects = ms.get("status_effects", {})
-                    events[eid].combat_started = saved_evt.get("combat_started", False)
-                    events[eid].player_fled = saved_evt.get("player_fled", False)
 
         quests = registry.get_quests_by_ids(room_quest_ids) if room_quest_ids else registry.quest_registry
         for raw_qid, saved_q in save_state.quest_states.items():
@@ -851,6 +849,8 @@ class SessionManager:
                     return None
                 if action == "quit_to_start":
                     self.game_controller = None
+                    self.current_room_index = 0
+                    self.game_stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
                     self.music.play_start_screen()
                     self.sfx.stop_ambience()
                     self.screen_ctrl.reset_to(ScreenState.START)
@@ -881,6 +881,8 @@ class SessionManager:
                     return None
                 if action == "quit_to_start":
                     self.game_controller = None
+                    self.current_room_index = 0
+                    self.game_stats = {"monsters_killed": 0, "items_used": 0, "rooms_cleared": 0}
                     self.music.play_start_screen()
                     self.sfx.stop_ambience()
                     self.screen_ctrl.reset_to(ScreenState.START)

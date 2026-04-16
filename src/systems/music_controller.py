@@ -119,22 +119,25 @@ class MusicController:
         except Exception:
             volume = 0.6
 
-        if not self._try_load_and_play(path, track_name, volume, loops):
-            # First load failed — reinit mixer and retry (handles MP3/OGG
-            # files that the default WAV-only mixer config can't decode).
+        for attempt in range(5):
+            if self._try_load_and_play(path, track_name, volume, loops):
+                return
             try:
                 pygame.mixer.quit()
                 pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=4096)
-                if not self._try_load_and_play(path, track_name, volume, loops):
-                    self._current = None
             except Exception as e:
                 logger.warning(
-                    "Music reinit failed for '%s' (%s): %s",
+                    "Music reinit attempt %d/5 failed for '%s': %s",
+                    attempt + 1,
                     track_name,
-                    path,
                     e,
                 )
-                self._current = None
+            if attempt < 4:
+                import time
+
+                time.sleep(0.2 * (attempt + 1))
+        logger.warning("Music: gave up on '%s' after 5 attempts.", track_name)
+        self._current = None
 
     def _try_load_and_play(self, path: str, track_name: str, volume: float, loops: int) -> bool:
         """Attempt to load and play a music file. Returns True on success."""

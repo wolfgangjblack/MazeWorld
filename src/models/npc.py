@@ -205,7 +205,7 @@ class AggressiveNPC(NPC):
     """NPC that moves randomly until the player is within 5 squares and in line of sight.
     After combat_defeated is set, reverts to random wandering."""
 
-    color: Tuple[int, int, int] = (255, 0, 0)
+    color: Tuple[int, int, int] = (255, 140, 0)
     dist: int = 5
     combat_defeated: bool = False
     npc_monster: Optional[dict] = None

@@ -360,12 +360,18 @@ class ClaudePromptSet(PromptSet):
             skeleton_summaries = []
             for i, ws in enumerate(weapon_skeletons):
                 parts = [ws.get("weapon_type", "heavy"), ws.get("damage_type", "slashing")]
+                stat = ws.get("stat_modifier", "")
+                if stat:
+                    parts.append(f"stat: {stat}")
                 if ws.get("magic_element"):
                     parts.append(f"magic: {ws['magic_element']}")
                 skeleton_summaries.append(f"  {i + 1}. {', '.join(parts)}")
             weapon_note = (
                 "\n\nWeapon skeletons (mechanics pre-rolled, you generate ONLY name and desc for each):\n"
                 + "\n".join(skeleton_summaries)
+                + "\n\nMatch weapon names to their type: heavy(STR)=swords/axes/hammers, "
+                "light(DEX)=daggers/rapiers/bows, arcane(INT)=staffs/wands/tomes, "
+                "sacred(CON)=maces/flails/shields, enchanted(WIS)=runic blades/glyphed weapons."
             )
         return LLMRequest(
             system=(
