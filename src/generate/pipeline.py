@@ -1446,6 +1446,8 @@ def _phase4b_dialogue(
             "story_context": story_context[:1000],
         }
 
+    tree_ok = 0
+    tree_fail = 0
     for npc in npc_pool:
         has_quest = bool(npc.get("quest_id"))
         quest_ctx = _build_quest_ctx(npc)
@@ -1461,7 +1463,9 @@ def _phase4b_dialogue(
         )
 
         if "error" in tree:
+            tree_fail += 1
             continue
+        tree_ok += 1
         if "incomplete" in tree:
             inc = tree["incomplete"]
             if isinstance(inc, dict) and "nodes" in inc:
@@ -1476,7 +1480,10 @@ def _phase4b_dialogue(
         elif "nodes" in tree:
             npc["dialogue_tree"] = tree
 
-    logger.info("Room %d: Dialogue generated for %d NPCs.", room_idx, len(npc_pool))
+    logger.info(
+        "Room %d: Dialogue trees %d/%d succeeded (%d failed).",
+        room_idx, tree_ok, len(npc_pool), tree_fail,
+    )
     return npc_pool
 
 
