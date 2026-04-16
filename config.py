@@ -40,6 +40,7 @@ def resolve_data_path(path: str | None) -> str | None:
         return path
     return os.path.join(_BASE_DIR, path)
 
+
 ### maze settings
 # ------------------------------------
 # Screen settings
