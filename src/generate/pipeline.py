@@ -1482,7 +1482,10 @@ def _phase4b_dialogue(
 
     logger.info(
         "Room %d: Dialogue trees %d/%d succeeded (%d failed).",
-        room_idx, tree_ok, len(npc_pool), tree_fail,
+        room_idx,
+        tree_ok,
+        len(npc_pool),
+        tree_fail,
     )
     return npc_pool
 
