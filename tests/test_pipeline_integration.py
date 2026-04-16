@@ -20,161 +20,178 @@ from src.prompts.base import LLMRequest
 
 _ENV_SEQUENCE = json.dumps([{"type": "village", "name": "Thornhaven"}])
 
-_OVERARCHING_STORY = json.dumps({
-    "title": "The Dark Tide",
-    "synopsis": "A shadow cult spreads corruption through the coastal villages.",
-    "faction": {
-        "name": "Shadow Guild",
-        "description": "A secretive order of dark sorcerers.",
-        "history": "Founded in the deep caves beneath the coast.",
-        "leader": "Lord Vex",
-    },
-    "escalation_arc": ["The cult's presence grows."],
-    "climax": "Confront Lord Vex in his sanctum.",
-    "final_boss_name": "Lord Vex",
-    "final_boss_lore": "Once a village elder, now consumed by shadow magic.",
-    "key_npc_names": ["Greta", "Old Sal"],
-})
-
-_ROOM_BEAT = json.dumps({
-    "summary": "The adventurer arrives at a besieged fishing village.",
-    "faction_presence": "Shadow Guild agents lurk in the tavern.",
-    "escalation": 1,
-    "characters": [],
-    "mini_boss": {"name": "Shadow Acolyte", "description": "A robed cultist."},
-    "conflicts": [],
-})
-
-_CLASSES = json.dumps([
+_OVERARCHING_STORY = json.dumps(
     {
-        "name": "Harbor Guard",
-        "archetype": "warrior",
-        "flavor_text": "A stalwart defender of the docks.",
-        "starting_weapon": "Rusty Cutlass",
-        "stats": {"STR": 16, "DEX": 14, "CON": 15, "INT": 10, "WIS": 10, "CHA": 12, "LUCK": 8},
-        "abilities": [
-            {"name": "Shield Bash", "description": "Slam with your shield."},
-            {"name": "Battle Cry", "description": "Boost morale."},
-            {"name": "Heavy Swing", "description": "A powerful overhead strike."},
-            {"name": "Intimidate", "description": "Frighten the enemy."},
-        ],
-        "spells": [],
-        "portrait_prompt": "a harbor guard",
-        "ability_pool": [{"name": "Cleave", "description": "Hit multiple foes."}],
-        "spell_pool": [],
-    },
+        "title": "The Dark Tide",
+        "synopsis": "A shadow cult spreads corruption through the coastal villages.",
+        "faction": {
+            "name": "Shadow Guild",
+            "description": "A secretive order of dark sorcerers.",
+            "history": "Founded in the deep caves beneath the coast.",
+            "leader": "Lord Vex",
+        },
+        "escalation_arc": ["The cult's presence grows."],
+        "climax": "Confront Lord Vex in his sanctum.",
+        "final_boss_name": "Lord Vex",
+        "final_boss_lore": "Once a village elder, now consumed by shadow magic.",
+        "key_npc_names": ["Greta", "Old Sal"],
+    }
+)
+
+_ROOM_BEAT = json.dumps(
     {
-        "name": "Tide Mage",
-        "archetype": "mage",
-        "flavor_text": "Commands the power of the sea.",
-        "starting_weapon": "Driftwood Staff",
-        "stats": {"STR": 8, "DEX": 12, "CON": 10, "INT": 16, "WIS": 14, "CHA": 10, "LUCK": 15},
-        "abilities": [],
-        "spells": [
-            {"name": "Tidal Bolt", "description": "A blast of sea water."},
-            {"name": "Frost Wave", "description": "A wave of icy cold."},
-            {"name": "Whirlpool", "description": "A swirling vortex."},
-            {"name": "Sea Shield", "description": "A barrier of water."},
-        ],
-        "portrait_prompt": "a tide mage",
-        "ability_pool": [],
-        "spell_pool": [{"name": "Tsunami", "description": "A massive wave."}],
-    },
+        "summary": "The adventurer arrives at a besieged fishing village.",
+        "faction_presence": "Shadow Guild agents lurk in the tavern.",
+        "escalation": 1,
+        "characters": [],
+        "mini_boss": {"name": "Shadow Acolyte", "description": "A robed cultist."},
+        "conflicts": [],
+    }
+)
+
+_CLASSES = json.dumps(
+    [
+        {
+            "name": "Harbor Guard",
+            "archetype": "warrior",
+            "flavor_text": "A stalwart defender of the docks.",
+            "starting_weapon": "Rusty Cutlass",
+            "stats": {"STR": 16, "DEX": 14, "CON": 15, "INT": 10, "WIS": 10, "CHA": 12, "LUCK": 8},
+            "abilities": [
+                {"name": "Shield Bash", "description": "Slam with your shield."},
+                {"name": "Battle Cry", "description": "Boost morale."},
+                {"name": "Heavy Swing", "description": "A powerful overhead strike."},
+                {"name": "Intimidate", "description": "Frighten the enemy."},
+            ],
+            "spells": [],
+            "portrait_prompt": "a harbor guard",
+            "ability_pool": [{"name": "Cleave", "description": "Hit multiple foes."}],
+            "spell_pool": [],
+        },
+        {
+            "name": "Tide Mage",
+            "archetype": "mage",
+            "flavor_text": "Commands the power of the sea.",
+            "starting_weapon": "Driftwood Staff",
+            "stats": {"STR": 8, "DEX": 12, "CON": 10, "INT": 16, "WIS": 14, "CHA": 10, "LUCK": 15},
+            "abilities": [],
+            "spells": [
+                {"name": "Tidal Bolt", "description": "A blast of sea water."},
+                {"name": "Frost Wave", "description": "A wave of icy cold."},
+                {"name": "Whirlpool", "description": "A swirling vortex."},
+                {"name": "Sea Shield", "description": "A barrier of water."},
+            ],
+            "portrait_prompt": "a tide mage",
+            "ability_pool": [],
+            "spell_pool": [{"name": "Tsunami", "description": "A massive wave."}],
+        },
+        {
+            "name": "Shore Cleric",
+            "archetype": "healer",
+            "flavor_text": "Blessed by the sea goddess.",
+            "starting_weapon": "Coral Mace",
+            "stats": {"STR": 10, "DEX": 12, "CON": 13, "INT": 8, "WIS": 16, "CHA": 14, "LUCK": 12},
+            "abilities": [],
+            "spells": [
+                {"name": "Healing Tide", "description": "Restore health with sea magic."},
+                {"name": "Purify", "description": "Cleanse poison."},
+                {"name": "Blessing", "description": "Grant a stat buff."},
+                {"name": "Smite", "description": "Holy damage."},
+            ],
+            "portrait_prompt": "a shore cleric",
+            "ability_pool": [],
+            "spell_pool": [{"name": "Resurrect", "description": "Bring back from the brink."}],
+        },
+        {
+            "name": "Dock Rat",
+            "archetype": "jester",
+            "flavor_text": "A cunning trickster of the wharves.",
+            "starting_weapon": "Sharpened Hook",
+            "stats": {"STR": 12, "DEX": 13, "CON": 12, "INT": 13, "WIS": 12, "CHA": 13, "LUCK": 15},
+            "abilities": [],
+            "spells": [],
+            "portrait_prompt": "a dock rat jester",
+            "ability_pool": [],
+            "spell_pool": [],
+        },
+    ]
+)
+
+_SPELL_POOL = json.dumps([{"name": f"Spell {i}", "description": f"A generated spell number {i}."} for i in range(10)])
+
+_ITEMS = json.dumps(
     {
-        "name": "Shore Cleric",
-        "archetype": "healer",
-        "flavor_text": "Blessed by the sea goddess.",
-        "starting_weapon": "Coral Mace",
-        "stats": {"STR": 10, "DEX": 12, "CON": 13, "INT": 8, "WIS": 16, "CHA": 14, "LUCK": 12},
-        "abilities": [],
-        "spells": [
-            {"name": "Healing Tide", "description": "Restore health with sea magic."},
-            {"name": "Purify", "description": "Cleanse poison."},
-            {"name": "Blessing", "description": "Grant a stat buff."},
-            {"name": "Smite", "description": "Holy damage."},
-        ],
-        "portrait_prompt": "a shore cleric",
-        "ability_pool": [],
-        "spell_pool": [{"name": "Resurrect", "description": "Bring back from the brink."}],
-    },
+        "food": [{"name": "Hardtack", "desc": "Dry ship biscuit.", "stamina_value": 10}],
+        "drink": [{"name": "Grog", "desc": "Watered-down rum.", "stamina_value": 8}],
+        "tools": [{"name": "Rusty Crowbar", "desc": "Good for prying.", "attribute": "bludgeon"}],
+        "weapons": [{"name": "Barnacle Blade", "desc": "A corroded short sword."}],
+        "spell_scrolls": [{"name": "Scroll of Mending", "desc": "Repairs minor wounds.", "spell_effect": "heal"}],
+    }
+)
+
+_NPC_BATCH = json.dumps(
+    [
+        {"name": "Greta", "job": "innkeeper", "personality": "warm", "hobby": "cooking"},
+    ]
+)
+
+_MONSTERS = json.dumps(
+    [
+        {
+            "name": "Goblin Scout",
+            "species": "goblin",
+            "hp": 25,
+            "ac": 12,
+            "damage_dice": "1d6",
+            "level": 1,
+            "abilities": [],
+            "elemental_affinity": "dark",
+            "description": "A sneaky goblin.",
+        },
+    ]
+)
+
+_COMBAT_EVENT = json.dumps(
+    [
+        {"name": "Dock Ambush", "type": "combat", "description": "Goblins leap from the crates!"},
+    ]
+)
+
+_PUZZLE_EVENT = json.dumps(
+    [
+        {
+            "name": "Locked Gate",
+            "type": "puzzle",
+            "description": "A rusty gate blocks the path.",
+            "choices": [
+                {"text": "Force it open", "stat": "STR", "dc": 12},
+                {"text": "Walk away", "auto_success": True},
+            ],
+        },
+    ]
+)
+
+_GENERIC_EVENT = json.dumps(
+    [
+        {
+            "name": "Strange Merchant",
+            "type": "event",
+            "description": "A hooded figure beckons from an alley.",
+            "choices": [
+                {"text": "Approach cautiously", "stat": "CHA", "dc": 10},
+                {"text": "Ignore them", "auto_success": True},
+            ],
+        },
+    ]
+)
+
+_QUEST = json.dumps(
     {
-        "name": "Dock Rat",
-        "archetype": "jester",
-        "flavor_text": "A cunning trickster of the wharves.",
-        "starting_weapon": "Sharpened Hook",
-        "stats": {"STR": 12, "DEX": 13, "CON": 12, "INT": 13, "WIS": 12, "CHA": 13, "LUCK": 15},
-        "abilities": [],
-        "spells": [],
-        "portrait_prompt": "a dock rat jester",
-        "ability_pool": [],
-        "spell_pool": [],
-    },
-])
-
-_SPELL_POOL = json.dumps([
-    {"name": f"Spell {i}", "description": f"A generated spell number {i}."}
-    for i in range(10)
-])
-
-_ITEMS = json.dumps({
-    "food": [{"name": "Hardtack", "desc": "Dry ship biscuit.", "stamina_value": 10}],
-    "drink": [{"name": "Grog", "desc": "Watered-down rum.", "stamina_value": 8}],
-    "tools": [{"name": "Rusty Crowbar", "desc": "Good for prying.", "attribute": "bludgeon"}],
-    "weapons": [{"name": "Barnacle Blade", "desc": "A corroded short sword."}],
-    "spell_scrolls": [{"name": "Scroll of Mending", "desc": "Repairs minor wounds.", "spell_effect": "heal"}],
-})
-
-_NPC_BATCH = json.dumps([
-    {"name": "Greta", "job": "innkeeper", "personality": "warm", "hobby": "cooking"},
-])
-
-_MONSTERS = json.dumps([
-    {
-        "name": "Goblin Scout",
-        "species": "goblin",
-        "hp": 25,
-        "ac": 12,
-        "damage_dice": "1d6",
-        "level": 1,
-        "abilities": [],
-        "elemental_affinity": "dark",
-        "description": "A sneaky goblin.",
-    },
-])
-
-_COMBAT_EVENT = json.dumps([
-    {"name": "Dock Ambush", "type": "combat", "description": "Goblins leap from the crates!"},
-])
-
-_PUZZLE_EVENT = json.dumps([
-    {
-        "name": "Locked Gate",
-        "type": "puzzle",
-        "description": "A rusty gate blocks the path.",
-        "choices": [
-            {"text": "Force it open", "stat": "STR", "dc": 12},
-            {"text": "Walk away", "auto_success": True},
-        ],
-    },
-])
-
-_GENERIC_EVENT = json.dumps([
-    {
-        "name": "Strange Merchant",
-        "type": "event",
-        "description": "A hooded figure beckons from an alley.",
-        "choices": [
-            {"text": "Approach cautiously", "stat": "CHA", "dc": 10},
-            {"text": "Ignore them", "auto_success": True},
-        ],
-    },
-])
-
-_QUEST = json.dumps({
-    "type": "fetch",
-    "title": "Lost Supplies",
-    "description": "Find the missing supply crate near the docks.",
-})
+        "type": "fetch",
+        "title": "Lost Supplies",
+        "description": "Find the missing supply crate near the docks.",
+    }
+)
 
 _SIMPLE_TREE = {
     "nodes": {
@@ -221,18 +238,22 @@ _QUEST_TREE = {
 _DIALOGUE_TREE = json.dumps(_SIMPLE_TREE)
 _QUEST_DIALOGUE_TREE = json.dumps(_QUEST_TREE)
 
-_DIALOGUE_CONTEXT = json.dumps([
-    {
-        "opening_greeting": "Hello, traveler!",
-        "exhausted_dialogue": "I have nothing more to say.",
-        "personality_notes": ["friendly", "cautious"],
-    },
-])
+_DIALOGUE_CONTEXT = json.dumps(
+    [
+        {
+            "opening_greeting": "Hello, traveler!",
+            "exhausted_dialogue": "I have nothing more to say.",
+            "personality_notes": ["friendly", "cautious"],
+        },
+    ]
+)
 
-_MUSIC_PROMPTS = json.dumps({
-    "combat": "epic orchestral battle theme",
-    "maze_village": "calm folk melody with acoustic guitar",
-})
+_MUSIC_PROMPTS = json.dumps(
+    {
+        "combat": "epic orchestral battle theme",
+        "maze_village": "calm folk melody with acoustic guitar",
+    }
+)
 
 _NARRATIVE_TEXT = "You step into the village. The air smells of salt and smoke."
 _PORTRAIT_TEXT = "A weathered innkeeper standing in a cozy tavern."
@@ -362,15 +383,30 @@ def _mock_llm(request: LLMRequest) -> str:
 def gen_dir(tmp_path):
     """Isolated DATA_DIR with all required subdirectories."""
     for sub in [
-        "story", "classes", "npcs", "events", "items",
-        "monsters", "quests", "rooms/room_0", "portraits",
-        "portraits/npcs", "portraits/events", "portraits/classes",
-        "portraits/monsters", "portraits/items", "portraits/maps",
-        "sfx", "music", "saves", "player",
+        "story",
+        "classes",
+        "npcs",
+        "events",
+        "items",
+        "monsters",
+        "quests",
+        "rooms/room_0",
+        "portraits",
+        "portraits/npcs",
+        "portraits/events",
+        "portraits/classes",
+        "portraits/monsters",
+        "portraits/items",
+        "portraits/maps",
+        "sfx",
+        "music",
+        "saves",
+        "player",
     ]:
         (tmp_path / sub).mkdir(parents=True, exist_ok=True)
     yield tmp_path
     from src.registry import registry
+
     registry._loaded = False
 
 
@@ -399,23 +435,28 @@ def _build_patches(d: str, gen_dir):
         patch("src.generate.llm_executor.generate", side_effect=_mock_llm),
         patch("src.generate.summary_agent.generate", side_effect=_mock_llm),
         # Image (3 functions + backend fallback)
-        patch("src.generate.image_client.generate_portraits_parallel_async",
-              new_callable=AsyncMock, return_value=None),
+        patch("src.generate.image_client.generate_portraits_parallel_async", new_callable=AsyncMock, return_value=None),
         patch("src.generate.image_client.generate_player_portrait", return_value=None),
         patch("src.generate.image_client.generate_and_save_image", return_value=True),
         patch("src.generate.image_client.get_image_backend", return_value=mock_img_backend),
         # Audio
-        patch("src.generate.music_client.generate_all_music_async",
-              new_callable=AsyncMock, return_value={}),
-        patch("src.generate.sfx_client.generate_all_sfx_async",
-              new_callable=AsyncMock, return_value={}),
+        patch("src.generate.music_client.generate_all_music_async", new_callable=AsyncMock, return_value={}),
+        patch("src.generate.sfx_client.generate_all_sfx_async", new_callable=AsyncMock, return_value={}),
         # Config module
-        patch.multiple("config",
-                       DATA_DIR=d, NUM_ROOMS=1, WORLD_SEED=9999,
-                       STORY_SEED="Test seed", GAME_MODE="offline_static",
-                       GENERATE_GUIDE=False, LLM_BACKEND="api",
-                       IMAGE_BACKEND="local", MUSIC_BACKEND="none",
-                       LLM_CONCURRENCY=1, STORY_CONTEXT_LIMIT=500),
+        patch.multiple(
+            "config",
+            DATA_DIR=d,
+            NUM_ROOMS=1,
+            WORLD_SEED=9999,
+            STORY_SEED="Test seed",
+            GAME_MODE="offline_static",
+            GENERATE_GUIDE=False,
+            LLM_BACKEND="api",
+            IMAGE_BACKEND="local",
+            MUSIC_BACKEND="none",
+            LLM_CONCURRENCY=1,
+            STORY_CONTEXT_LIMIT=500,
+        ),
         # Pipeline path constants (bound at import time)
         patch("src.generate.pipeline.DATA_DIR", d),
         patch("src.generate.pipeline.STORY_PATH", str(gen_dir / "story" / "story.json")),
@@ -450,6 +491,7 @@ def test_generate_world_produces_manifest(gen_dir):
 
     with stack:
         from src.generate.pipeline import generate_world
+
         generate_world()
 
     # --- File existence ---
@@ -474,9 +516,7 @@ def test_generate_world_produces_manifest(gen_dir):
     assert manifest["num_rooms"] == 1
     assert len(manifest["rooms"]) == 1
     assert "validation_report" in manifest
-    assert manifest["validation_report"]["status"] in (
-        "passed", "passed_with_warnings", "failed"
-    )
+    assert manifest["validation_report"]["status"] in ("passed", "passed_with_warnings", "failed")
     assert "generation_stats" in manifest
 
     # --- Classes ---

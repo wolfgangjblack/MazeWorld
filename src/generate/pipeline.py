@@ -437,7 +437,9 @@ def _phase3a_spell_pools(
         json.dump(spell_pools, f, indent=2)
 
     total = sum(len(v) for v in spell_pools.values())
-    logger.info("Generated spell pools: %d total spells across %d pools [%s]", total, len(spell_pools), _get_model_tag())
+    logger.info(
+        "Generated spell pools: %d total spells across %d pools [%s]", total, len(spell_pools), _get_model_tag()
+    )
     return spell_pools
 
 
@@ -548,7 +550,13 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
                 }
             )
 
-    logger.info("Room %d: %d items (%d placements). [%s]", room_idx, len(generated_items or {}), len(item_placements), _get_model_tag())
+    logger.info(
+        "Room %d: %d items (%d placements). [%s]",
+        room_idx,
+        len(generated_items or {}),
+        len(item_placements),
+        _get_model_tag(),
+    )
     return generated_items, item_placements
 
 
@@ -1347,7 +1355,14 @@ def _phase4a_events(
         quest_counter += 1
 
     story_count = sum(1 for q in quest_list if q.get("is_story_quest"))
-    logger.info("Room %d: %d events, %d quests (%d story). [%s]", room_idx, len(event_list), len(quest_list), story_count, _get_model_tag())
+    logger.info(
+        "Room %d: %d events, %d quests (%d story). [%s]",
+        room_idx,
+        len(event_list),
+        len(quest_list),
+        story_count,
+        _get_model_tag(),
+    )
     return event_list, quest_list
 
 
