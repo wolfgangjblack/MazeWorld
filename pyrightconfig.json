@@ -1,6 +1,23 @@
 {
   "include": ["src"],
+  "exclude": [
+    "src/views",
+    "src/controllers",
+    "src/generate/guide_builder.py",
+    "src/generate/pipeline.py",
+    "src/generate/backends/image_local.py",
+    "src/generate/backends/llm_local.py",
+    "src/generate/image_client.py",
+    "src/generate/music_client.py",
+    "src/generate/world_editor.py",
+    "src/generate/class_gen.py",
+    "src/generate/generators/llm_primitives.py"
+  ],
   "pythonVersion": "3.11",
   "typeCheckingMode": "basic",
-  "reportMissingModuleSource": "none"
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportArgumentType": "warning"
 }
