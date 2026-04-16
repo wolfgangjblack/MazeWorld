@@ -4,7 +4,7 @@ import os
 
 import pygame
 
-from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, resolve_data_path
 
 TITLE_COLOR = (220, 180, 60)
 TEXT_COLOR = (200, 200, 200)
@@ -50,9 +50,10 @@ class RoomIntroView:
         self._line_h = font.get_linesize()
         self._max_visible = max(1, (self._box_h - 30) // self._line_h)
 
-        if portrait_path and os.path.exists(portrait_path):
+        resolved_portrait = resolve_data_path(portrait_path)
+        if resolved_portrait and os.path.exists(resolved_portrait):
             try:
-                img = pygame.image.load(portrait_path)
+                img = pygame.image.load(resolved_portrait)
                 self.bg_image = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
             except Exception:
                 pass

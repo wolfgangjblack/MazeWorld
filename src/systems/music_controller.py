@@ -18,6 +18,8 @@ import os
 
 import pygame
 
+from config import DATA_DIR, resolve_data_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -100,9 +102,9 @@ class MusicController:
         if track_name == self._current:
             return
 
-        path = self._tracks.get(track_name)
+        path = resolve_data_path(self._tracks.get(track_name))
         if not path or not os.path.exists(path):
-            fallback = os.path.join("data", "music", f"{track_name}.mp3")
+            fallback = os.path.join(DATA_DIR, "music", f"{track_name}.mp3")
             if os.path.exists(fallback):
                 path = fallback
                 self._tracks[track_name] = path

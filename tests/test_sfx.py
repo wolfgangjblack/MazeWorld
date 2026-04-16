@@ -11,8 +11,24 @@ No API calls, no actual audio files, no pygame display required.
 
 from unittest.mock import patch
 
+import pytest
+
 from src.generate.sfx_client import FIXED_SFX_PROMPTS, build_full_sfx_prompt_dict
 from src.systems.sfx_controller import SFXController
+
+
+@pytest.fixture
+def isolated_data_dir(tmp_path, monkeypatch):
+    """Point SFXController's DATA_DIR at an empty tmp dir.
+
+    Without this, the on-disk fallback (`DATA_DIR/sfx/<name>.mp3`) silently
+    succeeds against the real repo's generated audio files, defeating tests
+    that intend to exercise the "no audio available" path.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.systems.sfx_controller.DATA_DIR", str(tmp_path))
+    return tmp_path
+
 
 # ---------------------------------------------------------------------------
 # FIXED_SFX_PROMPTS: structural contract
@@ -133,8 +149,7 @@ class TestSFXControllerFallback:
         sfx = SFXController({"dice_roll": str(mp3)})
         assert sfx.has_sfx("dice_roll") is True
 
-    def test_play_ambience_silent_on_missing_file(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
+    def test_play_ambience_silent_on_missing_file(self, isolated_data_dir):
         sfx = SFXController({})
         sfx.play_ambience("village")
         assert sfx.current_ambience is None
