@@ -39,11 +39,13 @@ class InventoryManager:
         """Return inventory sorted: equipped weapon first, then food/drink/tool/scroll/weapon."""
         equipped = self._player.equipped_weapon
         items = list(self._inventory.values())
-        items.sort(key=lambda it: (
-            0 if it.name == equipped else 1,
-            self._CATEGORY_ORDER.get(it.category, 6),
-            it.name,
-        ))
+        items.sort(
+            key=lambda it: (
+                0 if it.name == equipped else 1,
+                self._CATEGORY_ORDER.get(it.category, 6),
+                it.name,
+            )
+        )
         return [(item.name, item.quantity) for item in items]
 
     def use_selected(self, selected_index: int) -> str:

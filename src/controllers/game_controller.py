@@ -638,7 +638,7 @@ class GameController:
         if not taunt:
             taunt = f"{npc.name} challenges you to fight!"
         self._pending_npc_combat = npc
-        self.dialogue_box.set_item_message(f"{npc.name}: \"{taunt}\"")
+        self.dialogue_box.set_item_message(f'{npc.name}: "{taunt}"')
         self.item_message_active = True
 
     def _handle_npc_interaction(self, npc):
@@ -824,11 +824,7 @@ class GameController:
                 elif isinstance(npc, AggressiveNPC):
                     npc.update_position(self.maze, (self.player.x, self.player.y), current_time)
 
-        if (
-            not self.combat_handler.active
-            and not self.dialogue_box.event_active
-            and not self.item_message_active
-        ):
+        if not self.combat_handler.active and not self.dialogue_box.event_active and not self.item_message_active:
             for npc in self.npcs:
                 if (
                     isinstance(npc, AggressiveNPC)
