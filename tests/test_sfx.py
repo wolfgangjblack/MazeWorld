@@ -29,6 +29,7 @@ def isolated_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("src.systems.sfx_controller.DATA_DIR", str(tmp_path))
     return tmp_path
 
+
 # ---------------------------------------------------------------------------
 # FIXED_SFX_PROMPTS: structural contract
 # ---------------------------------------------------------------------------
