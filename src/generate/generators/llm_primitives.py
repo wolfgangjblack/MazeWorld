@@ -152,10 +152,17 @@ def generate_story_quest_primitive(
     return _parse_json_response(raw)
 
 
-def generate_dialogue_tree(npc_personality: dict, quest_context: dict | None = None) -> dict:
+def generate_dialogue_tree(
+    npc_personality: dict, quest_context: dict | None = None, feedback: list[str] | None = None
+) -> dict:
     """Generate a multiple-choice dialogue tree for offline-static mode."""
     prompts = get_prompt_set()
     request = prompts.dialogue_tree_generation(npc_personality, quest_context)
+    if feedback:
+        request.user_message += (
+            "\n\nPrevious attempt failed validation:\n"
+            + "\n".join(f"- {r}" for r in feedback)
+        )
     raw = generate(request)
     return _parse_json_response(raw)
 

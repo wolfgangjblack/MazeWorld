@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import re
 
 from config import GAME_MODE
 from src.generate.llm_client import generate
@@ -254,13 +255,28 @@ def has_dialogue_choices(npc) -> bool:
     return bool(node.get("choices"))
 
 
+_EMOTE_RE = re.compile(r"^\*[^*]+\*$")
+
+
 def _extract_response(raw: str) -> str:
-    """Extract the usable NPC response from raw LLM output."""
+    """Extract the usable NPC response from raw LLM output.
+
+    Strips lines that are entirely asterisk-wrapped emotes (e.g. ``*sighs*``).
+    Mixed lines like ``*nods* Aye, that's true.`` are kept because the regex
+    only matches lines that start and end with ``*`` with nothing after.
+    Returns empty string if all lines are emotes so the caller can fall back
+    to ``_LLM_FAILURE_RESPONSE``.
+    """
     if "##Output:" in raw:
         response = raw.split("##Output:")[-1].strip()
     else:
         response = raw.strip()
-    return response.split("\n")[0].strip()
+    lines = response.split("\n")
+    dialogue_lines = [
+        ln.strip() for ln in lines
+        if ln.strip() and not _EMOTE_RE.fullmatch(ln.strip())
+    ]
+    return " ".join(dialogue_lines) if dialogue_lines else ""
 
 
 def _extract_response_with_cha(raw: str) -> tuple[str, dict | None]:

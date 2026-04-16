@@ -41,20 +41,42 @@ class LlamaPromptSet(PromptSet):
             max_tokens=40,
         )
 
-    def conversation_identity(self, name: str, job: str, personality: str, hobby: str, env: str, env_name: str) -> str:
-        return (
+    def conversation_identity(
+        self,
+        name: str,
+        job: str,
+        personality: str,
+        hobby: str,
+        env: str,
+        env_name: str,
+        personality_notes: list[str] | None = None,
+        dialogue_context: str | None = None,
+    ) -> str:
+        base = (
             f"##sys: You are playing a video game character. You are {name}, a {job} in a "
             f"{env} called {env_name}. This environment is in a fantasy setting, so limit "
             f"discussions to the environment, the npc's job, and the npc's hobbies. The npc's "
             f"personality is {personality}. The npc's hobbies are {hobby}.\n\n"
             "Always follow these rules:\n"
-            "1. do not speak for the player\n"
-            "2. do not Roleplay heavily\n"
-            "3. do not break the fourth wall\n"
-            "4. do not hallucinate\n"
-            "5. converse with the NPC but maintain conversational context\n"
-            "6. Only generate one response at a time"
+            "1. Respond ONLY with spoken dialogue — what you say out loud to the player\n"
+            "2. NEVER use asterisks, narration, or action descriptions "
+            "(no *looks around*, no *sighs*, no stage directions)\n"
+            "3. do not speak for the player\n"
+            "4. do not break the fourth wall\n"
+            "5. do not hallucinate\n"
+            "6. converse with the NPC but maintain conversational context\n"
+            "7. Only generate one spoken response at a time"
         )
+        if personality_notes:
+            base += "\n\nThings you know and can talk about:\n" + "\n".join(
+                f"- {note}" for note in personality_notes
+            )
+        if dialogue_context:
+            base += (
+                "\n\nYour voice and concerns (draw on this tone and these topics):\n"
+                + dialogue_context
+            )
+        return base
 
     def npc_greeting(self, name: str, identity: str) -> LLMRequest:
         return LLMRequest(
@@ -287,9 +309,61 @@ class LlamaPromptSet(PromptSet):
         )
 
     def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest:
-        context = str({"npc": npc_personality, "quest": quest_context})
+        import json as _json
 
-        if quest_context:
+        context = _json.dumps({"npc": npc_personality, "quest": quest_context})
+
+        _choice_note = (
+            "\nEach node should have 1-4 player choices. Vary the count — "
+            "important branching moments deserve more options, while transitional "
+            "moments can have fewer."
+        )
+
+        if quest_context and quest_context.get("quest_type") == "combat":
+            system = (
+                "You generate dialogue trees for a HOSTILE NPC in a fantasy game. "
+                "This NPC is an enemy the player must defeat in combat. "
+                "Output JSON with THREE trees:\n"
+                '1. "incomplete" — taunt/threat before combat (1-2 nodes). Aggressive, in-character.\n'
+                '2. "complete_success" — after player defeats this NPC (2-3 nodes). Yield, share info.\n'
+                '3. "complete_failure" — if player fled (1-2 nodes). Taunt them for running.\n'
+                'Format: {"incomplete": {"nodes": {"start": {"prompt": ..., "choices": [...]}, '
+                '"end": {"prompt": ..., "choices": []}}}, '
+                '"complete_success": {"nodes": {...}}, "complete_failure": {"nodes": {...}}}. '
+                "Use the NPC's personality, job, and backstory to shape their voice. "
+                "Stay in character." + _choice_note
+            )
+            examples = [
+                (
+                    _json.dumps({
+                        "npc": {"name": "Captain Marlowe", "job": "village guard captain",
+                                "personality": "battle-hardened but overwhelmed",
+                                "hobby": "whittling ships in bottles"},
+                        "quest": {"quest_type": "combat", "title": "Prove Your Worth",
+                                  "description": "Defeat the guard captain to earn his trust"},
+                    }),
+                    _json.dumps({
+                        "incomplete": {"nodes": {
+                            "start": {"prompt": "Wait, what are you doing? Those are MY guards! I won't have some outsider undermining my authority when my village is burning!",
+                                      "choices": [{"text": "I'm here to help!", "next_node_id": "challenge"},
+                                                   {"text": "Your men are scattered.", "next_node_id": "challenge"}]},
+                            "challenge": {"prompt": "I've held this harbor for fifteen years! Stand down or face the consequences!", "choices": []},
+                        }},
+                        "complete_success": {"nodes": {
+                            "start": {"prompt": "Damn... you fight like a veteran. I was wrong to challenge you.",
+                                      "choices": [{"text": "We need to work together.", "next_node_id": "end"}]},
+                            "end": {"prompt": "The lighthouse is the key. There's a smuggler's tunnel behind it. Together, we might pull this off.", "choices": []},
+                        }},
+                        "complete_failure": {"nodes": {
+                            "start": {"prompt": "Running away? Just like I thought — another coward!",
+                                      "choices": [{"text": "I'll return stronger.", "next_node_id": "end"}]},
+                            "end": {"prompt": "The goblins will have razed this village by then!", "choices": []},
+                        }},
+                    }),
+                ),
+            ]
+            max_tokens = 1000
+        elif quest_context:
             system = (
                 "You generate dialogue trees for a quest NPC. Output JSON with THREE trees:\n"
                 '1. "incomplete" — while quest is active (3-5 nodes). Introduce NPC, describe quest.\n'
@@ -299,21 +373,73 @@ class LlamaPromptSet(PromptSet):
                 '"end": {"prompt": ..., "choices": []}}}, '
                 '"complete_success": {"nodes": {...}}, "complete_failure": {"nodes": {...}}}. '
                 "Use the NPC's personality, hobby, and personality_notes to shape their voice. "
-                "Stay in character."
+                "Stay in character." + _choice_note
             )
+            examples = [
+                (
+                    _json.dumps({
+                        "npc": {"name": "Tom", "job": "dock worker",
+                                "personality": "breathless and urgent",
+                                "hobby": "collecting unusual shells"},
+                        "quest": {"quest_type": "fetch", "title": "Retrieve the Signal Horn",
+                                  "description": "Recover the stolen warning horn from the pier caves"},
+                    }),
+                    _json.dumps({
+                        "incomplete": {"nodes": {
+                            "start": {"prompt": "I saw them take the signal horn — it's the only way to warn the ships!",
+                                      "choices": [{"text": "Where did they take it?", "next_node_id": "details"},
+                                                   {"text": "I'll get it back.", "next_node_id": "end"}]},
+                            "details": {"prompt": "The big one carried it toward the pier caves. I'd go myself but my leg's twisted.",
+                                        "choices": [{"text": "I'll find it.", "next_node_id": "end"}]},
+                            "end": {"prompt": "Be careful down there. The horn comes first.", "choices": []},
+                        }},
+                        "complete_success": {"nodes": {
+                            "start": {"prompt": "The horn! You got it back! Three long blasts — the old storm warning.",
+                                      "choices": [{"text": "Will it reach the fleet?", "next_node_id": "end"}]},
+                            "end": {"prompt": "The sound carries for miles. You just saved every soul on those boats.", "choices": []},
+                        }},
+                        "complete_failure": {"nodes": {
+                            "start": {"prompt": "You couldn't find it? The fleet comes in at dawn...",
+                                      "choices": [{"text": "I'm sorry.", "next_node_id": "end"}]},
+                            "end": {"prompt": "At least you tried. I'll figure something out.", "choices": []},
+                        }},
+                    }),
+                ),
+            ]
             max_tokens = 1000
         else:
             system = (
                 "You generate dialogue trees for fantasy game NPCs. "
                 "Output a JSON: {nodes: {start: {prompt, choices: [{text, next_node_id}]}, ...}}. "
                 "Use the NPC's personality, hobby, and personality_notes to shape their voice. "
-                "3-5 nodes. Stay in character."
+                "3-5 nodes. Stay in character." + _choice_note
             )
+            examples = [
+                (
+                    _json.dumps({
+                        "npc": {"name": "Kendra", "job": "tavern keeper",
+                                "personality": "maternal and protective",
+                                "hobby": "brewing ales with coastal herbs"},
+                        "quest": None,
+                    }),
+                    _json.dumps({"nodes": {
+                        "start": {"prompt": "Another stranger looking for shelter? There's still room by the fire.",
+                                  "choices": [{"text": "What happened here?", "next_node_id": "info"},
+                                               {"text": "Is anyone hurt?", "next_node_id": "concern"}]},
+                        "info": {"prompt": "Came out of nowhere. The fog rolled in wrong and they were everywhere.",
+                                 "choices": [{"text": "Where were they last seen?", "next_node_id": "end"}]},
+                        "concern": {"prompt": "Cuts and bruises mostly. The children are terrified. I've been brewing tea to calm them.",
+                                    "choices": [{"text": "I'll help.", "next_node_id": "end"},
+                                                 {"text": "Stay safe.", "next_node_id": "end"}]},
+                        "end": {"prompt": "Bless you. Come back anytime — my door stays open tonight.", "choices": []},
+                    }}),
+                ),
+            ]
             max_tokens = 400
 
         return LLMRequest(
             system=system,
-            examples=[],
+            examples=examples,
             user_message=context,
             max_tokens=max_tokens,
         )

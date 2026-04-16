@@ -101,14 +101,14 @@ class TestGenerateNpcResponse:
 class TestExtractResponse:
     def test_strips_output_prefix(self):
         raw = "preamble\n##Output: Hello there!\nmore stuff"
-        assert _extract_response(raw) == "Hello there!"
+        assert _extract_response(raw) == "Hello there! more stuff"
 
     def test_plain_text(self):
         assert _extract_response("Just a response") == "Just a response"
 
-    def test_takes_first_line_only(self):
+    def test_joins_multiline(self):
         raw = "Line one\nLine two\nLine three"
-        assert _extract_response(raw) == "Line one"
+        assert _extract_response(raw) == "Line one Line two Line three"
 
     def test_strips_whitespace(self):
         assert _extract_response("  padded  ") == "padded"
@@ -116,6 +116,18 @@ class TestExtractResponse:
     def test_output_prefix_takes_last_occurrence(self):
         raw = "##Output: first\n##Output: second"
         assert _extract_response(raw) == "second"
+
+    def test_strips_emote_only_lines(self):
+        raw = "*looks around nervously*\nAye, the fog was wrong tonight."
+        assert _extract_response(raw) == "Aye, the fog was wrong tonight."
+
+    def test_keeps_mixed_emote_lines(self):
+        raw = '*nods* "That is the truth."'
+        assert _extract_response(raw) == '*nods* "That is the truth."'
+
+    def test_all_emotes_returns_empty(self):
+        raw = "*sighs heavily*\n*crosses arms*"
+        assert _extract_response(raw) == ""
 
 
 # ---------------------------------------------------------------------------

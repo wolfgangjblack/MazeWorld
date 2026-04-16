@@ -1386,41 +1386,95 @@ def _phase4b_dialogue(
 
     # Step B: dialogue trees (pre-generated for offline_static; stored for all modes)
     from src.generate.generators.llm_primitives import generate_dialogue_tree
+    from src.generate.pipeline_utils import _retry_with_feedback
+
+    def _validate_dialogue_tree(tree: dict, has_quest: bool) -> tuple[bool, list[str]]:
+        """Structurally validate a dialogue tree returned by the LLM."""
+        reasons: list[str] = []
+        if not isinstance(tree, dict):
+            return False, ["result is not a dict"]
+        if "error" in tree:
+            return False, [tree["error"]]
+
+        def _check_subtree(subtree: dict, label: str) -> None:
+            if not isinstance(subtree, dict) or "nodes" not in subtree:
+                reasons.append(f'{label}: missing "nodes" dict')
+                return
+            nodes = subtree["nodes"]
+            if "start" not in nodes:
+                reasons.append(f'{label}: missing "start" node')
+                return
+            for nid, node in nodes.items():
+                if not isinstance(node, dict):
+                    reasons.append(f"{label}: node '{nid}' is not a dict")
+                    continue
+                if "prompt" not in node:
+                    reasons.append(f"{label}: node '{nid}' missing 'prompt'")
+                if "choices" not in node:
+                    reasons.append(f"{label}: node '{nid}' missing 'choices'")
+                    continue
+                for choice in node["choices"]:
+                    target = choice.get("next_node_id")
+                    if target and target not in nodes:
+                        reasons.append(f"{label}: choice in '{nid}' references missing node '{target}'")
+
+        if has_quest:
+            for key in ("incomplete", "complete_success", "complete_failure"):
+                if key not in tree:
+                    reasons.append(f'missing top-level key "{key}"')
+                else:
+                    _check_subtree(tree[key], key)
+        else:
+            _check_subtree(tree, "tree")
+
+        return (len(reasons) == 0, reasons)
+
+    def _build_quest_ctx(npc_dict: dict) -> dict | None:
+        if not npc_dict.get("quest_id"):
+            return None
+        quest_obj = next((q for q in quest_list if q["id"] == npc_dict["quest_id"]), None)
+        if not quest_obj:
+            return None
+        return {
+            "quest_id": quest_obj["id"],
+            "quest_type": quest_obj["type"],
+            "title": quest_obj.get("title", ""),
+            "description": quest_obj.get("description", ""),
+            "success_dialogue": quest_obj.get("success_dialogue", ""),
+            "failure_dialogue": quest_obj.get("failure_dialogue", ""),
+            "room_story": room_story,
+            "story_context": story_context[:1000],
+        }
 
     for npc in npc_pool:
-        try:
-            quest_ctx = None
-            if npc.get("quest_id"):
-                quest_obj = next((q for q in quest_list if q["id"] == npc["quest_id"]), None)
-                if quest_obj:
-                    quest_ctx = {
-                        "quest_id": quest_obj["id"],
-                        "quest_type": quest_obj["type"],
-                        "title": quest_obj.get("title", ""),
-                        "description": quest_obj.get("description", ""),
-                        "success_dialogue": quest_obj.get("success_dialogue", ""),
-                        "failure_dialogue": quest_obj.get("failure_dialogue", ""),
-                        "room_story": room_story,
-                        "story_context": story_context[:1000],
-                    }
-            tree = generate_dialogue_tree(npc, quest_ctx)
-            if "error" in tree:
-                continue
-            if "incomplete" in tree:
-                inc = tree["incomplete"]
-                if isinstance(inc, dict) and "nodes" in inc:
-                    npc["dialogue_tree"] = inc
-                    npc["dialogue_tree_incomplete"] = inc
-                comp = tree.get("complete_success")
-                if isinstance(comp, dict) and "nodes" in comp:
-                    npc["dialogue_tree_complete"] = comp
-                fail = tree.get("complete_failure")
-                if isinstance(fail, dict) and "nodes" in fail:
-                    npc["dialogue_tree_failed"] = fail
-            elif "nodes" in tree:
-                npc["dialogue_tree"] = tree
-        except Exception as e:
-            logger.warning("Room %d NPC %s dialogue tree failed: %s", room_idx, npc.get("name"), e)
+        has_quest = bool(npc.get("quest_id"))
+        quest_ctx = _build_quest_ctx(npc)
+
+        def _gen(feedback=None, _npc=npc, _ctx=quest_ctx):
+            return generate_dialogue_tree(_npc, _ctx, feedback=feedback)
+
+        tree = _retry_with_feedback(
+            generate_fn=_gen,
+            validate_fn=lambda t, _hq=has_quest: _validate_dialogue_tree(t, _hq),
+            fallback={"error": "exhausted retries"},
+            label=f"dialogue_tree:{npc.get('name', '?')}",
+        )
+
+        if "error" in tree:
+            continue
+        if "incomplete" in tree:
+            inc = tree["incomplete"]
+            if isinstance(inc, dict) and "nodes" in inc:
+                npc["dialogue_tree"] = inc
+                npc["dialogue_tree_incomplete"] = inc
+            comp = tree.get("complete_success")
+            if isinstance(comp, dict) and "nodes" in comp:
+                npc["dialogue_tree_complete"] = comp
+            fail = tree.get("complete_failure")
+            if isinstance(fail, dict) and "nodes" in fail:
+                npc["dialogue_tree_failed"] = fail
+        elif "nodes" in tree:
+            npc["dialogue_tree"] = tree
 
     logger.info("Room %d: Dialogue generated for %d NPCs.", room_idx, len(npc_pool))
     return npc_pool

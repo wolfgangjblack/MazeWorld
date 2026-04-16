@@ -27,18 +27,41 @@ class ClaudePromptSet(PromptSet):
             max_tokens=60,
         )
 
-    def conversation_identity(self, name: str, job: str, personality: str, hobby: str, env: str, env_name: str) -> str:
-        return (
+    def conversation_identity(
+        self,
+        name: str,
+        job: str,
+        personality: str,
+        hobby: str,
+        env: str,
+        env_name: str,
+        personality_notes: list[str] | None = None,
+        dialogue_context: str | None = None,
+    ) -> str:
+        base = (
             f"You are {name}, a {job} in a fantasy {env} called {env_name}. "
             f"Your personality is {personality}. Your hobbies include {hobby}.\n\n"
             "Rules:\n"
+            "- Respond ONLY with spoken dialogue — what you say out loud to the player\n"
+            "- NEVER use asterisks, narration, or action descriptions "
+            "(no *looks around*, no *sighs*, no stage directions)\n"
             "- Stay in character at all times\n"
             "- Do not speak for the player\n"
             "- Do not break the fourth wall\n"
             "- Keep responses concise (1-3 sentences)\n"
             "- Only discuss topics relevant to your environment, job, and hobbies\n"
-            "- Generate exactly one response per turn"
+            "- Generate exactly one spoken response per turn"
         )
+        if personality_notes:
+            base += "\n\nThings you know and can talk about:\n" + "\n".join(
+                f"- {note}" for note in personality_notes
+            )
+        if dialogue_context:
+            base += (
+                "\n\nYour voice and concerns (draw on this tone and these topics):\n"
+                + dialogue_context
+            )
+        return base
 
     def npc_greeting(self, name: str, identity: str) -> LLMRequest:
         return LLMRequest(
@@ -270,6 +293,12 @@ class ClaudePromptSet(PromptSet):
     def dialogue_tree_generation(self, npc_personality: dict, quest_context: dict | None = None) -> LLMRequest:
         context = json.dumps({"npc": npc_personality, "quest": quest_context})
 
+        _choice_note = (
+            "\n\nEach node should have 1-4 player choices. Vary the count — "
+            "important branching moments deserve more options, while transitional "
+            "moments can have fewer."
+        )
+
         if quest_context and quest_context.get("quest_type") == "combat":
             system = (
                 "You generate dialogue trees for a HOSTILE NPC in a fantasy game. "
@@ -293,8 +322,61 @@ class ClaudePromptSet(PromptSet):
                 '"complete_success": {"nodes": {...}}, '
                 '"complete_failure": {"nodes": {...}}}.\n\n'
                 "Use the NPC's personality, job, and backstory to shape their voice. "
-                "Stay in character. Reference the story context." + _NO_FENCES
+                "Stay in character. Reference the story context." + _choice_note + _NO_FENCES
             )
+            examples = [
+                (
+                    json.dumps({
+                        "npc": {"name": "Captain Marlowe", "job": "village guard captain",
+                                "personality": "battle-hardened but overwhelmed",
+                                "hobby": "whittling ships in bottles"},
+                        "quest": {"quest_type": "combat", "title": "Prove Your Worth",
+                                  "description": "Defeat the guard captain to earn his trust"},
+                    }),
+                    json.dumps({
+                        "incomplete": {"nodes": {
+                            "start": {
+                                "prompt": "Wait, what are you doing? Those are MY guards you're interfering with! I don't know who you are, but I won't have some outsider undermining my authority when my village is burning!",
+                                "choices": [
+                                    {"text": "I'm here to help defend the village!", "next_node_id": "challenge"},
+                                    {"text": "Your men are scattered and useless.", "next_node_id": "challenge"},
+                                ],
+                            },
+                            "challenge": {
+                                "prompt": "Help? HELP?! I've held this harbor for fifteen years without your interference! Stand down or face the consequences!",
+                                "choices": [],
+                            },
+                        }},
+                        "complete_success": {"nodes": {
+                            "start": {
+                                "prompt": "Damn... you fight like a seasoned veteran. I was wrong to challenge you when the village needs every sword it can get.",
+                                "choices": [
+                                    {"text": "We need to work together to save the village.", "next_node_id": "alliance"},
+                                    {"text": "Tell me about the goblin positions.", "next_node_id": "tactical"},
+                                ],
+                            },
+                            "alliance": {
+                                "prompt": "Aye, you're right. The goblins have taken the lighthouse and are signaling something out at sea. Will you help me coordinate the counterattack?",
+                                "choices": [{"text": "What's our tactical situation?", "next_node_id": "tactical"}],
+                            },
+                            "tactical": {
+                                "prompt": "The lighthouse is the key. There's a hidden passage through the old smuggler's tunnel that leads behind it. Together, we might just pull this off.",
+                                "choices": [],
+                            },
+                        }},
+                        "complete_failure": {"nodes": {
+                            "start": {
+                                "prompt": "Running away, are you? Just like I thought — another coward who can't handle real combat!",
+                                "choices": [{"text": "I'll return when I'm stronger.", "next_node_id": "taunt"}],
+                            },
+                            "taunt": {
+                                "prompt": "Stronger? Ha! The goblins will have razed this village by the time you find your courage!",
+                                "choices": [],
+                            },
+                        }},
+                    }),
+                ),
+            ]
             max_tokens = 1000
         elif quest_context:
             system = (
@@ -315,8 +397,66 @@ class ClaudePromptSet(PromptSet):
                 '"complete_success": {"nodes": {...}}, '
                 '"complete_failure": {"nodes": {...}}}.\n\n'
                 "Use the NPC's personality, hobby, and personality_notes to shape their voice and word choice. "
-                "Stay in character. Reference the quest title and story context." + _NO_FENCES
+                "Stay in character. Reference the quest title and story context." + _choice_note + _NO_FENCES
             )
+            examples = [
+                (
+                    json.dumps({
+                        "npc": {"name": "Tom", "job": "dock worker with crucial intelligence",
+                                "personality": "breathless and urgent",
+                                "hobby": "collecting unusual shells"},
+                        "quest": {"quest_type": "fetch", "title": "Retrieve the Signal Horn",
+                                  "description": "Recover the stolen warning horn from the pier caves before dawn"},
+                    }),
+                    json.dumps({
+                        "incomplete": {"nodes": {
+                            "start": {
+                                "prompt": "I saw them take the signal horn from the watchtower — it's the only way to warn the ships at sea! Without it, every fishing boat out there sails right into an ambush.",
+                                "choices": [
+                                    {"text": "Where did they take it?", "next_node_id": "details"},
+                                    {"text": "I'll get it back.", "next_node_id": "urgency"},
+                                    {"text": "How many goblins were there?", "next_node_id": "details"},
+                                ],
+                            },
+                            "details": {
+                                "prompt": "The big one with the scarred snout carried it toward the pier caves. I'd go myself but my leg's twisted from the fall off the dock.",
+                                "choices": [{"text": "I'll find it.", "next_node_id": "end"}],
+                            },
+                            "urgency": {
+                                "prompt": "Hurry — the dawn tide brings the fishing fleet home and they won't know what's waiting. That horn is the only warning they'll get.",
+                                "choices": [
+                                    {"text": "I'll be back with it.", "next_node_id": "end"},
+                                    {"text": "Anything else I should know?", "next_node_id": "details"},
+                                ],
+                            },
+                            "end": {
+                                "prompt": "Be careful down there. And if you see a red-marked shell on the ground, that's my lucky charm. But the horn comes first.",
+                                "choices": [],
+                            },
+                        }},
+                        "complete_success": {"nodes": {
+                            "start": {
+                                "prompt": "The horn! You actually got it back! Give it here — three long blasts, the old storm warning. Every captain at sea knows what that means.",
+                                "choices": [{"text": "Will it reach the fleet?", "next_node_id": "end"}],
+                            },
+                            "end": {
+                                "prompt": "The sound carries for miles over open water. You just saved every soul on those boats.",
+                                "choices": [],
+                            },
+                        }},
+                        "complete_failure": {"nodes": {
+                            "start": {
+                                "prompt": "You couldn't find it? The fleet comes in at dawn... maybe I can rig something from the old bell tower, if my leg holds.",
+                                "choices": [{"text": "I'm sorry, I tried.", "next_node_id": "end"}],
+                            },
+                            "end": {
+                                "prompt": "Don't beat yourself up. At least you tried, which is more than most have done tonight.",
+                                "choices": [],
+                            },
+                        }},
+                    }),
+                ),
+            ]
             max_tokens = 1000
         else:
             system = (
@@ -327,13 +467,48 @@ class ClaudePromptSet(PromptSet):
                 '"node2": {"prompt": "...", "choices": [...]}, '
                 '"end": {"prompt": "Farewell!", "choices": []}}}. '
                 "Use the NPC's personality, hobby, and personality_notes to shape their voice and word choice. "
-                "Keep it 3-5 nodes deep. Stay in character." + _NO_FENCES
+                "Keep it 3-5 nodes deep. Stay in character." + _choice_note + _NO_FENCES
             )
+            examples = [
+                (
+                    json.dumps({
+                        "npc": {"name": "Kendra", "job": "tavern keeper sheltering refugees",
+                                "personality": "maternal and protective",
+                                "hobby": "brewing ales with coastal herbs"},
+                        "quest": None,
+                    }),
+                    json.dumps({"nodes": {
+                        "start": {
+                            "prompt": "Another stranger looking for shelter? Well, you picked the right place. Half the village is crammed in here, but there's still room by the fire.",
+                            "choices": [
+                                {"text": "What happened here?", "next_node_id": "info"},
+                                {"text": "Is anyone hurt?", "next_node_id": "concern"},
+                            ],
+                        },
+                        "info": {
+                            "prompt": "Came out of nowhere, they did. One moment the harbor was quiet, next the fog rolled in wrong. I've been counting heads — three families still unaccounted for.",
+                            "choices": [{"text": "Where were they last seen?", "next_node_id": "end"}],
+                        },
+                        "concern": {
+                            "prompt": "Cuts and bruises mostly. Old Harlan took a bad knock. The children are the worst off — not injured, just terrified. I've been brewing a calming tea to settle their nerves.",
+                            "choices": [
+                                {"text": "I'll see what I can do.", "next_node_id": "end"},
+                                {"text": "Do you need any supplies?", "next_node_id": "end"},
+                                {"text": "Stay safe, keep the doors barred.", "next_node_id": "end"},
+                            ],
+                        },
+                        "end": {
+                            "prompt": "Bless you for helping. If you need a warm drink or a bandage, come back anytime — my door stays open tonight.",
+                            "choices": [],
+                        },
+                    }}),
+                ),
+            ]
             max_tokens = 400
 
         return LLMRequest(
             system=system,
-            examples=[],
+            examples=examples,
             user_message=context,
             max_tokens=max_tokens,
         )

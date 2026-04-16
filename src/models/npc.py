@@ -67,6 +67,28 @@ class NPC(BaseModel):
         self.job = self.job or random.choice(JOBS[self.environment])
         self.hobby = self.hobby or random.choice(HOBBIES[self.environment])
 
+    def _build_dialogue_context(self) -> str | None:
+        """Extract prompt text from dialogue trees into a compact summary for the LLM."""
+        sections = []
+
+        def _extract_prompts(tree: dict | None, label: str) -> None:
+            if not tree or not isinstance(tree, dict):
+                return
+            nodes = tree.get("nodes", {})
+            prompts_text = [n.get("prompt", "") for n in nodes.values() if isinstance(n, dict) and n.get("prompt")]
+            if prompts_text:
+                joined = " ".join(p[:120] for p in prompts_text[:3])
+                sections.append(f'{label}: "{joined}"')
+
+        if self.dialogue_tree_incomplete:
+            _extract_prompts(self.dialogue_tree_incomplete, "Before quest")
+            _extract_prompts(self.dialogue_tree_complete, "After success")
+            _extract_prompts(self.dialogue_tree_failed, "After failure")
+        elif self.dialogue_tree:
+            _extract_prompts(self.dialogue_tree, "Conversation")
+
+        return "\n".join(sections) if sections else None
+
     def build_identity(self):
         """Build the conversation identity using the prompt library."""
         if self.identity:
@@ -79,6 +101,8 @@ class NPC(BaseModel):
             hobby=self.hobby,
             env=self.environment,
             env_name=self.environment_name or self.environment or "Unknown",
+            personality_notes=self.personality_notes or None,
+            dialogue_context=self._build_dialogue_context(),
         )
 
     def add_turn(self, role: str, content: str):

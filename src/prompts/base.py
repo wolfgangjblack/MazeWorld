@@ -26,7 +26,15 @@ class PromptSet(ABC):
 
     @abstractmethod
     def conversation_identity(
-        self, name: str, job: str, personality: str, hobby: str, env: str, env_name: str
+        self,
+        name: str,
+        job: str,
+        personality: str,
+        hobby: str,
+        env: str,
+        env_name: str,
+        personality_notes: list[str] | None = None,
+        dialogue_context: str | None = None,
     ) -> str: ...
 
     @abstractmethod
