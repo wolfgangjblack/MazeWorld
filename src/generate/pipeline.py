@@ -1731,8 +1731,7 @@ def _phase7_portraits(
             tasks.append(generate_portraits_parallel_async(event_db, save_dir, prefix))
         tasks.append(
             generate_portraits_parallel_async(
-                class_portrait_db, os.path.join(DATA_DIR, "portraits", "classes"),
-                 "class_"
+                class_portrait_db, os.path.join(DATA_DIR, "portraits", "classes"), "class_"
             )
         )
         for mon_db, save_dir, prefix in monster_batches:
