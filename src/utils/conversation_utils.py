@@ -272,10 +272,7 @@ def _extract_response(raw: str) -> str:
     else:
         response = raw.strip()
     lines = response.split("\n")
-    dialogue_lines = [
-        ln.strip() for ln in lines
-        if ln.strip() and not _EMOTE_RE.fullmatch(ln.strip())
-    ]
+    dialogue_lines = [ln.strip() for ln in lines if ln.strip() and not _EMOTE_RE.fullmatch(ln.strip())]
     return " ".join(dialogue_lines) if dialogue_lines else ""
 
 

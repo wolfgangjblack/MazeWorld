@@ -159,10 +159,7 @@ def generate_dialogue_tree(
     prompts = get_prompt_set()
     request = prompts.dialogue_tree_generation(npc_personality, quest_context)
     if feedback:
-        request.user_message += (
-            "\n\nPrevious attempt failed validation:\n"
-            + "\n".join(f"- {r}" for r in feedback)
-        )
+        request.user_message += "\n\nPrevious attempt failed validation:\n" + "\n".join(f"- {r}" for r in feedback)
     raw = generate(request)
     return _parse_json_response(raw)
 

@@ -68,14 +68,9 @@ class LlamaPromptSet(PromptSet):
             "7. Only generate one spoken response at a time"
         )
         if personality_notes:
-            base += "\n\nThings you know and can talk about:\n" + "\n".join(
-                f"- {note}" for note in personality_notes
-            )
+            base += "\n\nThings you know and can talk about:\n" + "\n".join(f"- {note}" for note in personality_notes)
         if dialogue_context:
-            base += (
-                "\n\nYour voice and concerns (draw on this tone and these topics):\n"
-                + dialogue_context
-            )
+            base += "\n\nYour voice and concerns (draw on this tone and these topics):\n" + dialogue_context
         return base
 
     def npc_greeting(self, name: str, identity: str) -> LLMRequest:
@@ -335,31 +330,64 @@ class LlamaPromptSet(PromptSet):
             )
             examples = [
                 (
-                    _json.dumps({
-                        "npc": {"name": "Captain Marlowe", "job": "village guard captain",
+                    _json.dumps(
+                        {
+                            "npc": {
+                                "name": "Captain Marlowe",
+                                "job": "village guard captain",
                                 "personality": "battle-hardened but overwhelmed",
-                                "hobby": "whittling ships in bottles"},
-                        "quest": {"quest_type": "combat", "title": "Prove Your Worth",
-                                  "description": "Defeat the guard captain to earn his trust"},
-                    }),
-                    _json.dumps({
-                        "incomplete": {"nodes": {
-                            "start": {"prompt": "Wait, what are you doing? Those are MY guards! I won't have some outsider undermining my authority when my village is burning!",
-                                      "choices": [{"text": "I'm here to help!", "next_node_id": "challenge"},
-                                                   {"text": "Your men are scattered.", "next_node_id": "challenge"}]},
-                            "challenge": {"prompt": "I've held this harbor for fifteen years! Stand down or face the consequences!", "choices": []},
-                        }},
-                        "complete_success": {"nodes": {
-                            "start": {"prompt": "Damn... you fight like a veteran. I was wrong to challenge you.",
-                                      "choices": [{"text": "We need to work together.", "next_node_id": "end"}]},
-                            "end": {"prompt": "The lighthouse is the key. There's a smuggler's tunnel behind it. Together, we might pull this off.", "choices": []},
-                        }},
-                        "complete_failure": {"nodes": {
-                            "start": {"prompt": "Running away? Just like I thought — another coward!",
-                                      "choices": [{"text": "I'll return stronger.", "next_node_id": "end"}]},
-                            "end": {"prompt": "The goblins will have razed this village by then!", "choices": []},
-                        }},
-                    }),
+                                "hobby": "whittling ships in bottles",
+                            },
+                            "quest": {
+                                "quest_type": "combat",
+                                "title": "Prove Your Worth",
+                                "description": "Defeat the guard captain to earn his trust",
+                            },
+                        }
+                    ),
+                    _json.dumps(
+                        {
+                            "incomplete": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "Wait, what are you doing? Those are MY guards! I won't have some outsider undermining my authority when my village is burning!",
+                                        "choices": [
+                                            {"text": "I'm here to help!", "next_node_id": "challenge"},
+                                            {"text": "Your men are scattered.", "next_node_id": "challenge"},
+                                        ],
+                                    },
+                                    "challenge": {
+                                        "prompt": "I've held this harbor for fifteen years! Stand down or face the consequences!",
+                                        "choices": [],
+                                    },
+                                }
+                            },
+                            "complete_success": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "Damn... you fight like a veteran. I was wrong to challenge you.",
+                                        "choices": [{"text": "We need to work together.", "next_node_id": "end"}],
+                                    },
+                                    "end": {
+                                        "prompt": "The lighthouse is the key. There's a smuggler's tunnel behind it. Together, we might pull this off.",
+                                        "choices": [],
+                                    },
+                                }
+                            },
+                            "complete_failure": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "Running away? Just like I thought — another coward!",
+                                        "choices": [{"text": "I'll return stronger.", "next_node_id": "end"}],
+                                    },
+                                    "end": {
+                                        "prompt": "The goblins will have razed this village by then!",
+                                        "choices": [],
+                                    },
+                                }
+                            },
+                        }
+                    ),
                 ),
             ]
             max_tokens = 1000
@@ -377,33 +405,62 @@ class LlamaPromptSet(PromptSet):
             )
             examples = [
                 (
-                    _json.dumps({
-                        "npc": {"name": "Tom", "job": "dock worker",
+                    _json.dumps(
+                        {
+                            "npc": {
+                                "name": "Tom",
+                                "job": "dock worker",
                                 "personality": "breathless and urgent",
-                                "hobby": "collecting unusual shells"},
-                        "quest": {"quest_type": "fetch", "title": "Retrieve the Signal Horn",
-                                  "description": "Recover the stolen warning horn from the pier caves"},
-                    }),
-                    _json.dumps({
-                        "incomplete": {"nodes": {
-                            "start": {"prompt": "I saw them take the signal horn — it's the only way to warn the ships!",
-                                      "choices": [{"text": "Where did they take it?", "next_node_id": "details"},
-                                                   {"text": "I'll get it back.", "next_node_id": "end"}]},
-                            "details": {"prompt": "The big one carried it toward the pier caves. I'd go myself but my leg's twisted.",
-                                        "choices": [{"text": "I'll find it.", "next_node_id": "end"}]},
-                            "end": {"prompt": "Be careful down there. The horn comes first.", "choices": []},
-                        }},
-                        "complete_success": {"nodes": {
-                            "start": {"prompt": "The horn! You got it back! Three long blasts — the old storm warning.",
-                                      "choices": [{"text": "Will it reach the fleet?", "next_node_id": "end"}]},
-                            "end": {"prompt": "The sound carries for miles. You just saved every soul on those boats.", "choices": []},
-                        }},
-                        "complete_failure": {"nodes": {
-                            "start": {"prompt": "You couldn't find it? The fleet comes in at dawn...",
-                                      "choices": [{"text": "I'm sorry.", "next_node_id": "end"}]},
-                            "end": {"prompt": "At least you tried. I'll figure something out.", "choices": []},
-                        }},
-                    }),
+                                "hobby": "collecting unusual shells",
+                            },
+                            "quest": {
+                                "quest_type": "fetch",
+                                "title": "Retrieve the Signal Horn",
+                                "description": "Recover the stolen warning horn from the pier caves",
+                            },
+                        }
+                    ),
+                    _json.dumps(
+                        {
+                            "incomplete": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "I saw them take the signal horn — it's the only way to warn the ships!",
+                                        "choices": [
+                                            {"text": "Where did they take it?", "next_node_id": "details"},
+                                            {"text": "I'll get it back.", "next_node_id": "end"},
+                                        ],
+                                    },
+                                    "details": {
+                                        "prompt": "The big one carried it toward the pier caves. I'd go myself but my leg's twisted.",
+                                        "choices": [{"text": "I'll find it.", "next_node_id": "end"}],
+                                    },
+                                    "end": {"prompt": "Be careful down there. The horn comes first.", "choices": []},
+                                }
+                            },
+                            "complete_success": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "The horn! You got it back! Three long blasts — the old storm warning.",
+                                        "choices": [{"text": "Will it reach the fleet?", "next_node_id": "end"}],
+                                    },
+                                    "end": {
+                                        "prompt": "The sound carries for miles. You just saved every soul on those boats.",
+                                        "choices": [],
+                                    },
+                                }
+                            },
+                            "complete_failure": {
+                                "nodes": {
+                                    "start": {
+                                        "prompt": "You couldn't find it? The fleet comes in at dawn...",
+                                        "choices": [{"text": "I'm sorry.", "next_node_id": "end"}],
+                                    },
+                                    "end": {"prompt": "At least you tried. I'll figure something out.", "choices": []},
+                                }
+                            },
+                        }
+                    ),
                 ),
             ]
             max_tokens = 1000
@@ -416,23 +473,45 @@ class LlamaPromptSet(PromptSet):
             )
             examples = [
                 (
-                    _json.dumps({
-                        "npc": {"name": "Kendra", "job": "tavern keeper",
+                    _json.dumps(
+                        {
+                            "npc": {
+                                "name": "Kendra",
+                                "job": "tavern keeper",
                                 "personality": "maternal and protective",
-                                "hobby": "brewing ales with coastal herbs"},
-                        "quest": None,
-                    }),
-                    _json.dumps({"nodes": {
-                        "start": {"prompt": "Another stranger looking for shelter? There's still room by the fire.",
-                                  "choices": [{"text": "What happened here?", "next_node_id": "info"},
-                                               {"text": "Is anyone hurt?", "next_node_id": "concern"}]},
-                        "info": {"prompt": "Came out of nowhere. The fog rolled in wrong and they were everywhere.",
-                                 "choices": [{"text": "Where were they last seen?", "next_node_id": "end"}]},
-                        "concern": {"prompt": "Cuts and bruises mostly. The children are terrified. I've been brewing tea to calm them.",
-                                    "choices": [{"text": "I'll help.", "next_node_id": "end"},
-                                                 {"text": "Stay safe.", "next_node_id": "end"}]},
-                        "end": {"prompt": "Bless you. Come back anytime — my door stays open tonight.", "choices": []},
-                    }}),
+                                "hobby": "brewing ales with coastal herbs",
+                            },
+                            "quest": None,
+                        }
+                    ),
+                    _json.dumps(
+                        {
+                            "nodes": {
+                                "start": {
+                                    "prompt": "Another stranger looking for shelter? There's still room by the fire.",
+                                    "choices": [
+                                        {"text": "What happened here?", "next_node_id": "info"},
+                                        {"text": "Is anyone hurt?", "next_node_id": "concern"},
+                                    ],
+                                },
+                                "info": {
+                                    "prompt": "Came out of nowhere. The fog rolled in wrong and they were everywhere.",
+                                    "choices": [{"text": "Where were they last seen?", "next_node_id": "end"}],
+                                },
+                                "concern": {
+                                    "prompt": "Cuts and bruises mostly. The children are terrified. I've been brewing tea to calm them.",
+                                    "choices": [
+                                        {"text": "I'll help.", "next_node_id": "end"},
+                                        {"text": "Stay safe.", "next_node_id": "end"},
+                                    ],
+                                },
+                                "end": {
+                                    "prompt": "Bless you. Come back anytime — my door stays open tonight.",
+                                    "choices": [],
+                                },
+                            }
+                        }
+                    ),
                 ),
             ]
             max_tokens = 400
