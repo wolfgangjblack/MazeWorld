@@ -1,5 +1,5 @@
-from src.generate.backends.base import LLMBackend, ImageBackend, MusicBackend
-from src.generate.backends.registry import get_llm_backend, get_image_backend
+from src.generate.backends.base import ImageBackend, LLMBackend, MusicBackend
+from src.generate.backends.registry import get_image_backend, get_llm_backend
 
 __all__ = [
     "LLMBackend",

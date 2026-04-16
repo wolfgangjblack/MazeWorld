@@ -1,59 +1,149 @@
-# MazeWorld
+# MazeWorld -- GenAI-Orchestrated Game World Generation
 
-MazeWorld V1.0 is a procedurally generated 2D overhead RPG where players navigate maze environments, engage in turn-based combat, and interact with LLM-driven NPCs. All game content — classes, items, monsters, encounters, portraits — is generated via GenAI pipelines.
+A fully AI-generated dungeon RPG where every entity -- NPCs, monsters, items, quests, story arcs, portraits, music, and sound effects -- is created by an orchestrated pipeline of generative AI models. The result is a playable 2D overhead RPG with turn-based combat, multi-room exploration, and LLM-driven NPC dialogue.
 
-## Current Features (Phases 1-6)
+## GenAI Architecture
 
-**Codebase Architecture**
-- Restructured into `models/`, `generate/`, `controllers/`, `views/`, `systems/` with clean separation of concerns
-- Screen state machine (start screen -> class selection -> room intro -> gameplay)
-- Single entry point via `main.py` with `--dev` and `--skip-gen` flags
+**Multi-Model Pipeline** -- World generation orchestrates 5 AI modalities across a single pipeline run. Each modality supports swappable backends:
 
-**Player Classes & Stats**
-- 4 archetypes per environment: warrior, mage, healer, jester
-- 7 stats: STR, DEX, CON, INT, WIS, CHA, LUCK with modifier system
-- GenAI-generated class names, flavor text, stat arrays, and portraits themed to the environment
-- Jester presented as a mystery pick (black silhouette) until selected
+| Modality | API Backend | Local Backend |
+|----------|------------|---------------|
+| Text / Story | Claude 3.5 (Anthropic) | Llama 3.2 3B (HuggingFace) |
+| Portraits | fal.ai (nano-banana) | FLUX.1 (CUDA) / SDXL Turbo (MPS) |
+| Music | Google Lyria 3 | -- |
+| SFX | ElevenLabs | -- |
+| Narrative | Claude (summary agent) | Llama 3.2 |
 
-**Turn-Based Combat**
-- Initiative (1d20 + DEX), melee attacks vs AC, weapon damage dice
-- Magic system with 5 elements (fire, water, forest, light, dark) and rock-paper-scissors advantage (1.5x/0.5x)
-- Jester's Gamble: LUCK-influenced random effect table
-- Use items mid-combat, flee mechanic, rest action
-- Death triggers game over screen
+**Agentic Validation Pipeline** -- Generated content passes through a three-stage validation architecture: Checker (per-entity structural validation), Validator (cross-reference integrity), and World Editor (world-coherence audit). Failed entities trigger LLM re-generation with structured feedback. Validation uses domain-specific structural checks rather than schema-only validation, enabling game-logic constraints like puzzle solvability, quest-target existence, and circular dependency detection.
 
-**Items & Shops**
-- 5 item categories: food, drink, tools, weapons, spell scrolls — generated per environment
-- NPC merchant shops with buy/sell interface
-- Money system tracked as a player resource
-- Monster loot drops with probability-based drop tables
-- Spell scrolls consumable by all classes, learnable by Jester
+**Provider Abstraction** -- All AI backends implement abstract interfaces (`LLMBackend`, `ImageBackend`) with a singleton registry for lazy resolution. Prompts are decoupled from backends via `PromptSet` -- each model family gets optimized prompt formatting while sharing the same `LLMRequest` envelope.
 
-**Encounters & Monsters**
-- Invisible encounter tiles that trigger on step (one-time, cleared on resolution)
-- 3 encounter types: combat (monster fights), puzzle (tool/ability solutions), event (multi-choice + dice checks)
-- Environment-themed monster pools with level-scaled stats (HP, AC, damage dice, elemental affinity)
-- Monster compositions: solo, pack (2-4), mixed (strong + weak)
-- Monster abilities: poison, stun, elemental attacks (battle-scoped only)
-- Puzzle solvability validation during generation
+**Skeleton-Driven Generation** -- Mechanical properties (weapon dice, spell stats, encounter DCs) are pre-rolled as skeletons before the LLM call. The LLM generates only name and flavor text, then skeletons are merged back. This ensures balanced gameplay while preserving creative variety.
 
-**Quests, Story & Followers**
-- Overarching story generated from configurable `STORY_SEED` — faction, escalation arc, per-room story beats, final boss
-- 6 quest types: fetch, kill, escort, delivery, dialogue (CHA-based DC check), multi-step chains
-- Kill quests completable out of order (if encounter cleared before quest given)
-- Quest failure penalties (HP, hunger, thirst damage)
-- Quest log UI (Q key) with active/completed/failed sections, story quests marked distinctly
-- Follower system: up to 2 non-combatant followers managed via player menu
-- Follower dialogue with hints and personality, farewell on quest completion or failure
-- 3x quest density pool generated per zone, then selected with minimums (1 story, 1 faction combat)
+### Generation Pipeline
+
+```mermaid
+flowchart TD
+    subgraph phase1 ["Phase 1: Story and World"]
+        StorySeed["STORY_SEED + config"] --> StoryGen["Overarching Story\n(faction, arc, boss)"]
+        StoryGen --> Bible["World Bible\n(cross-reference index)"]
+    end
+
+    subgraph phase2 ["Phase 2: Per-Room Content"]
+        Skeletons["Pre-rolled Skeletons\n(weapons, spells, events)"]
+        LLM["LLM: Claude / Llama"]
+        Skeletons -->|"mechanics"| Merge["Skeleton + LLM Merge"]
+        LLM -->|"name + flavor"| Merge
+        Merge --> RoomData["Room Data\n(NPCs, items, monsters,\nevents, quests)"]
+    end
+
+    subgraph phase3 ["Phase 3: Assets"]
+        ImageGen["fal.ai / FLUX\n(portraits)"]
+        MusicGen["Lyria 3\n(music tracks)"]
+        SFXGen["ElevenLabs\n(sound effects)"]
+    end
+
+    subgraph phase4 ["Phase 4: NPC Dialogue"]
+        TreeGen["Dialogue Tree Generation\n(retry + validation)"]
+        Greetings["Opening Greetings\n+ Personality Notes"]
+    end
+
+    subgraph phase5 ["Phase 5: Validation"]
+        Checker["Checker\n(per-entity)"]
+        Validator["Validator\n(cross-reference)"]
+        EditorNode["World Editor\n(coherence)"]
+        Checker --> Validator --> EditorNode
+        EditorNode -->|"feedback"| LLM
+    end
+
+    phase1 --> phase2 --> phase3
+    phase2 --> phase4
+    phase2 --> phase5
+    Bible --> phase3
+    phase5 -->|"WorldBible"| DataFolder["data/ folder\n(all JSON, portraits,\nmusic, SFX)"]
+    phase3 --> DataFolder
+    phase4 --> DataFolder
+```
+
+### Runtime Architecture
+
+```mermaid
+flowchart LR
+    subgraph models [Models]
+        Player
+        NPC
+        Maze
+        Encounter
+        Quest
+        Spell
+    end
+
+    subgraph controllers [Controllers]
+        GC["GameController"]
+        CIH["CombatInputHandler"]
+        EIH["EventInputHandler"]
+    end
+
+    subgraph views [Views]
+        MazeView
+        CombatView
+        DialogueView
+        EncounterView
+    end
+
+    subgraph systems [Systems]
+        QuestMgr["QuestManager"]
+        SaveMgr["SaveManager"]
+        Survival["SurvivalSystem"]
+        FogOfWar
+        MusicDir["MusicDirector"]
+    end
+
+    GC --> CIH
+    GC --> EIH
+    GC --> models
+    GC --> systems
+    controllers --> views
+    views --> PygameDisplay["pygame display"]
+```
 
 ## Three-Mode Architecture
 
 | Mode | `.env` value | Description |
 |------|-------------|-------------|
-| **Offline (Static)** | `offline_static` | Pre-generated content with scripted dialogue trees. Fully self-contained. |
+| **Offline (Static)** | `offline_static` | Pre-generated content with scripted dialogue trees. Fully self-contained, no API keys needed. |
 | **Offline (Local)** | `offline_local` | NPC dialogue generated by locally hosted LLM. Requires local GPU. |
 | **Online (API)** | `online` | NPC dialogue generated via Claude API. Requires internet + API key. |
+
+## Game Features
+
+**Combat and Progression**
+- 4 class archetypes (warrior, mage, healer, jester) with GenAI-generated names, stats, and portraits per environment
+- Turn-based combat: initiative, melee/magic attacks, weapon stat scaling, spell stat modifiers
+- 5-element magic system (fire, water, forest, light, dark) with rock-paper-scissors multipliers
+- Level-up system with class-specific ability and spell pools that scale with room level
+- Jester's Gamble: LUCK-influenced random effect table; mystery pick at character select
+
+**World and Exploration**
+- Multi-room maze exploration with fog of war and day/night cycle
+- 3 encounter types: combat (monster fights), puzzle (tool/ability/spell solutions), event (multi-choice + dice checks with stat modifiers)
+- Environment-themed monster pools with level-scaled stats, elemental affinities, and loot tables
+- Gate bosses guarding room transitions; climax boss on the final room
+- Save/load system, survival mechanics (hunger, thirst, stamina), item shops
+
+**Story and NPCs**
+- Overarching story from configurable `STORY_SEED` -- faction, escalation arc, per-room beats, final boss
+- 6 quest types: fetch, kill, escort, delivery, dialogue, multi-step chains
+- NPC dialogue: pre-generated dialogue trees (offline) or live Claude conversation (online) with personality injection
+- Follower system with quest-linked companions, dialogue, and farewell on completion
+- GenAI-generated portraits, music tracks, and sound effects for all entities and screens
+
+## Project Stats
+
+- **62,000+** lines of Python
+- **998** tests across 40 test files (pytest, ruff, GitHub Actions CI)
+- **5** AI modalities orchestrated in a single pipeline
+- **3** runtime modes (offline static, offline local, online API)
 
 ## Setup
 
@@ -79,23 +169,10 @@ python main.py --dev --skip-gen
 - Python 3.11+
 - Pygame 2.6
 - Pydantic 2.9+
-- PyTorch 2.4+ (for local mode)
-- Transformers, Diffusers, Accelerate (for local mode)
 - Anthropic SDK (for online mode)
+- PyTorch 2.4+, Transformers, Diffusers (for local mode only)
 
 See `requirements.txt` for pinned versions.
-
-## What's Next (Phases 7-11)
-
-| Phase | Focus |
-|-------|-------|
-| 7 | Multi-room exploration, doors, gate bosses, level-up |
-| 8 | Fog of war, day/night cycle |
-| 9 | Survival rebalance, save/load, full screen UX |
-| 10 | Agentic generation pipeline with validation |
-| 11 | PyInstaller packaging, final polish, V1.0 release |
-
-See [PDR_V1.md](PDR_V1.md) for the full design review and [ROADMAP.md](ROADMAP.md) for the development plan.
 
 ## License
 

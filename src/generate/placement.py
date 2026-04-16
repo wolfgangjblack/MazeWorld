@@ -1,5 +1,9 @@
 """Placement utilities for NPCs, items, and encounters on the maze grid.
 
+NOTE: This module is NOT used by the production pipeline (which uses
+``Maze.build_tile_meta`` + ``_phase3b_items``).  It exists only as a
+test helper for ``tests/test_encounter_quest_gen.py``.
+
 Rules:
 - Not on walls
 - Encounter tiles are invisible (player doesn't see them until triggered)
@@ -12,8 +16,9 @@ import random
 from typing import Optional
 
 
-def find_open_cells(grid: list[list[int]], wall_id: int = 1,
-                    occupied: set[tuple[int, int]] | None = None) -> list[tuple[int, int]]:
+def find_open_cells(
+    grid: list[list[int]], wall_id: int = 1, occupied: set[tuple[int, int]] | None = None
+) -> list[tuple[int, int]]:
     """Return all open (non-wall) cells not already occupied."""
     occupied = occupied or set()
     cells = []
@@ -64,9 +69,13 @@ def place_encounters(
         if random.random() < time_gate_ratio:
             event_list[i]["time_gate"] = random.choice(["day", "night"])
 
-        event_position_map.append({
-            "x": x, "y": y, "event_id": event_list[i]["id"],
-        })
+        event_position_map.append(
+            {
+                "x": x,
+                "y": y,
+                "event_id": event_list[i]["id"],
+            }
+        )
         occupied.add((x, y))
 
     return event_position_map
@@ -97,8 +106,7 @@ def place_npcs(
 
         # Find open cells within this NPC's zone
         zone_open = [
-            (x, y) for (x, y) in open_cells_set
-            if zone_x <= x < zone_x + zone_size and zone_y <= y < zone_y + zone_size
+            (x, y) for (x, y) in open_cells_set if zone_x <= x < zone_x + zone_size and zone_y <= y < zone_y + zone_size
         ]
 
         if zone_open:

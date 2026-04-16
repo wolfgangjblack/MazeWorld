@@ -1,26 +1,34 @@
 """Tests for the InventoryManager system."""
 
-from src.systems.inventory import InventoryManager
-from src.models.player import PlayerCharacter, PlayerClass, Stats
 from src.models.items import (
-    Food, Weapon, SpellScroll, EscortItem, ItemStats,
+    EscortItem,
+    Food,
+    ItemStats,
+    SpellScroll,
+    Weapon,
 )
+from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.systems.inventory import InventoryManager
 
 
 def _make_player(**kwargs):
     return PlayerCharacter(x=0, y=0, **kwargs)
 
 
-def _make_food(name="bread", nutrition=15, price=10):
+def _make_food(name="bread", stamina=15, price=10):
     return Food(
-        category="food", name=name, desc="test food",
-        item_stats=ItemStats(nutrition_value=nutrition, price=price),
+        category="food",
+        name=name,
+        desc="test food",
+        item_stats=ItemStats(stamina_value=stamina, price=price),
     )
 
 
 def _make_weapon(name="sword", attack_dice="1d6", price=30):
     return Weapon(
-        category="weapon", name=name, desc="test weapon",
+        category="weapon",
+        name=name,
+        desc="test weapon",
         weapon_type="simple",
         item_stats=ItemStats(attack_dice=attack_dice, price=price),
     )
@@ -28,7 +36,9 @@ def _make_weapon(name="sword", attack_dice="1d6", price=30):
 
 def _make_scroll(name="scroll of fire", spell_effect="fire", price=20):
     return SpellScroll(
-        category="spell_scroll", name=name, desc="test scroll",
+        category="spell_scroll",
+        name=name,
+        desc="test scroll",
         spell_effect=spell_effect,
         item_stats=ItemStats(price=price),
     )
@@ -39,7 +49,7 @@ class TestInventoryManagerAdd:
         player = _make_player()
         mgr = InventoryManager(player.inventory, player)
         mgr.add(_make_food("bread"))
-        mgr.add(_make_food("apple", nutrition=10, price=5))
+        mgr.add(_make_food("apple", stamina=10, price=5))
         assert len(player.inventory) == 2
 
 
@@ -125,20 +135,24 @@ class TestInventoryManagerEquip:
 
 class TestInventoryManagerUseGive:
     def test_use_food(self):
-        player = _make_player(hunger=50)
+        player = _make_player(stamina=50)
         mgr = InventoryManager(player.inventory, player)
-        mgr.add(_make_food(nutrition=20))
+        mgr.add(_make_food(stamina=20))
         msg = mgr.use_selected(0)
         assert "ate" in msg.lower() or "used" in msg.lower()
-        assert player.hunger == 70
+        assert player.stamina == 70
         assert "bread" not in player.inventory
 
     def test_use_escort_item_not_removed(self):
         player = _make_player()
         mgr = InventoryManager(player.inventory, player)
         escort = EscortItem(
-            category="escort", name="Bob (escort)", desc="test",
-            item_stats=ItemStats(), npc_id=1, target_zone=(5, 5),
+            category="escort",
+            name="Bob (escort)",
+            desc="test",
+            item_stats=ItemStats(),
+            npc_id=1000,
+            target_zone=(5, 5),
         )
         mgr.add(escort)
         mgr.use_selected(0)
@@ -176,7 +190,8 @@ class TestInventoryManagerSpellScroll:
 
     def test_jester_learns_spell(self):
         jester_class = PlayerClass(
-            name="Jester", archetype="jester",
+            name="Jester",
+            archetype="jester",
             stats=Stats(LUCK=18, STR=10, DEX=10, CON=10, INT=10, WIS=10, CHA=4),
         )
         player = _make_player()
@@ -216,10 +231,10 @@ class TestPlayerDelegation:
         assert result == [("bread", 1)]
 
     def test_use_item(self):
-        player = _make_player(hunger=50)
-        player.add_to_inventory(_make_food(nutrition=20))
+        player = _make_player(stamina=50)
+        player.add_to_inventory(_make_food(stamina=20))
         player.use_item()
-        assert player.hunger == 70
+        assert player.stamina == 70
 
     def test_give_item(self):
         player = _make_player()

@@ -1,9 +1,12 @@
+import json
 import logging
+import random
+import re
 
 from config import GAME_MODE
+from src.generate.llm_client import generate
 from src.prompts import get_prompt_set
 from src.prompts.base import LLMRequest
-from src.generate.llm_client import generate
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +24,13 @@ def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = N
     Falls back to False (continue) on any error.
     """
     history_text = "\n".join(
-        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}"
-        for t in npc.interaction_history[-6:]
+        f"{'Player' if t['role'] == 'user' else npc.name}: {t['content']}" for t in npc.interaction_history[-6:]
     )
 
     quest_info = ""
     if quest_context:
         quest_info = (
-            f"Active quest: \"{quest_context.get('title', 'unknown')}\" "
+            f'Active quest: "{quest_context.get("title", "unknown")}" '
             f"(type: {quest_context.get('type', '?')}, "
             f"status: {quest_context.get('status', 'active')}). "
         )
@@ -52,7 +54,7 @@ def _llm_check_exhaustion(npc, player_input: str, quest_context: dict | None = N
             f"{getattr(npc, 'personality', 'unknown')})\n"
             f"{quest_info}\n"
             f"Recent conversation:\n{history_text}\n\n"
-            f"Player's latest input: \"{player_input}\"\n\n"
+            f'Player\'s latest input: "{player_input}"\n\n'
             "Should the NPC end this conversation? (yes/no)"
         ),
         max_tokens=10,
@@ -105,8 +107,9 @@ def check_dialogue_exhaustion(npc, player_input: str, quest_context: dict | None
     return False
 
 
-def generate_npc_response(npc, player_input: str, story_context: str = "",
-                          quest_context: dict | None = None) -> str:
+def generate_npc_response(
+    npc, player_input: str, story_context: str = "", quest_context: dict | None = None, player=None
+) -> str:
     """Generate an NPC response.
 
     - First meeting: uses pre-generated opening_greeting if available.
@@ -118,10 +121,11 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
     Dialogue exhaustion: after the NPC is done or annoyed, falls back to
     finished_dialogue text FOREVER (prevents token burn).
     """
-    # If dialogue is already exhausted, always return finished text
     if getattr(npc, "dialogue_exhausted", False):
-        finished = getattr(npc, "finished_dialogue", "I have nothing more to say.")
-        return f"{npc.name}: {finished}"
+        text = getattr(npc, "exhausted_dialogue", None) or getattr(
+            npc, "finished_dialogue", "I have nothing more to say."
+        )
+        return f"{npc.name}: {text}"
 
     is_greeting = not player_input
 
@@ -160,6 +164,7 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
             npc_name=npc.name,
             player_input="The player returns to speak with you.",
             story_context=story_context,
+            quest_context=quest_context,
         )
         try:
             raw = generate(request)
@@ -178,14 +183,28 @@ def generate_npc_response(npc, player_input: str, story_context: str = "",
             npc_name=npc.name,
             player_input=player_input,
             story_context=story_context,
+            quest_context=quest_context,
         )
         try:
             raw = generate(request)
-            response = _extract_response(raw)
+            response, cha_data = _extract_response_with_cha(raw)
         except Exception:
             response = _LLM_FAILURE_RESPONSE
+            cha_data = None
         if not response:
             response = _LLM_FAILURE_RESPONSE
+
+        # CHA check: d20 + CHA mod vs NPC's current DC (online mode only)
+        if cha_data and quest_context and player:
+            npc.current_dc = max(8, min(20, cha_data.get("dc_next", npc.current_dc)))
+            cha_mod = player.get_stat_modifier("CHA") if hasattr(player, "get_stat_modifier") else 0
+            roll = random.randint(1, 20) + cha_mod
+            if roll < npc.current_dc:
+                npc.dialogue_exhausted = True
+                dismissal = _generate_dismissal(npc, cha_data.get("tone", "rude"))
+                npc.add_turn("npc", dismissal)
+                return f"{npc.name}: {dismissal}"
+
         npc.add_turn("npc", response)
 
     # Check exhaustion after LLM response
@@ -220,7 +239,7 @@ def _static_dialogue_response(npc, player_input: str) -> str:
     prompt = node.get("prompt", "...")
     choices = node.get("choices", [])
     if choices:
-        choice_text = "\n".join(f"  {i+1}. {c['text']}" for i, c in enumerate(choices))
+        choice_text = "\n".join(f"  {i + 1}. {c['text']}" for i, c in enumerate(choices))
         return f"{npc.name}: {prompt}\n{choice_text}"
     return f"{npc.name}: {prompt}"
 
@@ -236,10 +255,55 @@ def has_dialogue_choices(npc) -> bool:
     return bool(node.get("choices"))
 
 
+_EMOTE_RE = re.compile(r"^\*[^*]+\*$")
+
+
 def _extract_response(raw: str) -> str:
-    """Extract the usable NPC response from raw LLM output."""
+    """Extract the usable NPC response from raw LLM output.
+
+    Strips lines that are entirely asterisk-wrapped emotes (e.g. ``*sighs*``).
+    Mixed lines like ``*nods* Aye, that's true.`` are kept because the regex
+    only matches lines that start and end with ``*`` with nothing after.
+    Returns empty string if all lines are emotes so the caller can fall back
+    to ``_LLM_FAILURE_RESPONSE``.
+    """
     if "##Output:" in raw:
         response = raw.split("##Output:")[-1].strip()
     else:
         response = raw.strip()
-    return response.split("\n")[0].strip()
+    lines = response.split("\n")
+    dialogue_lines = [ln.strip() for ln in lines if ln.strip() and not _EMOTE_RE.fullmatch(ln.strip())]
+    return " ".join(dialogue_lines) if dialogue_lines else ""
+
+
+def _extract_response_with_cha(raw: str) -> tuple[str, dict | None]:
+    """Extract NPC response text and optional CHA evaluation JSON from last line."""
+    lines = raw.strip().split("\n")
+    cha_data = None
+    if lines:
+        last = lines[-1].strip()
+        if last.startswith("{") and "dc_next" in last:
+            try:
+                cha_data = json.loads(last)
+                lines = lines[:-1]
+            except json.JSONDecodeError:
+                pass
+    response_text = _extract_response("\n".join(lines))
+    return response_text, cha_data
+
+
+def _generate_dismissal(npc, tone: str) -> str:
+    """Generate a personality-appropriate dismissal when CHA check fails."""
+    request = LLMRequest(
+        system=npc.identity or f"You are {npc.name}, a fantasy NPC.",
+        user_message=(
+            f"The player has been {tone}. End the conversation with a brief, "
+            "in-character dismissal (1 sentence). You don't want to talk anymore."
+        ),
+        max_tokens=60,
+    )
+    try:
+        raw = generate(request)
+        return _extract_response(raw)
+    except Exception:
+        return "I don't think I want to talk anymore."

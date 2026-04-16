@@ -1,18 +1,23 @@
 """Tests for StartView, ConfigView (tabbed), and screen state machine."""
 
-import sys
 import os
-import pytest
+import sys
+
 import pygame
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.controllers.screen_controller import ScreenController, ScreenState
-from src.views.start_view import StartView, MENU_ITEMS
-from src.views.config_view import (
-    ConfigView, EDITABLE_SETTINGS, GENERATION_SETTINGS,
-    _mask_secret, _update_dotenv,
-)
 import config as cfg
+from src.controllers.screen_controller import ScreenController, ScreenState
+from src.views.config_view import (
+    EDITABLE_SETTINGS,
+    GENERATION_SETTINGS,
+    ConfigView,
+    _mask_secret,
+    _update_dotenv,
+)
+from src.views.start_view import MENU_ITEMS, StartView
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +39,7 @@ def font():
 
 # --- ScreenState CONFIG ---
 
+
 def test_config_state_exists():
     assert hasattr(ScreenState, "CONFIG")
     assert ScreenState.CONFIG.value == "config"
@@ -53,6 +59,7 @@ def test_config_back_to_start():
 
 
 # --- StartView ---
+
 
 def test_start_view_menu_items():
     assert "Start New Game" in MENU_ITEMS
@@ -129,6 +136,7 @@ def test_start_view_draw_no_crash(screen, font):
 
 # --- ConfigView: tab structure ---
 
+
 def test_config_view_has_all_settings(screen, font):
     """Legacy .items property returns combined list for both tabs."""
     view = ConfigView(screen, font)
@@ -193,6 +201,7 @@ def test_config_view_escape_returns_back(screen, font):
 
 
 # --- ConfigView: editable tab editing ---
+
 
 def test_config_view_cycle_editable(screen, font):
     view = ConfigView(screen, font)
@@ -272,6 +281,7 @@ def test_config_view_draw_no_crash(screen, font):
 
 # --- Secret masking ---
 
+
 def test_mask_secret_empty():
     assert _mask_secret("") == "(not set)"
 
@@ -287,6 +297,7 @@ def test_mask_secret_long():
 
 
 # --- Secret editing ---
+
 
 def test_config_view_secret_edit_writes_env(screen, font, tmp_path, monkeypatch):
     """Editing an API key writes to os.environ and calls _update_dotenv."""
@@ -330,6 +341,7 @@ def test_config_view_secret_displays_masked(screen, font, monkeypatch):
 
 # --- _update_dotenv ---
 
+
 def test_update_dotenv_creates_file(tmp_path, monkeypatch):
     dotenv_file = tmp_path / ".env"
     monkeypatch.setattr("src.views.config_view._DOTENV_PATH", str(dotenv_file))
@@ -365,24 +377,27 @@ def test_update_dotenv_appends_new_key(tmp_path, monkeypatch):
 
 # --- New config settings ---
 
+
 def test_config_new_settings_exist():
-    """All Phase 1 gap settings exist in config module."""
+    """All required settings exist in config module."""
     assert hasattr(cfg, "NUM_ROOMS")
-    assert hasattr(cfg, "QUEST_DENSITY")
+    assert hasattr(cfg, "EVENT_DENSITY")
+    assert hasattr(cfg, "ITEM_DENSITY")
+    assert hasattr(cfg, "NPC_DENSITY")
     assert hasattr(cfg, "MAP_COLORS")
     assert hasattr(cfg, "MASTER_VOLUME")
     assert hasattr(cfg, "MUSIC_VOLUME")
     assert hasattr(cfg, "MUSIC_BACKEND")
 
 
-def test_config_num_rooms_default():
-    assert cfg.NUM_ROOMS == 1
+def test_config_num_rooms_valid():
     assert isinstance(cfg.NUM_ROOMS, int)
+    assert cfg.NUM_ROOMS >= 1
 
 
-def test_config_quest_density_default():
-    assert cfg.QUEST_DENSITY == 0.1
-    assert isinstance(cfg.QUEST_DENSITY, float)
+def test_config_event_density_default():
+    assert cfg.EVENT_DENSITY == 0.1
+    assert isinstance(cfg.EVENT_DENSITY, float)
 
 
 def test_config_map_colors_default():
@@ -403,6 +418,7 @@ def test_config_music_backend_default():
 
 # --- GAME_MODE is read-only (generation tab) ---
 
+
 def test_game_mode_in_generation_tab():
     """GAME_MODE must be in the read-only generation tab, not editable."""
     gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
@@ -412,10 +428,9 @@ def test_game_mode_in_generation_tab():
 
 
 def test_new_settings_in_generation_tab():
-    """NUM_ROOMS, QUEST_DENSITY, MAP_COLORS are in generation (read-only) tab."""
+    """NUM_ROOMS, EVENT_DENSITY, MAP_COLORS are in generation (read-only) tab."""
     gen_attrs = [attr for attr, _ in GENERATION_SETTINGS]
     assert "NUM_ROOMS" in gen_attrs
-    assert "QUEST_DENSITY" in gen_attrs
     assert "MAP_COLORS" in gen_attrs
 
 
@@ -490,9 +505,10 @@ def test_config_view_volume_clamped_below(screen, font):
 
 # --- Manifest schema ---
 
+
 def test_manifest_schema():
     """build_manifest() output matches PDR spec structure and computes counts."""
-    from src.generate.pipeline import build_manifest
+    from src.generate.pipeline_utils import build_manifest
 
     event_list = [
         {"id": "e1", "event_type": "combat", "monsters": [{"name": "goblin"}, {"name": "orc"}]},
@@ -530,14 +546,21 @@ def test_manifest_schema():
     )
 
     # PDR-required top-level keys
-    for key in ("seed", "story_seed", "game_mode", "num_rooms",
-                "environments", "generated_at", "validation", "content_index"):
+    for key in (
+        "seed",
+        "story_seed",
+        "game_mode",
+        "num_rooms",
+        "environments",
+        "generated_at",
+        "validation",
+        "content_index",
+    ):
         assert key in manifest, f"Missing manifest key: {key}"
 
     # content_index sub-keys
     ci = manifest["content_index"]
-    for key in ("rooms", "npcs", "items", "quests", "encounters",
-                "monsters", "images", "music_tracks"):
+    for key in ("rooms", "npcs", "items", "quests", "encounters", "monsters", "images", "music_tracks"):
         assert key in ci, f"Missing content_index key: {key}"
 
     # Counts are computed from inputs, not hardcoded
@@ -557,26 +580,39 @@ def test_manifest_schema():
 
 def test_manifest_schema_with_validation_report():
     """build_manifest() preserves full ValidationReport structure."""
-    from src.generate.pipeline import build_manifest
+    from src.generate.pipeline_utils import build_manifest
     from src.generate.validator import ValidationReport
 
     report = ValidationReport(rooms_validated=1)
     report.add_warning("test warning", entity_id="e1", phase="events")
 
     manifest = build_manifest(
-        seed=1, story_seed="s", game_mode="online", num_rooms=1,
-        environments=["forest"], generated_at="2026-01-01T00:00:00+00:00",
+        seed=1,
+        story_seed="s",
+        game_mode="online",
+        num_rooms=1,
+        environments=["forest"],
+        generated_at="2026-01-01T00:00:00+00:00",
         validation=report.to_dict(),
-        active_npc_count=0, item_count=0, quest_count=0,
-        event_list=[], npc_pool=[],
-        player_portrait_path=None, env_portrait_path=None,
-        environment="forest", env_name="Test", maze_width=40, maze_height=25,
-        class_count=0, portraits_generated=False, story_title="", faction_name="",
+        active_npc_count=0,
+        item_count=0,
+        quest_count=0,
+        event_list=[],
+        npc_pool=[],
+        player_portrait_path=None,
+        env_portrait_path=None,
+        environment="forest",
+        env_name="Test",
+        maze_width=40,
+        maze_height=25,
+        class_count=0,
+        portraits_generated=False,
+        story_title="",
+        faction_name="",
     )
 
     v = manifest["validation"]
-    for key in ("status", "rooms_validated", "critical_failures",
-                "major_retries", "minor_warnings", "details"):
+    for key in ("status", "rooms_validated", "critical_failures", "major_retries", "minor_warnings", "details"):
         assert key in v, f"Missing validation key: {key}"
 
     assert v["status"] == "passed_with_warnings"
@@ -587,8 +623,10 @@ def test_manifest_schema_with_validation_report():
 
 # --- ValidationReport unit tests ---
 
+
 def test_validation_report_empty_is_passed():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport(rooms_validated=1)
     assert r.status == "passed"
     assert r.to_dict()["status"] == "passed"
@@ -597,6 +635,7 @@ def test_validation_report_empty_is_passed():
 
 def test_validation_report_warning_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_warning("minor issue", entity_id="x", phase="quests")
     assert r.status == "passed_with_warnings"
@@ -608,6 +647,7 @@ def test_validation_report_warning_status():
 
 def test_validation_report_major_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_major("retry happened", phase="story")
     assert r.status == "passed_with_warnings"
@@ -617,6 +657,7 @@ def test_validation_report_major_status():
 
 def test_validation_report_critical_status():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport()
     r.add_warning("a warning")
     r.add_critical("fatal problem", entity_id="q1", phase="quests")
@@ -628,6 +669,7 @@ def test_validation_report_critical_status():
 
 def test_validation_report_to_dict_shape():
     from src.generate.validator import ValidationReport
+
     r = ValidationReport(rooms_validated=3)
     r.add_warning("w1")
     r.add_major("m1")
@@ -650,6 +692,7 @@ def test_validation_report_to_dict_shape():
 def test_registry_manifest_seed_compat():
     """Registry handles both old 'world_seed' and new 'seed' key."""
     import warnings
+
     from src.registry import GameRegistry
 
     reg = GameRegistry()

@@ -1,5 +1,6 @@
+from src.models.items import Drink, Food, SpellScroll, Tool, Weapon
 from src.registry import GameRegistry
-from src.models.items import Food, Drink, Tool, Weapon, SpellScroll
+from tests.conftest import requires_data, requires_npc_data
 
 
 def test_singleton():
@@ -8,6 +9,7 @@ def test_singleton():
     assert a is b
 
 
+@requires_data
 def test_items_loaded(reg):
     assert len(reg.item_registry) > 0
     for item in reg.item_registry.values():
@@ -34,12 +36,14 @@ def test_is_item(reg):
     assert not reg.is_item(999)
 
 
+@requires_data
 def test_item_ids(reg):
     ids = reg.item_ids()
     assert len(ids) > 0
     assert set(ids) == set(reg.item_registry.keys())
 
 
+@requires_data
 def test_items_by_class(reg):
     foods = reg.items_by_class(Food)
     drinks = reg.items_by_class(Drink)
@@ -52,15 +56,9 @@ def test_items_by_class(reg):
     assert all(isinstance(v, Tool) for v in tools.values())
 
 
+@requires_npc_data
 def test_npc_templates(reg):
     assert len(reg.npc_templates) >= 1
     for t in reg.npc_templates:
         assert "id" in t
         assert "type" in t
-
-
-def test_starter_inventory(reg):
-    inv = reg.starter_inventory
-    assert len(inv) >= 1
-    for item in inv.values():
-        assert isinstance(item, (Food, Drink, Tool))

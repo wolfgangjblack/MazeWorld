@@ -1,6 +1,7 @@
 """Follower lifecycle — join, dialogue, quest failure, farewell."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,6 +61,7 @@ class FollowerManager:
 
         # Add escort item so the zone-check works
         from src.models.items import EscortItem, ItemStats
+
         escort_item = EscortItem(
             category="escort",
             name=f"{npc_to_escort.name} (escort)",
@@ -75,7 +77,7 @@ class FollowerManager:
     # Removing followers
     # ------------------------------------------------------------------
 
-    def remove_follower_for_quest(self, quest_id: str) -> str | None:
+    def remove_follower_for_quest(self, quest_id: int) -> str | None:
         """Remove the follower tied to *quest_id*. Returns farewell or None."""
         follower = self.player.get_follower_by_quest(quest_id)
         if not follower:
@@ -145,11 +147,13 @@ class FollowerManager:
             quest_summary = ""
             if f.quest_id and f.quest_id in self.quests:
                 quest_summary = self.quests[f.quest_id].title
-            info.append({
-                "name": f.name,
-                "personality": f.personality,
-                "quest_summary": quest_summary,
-                "destination_room": f.destination_room,
-                "hints": f.dialogue_hints,
-            })
+            info.append(
+                {
+                    "name": f.name,
+                    "personality": f.personality,
+                    "quest_summary": quest_summary,
+                    "destination_room": f.destination_room,
+                    "hints": f.dialogue_hints,
+                }
+            )
         return info

@@ -1,29 +1,40 @@
 """Class selection screen — pick from 4 generated classes, name character."""
 
-import os
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
-from src.utils.text_utils import draw_wrapped_text
 
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from src.views.portrait_utils import load_portrait
+from src.views.status_layout import (
+    draw_status_layout,
+    estimate_status_height,
+    truncate_to_fit,
+)
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
 UNSELECTED_COLOR = (180, 180, 180)
 STAT_COLOR = (140, 200, 140)
 SPELL_COLOR = (140, 160, 220)
+
+ARCHETYPE_DISPLAY = {"jester": "Wild Card"}
 ABILITY_COLOR = (220, 160, 140)
 JESTER_HIDDEN_COLOR = (100, 100, 100)
 PANEL_BG = (30, 30, 50)
 PANEL_BORDER = (80, 80, 120)
 CONFIRM_COLOR = (100, 255, 100)
+HINT_COLOR = (120, 120, 120)
+COST_COLOR = (180, 120, 80)
+DIM_COLOR = (150, 150, 150)
 
 STAT_NAMES = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
 
-# Screen sub-states
 STATE_SELECT = "select"
 STATE_DETAIL = "detail"
 STATE_NAME = "name"
 STATE_CONFIRM = "confirm"
+
+DETAIL_SCROLL_STEP = 24
+FOOTER_HEIGHT = 40
 
 
 class ClassSelectView:
@@ -34,24 +45,22 @@ class ClassSelectView:
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
         self.small_font = pygame.font.Font(None, 24)
-        self.class_options = class_options  # list[PlayerClass]
+        self.tiny_font = pygame.font.Font(None, 20)
+        self.class_options = class_options
         self.selected_index = 0
         self.state = STATE_SELECT
         self.player_name = ""
+        self.detail_scroll = 0
         self.portraits = {}
         self._load_portraits()
 
     def _load_portraits(self):
-        """Load portrait images for each class."""
         for i, pc in enumerate(self.class_options):
-            if pc.portrait_path and os.path.exists(pc.portrait_path):
-                try:
-                    img = pygame.image.load(pc.portrait_path)
-                    self.portraits[i] = pygame.transform.scale(img, (128, 128))
-                except Exception:
-                    self.portraits[i] = None
-            else:
-                self.portraits[i] = None
+            self.portraits[i] = load_portrait(pc.portrait_path, (128, 128))
+
+    # ------------------------------------------------------------------
+    # Draw dispatch
+    # ------------------------------------------------------------------
 
     def draw(self):
         self.screen.fill(BLACK)
@@ -65,8 +74,11 @@ class ClassSelectView:
         elif self.state == STATE_CONFIRM:
             self._draw_confirm()
 
+    # ------------------------------------------------------------------
+    # Card grid (2x2)
+    # ------------------------------------------------------------------
+
     def _draw_selection_grid(self):
-        """Draw the 4 class cards in a 2x2 grid."""
         title = self.title_font.render("Choose Your Class", True, TITLE_COLOR)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 20))
 
@@ -80,184 +92,204 @@ class ClassSelectView:
             row = i // 2
             x = start_x + col * (card_w + gap)
             y = start_y + row * (card_h + gap)
-            selected = (i == self.selected_index)
-            self._draw_class_card(x, y, card_w, card_h, pc, i, selected)
+            self._draw_class_card(x, y, card_w, card_h, pc, i, i == self.selected_index)
 
         hint = self.small_font.render(
             "Arrow keys to select  |  Enter to view details  |  Esc to go back",
-            True, UNSELECTED_COLOR
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
     def _draw_class_card(self, x, y, w, h, pc, index, selected):
-        """Draw a single class card."""
         border_color = SELECTED_COLOR if selected else PANEL_BORDER
         pygame.draw.rect(self.screen, PANEL_BG, (x, y, w, h))
         pygame.draw.rect(self.screen, border_color, (x, y, w, h), 2)
 
         is_jester = pc.archetype == "jester"
         pad = 10
+        portrait_size = 100
+        text_right_edge = x + w - pad
 
-        # Portrait area
-        portrait_rect = pygame.Rect(x + pad, y + pad, 128, 128)
+        # Portrait
+        portrait_rect = pygame.Rect(x + pad, y + pad, portrait_size, portrait_size)
         if is_jester and self.state == STATE_SELECT:
-            # Black silhouette with "???"
             pygame.draw.rect(self.screen, (20, 20, 20), portrait_rect)
-            q_text = self.title_font.render("???", True, JESTER_HIDDEN_COLOR)
-            self.screen.blit(q_text, (
-                portrait_rect.x + (128 - q_text.get_width()) // 2,
-                portrait_rect.y + (128 - q_text.get_height()) // 2
-            ))
+            q_text = self.font.render("???", True, JESTER_HIDDEN_COLOR)
+            self.screen.blit(
+                q_text,
+                (
+                    portrait_rect.x + (portrait_size - q_text.get_width()) // 2,
+                    portrait_rect.y + (portrait_size - q_text.get_height()) // 2,
+                ),
+            )
         elif self.portraits.get(index):
-            self.screen.blit(self.portraits[index], portrait_rect.topleft)
+            scaled = pygame.transform.scale(self.portraits[index], (portrait_size, portrait_size))
+            self.screen.blit(scaled, portrait_rect.topleft)
         else:
             pygame.draw.rect(self.screen, (40, 40, 60), portrait_rect)
-            placeholder = self.small_font.render("No Portrait", True, UNSELECTED_COLOR)
-            self.screen.blit(placeholder, (
-                portrait_rect.x + (128 - placeholder.get_width()) // 2,
-                portrait_rect.y + 55
-            ))
 
         # Text area (right of portrait)
-        text_x = x + pad + 128 + pad
+        text_x = x + pad + portrait_size + pad
         text_y = y + pad
+        text_max_w = text_right_edge - text_x
 
         if is_jester and self.state == STATE_SELECT:
-            name_text = self.font.render("???", True, JESTER_HIDDEN_COLOR)
-            self.screen.blit(name_text, (text_x, text_y))
-            flavor = self.small_font.render("A mystery awaits...", True, JESTER_HIDDEN_COLOR)
-            self.screen.blit(flavor, (text_x, text_y + 30))
+            self.screen.blit(self.font.render("???", True, JESTER_HIDDEN_COLOR), (text_x, text_y))
+            self.screen.blit(
+                self.small_font.render("A mystery awaits...", True, JESTER_HIDDEN_COLOR), (text_x, text_y + 28)
+            )
         else:
-            # Name
             name_color = SELECTED_COLOR if selected else WHITE
-            name_text = self.font.render(pc.name, True, name_color)
-            self.screen.blit(name_text, (text_x, text_y))
+            name_surf = self.font.render(pc.name, True, name_color)
+            self.screen.blit(name_surf, (text_x, text_y))
 
-            # Archetype
-            arch_text = self.small_font.render(f"({pc.archetype.title()})", True, UNSELECTED_COLOR)
-            self.screen.blit(arch_text, (text_x, text_y + 28))
+            arch_text = self.small_font.render(
+                f"({ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())})", True, UNSELECTED_COLOR
+            )
+            self.screen.blit(arch_text, (text_x, text_y + 26))
 
-            # Weapon
-            wpn_text = self.small_font.render(f"Weapon: {pc.starting_weapon}", True, ABILITY_COLOR)
-            self.screen.blit(wpn_text, (text_x, text_y + 50))
+            wpn_text = self.tiny_font.render(f"Weapon: {pc.starting_weapon}", True, ABILITY_COLOR)
+            self.screen.blit(wpn_text, (text_x, text_y + 46))
 
-        # Stats bar (below portrait)
-        stats_y = y + pad + 128 + 8
+            # Truncated flavor text (pixel-accurate)
+            flavor = pc.flavor_text
+            if flavor:
+                line1 = truncate_to_fit(flavor, self.tiny_font, text_max_w)
+                surf = self.tiny_font.render(line1, True, DIM_COLOR)
+                self.screen.blit(surf, (text_x, text_y + 64))
+                if len(line1) < len(flavor) and not line1.endswith("..."):
+                    rest = flavor[len(line1) :]
+                    line2 = truncate_to_fit(rest, self.tiny_font, text_max_w)
+                    surf2 = self.tiny_font.render(line2, True, DIM_COLOR)
+                    self.screen.blit(surf2, (text_x, text_y + 80))
+
+        # Stats (below portrait, full card width)
+        stats_y = y + pad + portrait_size + 8
+        card_bottom = y + h - pad
         if not (is_jester and self.state == STATE_SELECT):
-            self._draw_stat_bars_mini(x + pad, stats_y, w - 2 * pad, pc)
+            self._draw_stat_bars_mini(x + pad, stats_y, w - 2 * pad, pc, card_bottom)
         else:
-            hidden = self.small_font.render("Stats hidden until selected", True, JESTER_HIDDEN_COLOR)
+            hidden = self.tiny_font.render("Stats hidden until selected", True, JESTER_HIDDEN_COLOR)
             self.screen.blit(hidden, (x + pad, stats_y))
 
-    def _draw_stat_bars_mini(self, x, y, total_w, pc):
-        """Draw compact stat bars for card view."""
-        bar_h = 10
+    def _draw_stat_bars_mini(self, x, y, total_w, pc, y_limit):
+        bar_h = 8
         gap = 2
         for i, stat in enumerate(STAT_NAMES):
+            row_y = y + i * (bar_h + gap)
+            if row_y + bar_h > y_limit:
+                break
             val = getattr(pc.stats, stat)
-            label = self.small_font.render(f"{stat[:3]}", True, STAT_COLOR)
-            self.screen.blit(label, (x, y + i * (bar_h + gap)))
+            label = self.tiny_font.render(stat[:3], True, STAT_COLOR)
+            self.screen.blit(label, (x, row_y))
 
-            bar_x = x + 40
-            bar_w = total_w - 50
-            # Background
-            pygame.draw.rect(self.screen, (40, 40, 60), (bar_x, y + i * (bar_h + gap), bar_w, bar_h))
-            # Fill (scale 6-18 to 0-100%)
+            bar_x = x + 35
+            bar_w = total_w - 60
+            pygame.draw.rect(self.screen, (40, 40, 60), (bar_x, row_y, bar_w, bar_h))
             fill_pct = max(0, min(1, (val - 6) / 12))
             fill_w = int(bar_w * fill_pct)
             bar_color = SELECTED_COLOR if val >= 14 else STAT_COLOR if val >= 11 else (160, 80, 80)
-            pygame.draw.rect(self.screen, bar_color, (bar_x, y + i * (bar_h + gap), fill_w, bar_h))
-            # Value
-            val_text = self.small_font.render(str(val), True, WHITE)
-            self.screen.blit(val_text, (bar_x + bar_w + 4, y + i * (bar_h + gap) - 2))
+            pygame.draw.rect(self.screen, bar_color, (bar_x, row_y, fill_w, bar_h))
+            val_text = self.tiny_font.render(str(val), True, WHITE)
+            self.screen.blit(val_text, (bar_x + bar_w + 4, row_y - 1))
+
+    # ------------------------------------------------------------------
+    # Detail view — wireframe layout (portrait+stats top, desc mid, spells bottom)
+    # ------------------------------------------------------------------
 
     def _draw_detail_view(self):
-        """Draw detailed view of the selected class."""
         pc = self.class_options[self.selected_index]
         pad = 20
 
+        # Title bar (fixed)
         title = self.title_font.render(pc.name, True, TITLE_COLOR)
-        self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 15))
+        self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 10))
+        arch = self.small_font.render(
+            f"{ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())} \u2014 {pc.environment}",
+            True,
+            UNSELECTED_COLOR,
+        )
+        self.screen.blit(arch, ((SCREEN_WIDTH - arch.get_width()) // 2, 48))
 
-        arch = self.font.render(f"{pc.archetype.title()} — {pc.environment}", True, UNSELECTED_COLOR)
-        self.screen.blit(arch, ((SCREEN_WIDTH - arch.get_width()) // 2, 55))
+        header_h = 72
+        viewport_top = header_h
+        viewport_bottom = SCREEN_HEIGHT - FOOTER_HEIGHT
+        viewport_h = viewport_bottom - viewport_top
 
-        # Portrait (left column)
-        portrait_x, portrait_y = pad, 90
-        if self.portraits.get(self.selected_index):
-            portrait = pygame.transform.scale(self.portraits[self.selected_index], (180, 180))
-            self.screen.blit(portrait, (portrait_x, portrait_y))
-        else:
-            pygame.draw.rect(self.screen, (40, 40, 60), (portrait_x, portrait_y, 180, 180))
+        # Weapon info string
+        from src.models.weapon import STARTER_WEAPONS
 
-        # Flavor text
-        flavor_y = portrait_y + 190
-        draw_wrapped_text(self.screen, pc.flavor_text, pad, flavor_y, 180, self.small_font, UNSELECTED_COLOR)
+        starter = STARTER_WEAPONS.get(pc.archetype)
+        weapon_info = ""
+        if starter:
+            dt = starter.damage_type if starter.damage_type != "physical" else ""
+            dt_str = f"  |  {dt}" if dt else ""
+            weapon_info = f"{starter.weapon_type.title()}  |  {starter.dice_expr}  |  {starter.stat}{dt_str}"
 
-        # Weapon
-        weapon_y = flavor_y + 50
-        wpn = self.font.render(f"Weapon: {pc.starting_weapon}", True, ABILITY_COLOR)
-        self.screen.blit(wpn, (pad, weapon_y))
+        content_h = estimate_status_height(
+            pc.stats,
+            pc.flavor_text,
+            pc.starting_weapon,
+            pc.abilities,
+            pc.spells,
+        )
+        max_scroll = max(0, content_h - viewport_h)
+        self.detail_scroll = max(0, min(self.detail_scroll, max_scroll))
 
-        # Stats (middle column)
-        stats_x = pad + 200 + pad
-        stats_y = 90
-        stats_title = self.font.render("Stats", True, STAT_COLOR)
-        self.screen.blit(stats_title, (stats_x, stats_y))
-        stats_y += 30
-        for stat in STAT_NAMES:
-            val = getattr(pc.stats, stat)
-            mod = pc.stats.modifier(stat)
-            mod_str = f"+{mod}" if mod >= 0 else str(mod)
-            line = self.small_font.render(f"{stat}: {val} ({mod_str})", True, STAT_COLOR)
-            self.screen.blit(line, (stats_x, stats_y))
-            stats_y += 22
-        total = self.small_font.render(f"Total: {pc.stats.total()}/72", True, UNSELECTED_COLOR)
-        self.screen.blit(total, (stats_x, stats_y + 5))
+        clip_rect = pygame.Rect(0, viewport_top, SCREEN_WIDTH, viewport_h)
+        self.screen.set_clip(clip_rect)
 
-        # Abilities & Spells (right column)
-        right_x = stats_x + 160
-        right_y = 90
+        base_y = viewport_top - self.detail_scroll
+        portrait = self.portraits.get(self.selected_index)
 
-        if pc.abilities:
-            ab_title = self.font.render("Abilities", True, ABILITY_COLOR)
-            self.screen.blit(ab_title, (right_x, right_y))
-            right_y += 28
-            for ab in pc.abilities[:6]:
-                line = self.small_font.render(f"- {ab.name}", True, ABILITY_COLOR)
-                self.screen.blit(line, (right_x, right_y))
-                right_y += 20
+        draw_status_layout(
+            self.screen,
+            self.font,
+            self.small_font,
+            self.tiny_font,
+            portrait,
+            pc.stats,
+            pc.flavor_text,
+            pc.starting_weapon,
+            weapon_info,
+            pc.abilities,
+            pc.spells,
+            base_y,
+            pad,
+        )
 
-        right_y += 10
-        if pc.spells:
-            sp_title = self.font.render("Spells", True, SPELL_COLOR)
-            self.screen.blit(sp_title, (right_x, right_y))
-            right_y += 28
-            for sp in pc.spells[:6]:
-                type_tag = f"[{sp.spell_type}]"
-                line = self.small_font.render(f"- {sp.name} {type_tag}", True, SPELL_COLOR)
-                self.screen.blit(line, (right_x, right_y))
-                right_y += 20
+        self.screen.set_clip(None)
 
-        # Hints
+        if self.detail_scroll > 0:
+            arrow = self.tiny_font.render("\u25b2 Scroll up", True, HINT_COLOR)
+            self.screen.blit(arrow, ((SCREEN_WIDTH - arrow.get_width()) // 2, viewport_top + 2))
+        if self.detail_scroll < max_scroll:
+            arrow = self.tiny_font.render("\u25bc Scroll down", True, HINT_COLOR)
+            self.screen.blit(arrow, ((SCREEN_WIDTH - arrow.get_width()) // 2, viewport_bottom - 16))
+
         hint = self.small_font.render(
-            "Enter to select this class  |  Esc to go back",
-            True, UNSELECTED_COLOR
+            "Enter to select this class  |  Esc to go back  |  Up/Down to scroll",
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
+    # ------------------------------------------------------------------
+    # Name input
+    # ------------------------------------------------------------------
+
     def _draw_name_input(self):
-        """Draw the character naming screen."""
         title = self.title_font.render("Name Your Character", True, TITLE_COLOR)
         self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, SCREEN_HEIGHT // 3 - 60))
 
         pc = self.class_options[self.selected_index]
-        cls_text = self.font.render(f"Class: {pc.name} ({pc.archetype.title()})", True, UNSELECTED_COLOR)
+        cls_text = self.font.render(
+            f"Class: {pc.name} ({ARCHETYPE_DISPLAY.get(pc.archetype, pc.archetype.title())})", True, UNSELECTED_COLOR
+        )
         self.screen.blit(cls_text, ((SCREEN_WIDTH - cls_text.get_width()) // 2, SCREEN_HEIGHT // 3))
 
-        # Name input box
-        box_w = 400
-        box_h = 50
+        box_w, box_h = 400, 50
         box_x = (SCREEN_WIDTH - box_w) // 2
         box_y = SCREEN_HEIGHT // 2 - box_h // 2
         pygame.draw.rect(self.screen, PANEL_BG, (box_x, box_y, box_w, box_h))
@@ -268,33 +300,36 @@ class ClassSelectView:
 
         hint = self.small_font.render(
             "Type your name and press Enter  |  Esc to go back",
-            True, UNSELECTED_COLOR
+            True,
+            UNSELECTED_COLOR,
         )
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
 
+    # ------------------------------------------------------------------
+    # Confirm (Enter / Esc)
+    # ------------------------------------------------------------------
+
     def _draw_confirm(self):
-        """Draw confirmation: 'Will you be [Name] the [Class]?'"""
         pc = self.class_options[self.selected_index]
 
         question = self.title_font.render(
             f"Will you be {self.player_name} the {pc.name}?",
-            True, TITLE_COLOR
+            True,
+            TITLE_COLOR,
         )
         self.screen.blit(question, ((SCREEN_WIDTH - question.get_width()) // 2, SCREEN_HEIGHT // 3))
 
-        yes_text = self.font.render("[Y] Yes, begin my journey", True, CONFIRM_COLOR)
-        no_text = self.font.render("[N] No, let me reconsider", True, UNSELECTED_COLOR)
+        yes_text = self.font.render("[Enter] Begin my journey", True, CONFIRM_COLOR)
+        no_text = self.font.render("[Esc] Let me reconsider", True, UNSELECTED_COLOR)
         self.screen.blit(yes_text, ((SCREEN_WIDTH - yes_text.get_width()) // 2, SCREEN_HEIGHT // 2))
         self.screen.blit(no_text, ((SCREEN_WIDTH - no_text.get_width()) // 2, SCREEN_HEIGHT // 2 + 40))
 
-    def handle_input(self, event) -> dict | None:
-        """Process keydown event. Returns action dict or None.
+    # ------------------------------------------------------------------
+    # Input handling
+    # ------------------------------------------------------------------
 
-        Possible return values:
-        - {"action": "selected", "class_index": int, "player_name": str}
-        - {"action": "back"}
-        - None (no action)
-        """
+    def handle_input(self, event) -> dict | None:
+        """Process keydown event. Returns action dict or None."""
         if self.state == STATE_SELECT:
             return self._handle_select_input(event)
         elif self.state == STATE_DETAIL:
@@ -319,6 +354,7 @@ class ClassSelectView:
             if self.selected_index + 2 < len(self.class_options):
                 self.selected_index += 2
         elif event.key == pygame.K_RETURN:
+            self.detail_scroll = 0
             self.state = STATE_DETAIL
         elif event.key == pygame.K_ESCAPE:
             return {"action": "back"}
@@ -329,6 +365,10 @@ class ClassSelectView:
             self.state = STATE_NAME
         elif event.key == pygame.K_ESCAPE:
             self.state = STATE_SELECT
+        elif event.key == pygame.K_UP:
+            self.detail_scroll = max(0, self.detail_scroll - DETAIL_SCROLL_STEP)
+        elif event.key == pygame.K_DOWN:
+            self.detail_scroll += DETAIL_SCROLL_STEP
         return None
 
     def _handle_name_input(self, event):
@@ -344,13 +384,13 @@ class ClassSelectView:
         return None
 
     def _handle_confirm_input(self, event):
-        if event.key == pygame.K_y:
+        if event.key == pygame.K_RETURN:
             return {
                 "action": "selected",
                 "class_index": self.selected_index,
                 "player_name": self.player_name.strip(),
             }
-        elif event.key in (pygame.K_n, pygame.K_ESCAPE):
+        elif event.key == pygame.K_ESCAPE:
             self.state = STATE_SELECT
             self.player_name = ""
         return None

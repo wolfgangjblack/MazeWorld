@@ -4,10 +4,11 @@ Opened with Tab key during normal gameplay (not during combat/events).
 """
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.views.save_load_panel import SaveLoadPanel
 
 TABS = ["Save/Load", "Quest Log", "Followers"]
-SAVE_LOAD_ITEMS = ["Save Game", "Load Game", "Back"]
 
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
@@ -29,8 +30,7 @@ FOLLOWER_DETAIL_COLOR = (180, 180, 180)
 class PlayerMenuView:
     """Player menu with tabs: Save/Load, Quest Log, Followers."""
 
-    def __init__(self, screen, font, can_save=True, has_saves=False,
-                 quest_log=None, follower_info=None):
+    def __init__(self, screen, font, can_save=True, has_saves=False, quest_log=None, follower_info=None, saves=None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 48)
@@ -41,22 +41,31 @@ class PlayerMenuView:
         self.has_saves = has_saves
         self.quest_log = quest_log or {"active": [], "completed": [], "failed": []}
         self.follower_info = follower_info or []
-        self.status_message = ""
-        self.status_is_error = False
         # Quest log scroll
         self.quest_scroll_offset = 0
         # Follower selection
         self.follower_selected = 0
 
+        # Embedded save/load panel
+        self.save_load_panel = SaveLoadPanel(
+            screen,
+            font,
+            saves or [],
+            can_save=can_save,
+        )
+
     def set_status(self, message: str, is_error: bool = False):
-        self.status_message = message
-        self.status_is_error = is_error
+        self.save_load_panel.set_status(message, is_error)
 
     def update_quest_log(self, quest_log: dict):
         self.quest_log = quest_log
 
     def update_follower_info(self, follower_info: list[dict]):
         self.follower_info = follower_info
+
+    def refresh_saves(self, saves: list[dict]):
+        self.save_load_panel.refresh_saves(saves)
+        self.has_saves = bool(saves)
 
     def draw(self):
         # Semi-transparent overlay
@@ -65,20 +74,20 @@ class PlayerMenuView:
         overlay.set_alpha(200)
         self.screen.blit(overlay, (0, 0))
 
-        # Draw tab bar
-        self._draw_tabs()
-
         if self.active_tab == 0:
-            self._draw_save_load()
-        elif self.active_tab == 1:
-            self._draw_quest_log()
-        elif self.active_tab == 2:
-            self._draw_followers()
+            self.save_load_panel.draw()
+        else:
+            # Draw tab bar for Quest Log / Followers
+            self._draw_tabs()
+            if self.active_tab == 1:
+                self._draw_quest_log()
+            elif self.active_tab == 2:
+                self._draw_followers()
 
-        # Hint
-        hint_text = "Tab/Esc: Close  |  Left/Right: Switch Tab"
-        hint_surface = self.small_font.render(hint_text, True, (100, 100, 100))
-        self.screen.blit(hint_surface, (10, SCREEN_HEIGHT - 30))
+            # Hint
+            hint_text = "Tab/Esc: Close  |  Left/Right: Switch Tab"
+            hint_surface = self.small_font.render(hint_text, True, (100, 100, 100))
+            self.screen.blit(hint_surface, (10, SCREEN_HEIGHT - 30))
 
     def _draw_tabs(self):
         tab_y = 20
@@ -92,57 +101,7 @@ class PlayerMenuView:
             self.screen.blit(text, (x, tab_y))
 
         # Separator line
-        pygame.draw.line(self.screen, (80, 80, 80),
-                         (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
-
-    # ------------------------------------------------------------------
-    # Tab 0: Save / Load
-    # ------------------------------------------------------------------
-
-    def _draw_save_load(self):
-        title_surface = self.title_font.render("Menu", True, TITLE_COLOR)
-        title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
-        self.screen.blit(title_surface, (title_x, 80))
-
-        line_height = self.font.get_linesize()
-        start_y = SCREEN_HEIGHT // 2 - 30
-
-        for i, item in enumerate(SAVE_LOAD_ITEMS):
-            disabled = self._is_save_load_disabled(i)
-            if disabled:
-                color = DISABLED_COLOR
-            elif i == self.selected_index:
-                color = SELECTED_COLOR
-            else:
-                color = UNSELECTED_COLOR
-
-            prefix = "> " if i == self.selected_index else "  "
-            label = item
-            if disabled:
-                if item == "Save Game":
-                    label += " (in combat)"
-                elif item == "Load Game":
-                    label += " (no saves)"
-            text_surface = self.font.render(f"{prefix}{label}", True, color)
-            text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
-            self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
-
-        if self.status_message:
-            msg_color = ERROR_COLOR if self.status_is_error else STATUS_COLOR
-            msg_surface = self.font.render(self.status_message, True, msg_color)
-            msg_x = (SCREEN_WIDTH - msg_surface.get_width()) // 2
-            self.screen.blit(
-                msg_surface,
-                (msg_x, start_y + len(SAVE_LOAD_ITEMS) * (line_height + 10) + 20),
-            )
-
-    def _is_save_load_disabled(self, index: int) -> bool:
-        item = SAVE_LOAD_ITEMS[index]
-        if item == "Save Game" and not self.can_save:
-            return True
-        if item == "Load Game" and not self.has_saves:
-            return True
-        return False
+        pygame.draw.line(self.screen, (80, 80, 80), (20, tab_y + 30), (SCREEN_WIDTH - 20, tab_y + 30))
 
     # ------------------------------------------------------------------
     # Tab 1: Quest Log
@@ -235,40 +194,39 @@ class PlayerMenuView:
             self.screen.blit(empty, (empty_x, SCREEN_HEIGHT // 2 - 20))
             return
 
-        count_text = self.small_font.render(
-            f"({len(self.follower_info)}/{2} slots)", True, DISABLED_COLOR)
+        count_text = self.small_font.render(f"({len(self.follower_info)}/{2} slots)", True, DISABLED_COLOR)
         self.screen.blit(count_text, (SCREEN_WIDTH - margin - count_text.get_width(), 80))
 
         for i, info in enumerate(self.follower_info):
-            is_selected = (i == self.follower_selected)
+            is_selected = i == self.follower_selected
             prefix = "> " if is_selected else "  "
 
             # Name
             name_color = SELECTED_COLOR if is_selected else FOLLOWER_NAME_COLOR
-            name_surface = self.font.render(
-                f"{prefix}{info['name']}", True, name_color)
+            name_surface = self.font.render(f"{prefix}{info['name']}", True, name_color)
             self.screen.blit(name_surface, (margin, y))
             y += line_h
 
             # Quest summary
             if info.get("quest_summary"):
                 quest_surface = self.small_font.render(
-                    f"    Quest: {info['quest_summary']}", True, FOLLOWER_DETAIL_COLOR)
+                    f"    Quest: {info['quest_summary']}", True, FOLLOWER_DETAIL_COLOR
+                )
                 self.screen.blit(quest_surface, (margin, y))
                 y += line_h - 2
 
             # Destination
             dest = info.get("destination_room", 0)
             dest_text = f"Room {dest}" if dest > 0 else "This room"
-            dest_surface = self.small_font.render(
-                f"    Destination: {dest_text}", True, FOLLOWER_DETAIL_COLOR)
+            dest_surface = self.small_font.render(f"    Destination: {dest_text}", True, FOLLOWER_DETAIL_COLOR)
             self.screen.blit(dest_surface, (margin, y))
             y += line_h - 2
 
             # Personality
             if info.get("personality"):
                 pers_surface = self.small_font.render(
-                    f"    Personality: {info['personality'][:50]}", True, FOLLOWER_DETAIL_COLOR)
+                    f"    Personality: {info['personality'][:50]}", True, FOLLOWER_DETAIL_COLOR
+                )
                 self.screen.blit(pers_surface, (margin, y))
                 y += line_h - 2
 
@@ -276,23 +234,40 @@ class PlayerMenuView:
 
         # Talk hint
         if self.follower_info:
-            talk_hint = self.small_font.render(
-                "Enter: Talk to selected follower", True, (100, 100, 100))
+            talk_hint = self.small_font.render("Enter: Talk to selected follower", True, (100, 100, 100))
             self.screen.blit(talk_hint, (margin, SCREEN_HEIGHT - 60))
 
     # ------------------------------------------------------------------
     # Input handling
     # ------------------------------------------------------------------
 
-    def handle_input(self, event) -> str | None:
-        """Process keydown. Returns action string or None.
+    def handle_input(self, event) -> str | dict | None:
+        """Process keydown. Returns action string, panel action dict, or None.
 
-        Actions: 'save', 'load', 'back', 'talk_follower_N' (N = index).
+        Actions: panel dicts (save_new, save_overwrite, load, delete),
+        'back', 'talk_follower_N' (N = index).
         """
+        # When on Save/Load tab, delegate entirely to SaveLoadPanel
+        # (must be checked before Tab/Esc so confirm dialogs work)
+        if self.active_tab == 0:
+            # Tab always closes the whole menu
+            if event.key == pygame.K_TAB:
+                return "back"
+            result = self.save_load_panel.handle_input(event)
+            if result is None:
+                return None
+            if result["action"] == "back":
+                # Panel Esc: switch to next outer tab instead of closing
+                self.active_tab = 1
+                self.follower_selected = 0
+                return None
+            return result
+
+        # Close menu on Tab/Esc (only for non-panel tabs)
         if event.key in (pygame.K_TAB, pygame.K_ESCAPE):
             return "back"
 
-        # Tab switching
+        # Tab switching for other tabs
         if event.key == pygame.K_LEFT:
             self.active_tab = (self.active_tab - 1) % len(TABS)
             self.selected_index = 0
@@ -305,29 +280,10 @@ class PlayerMenuView:
             return None
 
         # Tab-specific input
-        if self.active_tab == 0:
-            return self._handle_save_load_input(event)
-        elif self.active_tab == 1:
+        if self.active_tab == 1:
             return self._handle_quest_log_input(event)
         elif self.active_tab == 2:
             return self._handle_follower_input(event)
-        return None
-
-    def _handle_save_load_input(self, event) -> str | None:
-        if event.key == pygame.K_UP:
-            self.selected_index = (self.selected_index - 1) % len(SAVE_LOAD_ITEMS)
-        elif event.key == pygame.K_DOWN:
-            self.selected_index = (self.selected_index + 1) % len(SAVE_LOAD_ITEMS)
-        elif event.key == pygame.K_RETURN:
-            if self._is_save_load_disabled(self.selected_index):
-                return None
-            selected = SAVE_LOAD_ITEMS[self.selected_index]
-            if selected == "Save Game":
-                return "save"
-            elif selected == "Load Game":
-                return "load"
-            elif selected == "Back":
-                return "back"
         return None
 
     def _handle_quest_log_input(self, event) -> str | None:
@@ -340,8 +296,7 @@ class PlayerMenuView:
         if event.key == pygame.K_UP:
             self.follower_selected = max(0, self.follower_selected - 1)
         elif event.key == pygame.K_DOWN:
-            self.follower_selected = min(
-                len(self.follower_info) - 1, self.follower_selected + 1)
+            self.follower_selected = min(len(self.follower_info) - 1, self.follower_selected + 1)
         elif event.key == pygame.K_RETURN:
             return f"talk_follower_{self.follower_selected}"
         return None

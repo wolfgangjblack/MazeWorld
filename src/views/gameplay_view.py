@@ -1,11 +1,12 @@
 import pygame
-from config import BLACK, WHITE, SCREEN_WIDTH, SCREEN_HEIGHT
-from src.views.npc_view import NPCView
-from src.views.maze_view import MazeView
-from src.views.player_view import PlayerView
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from src.registry import registry
 from src.views.dialogue_view import DialogueBoxView
 from src.views.encounter_view import EncounterView
-from src.registry import registry
+from src.views.maze_view import MazeView
+from src.views.npc_view import NPCView
+from src.views.player_view import PlayerView
 
 
 class GameView:
@@ -22,14 +23,36 @@ class GameView:
         self.title_font = pygame.font.Font(None, 36)
         self.quest_font = pygame.font.Font(None, 24)
 
-    def draw_game(self, maze, player, npcs, inventory_active, item_message_active,
-                  current_npc, player_at_item, quests=None, debug_reveal=False,
-                  shop_active=False, shop_npc=None, shop_mode="buy",
-                  shop_selected_index=0,
-                  quest_log_active=False, quest_log=None, followers=None,
-                  fog=None, visibility_radius=3, night_alpha=0,
-                  time_period=None, day_number=None,
-                  item_detail_active=False):
+    def draw_game(
+        self,
+        maze,
+        player,
+        npcs,
+        inventory_active,
+        item_message_active,
+        current_npc,
+        player_at_item,
+        quests=None,
+        debug_reveal=False,
+        shop_active=False,
+        shop_npc=None,
+        shop_mode="buy",
+        shop_selected_index=0,
+        quest_log_active=False,
+        quest_log=None,
+        followers=None,
+        fog=None,
+        visibility_radius=3,
+        night_alpha=0,
+        time_period=None,
+        day_number=None,
+        period_progress=0.0,
+        item_detail_active=False,
+        event_type_map=None,
+        event_flag_map=None,
+        dialogue_choices=None,
+        dialogue_choice_index=0,
+    ):
         self.screen.fill(BLACK)
 
         escort_zones = self._get_escort_zones(quests, player) if quests else None
@@ -41,24 +64,31 @@ class GameView:
             if item_detail_active:
                 self.draw_item_detail(player)
         else:
-            self.maze_view.draw_maze(self.screen, maze, escort_zones=escort_zones,
-                                     debug_reveal=debug_reveal,
-                                     fog=fog, player_x=player.x, player_y=player.y,
-                                     visibility_radius=visibility_radius,
-                                     night_alpha=night_alpha)
+            self.maze_view.draw_maze(
+                self.screen,
+                maze,
+                escort_zones=escort_zones,
+                debug_reveal=debug_reveal,
+                fog=fog,
+                player_x=player.x,
+                player_y=player.y,
+                visibility_radius=visibility_radius,
+                night_alpha=night_alpha,
+                event_type_map=event_type_map,
+                event_flag_map=event_flag_map,
+            )
 
             for npc in npcs:
                 # Only draw NPCs in revealed/visible tiles (if fog active)
                 if fog and not debug_reveal:
-                    if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y,
-                                                     visibility_radius, maze=maze):
+                    if not fog.is_currently_visible(npc.x, npc.y, player.x, player.y, visibility_radius, maze=maze):
                         continue
                 self.npc_view.draw_npc(self.screen, npc)
 
             self.player_view.draw_player(self.screen, player)
-            self.player_view.draw_hud(self.screen, player,
-                                       time_period=time_period,
-                                       day_number=day_number)
+            self.player_view.draw_hud(
+                self.screen, player, time_period=time_period, day_number=day_number, period_progress=period_progress
+            )
 
             # Show follower count in HUD area
             if followers:
@@ -66,11 +96,16 @@ class GameView:
                 ft = self.font.render(f"Followers: {follower_names}", True, (180, 255, 180))
                 self.screen.blit(ft, (10, SCREEN_HEIGHT - 70))
 
-        if (current_npc and not item_message_active and
-            not inventory_active
+        if (
+            current_npc
+            and not item_message_active
+            and not inventory_active
             and not self.dialogue_box.dialogue_active
-            and not self.dialogue_box.event_active and not quest_log_active):
+            and not self.dialogue_box.event_active
+            and not quest_log_active
+        ):
             from src.models.npc import MerchantNPC
+
             if isinstance(current_npc, MerchantNPC):
                 text_surface = self.font.render("Enter: Talk  |  S: Shop", True, WHITE)
             else:
@@ -79,10 +114,16 @@ class GameView:
 
         if debug_reveal:
             debug_surface = self.font.render("DEBUG", True, (255, 0, 0))
-            self.screen.blit(debug_surface,
-                             (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
+            self.screen.blit(debug_surface, (SCREEN_WIDTH - debug_surface.get_width() - 10, 10))
 
-        self.draw_dialogue_and_messages(player, maze, item_message_active, player_at_item)
+        self.draw_dialogue_and_messages(
+            player,
+            maze,
+            item_message_active,
+            player_at_item,
+            dialogue_choices=dialogue_choices,
+            dialogue_choice_index=dialogue_choice_index,
+        )
 
     def _get_escort_zones(self, quests, player):
         """Return a list of (x, y) target zones for active escort quests."""
@@ -90,66 +131,150 @@ class GameView:
         if not quests:
             return zones
         for quest in quests.values():
-            if (quest.type == "escort" and quest.status == "active"
-                    and quest.id in player.active_quests):
-                tz = getattr(quest, 'target_zone', None)
+            if quest.type == "escort" and quest.status == "active" and quest.id in player.active_quests:
+                tz = getattr(quest, "target_zone", None)
                 if tz:
                     zones.append(tuple(tz))
         return zones
 
     def draw_inventory(self, player):
-        bg = pygame.Rect(100, 80, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 160)
-        pygame.draw.rect(self.screen, (200, 200, 200), bg)
-        pygame.draw.rect(self.screen, (80, 80, 80), bg, 2)
+        from src.views.portrait_utils import load_portrait
 
-        # Title and money
-        title = self.font.render("INVENTORY", True, (0, 0, 0))
-        self.screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 90))
-        money_text = self.font.render(f"Gold: {player.money}", True, (180, 150, 0))
-        self.screen.blit(money_text, (SCREEN_WIDTH - 280, 90))
+        M = 20
+        detail_h = 155
+        title_h = 40
+        ctrl_h = 25
+        list_top = M + title_h + 5
+        list_bottom = SCREEN_HEIGHT - M - detail_h - ctrl_h - 10
+        panel_w = SCREEN_WIDTH - M * 2
+
+        # Outer frame
+        pygame.draw.rect(self.screen, (25, 25, 40), (M, M, panel_w, SCREEN_HEIGHT - M * 2))
+        pygame.draw.rect(self.screen, (100, 100, 130), (M, M, panel_w, SCREEN_HEIGHT - M * 2), 2)
+
+        # Title bar
+        title = self.font.render("Inventory", True, (255, 215, 0))
+        self.screen.blit(title, (M + 15, M + 10))
+        money_text = self.small_font.render(f"Gold: {player.money}", True, (200, 170, 50))
+        self.screen.blit(money_text, (SCREEN_WIDTH - M - money_text.get_width() - 15, M + 14))
+        pygame.draw.line(self.screen, (80, 80, 100), (M, M + title_h), (SCREEN_WIDTH - M, M + title_h))
 
         inventory = player.get_inventory()
-        y_start = 130
-        for index, (item_name, quantity) in enumerate(inventory):
-            selected = index == player.selected_item_index
-            color = (255, 0, 0) if selected else (0, 0, 0)
+        row_h = 26
+        half_space = 8
+        stride = row_h + half_space
+        visible_count = max(1, (list_bottom - list_top) // stride)
+        scroll = getattr(player, "_inv_scroll", 0)
+        total = len(inventory)
 
-            # Equipped indicator
-            prefix = ""
-            if player.equipped_weapon == item_name:
-                prefix = "[E] "
+        for vi in range(visible_count):
+            idx = scroll + vi
+            if idx >= total:
+                break
+            item_name, quantity = inventory[idx]
+            selected = idx == player.selected_item_index
+            y = list_top + vi * stride
 
-            item_text = f"{prefix}{quantity}x {item_name}"
-            text_surface = self.font.render(item_text, True, color)
-            self.screen.blit(text_surface, (150, y_start + index * 30))
+            if selected:
+                sel_rect = pygame.Rect(M + 4, y - 2, panel_w - 8, row_h + 4)
+                pygame.draw.rect(self.screen, (55, 55, 85), sel_rect)
 
-            # Show item stats on selected
-            if selected and item_name in player.inventory:
-                item_obj = player.inventory[item_name]
+            is_equipped = player.equipped_weapon == item_name
+            prefix = "[E] " if is_equipped else ""
+            color = (255, 255, 100) if selected else ((140, 220, 140) if is_equipped else (200, 200, 200))
+            name_surf = self.font.render(f"  {prefix}{item_name}", True, color)
+            self.screen.blit(name_surf, (M + 12, y + 2))
+
+            qty_surf = self.font.render(f"x{quantity}", True, color)
+            self.screen.blit(qty_surf, (SCREEN_WIDTH - M - qty_surf.get_width() - 15, y + 2))
+
+        if total > visible_count:
+            start_show = scroll + 1
+            end_show = min(scroll + visible_count, total)
+            ind = self.small_font.render(f"{start_show}-{end_show} / {total}", True, (100, 100, 100))
+            self.screen.blit(ind, (SCREEN_WIDTH - M - ind.get_width() - 15, list_bottom + 2))
+
+        # Separator before detail panel
+        detail_y = SCREEN_HEIGHT - M - detail_h - ctrl_h - 5
+        pygame.draw.line(self.screen, (80, 80, 100), (M, detail_y - 3), (SCREEN_WIDTH - M, detail_y - 3))
+
+        # Detail panel
+        det_rect = pygame.Rect(M + 4, detail_y, panel_w - 8, detail_h)
+        pygame.draw.rect(self.screen, (35, 33, 48), det_rect)
+        pygame.draw.rect(self.screen, (80, 80, 100), det_rect, 1)
+
+        if inventory and 0 <= player.selected_item_index < total:
+            sel_name, _ = inventory[player.selected_item_index]
+            if sel_name in player.inventory:
+                item_obj = player.inventory[sel_name]
+                cx = M + 18
+                cy = detail_y + 8
+                portrait_w = 0
+
+                portrait_surf = load_portrait(getattr(item_obj, "profile_image", None), (80, 80))
+                if portrait_surf:
+                    px = SCREEN_WIDTH - M - 95
+                    self.screen.blit(portrait_surf, (px, cy))
+                    pygame.draw.rect(self.screen, (100, 100, 130), (px, cy, 80, 80), 1)
+                    portrait_w = 92
+
+                desc_max_w = panel_w - 40 - portrait_w
+
+                nm = self.font.render(item_obj.name, True, (255, 215, 0))
+                self.screen.blit(nm, (cx, cy))
+                cy += 22
+
+                desc_lines = self._wrap_inv_text(item_obj.desc, desc_max_w)
+                for dl in desc_lines[:3]:
+                    ds = self.small_font.render(dl, True, (190, 190, 190))
+                    self.screen.blit(ds, (cx, cy))
+                    cy += 16
+
+                cy = detail_y + detail_h - 30
                 stats = item_obj.item_stats
-                detail_parts = []
-                if stats.nutrition_value:
-                    detail_parts.append(f"Food:{stats.nutrition_value}")
-                if stats.hydration_value:
-                    detail_parts.append(f"Water:{stats.hydration_value}")
-                if stats.health_value:
-                    detail_parts.append(f"HP:{stats.health_value}")
+                stat_parts = []
                 if stats.attack_dice:
-                    detail_parts.append(f"Dmg:{stats.attack_dice}")
+                    stat_parts.append(f"Dmg: {stats.attack_dice}")
+                if stats.stat_modifier:
+                    stat_parts.append(f"Stat: {stats.stat_modifier}")
+                if stats.stamina_value:
+                    stat_parts.append(f"Stam: {stats.stamina_value:+d}")
+                if stats.health_value:
+                    stat_parts.append(f"HP: {stats.health_value:+d}")
                 if stats.attribute:
-                    detail_parts.append(f"Attr:{stats.attribute}")
-                if stats.price:
-                    detail_parts.append(f"Val:{stats.price}g")
+                    stat_parts.append(f"Attr: {stats.attribute}")
                 if stats.uses > 1:
-                    detail_parts.append(f"Uses:{stats.uses}")
-                if detail_parts:
-                    detail = "  ".join(detail_parts)
-                    detail_surface = self.font.render(detail, True, (80, 80, 80))
-                    self.screen.blit(detail_surface, (150, y_start + index * 30 + 16))
+                    stat_parts.append(f"Uses: {stats.uses}")
 
-        controls = "Up/Down: Select  |  Enter/U: Use  |  E: Equip  |  D: Details  |  Esc: Close"
-        exit_text = self.font.render(controls, True, (0, 0, 0))
-        self.screen.blit(exit_text, (105, SCREEN_HEIGHT - 120))
+                stat_str = "  |  ".join(stat_parts) if stat_parts else "No notable stats"
+                stat_s = self.small_font.render(stat_str, True, (150, 200, 150))
+                self.screen.blit(stat_s, (cx, cy))
+                if stats.price:
+                    val_s = self.small_font.render(f"Value: {stats.price}g", True, (200, 180, 100))
+                    self.screen.blit(val_s, (SCREEN_WIDTH - M - val_s.get_width() - 18, cy))
+
+        # Controls bar
+        ctrl_y = SCREEN_HEIGHT - M - ctrl_h
+        pygame.draw.line(self.screen, (80, 80, 100), (M, ctrl_y - 3), (SCREEN_WIDTH - M, ctrl_y - 3))
+        ctrl = self.small_font.render(
+            "Up/Down: Select  |  Enter: Use  |  E: Equip  |  D: Details  |  Esc: Close", True, (100, 100, 100)
+        )
+        self.screen.blit(ctrl, (M + 12, ctrl_y + 2))
+
+    def _wrap_inv_text(self, text, max_w):
+        words = text.split()
+        lines, cur = [], ""
+        for w in words:
+            test = f"{cur} {w}".strip()
+            if self.small_font.size(test)[0] <= max_w:
+                cur = test
+            else:
+                if cur:
+                    lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines
 
     def draw_item_detail(self, player):
         """Draw item detail popup overlay for the currently selected inventory item."""
@@ -180,6 +305,7 @@ class GameView:
         if item.profile_image:
             try:
                 import os
+
                 if os.path.exists(item.profile_image):
                     img = pygame.image.load(item.profile_image)
                     img = pygame.transform.scale(img, (96, 96))
@@ -196,13 +322,20 @@ class GameView:
         y += 35
 
         # Category / type
-        type_name = type(item).__name__
-        cat_surf = self.small_font.render(f"Type: {type_name}  |  Category: {item.category}", True, (160, 160, 160))
+        from src.models.items import Weapon as InvWeapon
+
+        if isinstance(item, InvWeapon):
+            wtype = getattr(item, "weapon_type", "heavy").capitalize()
+            wcat = getattr(item, "weapon_category", "simple").capitalize()
+            cat_text = f"{wtype} {wcat} Weapon"
+        else:
+            cat_text = item.category.replace("_", " ").title()
+        cat_surf = self.small_font.render(cat_text, True, (160, 160, 160))
         self.screen.blit(cat_surf, (content_x, y))
         y += 22
 
         # Equipped indicator
-        if hasattr(player, 'equipped_weapon') and player.equipped_weapon == item.name:
+        if hasattr(player, "equipped_weapon") and player.equipped_weapon == item.name:
             eq_surf = self.font.render("[EQUIPPED]", True, (100, 255, 100))
             self.screen.blit(eq_surf, (content_x, y))
             y += 24
@@ -246,10 +379,15 @@ class GameView:
             stat_lines.append(f"Damage: {stats.attack_dice}")
         if stats.stat_modifier:
             stat_lines.append(f"Stat: {stats.stat_modifier}")
-        if stats.nutrition_value:
-            stat_lines.append(f"Nutrition: {stats.nutrition_value:+d}")
-        if stats.hydration_value:
-            stat_lines.append(f"Hydration: {stats.hydration_value:+d}")
+        if isinstance(item, InvWeapon):
+            dmg_type = getattr(item, "damage_type", "")
+            if dmg_type:
+                stat_lines.append(f"Dmg Type: {dmg_type.capitalize()}")
+            magic_el = getattr(item, "magic_element", None)
+            if magic_el:
+                stat_lines.append(f"Element: {magic_el.capitalize()}")
+        if stats.stamina_value:
+            stat_lines.append(f"Stamina: {stats.stamina_value:+d}")
         if stats.health_value:
             stat_lines.append(f"Health: {stats.health_value:+d}")
         if stats.uses > 1:
@@ -272,8 +410,7 @@ class GameView:
 
         # Close hint
         hint = self.small_font.render("Esc / D: Close detail", True, (120, 120, 120))
-        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2,
-                                panel_y + panel_h - 25))
+        self.screen.blit(hint, (panel_x + panel_w // 2 - hint.get_width() // 2, panel_y + panel_h - 25))
 
     def draw_quest_log(self, quest_log):
         """Draw the quest log overlay with active/completed/failed sections."""
@@ -313,24 +450,57 @@ class GameView:
                     break
             y += 10
 
-        exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (180, 180, 180))
-        self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2,
-                                     SCREEN_HEIGHT - 60))
+        # Combat record section
+        combat_stats = quest_log.get("combat_stats", {})
+        if combat_stats and y < SCREEN_HEIGHT - 160:
+            pygame.draw.line(self.screen, (80, 80, 100), (70, y), (SCREEN_WIDTH - 70, y))
+            y += 8
+            hdr = self.font.render("— Combat Record —", True, (150, 150, 200))
+            self.screen.blit(hdr, (70, y))
+            y += 28
+            lines = [
+                f"Combats Won: {combat_stats.get('combats_won', 0)}",
+                f"Monsters Killed: {combat_stats.get('monsters_killed', 0)}",
+                f"Combats Fled: {combat_stats.get('combats_fled', 0)}",
+            ]
+            enc = quest_log.get("encounters_cleared", 0)
+            total_enc = quest_log.get("total_encounters", 0)
+            if total_enc:
+                lines.append(f"Encounters: {enc}/{total_enc}")
+            for line in lines:
+                if y > SCREEN_HEIGHT - 90:
+                    break
+                surf = self.quest_font.render(f"  {line}", True, (180, 200, 180))
+                self.screen.blit(surf, (90, y))
+                y += 22
 
-    def draw_dialogue_and_messages(self, player, maze, item_message_active, player_at_item):
+        exit_bg = pygame.Rect(0, SCREEN_HEIGHT - 80, SCREEN_WIDTH, 40)
+        pygame.draw.rect(self.screen, (30, 30, 50), exit_bg)
+        pygame.draw.line(self.screen, (80, 80, 100), (50, SCREEN_HEIGHT - 80), (SCREEN_WIDTH - 50, SCREEN_HEIGHT - 80))
+        exit_text = self.quest_font.render("Press 'Q' or 'Esc' to close", True, (200, 200, 210))
+        self.screen.blit(exit_text, (SCREEN_WIDTH // 2 - exit_text.get_width() // 2, SCREEN_HEIGHT - 72))
+
+    def draw_dialogue_and_messages(
+        self,
+        player,
+        maze,
+        item_message_active,
+        player_at_item,
+        dialogue_choices=None,
+        dialogue_choice_index=0,
+    ):
         if self.dialogue_box.event_active:
             event = self.dialogue_box.current_event
-            # Use full-screen encounter view for puzzle/event types,
-            # and for combat initiative (trigger screen before combat starts).
-            # Once multi-turn combat is underway, use the dialogue view's combat renderer.
-            if event and (event.type in ("puzzle", "event")
-                         or (event.type == "combat"
-                             and self.dialogue_box.combat_phase == "initiative")):
+            if event and event.type in ("puzzle", "event"):
                 self.encounter_view.draw(self.dialogue_box)
             else:
                 self.dialogue_view.draw(self.dialogue_box)
         elif item_message_active or self.dialogue_box.dialogue_active:
-            self.dialogue_view.draw(self.dialogue_box)
+            self.dialogue_view.draw(
+                self.dialogue_box,
+                choices=dialogue_choices,
+                choice_index=dialogue_choice_index,
+            )
         elif player_at_item:
             item_id = maze.grid[player.y][player.x]
             item_name = registry.get_item_name(item_id)

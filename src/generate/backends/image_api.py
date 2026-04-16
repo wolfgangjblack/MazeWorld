@@ -13,20 +13,20 @@ class ApiImageBackend(ImageBackend):
     def generate_image(self, prompt: str, width: int = 256, height: int = 256) -> str:
         """Returns a URL to the generated image."""
         import fal_client
-        from config import FAL_MODEL, FAL_KEY_ENV
+
+        from config import FAL_KEY_ENV, FAL_MODEL, FAL_NEGATIVE_SUFFIX
 
         fal_key = os.getenv(FAL_KEY_ENV)
         if not fal_key:
             raise RuntimeError(
-                f"'{FAL_KEY_ENV}' env var is not set. "
-                "Provide a fal API key or set IMAGE_BACKEND='local'."
+                f"'{FAL_KEY_ENV}' env var is not set. Provide a fal API key or set IMAGE_BACKEND='local'."
             )
 
         result = fal_client.subscribe(
             FAL_MODEL,
             arguments={
-                "prompt": prompt,
-                "image_size": {"width": width, "height": height},
+                "prompt": prompt + FAL_NEGATIVE_SUFFIX,
+                "aspect_ratio": "1:1",
                 "num_images": 1,
             },
         )

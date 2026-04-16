@@ -1,29 +1,22 @@
 import math
+import random
+
+from config import ITEM_DENSITY, MAZE_HEIGHT, MAZE_WIDTH
 from src.models.maze import Maze
-from src.models.items import Food, Drink, Tool
-
-from config import MAZE_WIDTH, MAZE_HEIGHT, NUM_FOOD, NUM_DRINKS, NUM_TOOLS
 
 
-def test_place_items(maze, reg):
-    placed = {}
-    for row in maze.grid:
-        for cell in row:
-            if reg.is_item(cell):
-                item = reg.get_item(cell)
-                cls = type(item)
-                placed[cls] = placed.get(cls, 0) + 1
+def test_item_tiles_match_density():
+    random.seed(42)
+    m = Maze()
+    m.generate()
+    open_spaces = m.find_open_spaces()
+    player_start = open_spaces[0]
+    pool_size = len(open_spaces) - 1
+    m.build_tile_meta(player_start)
 
-    assert placed.get(Food, 0) == NUM_FOOD
-    assert placed.get(Drink, 0) == NUM_DRINKS
-    assert placed.get(Tool, 0) == NUM_TOOLS
-
-
-def test_place_items_uses_registry(maze, reg):
-    for row in maze.grid:
-        for cell in row:
-            if cell not in (0, 1, maze.event_tile_id):
-                assert reg.is_item(cell), f"Cell value {cell} not in registry"
+    item_tiles = m.get_tiles_by_type("item")
+    expected = math.ceil(pool_size * ITEM_DENSITY)
+    assert abs(len(item_tiles) - expected) <= 1, f"Items: got {len(item_tiles)}, expected ~{expected}"
 
 
 def test_place_character():
@@ -41,9 +34,7 @@ def test_place_event_tiles_count():
     open_count = len(m.find_open_spaces())
     m.place_event_tiles()
 
-    event_count = sum(
-        1 for row in m.grid for cell in row if cell == m.event_tile_id
-    )
+    event_count = sum(1 for row in m.grid for cell in row if cell == m.event_tile_id)
     expected = math.ceil(open_count * m.event_percent)
     assert event_count == expected
 

@@ -1,13 +1,24 @@
-import sys
 import os
+import random
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from src.registry import registry
+from config import DATA_DIR
 from src.models.maze import Maze
 from src.models.player import PlayerCharacter
-from config import NUM_FOOD, NUM_DRINKS, NUM_TOOLS
+from src.registry import registry
+
+HAS_GENERATED_DATA = os.path.exists(os.path.join(DATA_DIR, "items", "items.json"))
+requires_data = pytest.mark.skipif(
+    not HAS_GENERATED_DATA,
+    reason="Requires generated world data (run pipeline first)",
+)
+
+HAS_NPC_DATA = os.path.exists(os.path.join(DATA_DIR, "npcs", "npcs.json"))
+requires_npc_data = pytest.mark.skipif(
+    not HAS_NPC_DATA,
+    reason="Requires generated NPC data (run pipeline first)",
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -26,7 +37,13 @@ def maze():
     m = Maze()
     m.generate()
     m.place_event_tiles()
-    m.place_items(NUM_FOOD, NUM_DRINKS, NUM_TOOLS)
+    player_start = m.find_open_spaces()[0]
+    m.build_tile_meta(player_start)
+    avail_ids = registry.item_ids()
+    if avail_ids:
+        for tile in m.get_tiles_by_type("item"):
+            x, y = tile.position
+            m.grid[y][x] = random.choice(avail_ids)
     return m
 
 

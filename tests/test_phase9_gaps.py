@@ -1,20 +1,21 @@
 """Tests for Phase 9 gaps: Tutorial, Story, GameOver portrait, Combat record."""
 
-import sys
 import os
-import pytest
+import sys
+
 import pygame
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.models.player import PlayerCharacter, PlayerClass, Stats
+import config as cfg
 from src.controllers.screen_controller import ScreenController, ScreenState
-from src.views.tutorial_view import TutorialView
-from src.views.story_view import StoryView
+from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.models.story import Faction, OverarchingStory
 from src.views.gameover_view import GameOverView
 from src.views.menu_view import MenuView
-from src.models.story import OverarchingStory, Faction
-import config as cfg
+from src.views.story_view import StoryView
+from src.views.tutorial_view import TutorialView
 
 
 @pytest.fixture(autouse=True)
@@ -36,7 +37,8 @@ def font():
 
 def _make_player_with_class():
     pc = PlayerClass(
-        name="Knight", archetype="warrior",
+        name="Knight",
+        archetype="warrior",
         stats=Stats(STR=16, DEX=12, CON=14, INT=8, WIS=8, CHA=10, LUCK=10),
     )
     p = PlayerCharacter(x=0, y=0, name="TestHero")
@@ -47,6 +49,7 @@ def _make_player_with_class():
 # ---------------------------------------------------------------------------
 # GAP 1: Tutorial View
 # ---------------------------------------------------------------------------
+
 
 class TestTutorialView:
     def test_screen_state_exists(self):
@@ -84,6 +87,7 @@ class TestTutorialView:
 # GAP 2: Story View
 # ---------------------------------------------------------------------------
 
+
 class TestStoryView:
     def test_screen_state_exists(self):
         assert hasattr(ScreenState, "STORY")
@@ -100,8 +104,7 @@ class TestStoryView:
             faction=Faction(name="Shadow Cult", description="They worship darkness."),
             climax="A showdown at the rift.",
         )
-        view = StoryView(screen, font, story=story, room_story_beat="A cold wind blows.",
-                         room_name="The Crypt")
+        view = StoryView(screen, font, story=story, room_story_beat="A cold wind blows.", room_name="The Crypt")
         view.draw()
 
     def test_esc_returns_back(self, screen, font):
@@ -123,6 +126,7 @@ class TestStoryView:
 # ---------------------------------------------------------------------------
 # GAP 3: GameOver Portrait
 # ---------------------------------------------------------------------------
+
 
 class TestGameOverPortrait:
     def test_gameover_accepts_portrait_path(self, screen, font):
@@ -165,6 +169,7 @@ class TestGameOverPortrait:
 # GAP 4: Combat Record + Title
 # ---------------------------------------------------------------------------
 
+
 class TestCombatRecord:
     def test_default_combat_record(self):
         p = PlayerCharacter(x=0, y=0)
@@ -203,7 +208,7 @@ class TestCombatRecord:
     def test_stats_tab_shows_combat_record(self, screen, font):
         player = _make_player_with_class()
         player.active_quests = []
-        player.completed_quests = ["q1"]
+        player.completed_quests = [4000]
         player.failed_quests = []
         player.combat_record["monsters_killed"] = 7
         player.combat_record["combats_won"] = 3
@@ -232,9 +237,11 @@ class TestCombatRecord:
 # Combat Record Serialization
 # ---------------------------------------------------------------------------
 
+
 class TestCombatRecordSerialization:
     def test_serialize_combat_record(self):
         from src.systems.save_manager import serialize_player
+
         p = _make_player_with_class()
         p.initialize_inventory()
         p.combat_record["monsters_killed"] = 5
@@ -247,7 +254,8 @@ class TestCombatRecordSerialization:
         assert data["title"] == "Veteran"
 
     def test_deserialize_combat_record(self):
-        from src.systems.save_manager import serialize_player, deserialize_player
+        from src.systems.save_manager import deserialize_player, serialize_player
+
         p = _make_player_with_class()
         p.initialize_inventory()
         p.combat_record["combats_won"] = 3
@@ -262,6 +270,7 @@ class TestCombatRecordSerialization:
 
     def test_deserialize_missing_combat_record(self):
         from src.systems.save_manager import deserialize_player
+
         data = {"x": 0, "y": 0, "name": "Test"}
         restored = deserialize_player(data)
         assert restored.combat_record["monsters_killed"] == 0

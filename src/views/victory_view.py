@@ -1,9 +1,10 @@
 """Victory screen — end-of-game stats summary and final message."""
 
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK, WHITE
-from src.utils.text_utils import draw_wrapped_text
 
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from src.utils.text_utils import draw_wrapped_text
+from src.views.portrait_utils import load_portrait
 
 GOLD = (220, 180, 60)
 DIM = (150, 150, 150)
@@ -14,8 +15,16 @@ PANEL_BG = (20, 20, 40)
 class VictoryView:
     """Displays victory screen with game stats summary."""
 
-    def __init__(self, screen, font, player, stats: dict, total_rooms: int,
-                 story_paragraph: str = ""):
+    def __init__(
+        self,
+        screen,
+        font,
+        player,
+        stats: dict,
+        total_rooms: int,
+        story_paragraph: str = "",
+        portrait_path: str | None = None,
+    ):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 56)
@@ -25,6 +34,7 @@ class VictoryView:
         self.stats = stats
         self.total_rooms = total_rooms
         self.story_paragraph = story_paragraph
+        self.portrait = load_portrait(portrait_path, (160, 160))
 
     def handle_input(self, event) -> str | None:
         """Returns 'quit' or 'menu'."""
@@ -37,20 +47,27 @@ class VictoryView:
     def draw(self):
         self.screen.fill(BLACK)
 
+        # Portrait (centered above title if available)
+        title_y = 30
+        if self.portrait:
+            px = (SCREEN_WIDTH - 160) // 2
+            self.screen.blit(self.portrait, (px, 20))
+            pygame.draw.rect(self.screen, GOLD, (px, 20, 160, 160), 2)
+            title_y = 190
+
         # Title
         title = self.title_font.render("VICTORY!", True, GOLD)
-        self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, 30))
+        self.screen.blit(title, ((SCREEN_WIDTH - title.get_width()) // 2, title_y))
 
         # Subtitle
         p = self.player
         class_name = p.player_class.name if p.player_class else "Adventurer"
         archetype = p.player_class.archetype if p.player_class else ""
-        subtitle = self.big_font.render(
-            f"{p.name} the {class_name}", True, WHITE)
-        self.screen.blit(subtitle, ((SCREEN_WIDTH - subtitle.get_width()) // 2, 90))
+        subtitle = self.big_font.render(f"{p.name} the {class_name}", True, WHITE)
+        self.screen.blit(subtitle, ((SCREEN_WIDTH - subtitle.get_width()) // 2, title_y + 60))
 
         # Stats panel
-        panel_x, panel_y = 60, 150
+        panel_x, panel_y = 60, title_y + 120
         panel_w, panel_h = SCREEN_WIDTH - 120, 400
         pygame.draw.rect(self.screen, PANEL_BG, (panel_x, panel_y, panel_w, panel_h))
         pygame.draw.rect(self.screen, GOLD, (panel_x, panel_y, panel_w, panel_h), 2)
@@ -86,12 +103,10 @@ class VictoryView:
         # Victory narrative (Bible-driven)
         if self.story_paragraph:
             y += 10
-            draw_wrapped_text(self.screen, self.story_paragraph,
-                              panel_x + 20, y, panel_w - 40,
-                              self.small_font, STAT_COLOR)
+            draw_wrapped_text(
+                self.screen, self.story_paragraph, panel_x + 20, y, panel_w - 40, self.small_font, STAT_COLOR
+            )
 
         # Hint
-        hint = self.small_font.render(
-            "Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
+        hint = self.small_font.render("Enter = Main Menu  |  Esc/Q = Quit", True, DIM)
         self.screen.blit(hint, ((SCREEN_WIDTH - hint.get_width()) // 2, SCREEN_HEIGHT - 30))
-

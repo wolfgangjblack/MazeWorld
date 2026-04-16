@@ -15,6 +15,7 @@ class LocalImageBackend(ImageBackend):
 
     def _get_device(self) -> str:
         import torch
+
         if torch.cuda.is_available():
             return "cuda"
         if torch.backends.mps.is_available():
@@ -28,17 +29,18 @@ class LocalImageBackend(ImageBackend):
         MPS/CPU -> SDXL Turbo (float16, MPS-native)
         """
         import torch
+
         from config import LOCAL_IMAGE_MODEL_CUDA, LOCAL_IMAGE_MODEL_MPS
 
         if device == "cuda":
             from diffusers import FluxPipeline
-            pipe = FluxPipeline.from_pretrained(
-                LOCAL_IMAGE_MODEL_CUDA, torch_dtype=torch.bfloat16
-            )
+
+            pipe = FluxPipeline.from_pretrained(LOCAL_IMAGE_MODEL_CUDA, torch_dtype=torch.bfloat16)
             pipe.enable_model_cpu_offload()
             return pipe, "flux"
 
         from diffusers import AutoPipelineForText2Image
+
         pipe = AutoPipelineForText2Image.from_pretrained(
             LOCAL_IMAGE_MODEL_MPS, torch_dtype=torch.float16, variant="fp16"
         )
@@ -56,18 +58,29 @@ class LocalImageBackend(ImageBackend):
             if device != "cpu":
                 logger.warning(
                     "Failed to load pipeline on %s, falling back to CPU: %s",
-                    device, e,
+                    device,
+                    e,
                 )
                 self._pipe, self._pipe_type = self._load_pipe("cpu")
             else:
-                raise RuntimeError(
-                    f"Failed to load local image pipeline: {e}"
-                ) from e
+                raise RuntimeError(f"Failed to load local image pipeline: {e}") from e
         return self._pipe
 
-    def generate_image(self, prompt: str, width: int = 256, height: int = 256):
-        """Returns a PIL Image."""
+    def generate_image(self, prompt: str, width: int | None = None, height: int | None = None):
+        """Returns a PIL Image at native resolution for the active model."""
+        from config import IMAGE_HEIGHT, IMAGE_WIDTH
+
         pipe = self._get_pipe()
+
+        if width is None:
+            width = IMAGE_WIDTH
+        if height is None:
+            height = IMAGE_HEIGHT
+
+        # SDXL Turbo is trained at 512x512 max; clamp to avoid artifacts
+        if self._pipe_type == "sdxl":
+            width = min(width, 512)
+            height = min(height, 512)
 
         if self._pipe_type == "flux":
             result = pipe(

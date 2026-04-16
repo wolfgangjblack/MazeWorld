@@ -1,26 +1,32 @@
 """Tests for the ShopView UI class (non-rendering logic)."""
 
-import pytest
 import pygame
+import pytest
 
-from src.views.shop_view import ShopView
+from config import SCREEN_HEIGHT, SCREEN_WIDTH
+from src.models.items import Food, ItemStats
 from src.models.npc import MerchantNPC
 from src.models.player import PlayerCharacter
-from src.models.items import Food, ItemStats
+from src.views.shop_view import ShopView
+from tests.conftest import requires_data
 
 
 @pytest.fixture(autouse=True)
 def init_pygame():
     pygame.init()
-    pygame.display.set_mode((800, 700))
+    pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     yield
     pygame.quit()
 
 
 def _make_merchant(shop_inventory=None):
     return MerchantNPC(
-        x=5, y=5, id=999, name="Test Merchant",
-        job="merchant", environment="city",
+        x=5,
+        y=5,
+        id=1999,
+        name="Test Merchant",
+        job="merchant",
+        environment="city",
         shop_inventory=shop_inventory or [],
     )
 
@@ -67,10 +73,12 @@ class TestShopViewNavigation:
         assert result == "close"
 
     def test_navigate_buy_items(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-            {"item_id": 201, "price": 15, "stock": 1},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 2},
+                {"item_id": 2001, "price": 15, "stock": 1},
+            ]
+        )
         player = _make_player()
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)
@@ -83,10 +91,8 @@ class TestShopViewNavigation:
 
     def test_navigate_sell_items(self, reg):
         player = _make_player()
-        food1 = Food(category="food", name="bread", desc="t",
-                     item_stats=ItemStats(price=10))
-        food2 = Food(category="food", name="apple", desc="t",
-                     item_stats=ItemStats(price=5))
+        food1 = Food(category="food", name="bread", desc="t", item_stats=ItemStats(price=10))
+        food2 = Food(category="food", name="apple", desc="t", item_stats=ItemStats(price=5))
         player.inventory = {"bread": food1, "apple": food2}
 
         merchant = _make_merchant()
@@ -99,10 +105,13 @@ class TestShopViewNavigation:
 
 
 class TestShopViewConfirm:
+    @requires_data
     def test_buy_triggers_confirm(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 2},
+            ]
+        )
         player = _make_player()
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)
@@ -113,10 +122,13 @@ class TestShopViewConfirm:
         assert view.confirming is True
         assert view.confirm_action["type"] == "buy"
 
+    @requires_data
     def test_confirm_buy(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 2},
+            ]
+        )
         player = _make_player()
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)
@@ -126,10 +138,13 @@ class TestShopViewConfirm:
         assert result == {"action": "buy", "index": 0}
         assert view.confirming is False
 
+    @requires_data
     def test_cancel_confirm(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 2},
+            ]
+        )
         player = _make_player()
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)
@@ -141,8 +156,7 @@ class TestShopViewConfirm:
 
     def test_sell_triggers_confirm(self, reg):
         player = _make_player()
-        food = Food(category="food", name="bread", desc="t",
-                    item_stats=ItemStats(price=20))
+        food = Food(category="food", name="bread", desc="t", item_stats=ItemStats(price=20))
         player.inventory = {"bread": food}
 
         merchant = _make_merchant()
@@ -157,8 +171,7 @@ class TestShopViewConfirm:
 
     def test_confirm_sell(self, reg):
         player = _make_player()
-        food = Food(category="food", name="bread", desc="t",
-                    item_stats=ItemStats(price=20))
+        food = Food(category="food", name="bread", desc="t", item_stats=ItemStats(price=20))
         player.inventory = {"bread": food}
 
         merchant = _make_merchant()
@@ -195,12 +208,13 @@ class TestShopViewEdgeCases:
         assert view.confirming is False
 
     def test_draw_does_not_crash(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 2},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 2},
+            ]
+        )
         player = _make_player()
-        food = Food(category="food", name="bread", desc="a tasty loaf",
-                    item_stats=ItemStats(price=10))
+        food = Food(category="food", name="bread", desc="a tasty loaf", item_stats=ItemStats(price=10))
         player.inventory = {"bread": food}
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)
@@ -208,9 +222,11 @@ class TestShopViewEdgeCases:
         view.draw()  # Should not raise
 
     def test_navigate_past_bounds(self, reg):
-        merchant = _make_merchant(shop_inventory=[
-            {"item_id": 200, "price": 10, "stock": 1},
-        ])
+        merchant = _make_merchant(
+            shop_inventory=[
+                {"item_id": 2000, "price": 10, "stock": 1},
+            ]
+        )
         player = _make_player()
         screen = pygame.display.get_surface()
         font = pygame.font.Font(None, 28)

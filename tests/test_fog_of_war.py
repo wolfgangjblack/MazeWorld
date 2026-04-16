@@ -1,12 +1,13 @@
 """Tests for the Fog of War system."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.systems.fog_of_war import FogOfWar, DEFAULT_VISIBILITY_RADIUS, NIGHT_VISIBILITY_PENALTY
+from config import FOG_NIGHT_PENALTY as NIGHT_VISIBILITY_PENALTY
 from src.models.player import PlayerCharacter, PlayerClass, Stats
+from src.systems.fog_of_war import DEFAULT_VISIBILITY_RADIUS, FogOfWar
 
 
 def _make_simple_maze(width=10, height=10):
@@ -121,45 +122,51 @@ class TestLineOfSight:
 class TestWISModifier:
     def test_wis_increases_radius(self):
         """Higher WIS should increase visibility radius."""
-        # WIS 10 = modifier 0, no bonus
+        from config import FOG_DAY_BONUS
+
+        # WIS 10 = modifier 0, no bonus (day period adds FOG_DAY_BONUS)
         player_low = _make_player(wis=10)
         fog_low = FogOfWar(width=20, height=20)
-        radius_low = fog_low.get_visibility_radius(player_low)
-        assert radius_low == DEFAULT_VISIBILITY_RADIUS
+        radius_low = fog_low.get_visibility_radius(player_low, time_period="day")
+        assert radius_low == DEFAULT_VISIBILITY_RADIUS + FOG_DAY_BONUS
 
         # WIS 16 = modifier +3, bonus = 3 // 2 = 1
         player_mid = _make_player(wis=16)
-        radius_mid = fog_low.get_visibility_radius(player_mid)
-        assert radius_mid == DEFAULT_VISIBILITY_RADIUS + 1
+        radius_mid = fog_low.get_visibility_radius(player_mid, time_period="day")
+        assert radius_mid == DEFAULT_VISIBILITY_RADIUS + FOG_DAY_BONUS + 1
 
         # WIS 18 = modifier +4, bonus = 4 // 2 = 2
         player_high = _make_player(wis=18)
-        radius_high = fog_low.get_visibility_radius(player_high)
-        assert radius_high == DEFAULT_VISIBILITY_RADIUS + 2
+        radius_high = fog_low.get_visibility_radius(player_high, time_period="day")
+        assert radius_high == DEFAULT_VISIBILITY_RADIUS + FOG_DAY_BONUS + 2
 
     def test_negative_wis_no_negative_bonus(self):
         """Negative WIS modifier should not reduce radius below base."""
+        from config import FOG_DAY_BONUS
+
         player = _make_player(wis=6)  # modifier = -2
         fog = FogOfWar()
-        radius = fog.get_visibility_radius(player)
-        # max(0, -2 // 2) = max(0, -1) = 0, so radius = DEFAULT
-        assert radius == DEFAULT_VISIBILITY_RADIUS
+        radius = fog.get_visibility_radius(player, time_period="day")
+        # max(0, -2 // 2) = 0, so radius = DEFAULT + FOG_DAY_BONUS
+        assert radius == DEFAULT_VISIBILITY_RADIUS + FOG_DAY_BONUS
 
 
 class TestNightVisibility:
     def test_night_reduces_radius(self):
         fog = FogOfWar()
         player = _make_player(wis=10)
-        normal = fog.get_visibility_radius(player, is_night=False)
-        night = fog.get_visibility_radius(player, is_night=True)
-        assert night == normal - NIGHT_VISIBILITY_PENALTY
+        day = fog.get_visibility_radius(player, time_period="day")
+        night = fog.get_visibility_radius(player, time_period="night")
+        from config import FOG_DAY_BONUS
+
+        assert night == DEFAULT_VISIBILITY_RADIUS - NIGHT_VISIBILITY_PENALTY
+        assert day == DEFAULT_VISIBILITY_RADIUS + FOG_DAY_BONUS
 
     def test_torch_restores_radius_at_night(self):
         fog = FogOfWar()
         player = _make_player(wis=10)
-        normal = fog.get_visibility_radius(player, is_night=False)
-        night_torch = fog.get_visibility_radius(player, is_night=True, has_torch=True)
-        assert night_torch == normal
+        night_torch = fog.get_visibility_radius(player, time_period="night", has_torch=True)
+        assert night_torch == DEFAULT_VISIBILITY_RADIUS
 
     def test_radius_never_below_one(self):
         fog = FogOfWar()

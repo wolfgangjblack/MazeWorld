@@ -13,7 +13,7 @@ NPC_VALIDATE_PROMPT = (
     "- MerchantNPCs must have shop_inventory with valid items\n"
     "- Personality must be appropriate (no offensive content)\n"
     "- Job must fit the {environment} environment\n\n"
-    "Return JSON: {{\"passed\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"passed": true/false, "reasons": [...]}}'
 )
 
 MONSTER_VALIDATE_PROMPT = (
@@ -25,7 +25,7 @@ MONSTER_VALIDATE_PROMPT = (
     "- Abilities must be battle-scoped only\n"
     "- Loot table items must exist in the world\n"
     "- Monster must be thematically appropriate for {environment}\n\n"
-    "Return JSON: {{\"passed\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"passed": true/false, "reasons": [...]}}'
 )
 
 ITEM_VALIDATE_PROMPT = (
@@ -37,7 +37,7 @@ ITEM_VALIDATE_PROMPT = (
     "- Tools must have an attribute and uses > 0\n"
     "- Food/drink must restore something (nutrition/hydration/health)\n"
     "- Stats should scale with room level\n\n"
-    "Return JSON: {{\"passed\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"passed": true/false, "reasons": [...]}}'
 )
 
 EVENT_VALIDATE_PROMPT = (
@@ -49,7 +49,7 @@ EVENT_VALIDATE_PROMPT = (
     "- Puzzles must have at least one solvable path with available tools\n"
     "- Events must have a walk-away option\n"
     "- time_gate must be 'day', 'night', or null\n\n"
-    "Return JSON: {{\"passed\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"passed": true/false, "reasons": [...]}}'
 )
 
 QUEST_VALIDATE_PROMPT = (
@@ -66,5 +66,5 @@ QUEST_VALIDATE_PROMPT = (
     "- Escort quest NPC must exist\n"
     "- Delivery quest item and target NPC must exist\n"
     "- Prerequisite quest chain depth <= 2\n\n"
-    "Return JSON: {{\"passed\": true/false, \"reasons\": [...]}}"
+    'Return JSON: {{"passed": true/false, "reasons": [...]}}'
 )

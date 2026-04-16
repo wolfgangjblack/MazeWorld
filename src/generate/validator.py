@@ -12,7 +12,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.models.player import (
-    ARCHETYPE_STAT_ROLES, STAT_BUDGET, STAT_NAMES, Stats,
+    ARCHETYPE_STAT_ROLES,
+    STAT_BUDGET,
+    STAT_NAMES,
+    Stats,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,6 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Pipeline-level validation report (PR #24)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ValidationReport:
@@ -48,30 +52,36 @@ class ValidationReport:
 
     def add_warning(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.minor_warnings += 1
-        self.details.append({
-            "severity": "minor",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "minor",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     def add_major(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.major_retries += 1
-        self.details.append({
-            "severity": "major",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "major",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     def add_critical(self, message: str, *, entity_id: str = "", phase: str = "") -> None:
         self.critical_failures += 1
-        self.details.append({
-            "severity": "critical",
-            "message": message,
-            "entity_id": entity_id,
-            "phase": phase,
-        })
+        self.details.append(
+            {
+                "severity": "critical",
+                "message": message,
+                "entity_id": entity_id,
+                "phase": phase,
+            }
+        )
 
     # -- Derived status -------------------------------------------------------
 
@@ -100,9 +110,11 @@ class ValidationReport:
 # Phase 2: Per-entity validators
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ValidationResult:
     """Outcome of a validation pass."""
+
     passed: bool
     reasons: list[str] = field(default_factory=list)
     data: object = None
@@ -160,14 +172,14 @@ class ClassValidator(BaseValidator):
 
         for stat in roles.get("secondary", []):
             val = getattr(stats, stat, 10)
-            lo, hi = (9, 13) if archetype == "jester" else (11, 14)
+            lo, hi = (11, 15) if archetype == "jester" else (12, 16)
             if not (lo <= val <= hi):
                 reasons.append(f"{stat}={val} outside secondary {lo}-{hi}")
 
         for stat in roles.get("dump", []):
             val = getattr(stats, stat, 10)
-            if not (6 <= val <= 10):
-                reasons.append(f"{stat}={val} outside dump 6-10")
+            if not (8 <= val <= 12):
+                reasons.append(f"{stat}={val} outside dump 8-12")
 
         # Minimum content counts
         min_ab = self.MIN_ABILITIES.get(archetype, 0)
@@ -219,14 +231,11 @@ class EventValidator(BaseValidator):
             reasons.append("Missing event description")
 
         if etype == "combat":
-            if not data.get("monsters"):
-                reasons.append("Combat event has no monsters")
+            if not data.get("monster_ids"):
+                reasons.append("Combat event has no monster_ids")
         elif etype == "puzzle":
             choices = data.get("choices", [])
-            solvable = any(
-                c.get("auto_success") or c.get("tool_attribute") in tool_attrs
-                for c in choices
-            )
+            solvable = any(c.get("auto_success") or c.get("tool_attribute") in tool_attrs for c in choices)
             if not solvable and tool_attrs:
                 reasons.append("Puzzle has no solvable path with available tools")
 
@@ -300,9 +309,7 @@ class MonsterValidator(BaseValidator):
                     reasons.append(f"Monster {name}: ability[{i}] missing name")
                 effect = ability.get("effect_type", "")
                 if effect not in ("damage", "poison", "stun"):
-                    reasons.append(
-                        f"Monster {name}: ability[{i}] unknown effect_type '{effect}'"
-                    )
+                    reasons.append(f"Monster {name}: ability[{i}] unknown effect_type '{effect}'")
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)
 
@@ -347,13 +354,9 @@ class ItemValidator(BaseValidator):
                 reasons.append(f"Item {name}: tool must have uses > 0")
 
         elif category in ("food", "drink"):
-            nutrition = stats.get("nutrition_value", 0)
-            hydration = stats.get("hydration_value", 0)
+            stamina = stats.get("stamina_value", stats.get("nutrition_value", stats.get("hydration_value", 0)))
             health = stats.get("health_value", 0)
-            if nutrition == 0 and hydration == 0 and health == 0:
-                reasons.append(
-                    f"Item {name}: {category} restores nothing "
-                    "(nutrition, hydration, health all 0)"
-                )
+            if stamina == 0 and health == 0:
+                reasons.append(f"Item {name}: {category} restores nothing (nutrition, hydration, health all 0)")
 
         return ValidationResult(passed=len(reasons) == 0, reasons=reasons, data=data)

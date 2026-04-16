@@ -6,6 +6,8 @@ def get_prompt_set() -> PromptSet:
 
     if LLM_BACKEND == "api":
         from src.prompts.generator_prompts.claude_prompts import ClaudePromptSet
+
         return ClaudePromptSet()
     from src.prompts.generator_prompts.llama_prompts import LlamaPromptSet
+
     return LlamaPromptSet()

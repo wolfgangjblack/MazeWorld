@@ -1,7 +1,8 @@
 """Story data models — OverarchingStory, RoomStoryBeat, Faction, and story entities."""
 
-from pydantic import BaseModel, Field
 from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class Faction(BaseModel):
@@ -14,6 +15,7 @@ class Faction(BaseModel):
 
 class StoryNPC(BaseModel):
     """A story-important NPC generated during Step 1 (story generation)."""
+
     name: str
     role: str = ""  # e.g. "ally", "betrayer", "quest_giver", "faction_leader"
     backstory: str = ""  # Full lore paragraph
@@ -24,6 +26,7 @@ class StoryNPC(BaseModel):
 
 class StoryItem(BaseModel):
     """A story-important item generated during Step 1."""
+
     name: str
     description: str = ""
     lore: str = ""  # Full lore paragraph — why it matters to the story
@@ -32,6 +35,7 @@ class StoryItem(BaseModel):
 
 class StoryMonster(BaseModel):
     """A story-important monster (e.g. faction member, room boss)."""
+
     name: str
     description: str = ""
     lore: str = ""  # Full lore paragraph — why it guards this area, its history

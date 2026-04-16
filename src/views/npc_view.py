@@ -1,6 +1,8 @@
 import pygame
+
 from config import GRID_SIZE
 from src.utils.display_utils import game_to_screen
+
 
 class NPCView:
     def draw_npc(self, screen, npc):

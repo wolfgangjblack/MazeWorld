@@ -1,9 +1,12 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuestReward(BaseModel):
     item_id: Optional[int] = None
+    # TODO: No XP/level-progression system exists yet. Level-ups happen
+    # automatically on room transitions. Wire this up if an XP system is added.
     xp: int = 0
     money: int = 0
     story_info: Optional[str] = None
@@ -12,13 +15,13 @@ class QuestReward(BaseModel):
 
 class QuestFailurePenalty(BaseModel):
     hp_damage: int = 0
-    hunger_damage: int = 0
-    thirst_damage: int = 0
+    stamina_damage: int = 0
 
 
 class Quest(BaseModel):
     """Base quest model."""
-    id: str
+
+    id: int
     type: str  # "fetch" | "escort" | "delivery" | "dialogue" | "combat" | "multi_step"
     title: str
     description: str
@@ -27,14 +30,13 @@ class Quest(BaseModel):
     is_story_quest: bool = False
     reward: QuestReward = Field(default_factory=QuestReward)
     failure_penalty: QuestFailurePenalty = Field(default_factory=QuestFailurePenalty)
-    prerequisite_quest_id: Optional[str] = None
+    prerequisite_quest_id: Optional[int] = None
     status: str = "not_started"  # "not_started" | "active" | "completed" | "failed"
     time_gate: Optional[str] = None  # "night" | "day" | None
     portrait_prompt: Optional[str] = None
     profile_image: Optional[str] = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def apply_failure_penalty(self, player) -> str:
         """Apply failure penalties to the player. Returns description of what happened."""
@@ -42,12 +44,9 @@ class Quest(BaseModel):
         if self.failure_penalty.hp_damage > 0:
             player.health = max(0, player.health - self.failure_penalty.hp_damage)
             msgs.append(f"Lost {self.failure_penalty.hp_damage} HP")
-        if self.failure_penalty.hunger_damage > 0:
-            player.hunger = max(0, player.hunger - self.failure_penalty.hunger_damage)
-            msgs.append(f"Lost {self.failure_penalty.hunger_damage} hunger")
-        if self.failure_penalty.thirst_damage > 0:
-            player.thirst = max(0, player.thirst - self.failure_penalty.thirst_damage)
-            msgs.append(f"Lost {self.failure_penalty.thirst_damage} thirst")
+        if self.failure_penalty.stamina_damage > 0:
+            player.stamina = max(0, player.stamina - self.failure_penalty.stamina_damage)
+            msgs.append(f"Lost {self.failure_penalty.stamina_damage} stamina")
         return ", ".join(msgs) if msgs else ""
 
 
@@ -62,6 +61,7 @@ class FetchQuest(Quest):
             found = 0
             for item in player.inventory.values():
                 from src.registry import registry
+
                 for rid, ritem in registry.item_registry.items():
                     if rid == item_id and ritem.name == item.name:
                         found += item.quantity
@@ -79,8 +79,7 @@ class EscortQuest(Quest):
 
     def check_completion(self, player_x: int, player_y: int) -> bool:
         zone_x, zone_y = self.target_zone
-        return (zone_x - 2 <= player_x <= zone_x + 2
-                and zone_y - 2 <= player_y <= zone_y + 2)
+        return zone_x - 2 <= player_x <= zone_x + 2 and zone_y - 2 <= player_y <= zone_y + 2
 
 
 class DeliveryQuest(Quest):
@@ -94,6 +93,7 @@ class DeliveryQuest(Quest):
             return False
         for item in player.inventory.values():
             from src.registry import registry
+
             for rid, ritem in registry.item_registry.items():
                 if rid == self.delivery_item_id and ritem.name == item.name:
                     return True
@@ -109,7 +109,7 @@ class DialogueQuest(Quest):
 
     def check_completion_cha(self, player, roll: int) -> bool:
         """CHA-based DC check. roll = 1d20 + CHA modifier."""
-        cha_mod = player.get_stat_modifier("CHA") if hasattr(player, 'get_stat_modifier') else 0
+        cha_mod = player.get_stat_modifier("CHA") if hasattr(player, "get_stat_modifier") else 0
         return (roll + cha_mod) >= self.dc
 
     def check_completion(self, dialogue_result: str) -> bool:
@@ -118,7 +118,8 @@ class DialogueQuest(Quest):
 
 class CombatQuest(Quest):
     type: str = "combat"
-    target_event_id: str = ""
+    target_event_id: int = 0
+    target_npc_id: Optional[int] = None
     target_monster_name: Optional[str] = None
 
     def check_completion(self, event_resolved: bool) -> bool:
@@ -127,17 +128,17 @@ class CombatQuest(Quest):
     def check_already_cleared(self, resolved_events: dict) -> bool:
         """Kill quests are completable out of order — if encounter already cleared."""
         event = resolved_events.get(self.target_event_id)
-        if event and getattr(event, 'resolved', False):
+        if event and getattr(event, "resolved", False):
             return True
         return False
 
 
 class MultiStepQuest(Quest):
     type: str = "multi_step"
-    sub_quest_ids: List[str] = Field(default_factory=list)  # ordered list of sub-quest IDs
+    sub_quest_ids: List[int] = Field(default_factory=list)
     current_step: int = 0
 
-    def get_current_sub_quest_id(self) -> Optional[str]:
+    def get_current_sub_quest_id(self) -> Optional[int]:
         if self.current_step < len(self.sub_quest_ids):
             return self.sub_quest_ids[self.current_step]
         return None
@@ -156,8 +157,9 @@ QUEST_TYPE_MAP = {
     "escort": EscortQuest,
     "delivery": DeliveryQuest,
     "dialogue": DialogueQuest,
-    "dialogue_gated": DialogueQuest,  # backward compat alias
+    "dialogue_gated": DialogueQuest,
     "combat": CombatQuest,
+    "solve": CombatQuest,
     "multi_step": MultiStepQuest,
 }
 

@@ -1,9 +1,14 @@
 """Game over screen — displays death message, brief stats, and options."""
 
+import logging
 import os
+
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 from src.utils.text_utils import draw_wrapped_text
+
+logger = logging.getLogger(__name__)
 
 TITLE_COLOR = (200, 50, 50)
 TEXT_COLOR = (180, 180, 180)
@@ -16,8 +21,7 @@ MENU_ITEMS = ["Load Game", "Quit to Start"]
 class GameOverView:
     """Game Over screen with brief stats summary and load/quit options."""
 
-    def __init__(self, screen, font, player, has_saves=False, portrait_path=None,
-                 story_paragraph=""):
+    def __init__(self, screen, font, player, has_saves=False, portrait_path=None, story_paragraph=""):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
@@ -33,7 +37,7 @@ class GameOverView:
                 img = pygame.image.load(portrait_path)
                 self.bg_image = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
             except Exception:
-                pass
+                logger.debug("Failed to load gameover portrait: %s", portrait_path, exc_info=True)
 
     def draw(self):
         if self.bg_image:
@@ -69,13 +73,14 @@ class GameOverView:
         # Story paragraph (Bible-driven)
         if self.story_paragraph:
             y += 10
-            y = draw_wrapped_text(self.screen, self.story_paragraph, 60, y,
-                                  SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR)
+            y = draw_wrapped_text(
+                self.screen, self.story_paragraph, 60, y, SCREEN_WIDTH - 120, self.small_font, TEXT_COLOR
+            )
 
         # Menu options
         y = SCREEN_HEIGHT // 2 + 60
         for i, item in enumerate(MENU_ITEMS):
-            disabled = (item == "Load Game" and not self.has_saves)
+            disabled = item == "Load Game" and not self.has_saves
             if disabled:
                 color = (80, 80, 80)
             elif i == self.selected_index:

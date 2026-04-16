@@ -3,6 +3,14 @@ import os
 from src.generate.backends.base import LLMBackend
 from src.prompts.base import LLMRequest
 
+_active_stats = None
+
+
+def set_stats(stats) -> None:
+    """Wire a GenerationStats instance to accumulate token counts from this backend."""
+    global _active_stats
+    _active_stats = stats
+
 
 class ApiLLMBackend(LLMBackend):
     """Anthropic Claude API backend for text generation."""
@@ -15,6 +23,7 @@ class ApiLLMBackend(LLMBackend):
             return self._client
 
         from anthropic import Anthropic
+
         from config import ANTHROPIC_KEY_ENV
 
         api_key = os.getenv(ANTHROPIC_KEY_ENV)
@@ -45,4 +54,9 @@ class ApiLLMBackend(LLMBackend):
             system=request.system,
             messages=messages,
         )
+        if _active_stats is not None:
+            _active_stats.record_llm_call(
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+            )
         return response.content[0].text

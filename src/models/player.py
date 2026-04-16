@@ -1,30 +1,76 @@
 import random
 from typing import Any, Dict, List, Literal, Optional, Tuple
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, ConfigDict, Field
+
 from src.models.spell import Spell
 from src.registry import registry
 
 StatName = Literal["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
 STAT_NAMES: list[StatName] = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LUCK"]
-STAT_BUDGET = 72
+STAT_BUDGET = 95
 
 # Archetype stat role assignments: primary stats get 14-18, secondary 11-14, dump 6-10
 ARCHETYPE_STAT_ROLES = {
     "warrior": {"primary": ["STR", "CON"], "secondary": ["DEX", "CHA"], "dump": ["INT", "WIS"]},
-    "mage":    {"primary": ["INT"],        "secondary": ["WIS", "DEX"], "dump": ["STR", "CON", "CHA"]},
-    "healer":  {"primary": ["WIS"],        "secondary": ["CHA", "CON"], "dump": ["STR", "DEX", "INT"]},
-    "jester":  {"primary": ["LUCK"],       "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
+    "mage": {"primary": ["INT"], "secondary": ["WIS", "DEX"], "dump": ["STR", "CON", "CHA"]},
+    "healer": {"primary": ["WIS"], "secondary": ["CHA", "CON"], "dump": ["STR", "DEX", "INT"]},
+    "jester": {"primary": ["LUCK"], "secondary": ["STR", "DEX", "CON", "INT", "WIS", "CHA"], "dump": []},
 }
 
-# Weapon soft-restriction: only matching archetypes get the stat bonus.
-# Any class CAN equip any weapon, but mismatched classes get 0 stat bonus.
+# Weapon category soft-restriction: only matching archetypes get the stat bonus.
+# Any class CAN equip any weapon in an allowed category, but mismatched = 0 stat bonus.
 # Jester uses avg(LUCK mod, weapon stat mod) for any weapon instead.
-ARCHETYPE_WEAPON_TYPES: dict[str, set[str]] = {
-    "warrior": {"heavy", "light"},
-    "mage":    {"simple"},
-    "healer":  {"simple"},
-    "jester":  set(),  # jester uses luck rule for all weapons
+ARCHETYPE_WEAPON_CATEGORIES: dict[str, set[str]] = {
+    "warrior": {"simple", "martial"},
+    "mage": {"simple"},
+    "healer": {"simple"},
+    "jester": set(),  # jester uses luck rule for all weapons
 }
+
+
+ABILITY_DISTRIBUTIONS = {
+    "warrior": {
+        "starting": [
+            {"purpose": "break", "stat": "STR"},
+            {"purpose": "intimidate", "stat": "CHA"},
+            {"purpose": "bash", "stat": "STR"},
+            {"purpose": "rally", "stat": "CHA"},
+        ],
+        "pool": [
+            {"purpose": "climb", "stat": "STR"},
+            {"purpose": "detect", "stat": "WIS"},
+            {"purpose": "grapple", "stat": "STR"},
+            {"purpose": "warcry", "stat": "CHA"},
+        ],
+    },
+    "mage": {"starting": [], "pool": []},
+    "healer": {"starting": [], "pool": []},
+    "jester": {"starting": [], "pool": []},
+}
+
+ABILITY_STAMINA_BY_PURPOSE = {
+    "break": 8,
+    "bash": 5,
+    "intimidate": 3,
+    "rally": 5,
+    "climb": 4,
+    "detect": 3,
+    "grapple": 6,
+    "warcry": 7,
+}
+
+
+def roll_ability_skeleton(slot: dict) -> dict:
+    """Pre-roll an ability's mechanical identity."""
+    purpose = slot["purpose"]
+    stat = slot["stat"]
+    stamina_cost = ABILITY_STAMINA_BY_PURPOSE.get(purpose, 4)
+    return {
+        "purpose": purpose,
+        "stat": stat,
+        "stamina_cost": stamina_cost,
+    }
 
 
 def stat_modifier(value: int) -> int:
@@ -34,6 +80,7 @@ def stat_modifier(value: int) -> int:
 
 class ActiveBuff(BaseModel):
     """A temporary stat buff active during combat."""
+
     stat: str
     value: int
     turns_remaining: int
@@ -41,6 +88,7 @@ class ActiveBuff(BaseModel):
 
 class Stats(BaseModel):
     """D&D-style stat block for player classes."""
+
     STR: int = 10
     DEX: int = 10
     CON: int = 10
@@ -69,15 +117,15 @@ class Stats(BaseModel):
         for stat in roles.get("secondary", []):
             val = getattr(self, stat)
             if archetype == "jester":
-                if not (9 <= val <= 13):
-                    errors.append(f"{stat}={val} not in secondary range 9-13")
+                if not (11 <= val <= 15):
+                    errors.append(f"{stat}={val} not in secondary range 11-15")
             else:
-                if not (11 <= val <= 14):
-                    errors.append(f"{stat}={val} not in secondary range 11-14")
+                if not (12 <= val <= 16):
+                    errors.append(f"{stat}={val} not in secondary range 12-16")
         for stat in roles.get("dump", []):
             val = getattr(self, stat)
-            if not (6 <= val <= 10):
-                errors.append(f"{stat}={val} not in dump range 6-10")
+            if not (8 <= val <= 12):
+                errors.append(f"{stat}={val} not in dump range 8-12")
         if self.total() != STAT_BUDGET:
             errors.append(f"total={self.total()} != budget {STAT_BUDGET}")
         return errors
@@ -87,8 +135,7 @@ class Ability(BaseModel):
     name: str
     description: str
     stat: StatName = "STR"
-    cost_hunger: int = 0
-    cost_thirst: int = 0
+    stamina_cost: int = 0
 
 
 class PlayerClass(BaseModel):
@@ -115,49 +162,56 @@ class PlayerCharacter(BaseModel):
     level: int = 1
     color: Tuple[int, int, int] = (0, 0, 255)
     health: int = 100
-    hunger: int = 100
-    thirst: int = 100
+    stamina: int = 100
     speed: float = 1.0
-    max_hunger: int = 100
     max_health: int = 100
-    max_thirst: int = 100
+    max_stamina: int = 100
     max_speed: float = 2.0
     selected_item_index: int = 0
     inventory: Dict[str, object] = Field(default_factory=dict)
     profile_image: Optional[str] = None
-    active_quests: List[str] = Field(default_factory=list)
-    completed_quests: List[str] = Field(default_factory=list)
-    failed_quests: List[str] = Field(default_factory=list)
+    active_quests: List[int] = Field(default_factory=list)
+    completed_quests: List[int] = Field(default_factory=list)
+    failed_quests: List[int] = Field(default_factory=list)
     followers: List[Any] = Field(default_factory=list)  # List[Follower]
     abilities: List[Any] = Field(default_factory=list)
     spells: List[Any] = Field(default_factory=list)
-    equipped_weapon: str = ""
+    equipped_weapon: Optional[str] = None
     armor: int = 0  # flat armor value added to AC
     weapon: Optional[Any] = None  # Weapon instance (resolved at runtime)
     active_buffs: List[ActiveBuff] = Field(default_factory=list)
 
     # --- Phase 4: Items, Inventory & Shops ---
     money: int = 0
-    equipped_weapon: Optional[str] = None
     learned_spells: List[str] = Field(default_factory=list)
 
     # --- Combat record ---
-    combat_record: Dict[str, int] = Field(default_factory=lambda: {
-        "monsters_killed": 0,
-        "damage_dealt": 0,
-        "damage_taken": 0,
-        "combats_won": 0,
-        "combats_fled": 0,
-    })
+    combat_record: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "monsters_killed": 0,
+            "damage_dealt": 0,
+            "damage_taken": 0,
+            "combats_won": 0,
+            "combats_fled": 0,
+        }
+    )
+    encounter_record: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "puzzles_solved": 0,
+            "puzzles_failed": 0,
+            "events_resolved": 0,
+            "events_failed": 0,
+        }
+    )
     title: str = ""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_inv_manager(self):
         """Lazy-init InventoryManager bound to this player's inventory."""
-        if not hasattr(self, '_inv_manager') or self._inv_manager is None:
+        if not hasattr(self, "_inv_manager") or self._inv_manager is None:
             from src.systems.inventory import InventoryManager
+
             self._inv_manager = InventoryManager(self.inventory, self)
         return self._inv_manager
 
@@ -180,36 +234,130 @@ class PlayerCharacter(BaseModel):
             return self.player_class.stats.modifier(stat)
         return 0
 
-    def level_up_choices(self) -> list:
-        """Return available abilities/spells to pick from on level-up."""
+    def level_up_choices(self, max_choices: int = 4) -> list:
+        """Return available abilities/spells to pick from on level-up.
+
+        Draws from ability_pool, spell_pool, and the shared spell pools file
+        (if it exists). Results are capped at *max_choices* via random sampling.
+        """
         if not self.player_class:
             return []
+
         known_names = {a.name for a in self.abilities} | {s.name for s in self.spells}
-        choices = []
+        choices: list[tuple[str, object]] = []
+
         for a in self.player_class.ability_pool:
             if a.name not in known_names:
                 choices.append(("ability", a))
+
         for s in self.player_class.spell_pool:
             if s.name not in known_names:
                 choices.append(("spell", s))
+
+        # Load shared spell pools from disk
+        pool_spells = self._load_spell_pool_choices(known_names)
+        choices.extend(pool_spells)
+
+        if len(choices) > max_choices:
+            choices = random.sample(choices, max_choices)
         return choices
 
-    def apply_level_up(self, choice_type: str, choice):
-        """Apply a level-up choice (ability or spell)."""
+    def _load_spell_pool_choices(self, known_names: set[str]) -> list[tuple[str, Spell]]:
+        """Load the shared spell pools and filter by archetype visibility."""
+        import json
+        import os
+
+        pool_path = os.path.join(os.getenv("DATA_DIR", "data"), "classes", "spell_pools.json")
+        if not os.path.exists(pool_path):
+            return []
+
+        try:
+            with open(pool_path) as f:
+                pools = json.load(f)
+        except Exception:
+            return []
+
+        archetype = self.player_class.archetype if self.player_class else ""
+        visible_pools = {
+            "mage": ["mage_damage", "buff"],
+            "healer": ["healer_damage", "heal", "buff"],
+            "jester": ["mage_damage", "healer_damage", "heal", "buff"],
+        }.get(archetype, [])
+
+        results: list[tuple[str, Spell]] = []
+        for pool_key in visible_pools:
+            for sd in pools.get(pool_key, []):
+                if sd.get("name", "") in known_names:
+                    continue
+                skel = dict(sd)
+                skel.pop("available_at_room", None)
+                try:
+                    results.append(("spell", Spell(**skel)))
+                except Exception:
+                    pass
+        return results
+
+    def apply_level_up(self, choice_type: str, choice, room_level: int = 1):
+        """Apply a level-up choice (ability or spell).
+
+        For spells, dice are scaled to *room_level* at acquisition time.
+        """
+        from src.models.spell import compute_spell_dice, compute_stamina_cost
+
         self.level += 1
         if choice_type == "ability":
             self.abilities.append(choice)
         elif choice_type == "spell":
+            if hasattr(choice, "spell_type") and choice.spell_type in ("damage_single", "damage_multi", "heal"):
+                num_dice, die_sides = compute_spell_dice(room_level, choice.spell_type)
+                stamina = compute_stamina_cost(die_sides, num_dice, choice.targets, choice.spell_type)
+                choice = choice.model_copy(
+                    update={
+                        "num_dice": num_dice,
+                        "die_sides": die_sides,
+                        "stamina_cost": stamina,
+                    }
+                )
             self.spells.append(choice)
 
     def initialize_inventory(self):
         from config import STARTING_MONEY
-        self.inventory = {
-            name: item.clone()
-            for name, item in registry.starter_inventory.items()
-        }
+
+        self.inventory = {name: item.clone() for name, item in registry.starter_inventory.items()}
         self.money = STARTING_MONEY
-        
+        if self.equipped_weapon and self.equipped_weapon not in self.inventory:
+            template = registry.get_item_by_name(self.equipped_weapon)
+            if template:
+                self.inventory[self.equipped_weapon] = template.clone()
+            else:
+                self._create_starter_weapon_item()
+
+    def _create_starter_weapon_item(self):
+        """Create an inventory Weapon item from the archetype's starter weapon template."""
+        from src.models.items import ItemStats
+        from src.models.items import Weapon as InvWeapon
+        from src.models.weapon import STARTER_WEAPONS
+
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        template = STARTER_WEAPONS.get(archetype)
+        if not template:
+            return
+        weapon_name = self.equipped_weapon or template.name
+        inv_weapon = InvWeapon(
+            category="weapon",
+            name=weapon_name,
+            desc=template.description or "A sturdy starting weapon.",
+            weapon_type=template.weapon_type,
+            damage_type=template.damage_type,
+            weapon_category=template.weapon_category,
+            magic_element=template.magic_element,
+            item_stats=ItemStats(
+                attack_dice=f"{template.num_dice}d{template.die_sides}",
+                stat_modifier=template.stat,
+            ),
+        )
+        self.inventory[weapon_name] = inv_weapon
+
     def move(self, dx: int, dy: int, maze, survival_system=None):
         new_x = self.x + dx
         new_y = self.y + dy
@@ -217,13 +365,6 @@ class PlayerCharacter(BaseModel):
         if not maze.is_wall(new_x, new_y):
             self.x = new_x
             self.y = new_y
-            if survival_system is not None:
-                survival_system.on_move(self)
-            else:
-                # Legacy fallback
-                self.hunger = max(0, self.hunger - 1)
-                self.thirst = max(0, self.thirst - 1)
-                self.apply_hunger_thirst_effects()
 
     def add_to_inventory(self, item):
         """Add an item to the player's inventory."""
@@ -244,25 +385,10 @@ class PlayerCharacter(BaseModel):
     def give_item(self):
         """Give the currently selected item."""
         return self._get_inv_manager().give_selected(self.selected_item_index)
-    
-    def update_hunger_and_thirst(self):
-        """Decrease hunger and thirst over time."""
-        self.hunger = max(0, self.hunger - 0.05)
-        self.thirst = max(0, self.thirst - 0.1)
 
-    def apply_hunger_thirst_effects(self):
-        """Apply penalties based on hunger and thirst levels."""
-        # Hunger effects
-        if self.hunger == 0:
-            self.health -= 1  # Lose health when starving
-        elif self.hunger < 20:
-            self.speed = self.speed * 0.8  # Reduce speed
-        elif self.hunger < 80:
-            self.speed = self.max_speed  # Normal speed
-
-        # Thirst effects
-        if self.thirst == 0:
-            self.health -= 1 # Lose health faster when dehydrated
+    def pay_stamina(self, amount: int):
+        """Deduct stamina, clamped to 0."""
+        self.stamina = max(0, self.stamina - amount)
 
     def is_item_at_player_position(self, maze):
         """Check if there is an item at the player's current position."""
@@ -275,20 +401,13 @@ class PlayerCharacter(BaseModel):
     def pick_up_item(self, maze):
         """Pick up an item if the player is on it."""
         return self._get_inv_manager().pick_up_from_maze(maze, self.x, self.y)
-    
+
     def check_health(self):
         """Check if the player is alive."""
         if self.health <= 0:
             self.health = 0
             # Handle player death (e.g., end game or respawn)
 
-    def apply_buffs(self):
-        """Apply buffs when hunger and thirst are high."""
-        if self.hunger > 80 and self.thirst > 80:
-            self.speed = self.max_speed  
-        else:
-            self.speed = self.speed  # Normal speed
-            
     def get_nearby_npc(self, npcs):
         """Return an NPC if one is adjacent to the player."""
         for npc in npcs:
@@ -296,19 +415,19 @@ class PlayerCharacter(BaseModel):
                 return npc
         return None
 
-    def accept_quest(self, quest_id: str):
+    def accept_quest(self, quest_id: int):
         if quest_id not in self.active_quests:
             self.active_quests.append(quest_id)
 
-    def complete_quest(self, quest_id: str):
+    def complete_quest(self, quest_id: int):
         if quest_id in self.active_quests:
             self.active_quests.remove(quest_id)
             self.completed_quests.append(quest_id)
 
-    def has_completed(self, quest_id: str) -> bool:
+    def has_completed(self, quest_id: int) -> bool:
         return quest_id in self.completed_quests
 
-    def fail_quest(self, quest_id: str):
+    def fail_quest(self, quest_id: int):
         if quest_id in self.active_quests:
             self.active_quests.remove(quest_id)
         if quest_id not in self.failed_quests:
@@ -317,6 +436,7 @@ class PlayerCharacter(BaseModel):
     def add_follower(self, follower) -> bool:
         """Add a follower. Returns False if at max capacity."""
         from src.models.follower import MAX_FOLLOWERS
+
         if len(self.followers) >= MAX_FOLLOWERS:
             return False
         self.followers.append(follower)
@@ -325,7 +445,7 @@ class PlayerCharacter(BaseModel):
     def remove_follower(self, npc_id: int):
         self.followers = [f for f in self.followers if f.npc_id != npc_id]
 
-    def get_follower_by_quest(self, quest_id: str):
+    def get_follower_by_quest(self, quest_id: int):
         for f in self.followers:
             if f.quest_id == quest_id:
                 return f
@@ -353,24 +473,25 @@ class PlayerCharacter(BaseModel):
         """Return the stat governing the current weapon. Random weapons pick a random stat."""
         if self.weapon is None:
             return "STR"
-        if self.weapon.weapon_type == "random":
+        if self.weapon.weapon_type == "wild":
             from src.models.weapon import RANDOM_WEAPON_STATS
+
             return random.choice(RANDOM_WEAPON_STATS)
         return self.weapon.stat
 
     def _weapon_stat_bonus(self, stat: str) -> int:
         """Return the stat bonus for the current weapon, applying soft-restriction.
 
-        - Matching archetype → full stat modifier
+        - Matching category → full stat modifier
         - Jester → avg(LUCK mod, weapon stat mod)
-        - Mismatched archetype → 0 (no stat bonus, just base damage)
+        - Mismatched category → 0 (no stat bonus, just base damage)
         """
         archetype = self.player_class.archetype if self.player_class else "warrior"
         if archetype == "jester":
             return self.get_jester_mod(stat)
-        weapon_type = self.weapon.weapon_type if self.weapon else "simple"
-        allowed = ARCHETYPE_WEAPON_TYPES.get(archetype, set())
-        if weapon_type in allowed:
+        category = self.weapon.weapon_category if self.weapon else "simple"
+        allowed = ARCHETYPE_WEAPON_CATEGORIES.get(archetype, {"simple"})
+        if category in allowed:
             return self.get_stat_mod(stat)
         return 0
 
@@ -394,6 +515,17 @@ class PlayerCharacter(BaseModel):
             return random.randint(1, 20) + self.get_stat_mod("WIS") + (self.level - 1)
         return random.randint(1, 20) + self.get_stat_mod("INT") + (self.level - 1)
 
+    def spell_stat_bonus(self, spell) -> int:
+        """Return the stat bonus for a spell based on its governing stat.
+
+        Uses spell.stat (INT/WIS/LUCK) and the jester averaging rule.
+        """
+        archetype = self.player_class.archetype if self.player_class else "warrior"
+        stat = getattr(spell, "stat", "INT")
+        if archetype == "jester":
+            return self.get_jester_mod(stat)
+        return self.get_stat_mod(stat)
+
     def get_jester_mod(self, normal_stat: str) -> int:
         """Jester modifier rule: avg(LUCK mod, normal stat mod)."""
         luck_mod = self.get_stat_mod("LUCK")
@@ -401,11 +533,10 @@ class PlayerCharacter(BaseModel):
         return (luck_mod + normal_mod) // 2
 
     def can_afford_spell(self, spell) -> bool:
-        return self.hunger >= spell.hunger_cost and self.thirst >= spell.thirst_cost
+        return self.stamina >= spell.stamina_cost
 
     def pay_spell_cost(self, spell):
-        self.hunger = max(0, self.hunger - spell.hunger_cost)
-        self.thirst = max(0, self.thirst - spell.thirst_cost)
+        self.stamina = max(0, self.stamina - spell.stamina_cost)
 
     def apply_buff(self, stat: str, value: int, duration: int):
         self.active_buffs.append(ActiveBuff(stat=stat, value=value, turns_remaining=duration))

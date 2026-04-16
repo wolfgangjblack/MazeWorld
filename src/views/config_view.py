@@ -5,8 +5,9 @@ import os
 import re
 
 import pygame
+
 import config as cfg
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
 # ── Tab 0: Editable Config (runtime) ────────────────────────────────────────
 # Each entry: (attr, label, choices | None, secret)
@@ -41,15 +42,13 @@ GENERATION_SETTINGS: list[tuple[str, str]] = [
     ("NUM_ROOMS", "Number of rooms"),
     ("WORLD_SEED", "World seed"),
     ("STORY_SEED", "Story seed"),
-    ("EVENT_PERCENT", "Event percent"),
     ("EVENT_DENSITY", "Event density"),
-    ("QUEST_DENSITY", "Quest density"),
+    ("ITEM_DENSITY", "Item density"),
+    ("NPC_DENSITY", "NPC density"),
+    ("COMBAT_CHANCE", "Combat event %"),
+    ("PUZZLE_CHANCE", "Puzzle event %"),
+    ("EVENT_CHANCE", "Narrative event %"),
     ("MAP_COLORS", "Map colors"),
-    ("NUM_FOOD", "Food items"),
-    ("NUM_DRINKS", "Drink items"),
-    ("NUM_TOOLS", "Tool items"),
-    ("NUM_WEAPONS", "Weapon items"),
-    ("NUM_SPELL_SCROLLS", "Spell scrolls"),
     ("STARTING_MONEY", "Starting money"),
 ]
 
@@ -87,7 +86,7 @@ def _update_dotenv(key: str, value: str) -> None:
     if os.path.exists(path):
         with open(path, "r") as fh:
             lines = fh.readlines()
-    pattern = re.compile(rf'^{re.escape(key)}\s*=')
+    pattern = re.compile(rf"^{re.escape(key)}\s*=")
     new_lines: list[str] = []
     for line in lines:
         if pattern.match(line):
@@ -203,8 +202,7 @@ class ConfigView:
 
         # Separator
         sep_y = tab_y + self.font.get_linesize() + 4
-        pygame.draw.line(self.screen, TAB_INACTIVE_COLOR,
-                         (margin_left, sep_y), (SCREEN_WIDTH - margin_left, sep_y))
+        pygame.draw.line(self.screen, TAB_INACTIVE_COLOR, (margin_left, sep_y), (SCREEN_WIDTH - margin_left, sep_y))
 
         # Items
         line_h = self.font.get_linesize() + 4
@@ -243,9 +241,7 @@ class ConfigView:
                 val_color = READONLY_COLOR
             else:
                 val_text = self._get_display_value(attr, secret)
-                val_color = (SECRET_COLOR if secret
-                             else EDITABLE_VALUE_COLOR if is_selected
-                             else VALUE_COLOR)
+                val_color = SECRET_COLOR if secret else EDITABLE_VALUE_COLOR if is_selected else VALUE_COLOR
 
             val_surf = self.font.render(val_text, True, val_color)
             self.screen.blit(val_surf, (value_x, y))

@@ -13,7 +13,7 @@ NPC_CHECK_PROMPT = (
     "2. Job/personality make sense for the environment\n"
     "3. Opening greeting is in-character\n"
     "4. No inappropriate content\n\n"
-    "Return JSON: {{\"passed\": true/false, \"issues\": [...]}}"
+    'Return JSON: {{"passed": true/false, "issues": [...]}}'
 )
 
 MONSTER_CHECK_PROMPT = (
@@ -24,7 +24,7 @@ MONSTER_CHECK_PROMPT = (
     "2. Stats are within level {level} scaling guidelines\n"
     "3. Abilities make thematic sense\n"
     "4. Loot table items exist in the world\n\n"
-    "Return JSON: {{\"passed\": true/false, \"issues\": [...]}}"
+    'Return JSON: {{"passed": true/false, "issues": [...]}}'
 )
 
 ITEM_CHECK_PROMPT = (
@@ -35,7 +35,7 @@ ITEM_CHECK_PROMPT = (
     "2. Category is correct (food/drink/tool/weapon/spell_scroll)\n"
     "3. Stats are reasonable for the item type\n"
     "4. Description makes sense\n\n"
-    "Return JSON: {{\"passed\": true/false, \"issues\": [...]}}"
+    'Return JSON: {{"passed": true/false, "issues": [...]}}'
 )
 
 EVENT_CHECK_PROMPT = (
@@ -47,7 +47,7 @@ EVENT_CHECK_PROMPT = (
     "3. Combat events have valid monsters\n"
     "4. Puzzle/event encounters have at least one solvable path\n"
     "5. Walk-away option exists for puzzles/events\n\n"
-    "Return JSON: {{\"passed\": true/false, \"issues\": [...]}}"
+    'Return JSON: {{"passed": true/false, "issues": [...]}}'
 )
 
 QUEST_CHECK_PROMPT = (
@@ -61,5 +61,5 @@ QUEST_CHECK_PROMPT = (
     "2. All referenced NPCs, items, and events exist\n"
     "3. Quest is completable given available entities\n"
     "4. Reward makes sense for quest difficulty\n\n"
-    "Return JSON: {{\"passed\": true/false, \"issues\": [...]}}"
+    'Return JSON: {{"passed": true/false, "issues": [...]}}'
 )

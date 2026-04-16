@@ -1,16 +1,25 @@
+# Auto-generated lockfile -- canonical deps live in pyproject.toml
+# Regenerate with: pip install -e ".[all]" && pip freeze > requirements.txt
 accelerate==0.34.2
+anthropic==0.88.0
 diffusers==0.30.3
+elevenlabs>=1.0.0
+fal-client==0.13.2
+google-genai>=0.3.0
+markdown>=3.5
+Pillow>=10.0.0
+pre-commit==4.5.1
+protobuf>=4.25.0
 pydantic==2.9.1
 pygame==2.6.0
 pyinstaller==6.11.1
+pytest==9.0.2
+pytest-cov>=4.0
+python-dotenv==1.1.0
+ruff>=0.11
+sentencepiece>=0.2.0
 torch==2.4.1
 torchvision==0.19.1
-transformers==4.44.2
-fal-client==0.13.2
-anthropic==0.88.0
-pytest==9.0.2
-pre-commit==4.5.1
-protobuf>=4.25.0
-python-dotenv==1.1.0
-sentencepiece>=0.2.0
 tqdm>=4.66.0
+transformers==4.44.2
+weasyprint>=60.0

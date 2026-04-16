@@ -1,12 +1,13 @@
 """Start screen — New Game, Load Game, Tutorial, Config, Quit."""
 
+import os
+
 import pygame
-from config import SCREEN_WIDTH, SCREEN_HEIGHT, BLACK
 
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
 
-MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Quit"]
+MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Credits", "Quit"]
 
-# Colors
 TITLE_COLOR = (220, 180, 60)
 SELECTED_COLOR = (255, 255, 100)
 UNSELECTED_COLOR = (180, 180, 180)
@@ -16,24 +17,40 @@ DISABLED_COLOR = (80, 80, 80)
 class StartView:
     """Renders the start menu and handles selection state."""
 
-    def __init__(self, screen, font, has_saves=False):
+    def __init__(self, screen, font, has_saves=False, portrait_path=None):
         self.screen = screen
         self.font = font
         self.title_font = pygame.font.Font(None, 64)
         self.selected_index = 0
         self.has_saves = has_saves
+        self._portrait = None
+        self._load_portrait(portrait_path)
+
+    def _load_portrait(self, path):
+        if not path or not os.path.exists(path):
+            return
+        try:
+            img = pygame.image.load(path).convert_alpha()
+            self._portrait = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        except Exception:
+            self._portrait = None
 
     def draw(self):
         self.screen.fill(BLACK)
 
-        # Title
+        if self._portrait:
+            self.screen.blit(self._portrait, (0, 0))
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 140))
+            self.screen.blit(overlay, (0, 0))
+
         title_surface = self.title_font.render("MazeWorld", True, TITLE_COLOR)
         title_x = (SCREEN_WIDTH - title_surface.get_width()) // 2
-        self.screen.blit(title_surface, (title_x, SCREEN_HEIGHT // 4))
+        title_y = SCREEN_HEIGHT // 3
+        self.screen.blit(title_surface, (title_x, title_y))
 
-        # Menu items
         line_height = self.font.get_linesize()
-        start_y = SCREEN_HEIGHT // 2
+        start_y = title_y + title_surface.get_height() + 25
         for i, item in enumerate(MENU_ITEMS):
             disabled = self._is_disabled(i)
             if disabled:
@@ -45,9 +62,13 @@ class StartView:
             prefix = "> " if i == self.selected_index else "  "
             text_surface = self.font.render(f"{prefix}{item}", True, color)
             text_x = (SCREEN_WIDTH - text_surface.get_width()) // 2
-            self.screen.blit(text_surface, (text_x, start_y + i * (line_height + 10)))
+            item_y = start_y + i * (line_height + 10)
+            if i == self.selected_index:
+                bg = pygame.Surface((text_surface.get_width() + 20, line_height + 6), pygame.SRCALPHA)
+                bg.fill((20, 20, 40, 200))
+                self.screen.blit(bg, (text_x - 10, item_y - 3))
+            self.screen.blit(text_surface, (text_x, item_y))
 
-        # Footer hint
         selected_item = MENU_ITEMS[self.selected_index]
         if self._is_disabled(self.selected_index):
             if selected_item == "Load Game":
@@ -60,6 +81,7 @@ class StartView:
                 "Load Game": "Continue a saved game",
                 "Tutorial": "View controls and mechanics",
                 "Config": "View and edit settings",
+                "Credits": "View credits and technology used",
                 "Quit": "Exit the game",
             }.get(selected_item, "")
 
@@ -75,10 +97,7 @@ class StartView:
         return False
 
     def handle_input(self, event) -> str | None:
-        """Process a keydown event. Returns an action string or None.
-
-        Actions: "new_game", "load_game", "tutorial", "config", "quit", or None.
-        """
+        """Process a keydown event. Returns an action string or None."""
         if event.key == pygame.K_UP:
             self.selected_index = (self.selected_index - 1) % len(MENU_ITEMS)
         elif event.key == pygame.K_DOWN:
@@ -95,6 +114,8 @@ class StartView:
                 return "tutorial"
             elif selected == "Config":
                 return "config"
+            elif selected == "Credits":
+                return "credits"
             elif selected == "Quit":
                 return "quit"
         return None

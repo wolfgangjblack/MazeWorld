@@ -1,14 +1,16 @@
 """Tests for debug toggle, GameController, GameView, and MazeView."""
-import sys
+
 import os
-import pytest
-import pygame
+import sys
 from unittest.mock import MagicMock, patch
+
+import pygame
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from config import GRID_SIZE, HUD_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT
-from src.views.maze_view import MazeView, DEBUG_EVENT_COLOR
+from config import GRID_SIZE, HUD_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH
+from src.views.maze_view import DEBUG_EVENT_FALLBACK, MazeView
 
 
 @pytest.fixture(autouse=True)
@@ -58,6 +60,7 @@ def _make_mini_maze():
 # MazeView tests
 # ---------------------------------------------------------------------------
 
+
 class TestMazeViewEventVisibility:
     def test_event_tile_invisible_by_default(self, screen):
         maze = _make_mini_maze()
@@ -86,14 +89,15 @@ class TestMazeViewEventVisibility:
         cx = 1 * GRID_SIZE + GRID_SIZE // 2
         cy = 2 * GRID_SIZE + HUD_HEIGHT + GRID_SIZE // 2
         color = screen.get_at((cx, cy))
-        assert (color.r, color.g, color.b) == DEBUG_EVENT_COLOR, (
-            f"Event tile should be purple when debug_reveal=True, got {color}"
+        assert (color.r, color.g, color.b) == DEBUG_EVENT_FALLBACK, (
+            f"Event tile should be purple (fallback) when debug_reveal=True without event_type_map, got {color}"
         )
 
 
 # ---------------------------------------------------------------------------
 # GameController tests
 # ---------------------------------------------------------------------------
+
 
 class TestGameControllerDebugToggle:
     def _make_controller(self, mock_dialogue_box):
@@ -112,9 +116,7 @@ class TestGameControllerDebugToggle:
         player.get_nearby_npc = MagicMock(return_value=None)
         player.followers = []
         maze = _make_mini_maze()
-        maze.is_wall = MagicMock(side_effect=lambda x, y: (
-            not (0 <= x < 3 and 0 <= y < 3) or maze.grid[y][x] == 1
-        ))
+        maze.is_wall = MagicMock(side_effect=lambda x, y: not (0 <= x < 3 and 0 <= y < 3) or maze.grid[y][x] == 1)
 
         with patch("src.controllers.game_controller.GameView"):
             ctrl = GameController(
@@ -155,9 +157,11 @@ class TestGameControllerDebugToggle:
 # GameView DEBUG label tests
 # ---------------------------------------------------------------------------
 
+
 class TestGameViewDebugLabel:
     def _make_game_view(self, screen, font, mock_dialogue_box):
         from src.views.gameplay_view import GameView
+
         return GameView(screen, font, mock_dialogue_box)
 
     @staticmethod
@@ -166,11 +170,9 @@ class TestGameViewDebugLabel:
         player.x = 1
         player.y = 1
         player.color = (0, 0, 255)
-        player.hunger = 100
-        player.thirst = 100
+        player.stamina = 100
         player.health = 100
-        player.max_hunger = 100
-        player.max_thirst = 100
+        player.max_stamina = 100
         player.max_health = 100
         player.inventory = {}
         player.active_quests = []
@@ -188,9 +190,14 @@ class TestGameViewDebugLabel:
 
         with patch("src.views.gameplay_view.registry"):
             gv.draw_game(
-                maze=maze, player=player, npcs=[], inventory_active=False,
-                item_message_active=False, current_npc=None,
-                player_at_item=False, debug_reveal=False,
+                maze=maze,
+                player=player,
+                npcs=[],
+                inventory_active=False,
+                item_message_active=False,
+                current_npc=None,
+                player_at_item=False,
+                debug_reveal=False,
             )
 
         post_color = screen.get_at((SCREEN_WIDTH - 20, 10))
@@ -203,9 +210,14 @@ class TestGameViewDebugLabel:
 
         with patch("src.views.gameplay_view.registry"):
             gv.draw_game(
-                maze=maze, player=player, npcs=[], inventory_active=False,
-                item_message_active=False, current_npc=None,
-                player_at_item=False, debug_reveal=True,
+                maze=maze,
+                player=player,
+                npcs=[],
+                inventory_active=False,
+                item_message_active=False,
+                current_npc=None,
+                player_at_item=False,
+                debug_reveal=True,
             )
 
         expected = font.render("DEBUG", True, (255, 0, 0))

@@ -10,9 +10,9 @@ Supports two modes:
 """
 
 import time as _time
+from enum import Enum
 
 from pydantic import BaseModel, PrivateAttr
-from enum import Enum
 
 
 class TimePeriod(str, Enum):
@@ -45,23 +45,13 @@ class DayNightCycle(BaseModel):
     = one full day cycle).  A pygame-driven millisecond clock
     (``update_realtime``) is also maintained for smooth rendering.
     """
+
     ticks: int = 0
     cycle_length: int = 200  # kept for action-based compat / serialization
 
     # Real-time tracking (ms). Set start_ms on first update().
     elapsed_ms: int = 0
     last_update_ms: int = 0  # last pygame.time.get_ticks value
-
-    def update_realtime(self, current_ms: int) -> None:
-        """Call each frame with pygame.time.get_ticks(). Advances elapsed_ms."""
-        if self.last_update_ms <= 0:
-            # First call — record the baseline, no delta yet
-            self.last_update_ms = max(1, current_ms)
-            return
-        delta = current_ms - self.last_update_ms
-        if delta > 0:
-            self.elapsed_ms += delta
-        self.last_update_ms = current_ms
 
     @property
     def _effective_ms(self) -> int:
@@ -135,6 +125,46 @@ class DayNightCycle(BaseModel):
     def day_number(self) -> int:
         """Which day it is (starting from 1)."""
         return self._effective_ms // FULL_CYCLE_MS + 1
+
+    # Pausing support — freezes both real-time and pygame-based advancement
+    _paused: bool = PrivateAttr(default=False)
+    _pause_elapsed_ms: int = PrivateAttr(default=0)
+    _pause_start_ticks: int = PrivateAttr(default=0)
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
+    def pause(self) -> None:
+        """Freeze time advancement (for menus, combat, events)."""
+        if self._paused:
+            return
+        self._paused = True
+        self._pause_elapsed_ms = self.elapsed_ms
+        self._pause_start_ticks = self.last_update_ms
+
+    def resume(self) -> None:
+        """Resume time advancement, discarding time spent paused."""
+        if not self._paused:
+            return
+        self._paused = False
+        self.elapsed_ms = self._pause_elapsed_ms
+        if self.real_time:
+            self._rt_anchor_time = _time.monotonic()
+            self._rt_anchor_ticks = self.ticks
+
+    def update_realtime(self, current_ms: int) -> None:
+        """Call each frame with pygame.time.get_ticks(). Advances elapsed_ms."""
+        if self._paused:
+            self.last_update_ms = current_ms
+            return
+        if self.last_update_ms <= 0:
+            self.last_update_ms = max(1, current_ms)
+            return
+        delta = current_ms - self.last_update_ms
+        if delta > 0:
+            self.elapsed_ms += delta
+        self.last_update_ms = current_ms
 
     def advance(self, steps: int = 1) -> None:
         """Advance time by the given number of action steps."""

@@ -21,6 +21,7 @@ class ScreenState(Enum):
     GAME_OVER = "game_over"
     VICTORY = "victory"
     STORY = "story"
+    CREDITS = "credits"
 
 
 class ScreenController:

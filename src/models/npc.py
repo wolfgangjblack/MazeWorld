@@ -1,13 +1,15 @@
 import random
-from pydantic import BaseModel, Field
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 
+from pydantic import BaseModel, ConfigDict, Field
+
+from src.data.world_data import ENVIRONMENT_TYPES, HOBBIES, JOBS, NAMES, PERSONALITIES
 from src.prompts import get_prompt_set
-from src.data.world_data import NAMES, PERSONALITIES, JOBS, HOBBIES, ENVIRONMENT_TYPES
 
 
 class NPC(BaseModel):
     """Base NPC class with behavior, image, and color."""
+
     x: int
     y: int
     id: int
@@ -24,21 +26,26 @@ class NPC(BaseModel):
     identity: Optional[str] = None
     opening_greeting: Optional[str] = None
     dialogue_tree: Optional[dict] = None
-    quest_id: Optional[str] = None
+    dialogue_tree_incomplete: Optional[dict] = None
+    dialogue_tree_complete: Optional[dict] = None
+    dialogue_tree_failed: Optional[dict] = None
+    quest_id: Optional[int] = None
+    current_dc: int = 10
     zone: Optional[List[int]] = None
     selected: bool = True
     interaction_history: List[dict] = Field(default_factory=list)
     has_met_player: bool = False
-    finished_dialogue: str = "I have nothing more to say."
+    exhausted_dialogue: str = "I have nothing more to say."  # mid-conversation exhaustion (pipeline)
+    finished_dialogue: str = "I have nothing more to say."  # post-quest completion (QuestManager)
     dialogue_exhausted: bool = False
+    personality_notes: List[str] = Field(default_factory=list)
     max_dialogue_turns: int = 10
     availability: Optional[str] = None  # "day" | "night" | "always" | None
     color: Tuple[int, int, int] = (0, 255, 0)
     move_interval: int = 5000
     last_move_time: int = 0
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def generate_personality_document(self, maze_environment: str | None = None):
         """Generate personality attributes for the NPC.
@@ -59,6 +66,28 @@ class NPC(BaseModel):
         self.job = self.job or random.choice(JOBS[self.environment])
         self.hobby = self.hobby or random.choice(HOBBIES[self.environment])
 
+    def _build_dialogue_context(self) -> str | None:
+        """Extract prompt text from dialogue trees into a compact summary for the LLM."""
+        sections = []
+
+        def _extract_prompts(tree: dict | None, label: str) -> None:
+            if not tree or not isinstance(tree, dict):
+                return
+            nodes = tree.get("nodes", {})
+            prompts_text = [n.get("prompt", "") for n in nodes.values() if isinstance(n, dict) and n.get("prompt")]
+            if prompts_text:
+                joined = " ".join(p[:120] for p in prompts_text[:3])
+                sections.append(f'{label}: "{joined}"')
+
+        if self.dialogue_tree_incomplete:
+            _extract_prompts(self.dialogue_tree_incomplete, "Before quest")
+            _extract_prompts(self.dialogue_tree_complete, "After success")
+            _extract_prompts(self.dialogue_tree_failed, "After failure")
+        elif self.dialogue_tree:
+            _extract_prompts(self.dialogue_tree, "Conversation")
+
+        return "\n".join(sections) if sections else None
+
     def build_identity(self):
         """Build the conversation identity using the prompt library."""
         if self.identity:
@@ -71,6 +100,8 @@ class NPC(BaseModel):
             hobby=self.hobby,
             env=self.environment,
             env_name=self.environment_name or self.environment or "Unknown",
+            personality_notes=self.personality_notes or None,
+            dialogue_context=self._build_dialogue_context(),
         )
 
     def add_turn(self, role: str, content: str):
@@ -88,7 +119,7 @@ class NPC(BaseModel):
         return False
 
     def is_appropriate(self, response: str) -> bool:
-        banned_words = ['chibi', 'loli', 'shota', 'nsfw']
+        banned_words = ["chibi", "loli", "shota", "nsfw"]
         for word in banned_words:
             if word in response.lower():
                 return False
@@ -98,13 +129,14 @@ class NPC(BaseModel):
         fallback_responses = [
             "I'm not sure how to respond to that.",
             "Let's talk about something else.",
-            "I don't have anything to say about that."
+            "I don't have anything to say about that.",
         ]
         return random.choice(fallback_responses)
 
 
 class StaticNPC(NPC):
     """NPC that doesn't move."""
+
     color: tuple = (0, 255, 0)
 
     def prepare(self, maze_environment: str | None = None):
@@ -114,6 +146,7 @@ class StaticNPC(NPC):
 
 class RandomNPC(NPC):
     """NPC that moves randomly around a fixed point."""
+
     color: Tuple[int, int, int] = (0, 255, 255)
     home_x: int = 0
     home_y: int = 0
@@ -142,6 +175,7 @@ class RandomNPC(NPC):
 
 class MerchantNPC(NPC):
     """NPC that sells items. Stays in place like a StaticNPC."""
+
     color: Tuple[int, int, int] = (255, 215, 0)  # gold
     shop_inventory: List[dict] = Field(default_factory=list)
     # Each entry: {"item_id": int, "price": int, "stock": int}
@@ -164,6 +198,7 @@ class MerchantNPC(NPC):
         if not player.spend_money(price):
             return "You don't have enough money."
         from src.registry import registry
+
         item_template = registry.get_item(entry["item_id"])
         if not item_template:
             player.add_money(price)  # refund
@@ -177,6 +212,7 @@ class MerchantNPC(NPC):
         if item_name not in player.inventory:
             return "You don't have that item."
         from src.models.items import EscortItem
+
         item = player.inventory[item_name]
         if isinstance(item, EscortItem):
             return "You can't sell that."
@@ -189,9 +225,13 @@ class MerchantNPC(NPC):
 
 
 class AggressiveNPC(NPC):
-    """NPC that moves randomly until the player is within 5 squares and in line of sight."""
-    color: Tuple[int, int, int] = (255, 0, 0)
+    """NPC that moves randomly until the player is within 5 squares and in line of sight.
+    After combat_defeated is set, reverts to random wandering."""
+
+    color: Tuple[int, int, int] = (255, 140, 0)
     dist: int = 5
+    combat_defeated: bool = False
+    npc_monster: Optional[dict] = None
 
     def prepare(self, maze_environment: str | None = None):
         self.generate_personality_document(maze_environment)
@@ -203,7 +243,7 @@ class AggressiveNPC(NPC):
 
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
 
-        if self.in_line_of_sight(maze, player_pos):
+        if not self.combat_defeated and self.in_line_of_sight(maze, player_pos):
             if player_pos[0] > self.x and not maze.is_wall(self.x + 1, self.y):
                 self.x += 1
             elif player_pos[0] < self.x and not maze.is_wall(self.x - 1, self.y):

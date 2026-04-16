@@ -1,10 +1,13 @@
 """Save state serialization model — full game state snapshot."""
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 class SaveMetadata(BaseModel):
     """Display info shown in save file lists."""
+
     character_name: str = "Adventurer"
     character_class: str = ""
     room_level: int = 1
@@ -24,7 +27,8 @@ class SaveState(BaseModel):
 
     # World identity
     seed: int = -1
-    room_id: str = "room_1"
+    current_room: int = 0
+    total_rooms: int = 1
 
     # Player state
     player_data: dict = Field(default_factory=dict)
@@ -33,6 +37,9 @@ class SaveState(BaseModel):
     maze_grid: list = Field(default_factory=list)
     maze_environment: str = ""
     maze_environment_name: str = ""
+    maze_door_position: Optional[list] = None
+    maze_door_revealed: bool = False
+    maze_gate_encounter_id: Optional[int] = None
 
     # NPC states (position, dialogue history, has_met_player, shop inventory)
     npc_states: list[dict] = Field(default_factory=list)
@@ -54,6 +61,16 @@ class SaveState(BaseModel):
 
     # Day/night cycle state
     day_night_data: dict = Field(default_factory=dict)
+
+    # Room progression
+    gate_cleared: bool = False
+    gc_stats: dict = Field(
+        default_factory=lambda: {
+            "monsters_killed": 0,
+            "items_used": 0,
+            "rooms_cleared": 0,
+        }
+    )
 
     # Timing
     time_played_seconds: float = 0.0

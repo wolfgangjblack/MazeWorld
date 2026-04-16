@@ -8,12 +8,13 @@ import json
 import logging
 import os
 
+from config import DATA_DIR
 from src.models.story import OverarchingStory
 from src.models.world_bible import EntityRef, RoomBible, WorldBible
 
 logger = logging.getLogger(__name__)
 
-WORLD_BIBLE_PATH = os.path.join("data", "world_bible.json")
+WORLD_BIBLE_PATH = os.path.join(DATA_DIR, "world_bible.json")
 
 
 def build_world_bible(
@@ -26,6 +27,9 @@ def build_world_bible(
     maze_environment: str,
 ) -> WorldBible:
     """Assemble the WorldBible cross-reference index from generated pools.
+
+    **Test-only helper.** The production pipeline builds the bible
+    incrementally in ``_phase1_story`` / entity-generation phases.
 
     Parameters
     ----------
@@ -86,32 +90,35 @@ def build_world_bible(
     # --- Index events (encounters) ---
     for event in event_list:
         eid = event["id"]
-        room.encounters.append(eid)
-        entity_index[f"encounter:{eid}"] = EntityRef(
+        eid_str = str(eid)
+        room.encounters.append(eid_str)
+        entity_index[f"encounter:{eid_str}"] = EntityRef(
             entity_type="encounter",
             room_id=room_id,
-            entity_id=eid,
+            entity_id=eid_str,
         )
 
-        # Index monsters within combat events
+        # Index monsters within combat events by XYYY monster IDs
         if event.get("type") == "combat":
-            for midx, monster in enumerate(event.get("monsters", [])):
-                monster_id = f"{eid}_m{midx}"
-                room.monsters.append(monster_id)
-                entity_index[f"monster:{monster_id}"] = EntityRef(
+            for mid in event.get("monster_ids", []):
+                mid_str = str(mid)
+                if mid_str not in room.monsters:
+                    room.monsters.append(mid_str)
+                entity_index[f"monster:{mid_str}"] = EntityRef(
                     entity_type="monster",
                     room_id=room_id,
-                    entity_id=monster_id,
+                    entity_id=mid_str,
                 )
 
     # --- Index quests ---
     for quest in quest_list:
         qid = quest["id"]
-        room.quests.append(qid)
-        entity_index[f"quest:{qid}"] = EntityRef(
+        qid_str = str(qid)
+        room.quests.append(qid_str)
+        entity_index[f"quest:{qid_str}"] = EntityRef(
             entity_type="quest",
             room_id=room_id,
-            entity_id=qid,
+            entity_id=qid_str,
         )
 
     bible.rooms[room_id] = room
@@ -120,42 +127,42 @@ def build_world_bible(
     return bible
 
 
-def cross_validate(bible: WorldBible, npc_pool: list[dict],
-                   event_list: list[dict], quest_list: list[dict],
-                   item_placements: list[dict]) -> list[str]:
+def cross_validate(
+    bible: WorldBible, npc_pool: list[dict], event_list: list[dict], quest_list: list[dict], item_placements: list[dict]
+) -> list[str]:
     """Run cross-content validation checks. Returns list of issues found."""
     from src.generate.checker import check_quest_references
 
-    npc_ids = {str(n["id"]) for n in npc_pool if n.get("selected")}
+    # Entity IDs are int (XYYY ranges); keep types aligned with quest JSON and pools.
+    npc_ids = {n["id"] for n in npc_pool if n.get("selected")}
     event_ids = {e["id"] for e in event_list}
     item_ids = {p["item_id"] for p in item_placements}
 
     issues: list[str] = []
     for quest in quest_list:
-        # Normalize NPC ID fields to strings for comparison
-        normalized = dict(quest)
-        for key in ("giver_npc_id", "escort_npc_id", "target_npc_id"):
-            if key in normalized:
-                normalized[key] = str(normalized[key])
-
-        issues.extend(check_quest_references(
-            normalized,
-            npc_ids=npc_ids,
-            item_ids=item_ids,
-            event_ids=event_ids,
-            label=f"Quest {quest['id']}",
-        ))
+        issues.extend(
+            check_quest_references(
+                quest,
+                npc_ids=npc_ids,
+                item_ids=item_ids,
+                event_ids=event_ids,
+                label=f"Quest {quest['id']}",
+            )
+        )
 
     return issues
 
 
 def write_world_bible(bible: WorldBible, path: str = WORLD_BIBLE_PATH) -> str:
-    """Serialise the WorldBible to JSON. Returns the path written."""
+    """Serialise the WorldBible to JSON. Returns the path written.
+
+    **Test-only helper.** The production pipeline persists the bible
+    directly via ``bible.persist()``.
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(bible.model_dump(), f, indent=2)
-    logger.info("WorldBible written to %s (%d entities indexed).",
-                path, len(bible.entity_index))
+    logger.info("WorldBible written to %s (%d entities indexed).", path, len(bible.entity_index))
     return path
 
 
@@ -194,27 +201,33 @@ def gameplay_audit(
 
     # --- Story coherence ---
     if not bible.story.title:
-        issues.append({
-            "severity": "warning",
-            "message": "Overarching story has no title",
-            "entity_id": "",
-        })
+        issues.append(
+            {
+                "severity": "warning",
+                "message": "Overarching story has no title",
+                "entity_id": "",
+            }
+        )
 
     faction = bible.story.faction
     if not faction:
-        issues.append({
-            "severity": "warning",
-            "message": "No faction defined in overarching story",
-            "entity_id": "",
-        })
+        issues.append(
+            {
+                "severity": "warning",
+                "message": "No faction defined in overarching story",
+                "entity_id": "",
+            }
+        )
 
     story_quests = [q for q in quest_list if q.get("is_story_quest")]
     if not story_quests:
-        issues.append({
-            "severity": "warning",
-            "message": "No story quests found — story progression may be broken",
-            "entity_id": "",
-        })
+        issues.append(
+            {
+                "severity": "warning",
+                "message": "No story quests found — story progression may be broken",
+                "entity_id": "",
+            }
+        )
 
     # --- Quest reference integrity ---
     for quest in quest_list:
@@ -223,63 +236,77 @@ def gameplay_audit(
 
         giver = quest.get("giver_npc_id")
         if giver not in npc_ids:
-            issues.append({
-                "severity": "error",
-                "message": f"Quest giver NPC {giver} does not exist",
-                "entity_id": qid,
-            })
+            issues.append(
+                {
+                    "severity": "error",
+                    "message": f"Quest giver NPC {giver} does not exist",
+                    "entity_id": qid,
+                }
+            )
 
         if qtype == "fetch":
             for ti in quest.get("target_items", []):
                 if ti.get("item_id") not in item_ids_on_map:
-                    issues.append({
-                        "severity": "error",
-                        "message": f"Fetch item {ti.get('item_id')} not on map",
-                        "entity_id": qid,
-                    })
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "message": f"Fetch item {ti.get('item_id')} not on map",
+                            "entity_id": qid,
+                        }
+                    )
 
         elif qtype == "combat":
             target = quest.get("target_event_id")
             if target and target not in combat_event_ids:
-                issues.append({
-                    "severity": "error",
-                    "message": f"Combat quest target event {target} not found",
-                    "entity_id": qid,
-                })
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Combat quest target event {target} not found",
+                        "entity_id": qid,
+                    }
+                )
 
         elif qtype == "escort":
             escort_npc = quest.get("escort_npc_id")
             if escort_npc and escort_npc not in npc_ids:
-                issues.append({
-                    "severity": "error",
-                    "message": f"Escort NPC {escort_npc} does not exist",
-                    "entity_id": qid,
-                })
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Escort NPC {escort_npc} does not exist",
+                        "entity_id": qid,
+                    }
+                )
 
         elif qtype == "delivery":
             if quest.get("delivery_item_id") not in item_ids_on_map:
-                issues.append({
-                    "severity": "error",
-                    "message": f"Delivery item {quest.get('delivery_item_id')} not on map",
-                    "entity_id": qid,
-                })
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Delivery item {quest.get('delivery_item_id')} not on map",
+                        "entity_id": qid,
+                    }
+                )
             if quest.get("target_npc_id") not in npc_ids:
-                issues.append({
-                    "severity": "error",
-                    "message": f"Delivery target NPC {quest.get('target_npc_id')} not found",
-                    "entity_id": qid,
-                })
+                issues.append(
+                    {
+                        "severity": "error",
+                        "message": f"Delivery target NPC {quest.get('target_npc_id')} not found",
+                        "entity_id": qid,
+                    }
+                )
 
         # Multi-step chain integrity
         if qtype == "multi_step":
             sub_ids = quest.get("sub_quest_ids", [])
             for sub_id in sub_ids:
                 if sub_id not in quest_ids:
-                    issues.append({
-                        "severity": "error",
-                        "message": f"Multi-step sub-quest {sub_id} not found",
-                        "entity_id": qid,
-                    })
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "message": f"Multi-step sub-quest {sub_id} not found",
+                            "entity_id": qid,
+                        }
+                    )
 
         # Prerequisite chain depth
         prereq = quest.get("prerequisite_quest_id")
@@ -289,20 +316,24 @@ def gameplay_audit(
             check = prereq
             while check and depth < 10:
                 if check in visited:
-                    issues.append({
-                        "severity": "error",
-                        "message": f"Circular prerequisite chain detected at {check}",
-                        "entity_id": qid,
-                    })
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "message": f"Circular prerequisite chain detected at {check}",
+                            "entity_id": qid,
+                        }
+                    )
                     break
                 visited.add(check)
                 parent = next((q for q in quest_list if q["id"] == check), None)
                 if parent is None:
-                    issues.append({
-                        "severity": "error",
-                        "message": f"Prerequisite quest {check} not found",
-                        "entity_id": qid,
-                    })
+                    issues.append(
+                        {
+                            "severity": "error",
+                            "message": f"Prerequisite quest {check} not found",
+                            "entity_id": qid,
+                        }
+                    )
                     break
                 check = parent.get("prerequisite_quest_id")
                 depth += 1
@@ -313,31 +344,37 @@ def gameplay_audit(
     if total_events > 0:
         ratio = len(time_gated) / total_events
         if ratio > 0.4:
-            issues.append({
-                "severity": "warning",
-                "message": f"Too many time-gated encounters: {len(time_gated)}/{total_events} "
-                           f"({ratio:.0%}), target ~20%",
-                "entity_id": "",
-            })
+            issues.append(
+                {
+                    "severity": "warning",
+                    "message": f"Too many time-gated encounters: {len(time_gated)}/{total_events} "
+                    f"({ratio:.0%}), target ~20%",
+                    "entity_id": "",
+                }
+            )
 
     # --- Monster presence in combat events ---
     for event in event_list:
-        if event.get("type") == "combat" and not event.get("monsters"):
-            issues.append({
-                "severity": "error",
-                "message": f"Combat event {event.get('id')} has no monsters",
-                "entity_id": event.get("id", ""),
-            })
+        if event.get("type") == "combat" and not event.get("monster_ids"):
+            issues.append(
+                {
+                    "severity": "error",
+                    "message": f"Combat event {event.get('id')} has no monsters",
+                    "entity_id": event.get("id", ""),
+                }
+            )
 
     # --- NPC quest assignments ---
     assigned_quests = {n.get("quest_id") for n in npc_pool if n.get("quest_id")}
     for qid in assigned_quests:
         if qid and qid not in quest_ids:
-            issues.append({
-                "severity": "warning",
-                "message": f"NPC assigned to non-existent quest {qid}",
-                "entity_id": qid,
-            })
+            issues.append(
+                {
+                    "severity": "warning",
+                    "message": f"NPC assigned to non-existent quest {qid}",
+                    "entity_id": qid,
+                }
+            )
 
     return issues
 
@@ -366,10 +403,7 @@ def editor_coherence_check(
     for rid, room in bible.rooms.items():
         for npc in room.npcs:
             if npc.name and npc.name in npc_names_seen:
-                issues.append(
-                    f"Duplicate NPC name '{npc.name}' in {rid} "
-                    f"(first seen in {npc_names_seen[npc.name]})"
-                )
+                issues.append(f"Duplicate NPC name '{npc.name}' in {rid} (first seen in {npc_names_seen[npc.name]})")
             elif npc.name:
                 npc_names_seen[npc.name] = rid
 

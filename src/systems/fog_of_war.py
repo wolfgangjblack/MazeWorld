@@ -8,15 +8,25 @@ Line-of-sight raycasting ensures walls block visibility.
 from typing import List
 
 from config import (
-    MAZE_WIDTH, MAZE_HEIGHT, FOG_DEFAULT_RADIUS,
-    FOG_NIGHT_PENALTY, FOG_DIM_EDGE,
+    FOG_DAWN_BONUS,
+    FOG_DAY_BONUS,
+    FOG_DEFAULT_RADIUS,
+    FOG_DIM_EDGE,
+    FOG_DUSK_PENALTY,
+    FOG_NIGHT_PENALTY,
+    MAZE_HEIGHT,
+    MAZE_WIDTH,
 )
 
-
-# Use config.py constants as the single source of truth
 DEFAULT_VISIBILITY_RADIUS = FOG_DEFAULT_RADIUS
-NIGHT_VISIBILITY_PENALTY = FOG_NIGHT_PENALTY
 DIM_EDGE_TILES = FOG_DIM_EDGE
+
+_PERIOD_MODIFIERS = {
+    "dawn": FOG_DAWN_BONUS,
+    "day": FOG_DAY_BONUS,
+    "dusk": -FOG_DUSK_PENALTY,
+    "night": -FOG_NIGHT_PENALTY,
+}
 
 
 class FogOfWar:
@@ -26,31 +36,31 @@ class FogOfWar:
         self.width = width
         self.height = height
         # False = hidden, True = revealed (permanently)
-        self.revealed: List[List[bool]] = [
-            [False for _ in range(width)] for _ in range(height)
-        ]
+        self.revealed: List[List[bool]] = [[False for _ in range(width)] for _ in range(height)]
 
-    def get_visibility_radius(self, player, is_night: bool = False,
-                              has_torch: bool = False) -> int:
+    def get_visibility_radius(
+        self, player, is_night: bool = False, has_torch: bool = False, time_period: str | None = None
+    ) -> int:
         """Calculate effective visibility radius.
 
         Base radius + WIS bonus (+1 per 2 WIS modifier points).
-        Night reduces by NIGHT_VISIBILITY_PENALTY unless torch is active.
+        Varies by time period: dawn/day give bonuses, dusk/night give penalties.
+        Torch negates night/dusk penalties.
         """
         radius = DEFAULT_VISIBILITY_RADIUS
 
-        # WIS modifier bonus: +1 tile per 2 WIS modifier points
-        wis_mod = player.get_stat_mod("WIS") if hasattr(player, 'get_stat_mod') else 0
+        wis_mod = player.get_stat_mod("WIS") if hasattr(player, "get_stat_mod") else 0
         radius += max(0, wis_mod // 2)
 
-        # Night penalty (torch negates)
-        if is_night and not has_torch:
-            radius -= NIGHT_VISIBILITY_PENALTY
+        period = time_period or ("night" if is_night else "day")
+        modifier = _PERIOD_MODIFIERS.get(period, 0)
+        if modifier < 0 and has_torch:
+            modifier = 0
+        radius += modifier
 
         return max(1, radius)
 
-    def update(self, player_x: int, player_y: int, maze,
-               radius: int) -> None:
+    def update(self, player_x: int, player_y: int, maze, radius: int) -> None:
         """Reveal all tiles visible from (player_x, player_y) within radius.
 
         Uses raycasting: for each tile in the radius circle, cast a ray
@@ -77,8 +87,7 @@ class FogOfWar:
                 if self._has_line_of_sight(player_x, player_y, tx, ty, maze):
                     self.revealed[ty][tx] = True
 
-    def _has_line_of_sight(self, x0: int, y0: int, x1: int, y1: int,
-                           maze) -> bool:
+    def _has_line_of_sight(self, x0: int, y0: int, x1: int, y1: int, maze) -> bool:
         """Bresenham's line algorithm to check if a wall blocks LOS.
 
         Returns True if there is a clear line of sight from (x0,y0) to (x1,y1).
@@ -116,9 +125,7 @@ class FogOfWar:
             return self.revealed[y][x]
         return False
 
-    def is_currently_visible(self, x: int, y: int, player_x: int,
-                             player_y: int, radius: int,
-                             maze=None) -> bool:
+    def is_currently_visible(self, x: int, y: int, player_x: int, player_y: int, radius: int, maze=None) -> bool:
         """Check if a tile is within the player's current visibility radius and has LOS."""
         dx = x - player_x
         dy = y - player_y
@@ -128,8 +135,7 @@ class FogOfWar:
             return self._has_line_of_sight(player_x, player_y, x, y, maze)
         return True
 
-    def is_dim(self, x: int, y: int, player_x: int, player_y: int,
-               radius: int) -> bool:
+    def is_dim(self, x: int, y: int, player_x: int, player_y: int, radius: int) -> bool:
         """Check if a tile is at the dim edge of visibility."""
         dx = x - player_x
         dy = y - player_y
