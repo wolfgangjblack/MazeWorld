@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QuestReward(BaseModel):
@@ -36,8 +36,7 @@ class Quest(BaseModel):
     portrait_prompt: Optional[str] = None
     profile_image: Optional[str] = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def apply_failure_penalty(self, player) -> str:
         """Apply failure penalties to the player. Returns description of what happened."""

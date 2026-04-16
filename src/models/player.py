@@ -1,7 +1,7 @@
 import random
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.models.spell import Spell
 from src.registry import registry
@@ -205,8 +205,7 @@ class PlayerCharacter(BaseModel):
     )
     title: str = ""
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_inv_manager(self):
         """Lazy-init InventoryManager bound to this player's inventory."""

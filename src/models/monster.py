@@ -12,7 +12,7 @@ import os
 import random
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from config import DATA_DIR
 
@@ -74,8 +74,7 @@ class Monster(BaseModel):
     # Battle state (not persisted)
     status_effects: Dict[str, int] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def model_post_init(self, __context):
         if self.max_hp == 0:

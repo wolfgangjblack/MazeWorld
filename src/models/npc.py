@@ -1,7 +1,7 @@
 import random
 from typing import List, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.data.world_data import ENVIRONMENT_TYPES, HOBBIES, JOBS, NAMES, PERSONALITIES
 from src.prompts import get_prompt_set
@@ -45,8 +45,7 @@ class NPC(BaseModel):
     move_interval: int = 5000
     last_move_time: int = 0
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def generate_personality_document(self, maze_environment: str | None = None):
         """Generate personality attributes for the NPC.
