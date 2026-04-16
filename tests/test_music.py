@@ -44,12 +44,13 @@ class TestMusicControllerFallback:
         mc.stop()  # must not raise
         assert mc.current_track is None
 
-    def test_play_maze_uses_correct_track_key(self):
+    def test_play_maze_uses_correct_track_key(self, tmp_path, monkeypatch):
         """play_maze(env_type) should look up 'maze_{env_type}' in the manifest.
 
         With no files present, both calls should leave current_track as None
         and not raise, confirming the correct key format is used internally.
         """
+        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         mc.play_maze("village")  # looks up "maze_village" — not in manifest, silent
         assert mc.current_track is None

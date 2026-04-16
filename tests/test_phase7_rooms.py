@@ -372,20 +372,22 @@ class TestLevelUpPools:
         for ctype, choice in choices:
             assert ctype == "ability"
 
-    def test_mage_level_up_offers_spells(self, mage_class):
+    def test_mage_level_up_offers_spells(self, mage_class, monkeypatch):
         p = PlayerCharacter(x=0, y=0)
         p.apply_class(mage_class)
+        monkeypatch.setattr(p, "_load_spell_pool_choices", lambda known: [])
         choices = p.level_up_choices()
         assert len(choices) == 2  # Ice Shard, Lightning
         for ctype, choice in choices:
             assert ctype == "spell"
 
-    def test_jester_level_up_has_mixed_pool(self, jester_class):
+    def test_jester_level_up_has_mixed_pool(self, jester_class, monkeypatch):
         """Jester gets choices from other class pools (populated during gen)."""
         p = PlayerCharacter(x=0, y=0)
         p.apply_class(jester_class)
+        monkeypatch.setattr(p, "_load_spell_pool_choices", lambda known: [])
         choices = p.level_up_choices()
-        # Should have both ability and spell from other pools
+        # Should have both ability and spell from fixture pools
         types = {c[0] for c in choices}
         assert "ability" in types
         assert "spell" in types
