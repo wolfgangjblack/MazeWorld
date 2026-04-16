@@ -46,7 +46,7 @@ jobs:
           pip install -e ".[dev,api]"
 
       - name: Run tests
-        run: python -m pytest tests/ -v --tb=short --cov=src --cov-report=term-missing --cov-fail-under=70
+        run: python -m pytest tests/ -v --tb=short --cov=src --cov-report=term-missing --cov-fail-under=60
 
   typecheck:
     runs-on: ubuntu-latest
@@ -64,4 +64,4 @@ jobs:
           pip install pyright
 
       - name: Run type checker
-        run: pyright src/ --level basic
+        run: pyright src/

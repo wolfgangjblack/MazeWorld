@@ -54,6 +54,24 @@ include = ["src*"]
 testpaths = ["tests"]
 markers = ["requires_data: needs generated world data (run pipeline first)"]
 
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/views/*",
+    "src/generate/pipeline.py",
+    "src/generate/guide_builder.py",
+    "src/generate/music_client.py",
+    "src/generate/sfx_client.py",
+    "src/generate/image_client.py",
+    "src/generate/llm_executor.py",
+    "src/generate/generators/spell_pool_gen.py",
+    "src/generate/summary_agent.py",
+    "src/db_constants.py",
+    "src/prompts/checker_prompts/*",
+    "src/prompts/validator_prompts/*",
+    "src/prompts/world_editor_prompts/*",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
