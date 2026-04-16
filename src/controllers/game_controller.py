@@ -753,9 +753,7 @@ class GameController:
             quest = self.quest_manager.has_unoffered_quest(npc, self.player)
             if quest:
                 desc = quest.description[:100] + ("..." if len(quest.description) > 100 else "")
-                self.dialogue_box.set_item_message(
-                    f"Quest: {quest.title}\n{desc}\n\nEnter: Accept  |  Escape: Decline"
-                )
+                self.dialogue_box.set_item_message(f"Quest: {quest.title}\n{desc}\n\nEnter: Accept  |  Escape: Decline")
                 self.item_message_active = True
                 self.pending_quest_offer = {"quest": quest, "npc": npc}
                 return

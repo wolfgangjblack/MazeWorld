@@ -155,7 +155,6 @@ class CombatController:
         target_ac = target.ac - (target_combatant.ac_penalty if target_combatant else 0)
         dc = target_ac + target.dex_mod
 
-        atk_d20 = getattr(self.player, "last_attack_d20", 0)
         atk_bonus = getattr(self.player, "last_attack_bonus", 0)
         atk_stat = getattr(self.player, "last_attack_stat", "")
 

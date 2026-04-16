@@ -100,7 +100,10 @@ async def _generate_track_async(
                 ),
             )
             if not response.candidates or not response.candidates[0].content:
-                logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, max_attempts)
+                logger.warning(
+                    "Lyria track '%s' attempt %d/%d: no audio in response",
+                     track_name, attempt + 1, max_attempts
+                )
                 if attempt < max_attempts - 1:
                     await asyncio.sleep(3 * (attempt + 1))
                 continue
@@ -112,7 +115,10 @@ async def _generate_track_async(
                         f.write(part.inline_data.data)
                     logger.info("Music track saved: %s", filepath)
                     return track_name, filepath
-            logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, max_attempts)
+            logger.warning(
+                "Lyria track '%s' attempt %d/%d: no audio in response",
+                 track_name, attempt + 1, max_attempts
+            )
         except Exception as e:
             logger.warning("Lyria track '%s' attempt %d/%d failed: %s", track_name, attempt + 1, max_attempts, e)
         if attempt < max_attempts - 1:
