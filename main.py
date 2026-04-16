@@ -1097,6 +1097,9 @@ def main():
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("MazeWorld")
+    icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
+    if os.path.exists(icon_path):
+        pygame.display.set_icon(pygame.image.load(icon_path))
     font = pygame.font.Font(None, 32)
     clock = pygame.time.Clock()
 
