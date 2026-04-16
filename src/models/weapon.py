@@ -24,7 +24,7 @@ WEAPON_CATEGORIES = {
 PHYSICAL_DAMAGE_TYPES = ["slashing", "piercing", "bludgeoning"]
 MAGIC_ELEMENTS = ["fire", "water", "forest", "light", "dark"]
 
-RANDOM_WEAPON_STATS = ["STR", "DEX", "CON", "INT", "WIS"]
+RANDOM_WEAPON_STATS = ["STR", "DEX", "CON", "INT", "WIS", "LUCK"]
 
 
 # ---------------------------------------------------------------------------

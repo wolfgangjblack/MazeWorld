@@ -233,4 +233,4 @@ def test_combat_actions():
 def test_follower():
     f = Follower(npc_id=1000, name="Arin", quest_id=4001)
     assert f.npc_id == 1000
-    assert f.joined_in_room == 1
+    assert f.joined_in_room == 0

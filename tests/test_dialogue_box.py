@@ -123,8 +123,11 @@ class TestBuildDisplayHistory:
         lines = db._build_display_history(npc)
         assert lines == [
             "Arin: Hello traveler",
+            "",
             "You: Hi there",
+            "",
             "Arin: Welcome",
+            "",
         ]
 
     def test_empty_history(self):
@@ -139,7 +142,7 @@ class TestBuildDisplayHistory:
 
         db = _make_db()
         lines = db._build_display_history(npc)
-        assert lines == ["Arin: Hello"]
+        assert lines == ["", "Arin: Hello", ""]
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +186,9 @@ class TestStartDialogue:
 
         assert db.conversation_history == [
             "Arin: Previous greeting",
+            "",
             "You: Previous reply",
+            "",
         ]
 
 

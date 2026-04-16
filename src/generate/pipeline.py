@@ -91,6 +91,22 @@ PHASE_NAMES = [
 ]
 
 
+def _get_model_tag() -> str:
+    from config import ANTHROPIC_MODEL, LLM_BACKEND, LLM_MODEL_PATH
+
+    return ANTHROPIC_MODEL if LLM_BACKEND == "api" else LLM_MODEL_PATH
+
+
+def _get_image_tag() -> str:
+    from config import FAL_MODEL, IMAGE_BACKEND, LOCAL_IMAGE_MODEL_MPS
+
+    return FAL_MODEL if IMAGE_BACKEND == "api" else LOCAL_IMAGE_MODEL_MPS
+
+
+def _get_audio_tag() -> str:
+    return "lyria-3 + elevenlabs"
+
+
 # ---------------------------------------------------------------------------
 # Phase 0: Environment Sequence
 # ---------------------------------------------------------------------------
@@ -392,7 +408,7 @@ def _phase3a_classes(
             )
         )
 
-    logger.info("Generated %d player classes.", len(player_classes))
+    logger.info("Generated %d player classes. [%s]", len(player_classes), _get_model_tag())
     return player_classes, class_elements
 
 
@@ -421,7 +437,9 @@ def _phase3a_spell_pools(
         json.dump(spell_pools, f, indent=2)
 
     total = sum(len(v) for v in spell_pools.values())
-    logger.info("Generated spell pools: %d total spells across %d pools", total, len(spell_pools))
+    logger.info(
+        "Generated spell pools: %d total spells across %d pools [%s]", total, len(spell_pools), _get_model_tag()
+    )
     return spell_pools
 
 
@@ -532,7 +550,13 @@ def _phase3b_items(layout: dict, bible: WorldBible) -> tuple[dict | None, list[d
                 }
             )
 
-    logger.info("Room %d: %d items (%d placements).", room_idx, len(generated_items or {}), len(item_placements))
+    logger.info(
+        "Room %d: %d items (%d placements). [%s]",
+        room_idx,
+        len(generated_items or {}),
+        len(item_placements),
+        _get_model_tag(),
+    )
     return generated_items, item_placements
 
 
@@ -636,7 +660,7 @@ def _phase3c_npcs(
         )
         npc_id_counter += 1
 
-    logger.info("Room %d: %d NPCs generated.", room_idx, len(npc_pool))
+    logger.info("Room %d: %d NPCs generated. [%s]", room_idx, len(npc_pool), _get_model_tag())
     return npc_pool
 
 
@@ -718,7 +742,7 @@ def _phase3d_monsters(layout: dict, bible: WorldBible, id_offset: int = 0) -> li
             ),
         )
 
-    logger.info("Room %d: %d monsters generated.", room_idx, len(monster_db))
+    logger.info("Room %d: %d monsters generated. [%s]", room_idx, len(monster_db), _get_model_tag())
     return monster_db
 
 
@@ -1331,7 +1355,14 @@ def _phase4a_events(
         quest_counter += 1
 
     story_count = sum(1 for q in quest_list if q.get("is_story_quest"))
-    logger.info("Room %d: %d events, %d quests (%d story).", room_idx, len(event_list), len(quest_list), story_count)
+    logger.info(
+        "Room %d: %d events, %d quests (%d story). [%s]",
+        room_idx,
+        len(event_list),
+        len(quest_list),
+        story_count,
+        _get_model_tag(),
+    )
     return event_list, quest_list
 
 
@@ -1460,6 +1491,7 @@ def _phase4b_dialogue(
             validate_fn=lambda t, _hq=has_quest: _validate_dialogue_tree(t, _hq),
             fallback={"error": "exhausted retries"},
             label=f"dialogue_tree:{npc.get('name', '?')}",
+            max_retries=5,
         )
 
         if "error" in tree:
@@ -1481,11 +1513,12 @@ def _phase4b_dialogue(
             npc["dialogue_tree"] = tree
 
     logger.info(
-        "Room %d: Dialogue trees %d/%d succeeded (%d failed).",
+        "Room %d: Dialogue trees %d/%d succeeded (%d failed). [%s]",
         room_idx,
         tree_ok,
         len(npc_pool),
         tree_fail,
+        _get_model_tag(),
     )
     return npc_pool
 
@@ -1725,11 +1758,11 @@ def _phase7_portraits(
     try:
         music_paths, sfx_paths = _asyncio.run(_run_all_async())
         portraits_generated = True
-        logger.info("Portraits generated successfully.")
+        logger.info("Portraits generated successfully. [%s]", _get_image_tag())
         if music_paths:
-            logger.info("Music generation complete: %d tracks.", len(music_paths))
+            logger.info("Music generation complete: %d tracks. [%s]", len(music_paths), _get_audio_tag())
         if sfx_paths:
-            logger.info("SFX generation complete: %d effects.", len(sfx_paths))
+            logger.info("SFX generation complete: %d effects. [%s]", len(sfx_paths), _get_audio_tag())
     except Exception as e:
         logger.warning("Phase 7 async generation failed: %s", e)
 

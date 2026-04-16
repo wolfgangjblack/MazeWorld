@@ -49,11 +49,14 @@ class InventoryManager:
         return [(item.name, item.quantity) for item in items]
 
     def use_selected(self, selected_index: int) -> str:
-        """Use the item at the given index. Returns message."""
-        items = list(self._inventory.values())
-        if not items or selected_index >= len(items):
+        """Use the item at the given index (sorted order). Returns message."""
+        sorted_list = self.get_list()
+        if not sorted_list or selected_index >= len(sorted_list):
             return "No item to use."
-        item = items[selected_index]
+        item_name = sorted_list[selected_index][0]
+        item = self._inventory.get(item_name)
+        if not item:
+            return "No item to use."
         from src.models.items import EscortItem, Tool, Weapon
 
         if isinstance(item, EscortItem):
@@ -69,11 +72,14 @@ class InventoryManager:
         return message
 
     def give_selected(self, selected_index: int) -> str:
-        """Give the item at the given index. Returns message."""
-        items = list(self._inventory.values())
-        if not items or selected_index >= len(items):
+        """Give the item at the given index (sorted order). Returns message."""
+        sorted_list = self.get_list()
+        if not sorted_list or selected_index >= len(sorted_list):
             return "No item to give."
-        item = items[selected_index]
+        item_name = sorted_list[selected_index][0]
+        item = self._inventory.get(item_name)
+        if not item:
+            return "No item to give."
         from src.models.items import EscortItem
 
         if isinstance(item, EscortItem):

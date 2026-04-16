@@ -13,10 +13,11 @@ from src.models.follower import Follower
 class FollowerManager:
     """Manages followers: add/remove, dialogue, room-progression failures."""
 
-    def __init__(self, player: PlayerCharacter, npcs: list, quests: dict):
+    def __init__(self, player: PlayerCharacter, npcs: list, quests: dict, current_room_index: int = 0):
         self.player = player
         self.npcs = npcs
         self.quests = quests
+        self.current_room_index = current_room_index
 
     # ------------------------------------------------------------------
     # Adding followers (escort quest accepted)
@@ -39,12 +40,13 @@ class FollowerManager:
         if not npc_to_escort:
             return None
 
+        relative_dest = getattr(quest, "destination_room", 0)
         follower = Follower(
             npc_id=escort_npc_id,
             name=npc_to_escort.name or f"NPC_{escort_npc_id}",
             quest_id=quest.id,
-            joined_in_room=1,
-            destination_room=getattr(quest, "destination_room", 1),
+            joined_in_room=self.current_room_index,
+            destination_room=self.current_room_index + relative_dest,
             personality=getattr(npc_to_escort, "personality", ""),
             farewell_text="Thank you for escorting me. Farewell!",
             dialogue_hints=[
@@ -52,25 +54,16 @@ class FollowerManager:
                 "Be careful, I've heard rumors of danger ahead.",
                 "I appreciate your help, adventurer.",
             ],
+            profile_image=getattr(npc_to_escort, "profile_image", None),
+            description=getattr(npc_to_escort, "backstory", "") or getattr(npc_to_escort, "description", ""),
         )
+
+        follower.original_npc = npc_to_escort
 
         if not self.player.add_follower(follower):
             return "You already have the maximum number of followers!"
 
         self.npcs.remove(npc_to_escort)
-
-        # Add escort item so the zone-check works
-        from src.models.items import EscortItem, ItemStats
-
-        escort_item = EscortItem(
-            category="escort",
-            name=f"{npc_to_escort.name} (escort)",
-            desc=f"Escorting {npc_to_escort.name} to safety.",
-            item_stats=ItemStats(),
-            npc_id=escort_npc_id,
-            target_zone=tuple(getattr(quest, "target_zone", [0, 0])),
-        )
-        self.player.add_to_inventory(escort_item)
         return f"{follower.name} is now following you!"
 
     # ------------------------------------------------------------------
@@ -145,15 +138,21 @@ class FollowerManager:
         info = []
         for f in self.player.followers:
             quest_summary = ""
+            quest_description = ""
             if f.quest_id and f.quest_id in self.quests:
-                quest_summary = self.quests[f.quest_id].title
+                quest = self.quests[f.quest_id]
+                quest_summary = quest.title
+                quest_description = getattr(quest, "description", "")
             info.append(
                 {
                     "name": f.name,
                     "personality": f.personality,
                     "quest_summary": quest_summary,
+                    "quest_description": quest_description,
                     "destination_room": f.destination_room,
                     "hints": f.dialogue_hints,
+                    "profile_image": f.profile_image,
+                    "description": f.description,
                 }
             )
         return info

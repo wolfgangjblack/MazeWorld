@@ -809,8 +809,8 @@ class TestFollowerManager:
         from src.models.quest import EscortQuest
 
         player = _make_player()
-        npc = MagicMock(id=1200, personality="brave")
-        npc.name = "GuardNPC"  # MagicMock 'name' kwarg is reserved
+        npc = MagicMock(id=1200, personality="brave", profile_image=None, backstory="A brave guard.", description="")
+        npc.name = "GuardNPC"
         quest = EscortQuest(
             id=4007,
             title="Escort",

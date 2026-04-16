@@ -42,10 +42,10 @@ class QuestManager:
     # Offering quests (NPC interaction)
     # ------------------------------------------------------------------
 
-    def try_offer_quest(self, npc, player: PlayerCharacter) -> Quest | None:
-        """If the NPC has an unoffered quest whose prereqs are met, activate it.
+    def has_unoffered_quest(self, npc, player: PlayerCharacter) -> Quest | None:
+        """Check if the NPC has an eligible quest that hasn't been offered yet.
 
-        Returns the newly-activated quest or None.
+        Returns the Quest object without changing its status, or None.
         """
         quest_id = getattr(npc, "quest_id", None)
         if not quest_id or quest_id not in self.quests:
@@ -56,11 +56,17 @@ class QuestManager:
         prereq = quest.prerequisite_quest_id
         if prereq and not player.has_completed(prereq):
             return None
+        return quest
+
+    def accept_quest_from_npc(self, npc, player: PlayerCharacter) -> Quest | None:
+        """Activate the NPC's quest after player accepts. Returns the quest or None."""
+        quest = self.has_unoffered_quest(npc, player)
+        if not quest:
+            return None
 
         quest.status = "active"
         player.accept_quest(quest.id)
 
-        # Activate first sub-quest for multi-step
         if quest.type == "multi_step":
             first_sub = quest.get_current_sub_quest_id()
             if first_sub and first_sub in self.quests:
@@ -69,7 +75,6 @@ class QuestManager:
                     sub.status = "active"
                     player.accept_quest(sub.id)
 
-        # Check if kill-quest target already cleared
         if quest.type in ("combat", "solve"):
             target_eid = getattr(quest, "target_event_id", 0)
             event = self.events.get(target_eid)
@@ -77,6 +82,10 @@ class QuestManager:
                 self.complete_quest(quest, player)
 
         return quest
+
+    def try_offer_quest(self, npc, player: PlayerCharacter) -> Quest | None:
+        """Legacy: auto-accept quest. Use accept_quest_from_npc for explicit acceptance."""
+        return self.accept_quest_from_npc(npc, player)
 
     # ------------------------------------------------------------------
     # Turn-in checks (talking to NPC)
@@ -132,20 +141,18 @@ class QuestManager:
 
     def check_escort_zone(self, player: PlayerCharacter) -> Quest | None:
         """Check if any active escort quest target zone has been reached."""
-        from src.models.items import EscortItem
-
-        for item_name, item in list(player.inventory.items()):
-            if isinstance(item, EscortItem):
-                for qid, quest in self.quests.items():
-                    if (
-                        quest.type == "escort"
-                        and getattr(quest, "escort_npc_id", None) == item.npc_id
-                        and quest.status == "active"
-                        and quest.check_completion(player.x, player.y)
-                    ):
-                        player.remove_from_inventory(item_name)
-                        self.complete_quest(quest, player)
-                        return quest
+        for follower in list(player.followers):
+            if not follower.quest_id:
+                continue
+            quest = self.quests.get(follower.quest_id)
+            if (
+                quest
+                and quest.type == "escort"
+                and quest.status == "active"
+                and quest.check_completion(player.x, player.y)
+            ):
+                self.complete_quest(quest, player)
+                return quest
         return None
 
     # ------------------------------------------------------------------

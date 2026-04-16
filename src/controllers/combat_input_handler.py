@@ -9,6 +9,7 @@ import random
 
 import pygame
 
+from config import SCREEN_WIDTH
 from src.controllers.combat_controller import CombatController, CombatState
 from src.registry import registry
 from src.views.combat_view import CombatView
@@ -36,6 +37,7 @@ class CombatInputHandler:
         self.pending_action = ""
         self.showing_result = False
         self.last_result = ""
+        self.result_page = 0
         self.browsing_log = False
         self.log_browse_scroll = 0
         self.game_over_selection = 0
@@ -84,12 +86,17 @@ class CombatInputHandler:
 
         if self.showing_result:
             if event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                self.showing_result = False
-                self.last_result = ""
-                self._run_monster_turns_and_cleanup()
+                if self._has_more_result_pages():
+                    self.result_page += 1
+                else:
+                    self.showing_result = False
+                    self.last_result = ""
+                    self.result_page = 0
+                    self._run_monster_turns_and_cleanup()
             elif event.key == pygame.K_TAB:
                 self.showing_result = False
                 self.last_result = ""
+                self.result_page = 0
                 self._run_monster_turns_and_cleanup()
                 self.browsing_log = True
                 self.log_browse_scroll = 0
@@ -262,6 +269,30 @@ class CombatInputHandler:
         if self.active and self.combat_view:
             self.combat_view.scroll_log(-event.y * 3)
 
+    def _has_more_result_pages(self) -> bool:
+        """Check if the current result text has more pages to show."""
+        if not self.combat_view or not self.last_result:
+            return False
+        max_w = SCREEN_WIDTH - 70
+        words = self.last_result.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if self.combat_view.font.size(test)[0] <= max_w:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        panel_h = self.combat_view.GRID_ROWS * 36 + 16
+        line_h = self.combat_view.font.get_linesize()
+        max_lines = max(1, (panel_h - 24) // line_h)
+        total_pages = max(1, (len(lines) + max_lines - 1) // max_lines)
+        return self.result_page < total_pages - 1
+
     def draw(self):
         if not self.active or not self.combat_view or not self.combat_controller:
             return
@@ -285,6 +316,7 @@ class CombatInputHandler:
             pending_spell_index=self.selected_spell,
             showing_result=self.showing_result,
             result_text=self.last_result,
+            result_page=self.result_page,
             browsing_log=self.browsing_log,
             log_browse_scroll=self.log_browse_scroll,
         )
@@ -354,6 +386,7 @@ class CombatInputHandler:
         msg = result.get("message", "") if isinstance(result, dict) else str(result or "")
         if msg:
             self.last_result = msg
+            self.result_page = 0
             self.showing_result = True
         else:
             self._run_monster_turns_and_cleanup()

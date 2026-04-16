@@ -1843,6 +1843,7 @@ def _convert_to_pdf(md_path: str, pdf_path: str) -> bool:
         h1 { page-break-before: always; color: #8B0000; }
         h1:first-of-type { page-break-before: avoid; }
         h2 { page-break-before: always; color: #333; border-bottom: 2px solid #8B0000; }
+        h2:first-of-type { page-break-before: avoid; }
         h3 { color: #555; }
         h4 { color: #666; }
         table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }

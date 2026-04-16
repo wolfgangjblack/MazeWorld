@@ -89,7 +89,8 @@ async def _generate_track_async(
     from google.genai import types
 
     model = _LYRA_CLIP if use_clip else _LYRA_PRO
-    for attempt in range(3):
+    max_attempts = 5
+    for attempt in range(max_attempts):
         try:
             response = await client.aio.models.generate_content(
                 model=model,
@@ -99,8 +100,10 @@ async def _generate_track_async(
                 ),
             )
             if not response.candidates or not response.candidates[0].content:
-                logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, 3)
-                if attempt < 2:
+                logger.warning(
+                    "Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, max_attempts
+                )
+                if attempt < max_attempts - 1:
                     await asyncio.sleep(3 * (attempt + 1))
                 continue
             for part in response.candidates[0].content.parts:
@@ -111,10 +114,12 @@ async def _generate_track_async(
                         f.write(part.inline_data.data)
                     logger.info("Music track saved: %s", filepath)
                     return track_name, filepath
-            logger.warning("Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, 3)
+            logger.warning(
+                "Lyria track '%s' attempt %d/%d: no audio in response", track_name, attempt + 1, max_attempts
+            )
         except Exception as e:
-            logger.warning("Lyria track '%s' attempt %d/%d failed: %s", track_name, attempt + 1, 3, e)
-        if attempt < 2:
+            logger.warning("Lyria track '%s' attempt %d/%d failed: %s", track_name, attempt + 1, max_attempts, e)
+        if attempt < max_attempts - 1:
             await asyncio.sleep(3 * (attempt + 1))
     return track_name, None
 

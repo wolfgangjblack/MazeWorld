@@ -514,7 +514,7 @@ class LlamaPromptSet(PromptSet):
                     ),
                 ),
             ]
-            max_tokens = 400
+            max_tokens = 600
 
         return LLMRequest(
             system=system,

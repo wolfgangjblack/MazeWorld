@@ -29,6 +29,7 @@ def create_item_from_data(item_id: int, data: dict):
         "quantity": 1,
         "item_stats": stats,
         "room_level": data.get("room_level", 1),
+        "profile_image": data.get("profile_image"),
     }
 
     if cls == Weapon:

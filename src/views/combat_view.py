@@ -83,6 +83,7 @@ class CombatView:
         pending_spell_index: int = -1,
         showing_result: bool = False,
         result_text: str = "",
+        result_page: int = 0,
         browsing_log: bool = False,
         log_browse_scroll: int = 0,
     ):
@@ -110,6 +111,7 @@ class CombatView:
             pending_spell_index=pending_spell_index,
             showing_result=showing_result,
             result_text=result_text,
+            result_page=result_page,
             browsing_log=browsing_log,
             log_browse_scroll=log_browse_scroll,
         )
@@ -310,13 +312,14 @@ class CombatView:
         pending_spell_index: int = -1,
         showing_result: bool = False,
         result_text: str = "",
+        result_page: int = 0,
         browsing_log: bool = False,
         log_browse_scroll: int = 0,
     ):
         menu_y = SCREEN_HEIGHT - LOG_HEIGHT - MENU_HEIGHT - 10
 
         if showing_result:
-            self._draw_action_result(result_text, menu_y)
+            self._draw_action_result(result_text, menu_y, result_page=result_page)
             return
 
         if not combat.is_player_turn() or combat.state != CombatState.ONGOING:
@@ -545,7 +548,7 @@ class CombatView:
     # Action result display — shown after player acts, before enemy turns
     # ------------------------------------------------------------------
 
-    def _draw_action_result(self, result_text: str, y: int):
+    def _draw_action_result(self, result_text: str, y: int, result_page: int = 0):
         panel_h = self.GRID_ROWS * 36 + 16
         pygame.draw.rect(self.screen, (30, 30, 40), (15, y, SCREEN_WIDTH - 30, panel_h))
         pygame.draw.rect(self.screen, MED_GRAY, (15, y, SCREEN_WIDTH - 30, panel_h), 1)
@@ -576,11 +579,20 @@ class CombatView:
 
         line_h = self.font.get_linesize()
         max_lines = max(1, (panel_h - 24) // line_h)
-        for i, line in enumerate(lines[:max_lines]):
+        total_pages = max(1, (len(lines) + max_lines - 1) // max_lines)
+        page = min(result_page, total_pages - 1)
+        page_lines = lines[page * max_lines : (page + 1) * max_lines]
+
+        for i, line in enumerate(page_lines):
             surf = self.font.render(line, True, text_color)
             self.screen.blit(surf, (25, y + 6 + i * line_h))
 
-        ctrl = self.small_font.render("Enter to continue  |  Tab: Combat Log", True, LIGHT_GRAY)
+        has_more = page < total_pages - 1
+        if has_more:
+            ctrl_text = "Enter: next page  |  Tab: Combat Log"
+        else:
+            ctrl_text = "Enter to continue  |  Tab: Combat Log"
+        ctrl = self.small_font.render(ctrl_text, True, LIGHT_GRAY)
         self.screen.blit(ctrl, (20, y + panel_h - 18))
 
     # ------------------------------------------------------------------
