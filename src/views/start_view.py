@@ -4,7 +4,7 @@ import os
 
 import pygame
 
-from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, resolve_data_path
 
 MENU_ITEMS = ["Start New Game", "Load Game", "Tutorial", "Config", "Credits", "Quit"]
 
@@ -27,10 +27,11 @@ class StartView:
         self._load_portrait(portrait_path)
 
     def _load_portrait(self, path):
-        if not path or not os.path.exists(path):
+        resolved = resolve_data_path(path)
+        if not resolved or not os.path.exists(resolved):
             return
         try:
-            img = pygame.image.load(path).convert_alpha()
+            img = pygame.image.load(resolved).convert_alpha()
             self._portrait = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
         except Exception:
             self._portrait = None

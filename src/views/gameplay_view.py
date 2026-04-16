@@ -1,6 +1,6 @@
 import pygame
 
-from config import BLACK, GRID_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE
+from config import BLACK, GRID_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH, WHITE, resolve_data_path
 from src.registry import registry
 from src.views.dialogue_view import DialogueBoxView
 from src.views.encounter_view import EncounterView
@@ -334,8 +334,9 @@ class GameView:
             try:
                 import os
 
-                if os.path.exists(item.profile_image):
-                    img = pygame.image.load(item.profile_image)
+                resolved = resolve_data_path(item.profile_image)
+                if resolved and os.path.exists(resolved):
+                    img = pygame.image.load(resolved)
                     img = pygame.transform.scale(img, (96, 96))
                     img_x = panel_x + panel_w - 116
                     self.screen.blit(img, (img_x, y))

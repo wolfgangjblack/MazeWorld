@@ -26,6 +26,20 @@ if getattr(sys, "frozen", False):
 else:
     SAVE_DIR = os.path.join(DATA_DIR, "saves")
 
+
+def resolve_data_path(path: str | None) -> str | None:
+    """Resolve a manifest/entity-stored asset path for loading.
+
+    Absolute paths pass through unchanged. Relative paths are anchored at
+    _BASE_DIR so they work both in dev (project root) and in a
+    PyInstaller-frozen .app where the CWD is not the project directory.
+    """
+    if not path:
+        return path
+    if os.path.isabs(path):
+        return path
+    return os.path.join(_BASE_DIR, path)
+
 ### maze settings
 # ------------------------------------
 # Screen settings

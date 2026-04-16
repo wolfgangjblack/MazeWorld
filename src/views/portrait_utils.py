@@ -10,6 +10,8 @@ import os
 
 import pygame
 
+from config import resolve_data_path
+
 logger = logging.getLogger(__name__)
 
 _CACHE_MAX = 64
@@ -24,20 +26,21 @@ def load_portrait(
     if not path:
         return None
 
-    key = f"{path}:{size[0]}x{size[1]}"
+    resolved = resolve_data_path(path)
+    key = f"{resolved}:{size[0]}x{size[1]}"
     if key in _cache:
         return _cache[key]
 
-    if os.path.exists(path):
+    if resolved and os.path.exists(resolved):
         try:
-            img = pygame.image.load(path).convert_alpha()
+            img = pygame.image.load(resolved).convert_alpha()
             img = pygame.transform.scale(img, size)
             if len(_cache) >= _CACHE_MAX:
                 _cache.pop(next(iter(_cache)))
             _cache[key] = img
             return img
         except Exception:
-            logger.debug("Failed to load portrait: %s", path, exc_info=True)
+            logger.debug("Failed to load portrait: %s", resolved, exc_info=True)
 
     _cache[key] = None
     return None

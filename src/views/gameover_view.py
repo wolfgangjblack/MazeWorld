@@ -5,7 +5,7 @@ import os
 
 import pygame
 
-from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH
+from config import BLACK, SCREEN_HEIGHT, SCREEN_WIDTH, resolve_data_path
 from src.utils.text_utils import draw_wrapped_text
 
 logger = logging.getLogger(__name__)
@@ -32,12 +32,13 @@ class GameOverView:
         self.bg_image = None
         self.story_paragraph = story_paragraph
 
-        if portrait_path and os.path.exists(portrait_path):
+        resolved_portrait = resolve_data_path(portrait_path)
+        if resolved_portrait and os.path.exists(resolved_portrait):
             try:
-                img = pygame.image.load(portrait_path)
+                img = pygame.image.load(resolved_portrait)
                 self.bg_image = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
             except Exception:
-                logger.debug("Failed to load gameover portrait: %s", portrait_path, exc_info=True)
+                logger.debug("Failed to load gameover portrait: %s", resolved_portrait, exc_info=True)
 
     def draw(self):
         if self.bg_image:

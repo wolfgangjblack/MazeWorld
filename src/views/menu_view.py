@@ -5,7 +5,7 @@ import os
 
 import pygame
 
-from config import SCREEN_HEIGHT, SCREEN_WIDTH
+from config import SCREEN_HEIGHT, SCREEN_WIDTH, resolve_data_path
 from src.views.status_layout import draw_status_layout, estimate_status_height
 
 logger = logging.getLogger(__name__)
@@ -110,11 +110,12 @@ class MenuView:
 
         # Load portrait
         portrait_surface = None
-        if p.profile_image and os.path.exists(p.profile_image):
+        resolved_portrait = resolve_data_path(p.profile_image)
+        if resolved_portrait and os.path.exists(resolved_portrait):
             try:
-                portrait_surface = pygame.image.load(p.profile_image)
+                portrait_surface = pygame.image.load(resolved_portrait)
             except Exception:
-                logger.debug("Failed to load player portrait: %s", p.profile_image, exc_info=True)
+                logger.debug("Failed to load player portrait: %s", resolved_portrait, exc_info=True)
 
         stats = pc.stats if pc else None
         if stats is None:

@@ -16,6 +16,8 @@ import os
 
 import pygame
 
+from config import DATA_DIR, resolve_data_path
+
 logger = logging.getLogger(__name__)
 
 _AMBIENT_CHANNEL_ID = 7  # reserve channel 7 for ambient loops
@@ -60,9 +62,9 @@ class SFXController:
         if sfx_name in self._sounds:
             return self._sounds[sfx_name]
 
-        path = self._manifest.get(sfx_name)
+        path = resolve_data_path(self._manifest.get(sfx_name))
         if not path or not os.path.exists(path):
-            fallback = os.path.join("data", "sfx", f"{sfx_name}.mp3")
+            fallback = os.path.join(DATA_DIR, "sfx", f"{sfx_name}.mp3")
             if os.path.exists(fallback):
                 path = fallback
                 self._manifest[sfx_name] = path
