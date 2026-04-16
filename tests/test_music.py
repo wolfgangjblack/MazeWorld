@@ -7,8 +7,25 @@ Covers the two pure-logic components:
 No API calls, no actual audio files, no pygame display required.
 """
 
+import pytest
+
 from src.generate.music_client import FIXED_PROMPTS, build_full_prompt_dict
 from src.systems.music_controller import MusicController
+
+
+@pytest.fixture
+def isolated_data_dir(tmp_path, monkeypatch):
+    """Point MusicController's DATA_DIR at an empty tmp dir.
+
+    Without this, the on-disk fallback (`DATA_DIR/music/<track>.mp3`) silently
+    succeeds against the real repo's generated audio files and these tests
+    that intend to exercise the "no audio available" path end up actually
+    playing a real track.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.systems.music_controller.DATA_DIR", str(tmp_path))
+    return tmp_path
+
 
 # ---------------------------------------------------------------------------
 # MusicController: silent fallback tests
@@ -16,23 +33,20 @@ from src.systems.music_controller import MusicController
 
 
 class TestMusicControllerFallback:
-    def test_silent_on_nonexistent_file(self, tmp_path, monkeypatch):
+    def test_silent_on_nonexistent_file(self, isolated_data_dir):
         """play() should not raise when the track file doesn't exist on disk."""
-        monkeypatch.chdir(tmp_path)
-        mc = MusicController({"combat": str(tmp_path / "nonexistent.wav")})
+        mc = MusicController({"combat": str(isolated_data_dir / "nonexistent.wav")})
         mc.play("combat")  # must not raise
         assert mc.current_track is None
 
-    def test_silent_on_missing_key(self, tmp_path, monkeypatch):
+    def test_silent_on_missing_key(self, isolated_data_dir):
         """play() should not raise when track name isn't in the manifest at all."""
-        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         mc.play("combat")
         assert mc.current_track is None
 
-    def test_silent_on_empty_manifest(self, tmp_path, monkeypatch):
+    def test_silent_on_empty_manifest(self, isolated_data_dir):
         """MusicController with no tracks silently accepts all play() calls."""
-        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         for track in ["start_screen", "combat", "maze_village", "puzzle_event", "victory", "game_over"]:
             mc.play(track)
@@ -44,13 +58,12 @@ class TestMusicControllerFallback:
         mc.stop()  # must not raise
         assert mc.current_track is None
 
-    def test_play_maze_uses_correct_track_key(self, tmp_path, monkeypatch):
+    def test_play_maze_uses_correct_track_key(self, isolated_data_dir):
         """play_maze(env_type) should look up 'maze_{env_type}' in the manifest.
 
         With no files present, both calls should leave current_track as None
         and not raise, confirming the correct key format is used internally.
         """
-        monkeypatch.chdir(tmp_path)
         mc = MusicController({})
         mc.play_maze("village")  # looks up "maze_village" — not in manifest, silent
         assert mc.current_track is None
@@ -74,14 +87,13 @@ class TestMusicControllerFallback:
         mc = MusicController({"combat": str(wav)})
         assert mc.has_track("combat") is True
 
-    def test_no_duplicate_play_on_same_track(self, tmp_path, monkeypatch):
+    def test_no_duplicate_play_on_same_track(self, isolated_data_dir):
         """Calling play() twice with the same track name should be a no-op on the second call.
 
         We verify this by confirming current_track stays consistent and no exception
         is raised, rather than trying to load a real audio file.
         """
-        monkeypatch.chdir(tmp_path)
-        mc = MusicController({"combat": str(tmp_path / "missing.wav")})
+        mc = MusicController({"combat": str(isolated_data_dir / "missing.wav")})
         mc.play("combat")  # sets current_track = None (file missing)
         mc.play("combat")  # should be a no-op since current_track already matches
         assert mc.current_track is None
