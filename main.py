@@ -62,6 +62,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description="MazeWorld V1")
     parser.add_argument("--dev", action="store_true", help="Dev mode: generate world and launch game directly")
     parser.add_argument("--skip-gen", action="store_true", help="Skip world generation (use with --dev)")
+    parser.add_argument(
+        "--exe",
+        action="store_true",
+        help="After (optional) generation, build the frozen macOS .app via PyInstaller and exit",
+    )
     return parser.parse_args()
 
 
@@ -70,6 +75,67 @@ def run_generation():
 
     generate_world()
     registry.reload()
+
+
+def _start_game_loop():
+    """Initialize pygame, build the session, and run until exit.
+
+    Shared by main() and run_game_only(). Assumes registry.load() has
+    already run and data is present on disk.
+    """
+    pygame.init()
+    pygame.font.init()
+
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("MazeWorld")
+    icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
+    if os.path.exists(icon_path):
+        pygame.display.set_icon(pygame.image.load(icon_path))
+    font = pygame.font.Font(None, 32)
+    clock = pygame.time.Clock()
+
+    from src.systems.music_controller import MusicController
+
+    music = MusicController(registry.manifest.get("music", {}) if registry.manifest else {})
+    music.play_start_screen()
+
+    from src.systems.sfx_controller import SFXController
+
+    sfx = SFXController(registry.manifest.get("sfx", {}) if registry.manifest else {})
+
+    screen_ctrl = ScreenController(ScreenState.START)
+    _start_portrait = registry.manifest.get("start_portrait") if registry.manifest else None
+    start_view = StartView(screen, font, has_saves=save_manager.has_saves(), portrait_path=_start_portrait)
+    config_view = ConfigView(screen, font)
+
+    narrative = {}
+    narrative_path = os.path.join(DATA_DIR, "narrative.json")
+    if os.path.exists(narrative_path):
+        try:
+            import json as _json
+
+            with open(narrative_path) as _nf:
+                narrative = _json.load(_nf)
+        except Exception:
+            logger.warning("Failed to load narrative.json", exc_info=True)
+
+    session = SessionManager(screen, font, clock, screen_ctrl, music, sfx, start_view, config_view, narrative)
+    session.run()
+    pygame.quit()
+
+
+def run_game_only():
+    """Frozen entry point: skip argparse and world generation entirely.
+
+    Called by launcher.py when the game is running as a PyInstaller bundle.
+    Raises RuntimeError if bundled data is missing -- launcher.py catches
+    this and writes it to crash.log (we cannot print to a console-less app
+    and pygame is not yet initialized to show a dialog).
+    """
+    registry.load()
+    if not registry.has_manifest():
+        raise RuntimeError("Game data not found. Ensure the 'data/' folder is present inside the app bundle.")
+    _start_game_loop()
 
 
 def setup_game(
@@ -1092,45 +1158,22 @@ def main():
             except (EOFError, KeyboardInterrupt):
                 print("Skipping generation, using fallback runtime mode.")
 
-    pygame.init()
-    pygame.font.init()
+    if args.exe:
+        import subprocess
 
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("MazeWorld")
-    icon_path = os.path.join(os.path.dirname(__file__), "assets", "icon.png")
-    if os.path.exists(icon_path):
-        pygame.display.set_icon(pygame.image.load(icon_path))
-    font = pygame.font.Font(None, 32)
-    clock = pygame.time.Clock()
+        # Prefer .venv-build (framework Python required for macOS .app bundles).
+        # PyInstaller can't produce a .app bundle from a non-framework Python,
+        # so a separate build venv is created with only runtime deps + PyInstaller.
+        build_python = os.path.join(os.path.dirname(__file__), ".venv-build", "bin", "python")
+        python_exe = build_python if os.path.exists(build_python) else sys.executable
+        print(f"Building macOS .app via PyInstaller (using {python_exe})...")
+        result = subprocess.run(
+            [python_exe, "-m", "PyInstaller", "mazeworld.spec", "--clean", "--noconfirm"],
+            check=False,
+        )
+        sys.exit(result.returncode)
 
-    from src.systems.music_controller import MusicController
-
-    music = MusicController(registry.manifest.get("music", {}) if registry.manifest else {})
-    music.play_start_screen()
-
-    from src.systems.sfx_controller import SFXController
-
-    sfx = SFXController(registry.manifest.get("sfx", {}) if registry.manifest else {})
-
-    screen_ctrl = ScreenController(ScreenState.START)
-    _start_portrait = registry.manifest.get("start_portrait") if registry.manifest else None
-    start_view = StartView(screen, font, has_saves=save_manager.has_saves(), portrait_path=_start_portrait)
-    config_view = ConfigView(screen, font)
-
-    narrative = {}
-    narrative_path = os.path.join(DATA_DIR, "narrative.json")
-    if os.path.exists(narrative_path):
-        try:
-            import json as _json
-
-            with open(narrative_path) as _nf:
-                narrative = _json.load(_nf)
-        except Exception:
-            logger.warning("Failed to load narrative.json", exc_info=True)
-
-    session = SessionManager(screen, font, clock, screen_ctrl, music, sfx, start_view, config_view, narrative)
-    session.run()
-    pygame.quit()
+    _start_game_loop()
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ import asyncio
 import logging
 import os
 
+from config import DATA_DIR
+
 logger = logging.getLogger(__name__)
 
 _active_stats = None
@@ -33,7 +35,7 @@ def set_stats(stats) -> None:
     _active_stats = stats
 
 
-SFX_DIR = "data/sfx"
+SFX_DIR = os.path.join(DATA_DIR, "sfx")
 
 # ---------------------------------------------------------------------------
 # Hardcoded prompts for universal (non-story-dependent) sounds

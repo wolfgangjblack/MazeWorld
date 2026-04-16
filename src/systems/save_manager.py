@@ -10,10 +10,8 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from config import DATA_DIR
+from config import SAVE_DIR
 from src.models.save import SaveMetadata, SaveState
-
-SAVE_DIR = os.path.join(DATA_DIR, "saves")
 
 
 def _ensure_save_dir():

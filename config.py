@@ -1,11 +1,30 @@
 import os
+import sys
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# When running as a PyInstaller-frozen app, bundled data lives in sys._MEIPASS
+# (which maps to Contents/Resources/ inside a macOS .app). In dev runs, paths
+# resolve relative to this file so the CWD doesn't affect lookup.
+if getattr(sys, "frozen", False):
+    _BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+else:
+    _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 ## Data directory (root for all generated content)
-DATA_DIR = os.getenv("DATA_DIR", "data")
+DATA_DIR = os.getenv("DATA_DIR", os.path.join(_BASE_DIR, "data"))
+
+## Save directory. When frozen, saves must live outside the read-only app
+## bundle so writes succeed. When running from source, saves stay under data/.
+if getattr(sys, "frozen", False):
+    if sys.platform == "darwin":
+        SAVE_DIR = os.path.join(os.path.expanduser("~/Library/Application Support/MazeWorld"), "saves")
+    else:
+        SAVE_DIR = os.path.join(os.environ.get("APPDATA", _BASE_DIR), "MazeWorld", "saves")
+else:
+    SAVE_DIR = os.path.join(DATA_DIR, "saves")
 
 ### maze settings
 # ------------------------------------
