@@ -30,15 +30,36 @@ else:
 def resolve_data_path(path: str | None) -> str | None:
     """Resolve a manifest/entity-stored asset path for loading.
 
-    Absolute paths pass through unchanged. Relative paths are anchored at
-    _BASE_DIR so they work both in dev (project root) and in a
-    PyInstaller-frozen .app where the CWD is not the project directory.
+    Relative paths are anchored at _BASE_DIR so they work both in dev
+    (project root) and in a PyInstaller-frozen .app where the CWD is not
+    the project directory.
+
+    Absolute paths are trusted when they exist (dev flow on the machine
+    that generated the data). If they do not exist -- the common case for
+    distributed builds, because the pipeline stores absolute paths from the
+    generation machine -- we attempt to re-anchor the `data/...` suffix of
+    the path onto _BASE_DIR. This lets bundled portraits/music/SFX resolve
+    on any machine (including Windows, where the generation-machine path
+    uses forward slashes that would never exist natively).
     """
     if not path:
         return path
-    if os.path.isabs(path):
+
+    if not os.path.isabs(path):
+        return os.path.join(_BASE_DIR, path)
+
+    if os.path.exists(path):
         return path
-    return os.path.join(_BASE_DIR, path)
+
+    normalized = path.replace("\\", "/")
+    idx = normalized.rfind("/data/")
+    if idx != -1:
+        tail = normalized[idx + 1 :]
+        candidate = os.path.join(_BASE_DIR, *tail.split("/"))
+        if os.path.exists(candidate):
+            return candidate
+
+    return path
 
 
 ### maze settings
@@ -55,8 +76,15 @@ MAX_HALLWAY_SIZE = 2
 MAZE_WIDTH = SCREEN_WIDTH // GRID_SIZE
 MAZE_HEIGHT = (SCREEN_HEIGHT - HUD_HEIGHT) // GRID_SIZE  # Subtract HUD height only
 WORLD_SEED = int(os.getenv("WORLD_SEED", "1234"))  # Set to -1 for random seed
-STORY_SEED = os.getenv("STORY_SEED", "A local seaside village is under siege by a goblin horde")
-NUM_ROOMS = 2  # 5 for base
+STORY_SEED = os.getenv(
+    "STORY_SEED",
+    "In a seemingly simple little village, a young adventurer discovers ancient "
+    "artifacts that seem to come from an ancient civilization that has long since "
+    "disappeared. These artifacts hint towards technology way past our current "
+    "understanding. However the forces of evil seek to find and control these "
+    "artifacts so they can rule the world.",
+)
+NUM_ROOMS = 5  # 5 for base
 # Density parameters (% of OPEN/PATH cells, not total cells)
 EVENT_DENSITY = 0.10
 ITEM_DENSITY = 0.10
@@ -96,7 +124,7 @@ GAME_MODE = os.getenv("GAME_MODE", "offline_static")  # "online" | "offline_loca
 GENERATE_GUIDE = os.getenv("GENERATE_GUIDE", "false").lower() in ("1", "true", "yes")
 
 
-STARTING_MONEY = 50
+STARTING_MONEY = 10
 
 ## Fog of War settings
 # ------------------------------------
