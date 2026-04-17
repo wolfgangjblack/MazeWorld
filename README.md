@@ -4,10 +4,33 @@
 
 ### ▶ Play it now
 
-**[Download from GitHub Releases](https://github.com/wolfgangblack/mazeworld/releases/latest)** — no install, no API keys, no Python.
+**No install, no API keys, no Python — just download and run.** Grab the zip for your OS from the [latest release](https://github.com/wolfgangjblack/MazeWorld/releases/latest) (~1 GB, includes all portraits, music, and sound effects).
 
-- **macOS (Apple Silicon):** `MazeWorld-macos-arm64.zip`. First launch is unsigned, so run `xattr -cr MazeWorld.app && open MazeWorld.app` once to clear Gatekeeper quarantine.
-- **Windows (x64):** `MazeWorld-windows-x64.zip`. Unzip and run `MazeWorld.exe`. First launch: SmartScreen will warn "Unknown publisher" — click **More info -> Run anyway**.
+#### macOS (Apple Silicon — M1/M2/M3/M4)
+
+1. Download `MazeWorld-macos-arm64.zip` and double-click to unzip.
+2. The app is unsigned, so macOS Gatekeeper will block it on first launch. Open Terminal and run:
+   ```bash
+   xattr -cr ~/Downloads/MazeWorld.app && open ~/Downloads/MazeWorld.app
+   ```
+   (Adjust the path if you moved the app. You only need this once.)
+3. Play.
+
+Saves and crash logs: `~/Library/Application Support/MazeWorld/saves/`.
+
+> Intel Macs are not currently supported.
+
+#### Windows (10 / 11, 64-bit)
+
+1. Download `MazeWorld-windows-x64.zip`, right-click -> "Extract All".
+2. Open the extracted `MazeWorld` folder and double-click `MazeWorld.exe`.
+3. SmartScreen will warn "Windows protected your PC" (unsigned binary). Click **More info -> Run anyway**. You only need this once.
+
+Saves and crash logs: `%APPDATA%\MazeWorld\saves\`.
+
+#### If the game won't launch
+
+Check `crash.log` in the saves folder (paths above). Startup errors get written there so console-less builds still leave a trail — paste the contents into a GitHub issue and I can help debug.
 
 <!-- Optional: drop a 15-30s gameplay GIF here. Lands the pitch in the first screen. -->
 ## GenAI Architecture

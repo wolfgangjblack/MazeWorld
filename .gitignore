@@ -193,3 +193,5 @@ CLAUDE.local.md
 saves/
 
 notebooks/
+
+.DS_Store
