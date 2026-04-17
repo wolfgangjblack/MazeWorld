@@ -4,9 +4,10 @@
 
 ### ▶ Play it now
 
-**[Download MazeWorld.app (macOS arm64, ~455MB)](https://drive.google.com/file/d/1Bl5pt2WeFYGRUbwMpR_EeNpY7jtd_A3y/view?usp=sharing)** — no install, no API keys, no Python. Double-click to play a 2-room run.
+**[Download from GitHub Releases](https://github.com/wolfgangblack/mazeworld/releases/latest)** — no install, no API keys, no Python.
 
-> First launch on macOS: the app is unsigned, so run `xattr -cr MazeWorld.app && open MazeWorld.app` once to clear the Gatekeeper quarantine.
+- **macOS (Apple Silicon):** `MazeWorld-macos-arm64.zip`. First launch is unsigned, so run `xattr -cr MazeWorld.app && open MazeWorld.app` once to clear Gatekeeper quarantine.
+- **Windows (x64):** `MazeWorld-windows-x64.zip`. Unzip and run `MazeWorld.exe`. First launch: SmartScreen will warn "Unknown publisher" — click **More info -> Run anyway**.
 
 <!-- Optional: drop a 15-30s gameplay GIF here. Lands the pitch in the first screen. -->
 ## GenAI Architecture
@@ -166,6 +167,44 @@ PyInstaller needs a framework-built Python on macOS, so the `--exe` flag uses a 
 ```
 
 Requires Python 3.12 from [python.org](https://www.python.org/downloads/macos/). Saves from the packaged app live at `~/Library/Application Support/MazeWorld/saves/` (including `crash.log` on failed launches).
+
+## Releasing (macOS + Windows via CI)
+
+PyInstaller can't cross-compile, so Windows `.exe` builds run on GitHub Actions. The `.github/workflows/release.yml` workflow packages both platforms and attaches the zips to a GitHub Release.
+
+### One-time setup
+
+Because the generated `data/` folder is ~1 GB (dominated by portraits) it stays out of git. It lives on a dedicated `world-data-vN` release tag and is consumed by the build jobs.
+
+1. Generate a world locally (`python main.py --dev`).
+2. Publish the data bundle as a release asset:
+
+    ```bash
+    ./scripts/publish_world_data.sh        # auto-picks the next world-data-vN tag
+    ```
+
+3. Point CI at that tag by setting a repository variable (Settings -> Secrets and variables -> Actions -> Variables, or via CLI):
+
+    ```bash
+    gh variable set WORLD_DATA_TAG --body "world-data-v1"
+    ```
+
+### Cutting a release
+
+Either push a version tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Or run the workflow manually (GitHub Actions UI -> `Release` -> `Run workflow`) and supply a version like `v0.1.0-test`. The workflow:
+
+- Builds `MazeWorld.app` on `macos-14` (arm64) via `mazeworld.spec`.
+- Builds `MazeWorld.exe` on `windows-latest` via `mazeworld_win.spec`.
+- Downloads the pinned `world-data-vN` zip on each runner and unpacks it into `data/` before PyInstaller runs.
+- Publishes both zips to the release tag with generated release notes.
+
+To ship a new world without touching code, regenerate, re-run `scripts/publish_world_data.sh` (it picks a new `world-data-vN`), bump `WORLD_DATA_TAG`, and cut a fresh version tag.
 
 ## Requirements
 
