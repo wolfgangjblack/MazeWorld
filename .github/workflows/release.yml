@@ -1,0 +1,177 @@
+name: Release
+
+# Builds MazeWorld.app (macOS arm64) and MazeWorld.exe (Windows x64) via
+# PyInstaller and attaches both zips to a GitHub Release. The ~1 GB world
+# data payload is fetched from a separate `world-data-vN` release tag
+# (see scripts/publish_world_data.sh) so it stays out of git.
+#
+# Triggered on version tag push (vX.Y.Z) or manually via workflow_dispatch.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v0.1.0-test). Will be created if it does not exist."
+        required: true
+      world_data_tag:
+        description: "World data release tag override (defaults to repo variable WORLD_DATA_TAG)"
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  build-macos:
+    name: Build macOS (arm64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install runtime + packaging deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pygame>=2.6" "pydantic>=2.9" "python-dotenv>=1.1" \
+                      "Pillow>=10.0" "protobuf>=4.25" "pyinstaller>=6.11"
+
+      - name: Resolve world data tag
+        id: data_tag
+        run: |
+          TAG="${{ github.event.inputs.world_data_tag }}"
+          if [ -z "$TAG" ]; then TAG="${{ vars.WORLD_DATA_TAG }}"; fi
+          if [ -z "$TAG" ]; then
+            echo "error: WORLD_DATA_TAG repo variable is not set and no override provided" >&2
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download pre-generated world data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.data_tag.outputs.tag }}" -p 'world-data.zip' -D /tmp
+          rm -rf data
+          unzip -q /tmp/world-data.zip -d .
+          test -f data/manifest.json
+
+      - name: Build .app via PyInstaller
+        run: pyinstaller mazeworld.spec --clean --noconfirm
+
+      - name: Package .app
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --keepParent "dist/MazeWorld.app" "artifacts/MazeWorld-macos-arm64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MazeWorld-macos-arm64
+          path: artifacts/MazeWorld-macos-arm64.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install runtime + packaging deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pygame>=2.6" "pydantic>=2.9" "python-dotenv>=1.1" `
+                      "Pillow>=10.0" "protobuf>=4.25" "pyinstaller>=6.11"
+
+      - name: Resolve world data tag
+        id: data_tag
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.world_data_tag }}"
+          if ([string]::IsNullOrEmpty($tag)) { $tag = "${{ vars.WORLD_DATA_TAG }}" }
+          if ([string]::IsNullOrEmpty($tag)) {
+            Write-Error "WORLD_DATA_TAG repo variable is not set and no override provided"
+            exit 1
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Download pre-generated world data
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.data_tag.outputs.tag }}" -p 'world-data.zip' -D $env:TEMP
+          if (Test-Path data) { Remove-Item -Recurse -Force data }
+          Expand-Archive -Path "$env:TEMP\world-data.zip" -DestinationPath .
+          if (-not (Test-Path data/manifest.json)) { Write-Error "data/manifest.json missing after unzip"; exit 1 }
+
+      - name: Build .exe via PyInstaller
+        shell: pwsh
+        run: pyinstaller mazeworld_win.spec --clean --noconfirm
+
+      - name: Package folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          Compress-Archive -Path dist/MazeWorld/* -DestinationPath artifacts/MazeWorld-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MazeWorld-windows-x64
+          path: artifacts/MazeWorld-windows-x64.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.event.inputs.version }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: MazeWorld ${{ steps.tag.outputs.tag }}
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
+          generate_release_notes: true
+          files: |
+            artifacts/MazeWorld-macos-arm64.zip
+            artifacts/MazeWorld-windows-x64.zip
+          body: |
+            ## Downloads
+
+            - macOS (Apple Silicon): `MazeWorld-macos-arm64.zip`
+              - First launch: `xattr -cr MazeWorld.app && open MazeWorld.app` to clear Gatekeeper quarantine.
+            - Windows (x64): `MazeWorld-windows-x64.zip`
+              - First launch: SmartScreen will show "Unknown publisher". Click **More info -> Run anyway**.
+
+            Saves (including `crash.log` on failed launches) live at:
+            - macOS: `~/Library/Application Support/MazeWorld/saves/`
+            - Windows: `%APPDATA%\MazeWorld\saves\`
